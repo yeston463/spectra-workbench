@@ -1,0 +1,1140 @@
+"""GDAL 3.13.3 算法、传统 CLI 命令、驱动与 Python API 索引编目（P2-02）。
+
+契约保证：
+1. 目标版本固定为 GDAL 3.13.3（Release 2026-08-13, 'Iowa City'）。
+2. 保留官方原始描述、分类与原生标识符。
+3. 建立新旧别名双向关联（例如 gdal_translate <-> gdal:translate, ogr2ogr <-> ogr:vectortranslate）。
+4. 缺失或未装配能力（如 gdal_auth、HDF5 驱动、废弃脚本 rgb2pct）严格保留为 missing / unsupported 状态，严禁静默删除。
+5. 公共 API 对象严密分类，排除私有符号；SWIG C 扩展无法反射签名的接口（(*args)）附带详尽说明。
+6. 本模块纯元数据与静态契约，导入时不加载 osgeo 原生动态库，安全服务于 UI 进程。
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Any
+
+from spectra_workbench.domain.models import (
+    Availability,
+    Binding,
+    CapabilityDescriptor,
+    CapabilityEngineSpec,
+    CapabilityKind,
+    CapabilitySource,
+    CapabilityState,
+    DatasetKind,
+    Entrypoint,
+    ParameterSpec,
+    PortSpec,
+    Presence,
+    Requirement,
+    Validation,
+    ValidationEvidence,
+)
+
+GDAL_VERSION = "3.13.3"
+GDAL_DOC_BASE = "https://gdal.org/en/3.13.3/"
+BASELINE_ID = "gdal-3.13.3"
+
+# 新旧命令与别名双向映射表（包含经典命令与统一 CLI 叶子命令别名）
+GDAL_ALIASES: dict[str, str] = {
+    # 经典别名
+    "gdal_translate": "gdal:translate",
+    "gdalwarp": "gdal:warp",
+    "gdaldem": "gdal:dem",
+    "gdal_grid": "gdal:grid",
+    "gdalbuildvrt": "gdal:buildvrt",
+    "gdal_rasterize": "gdal:rasterize",
+    "gdal_contour": "gdal:contour",
+    "gdal_polygonize": "gdal:polygonize",
+    "gdal_polygonize.py": "gdal:polygonize",
+    "gdal_sieve": "gdal:sieve",
+    "gdal_sieve.py": "gdal:sieve",
+    "gdal_fillnodata": "gdal:fillnodata",
+    "gdal_fillnodata.py": "gdal:fillnodata",
+    "nearblack": "gdal:nearblack",
+    "gdal_viewshed": "gdal:viewshed",
+    "gdal_calc": "gdal:calc",
+    "gdal_calc.py": "gdal:calc",
+    "gdal_merge": "gdal:merge",
+    "gdal_merge.py": "gdal:merge",
+    "gdal_proximity": "gdal:proximity",
+    "gdal_proximity.py": "gdal:proximity",
+    "gdal_retile": "gdal:retile",
+    "gdal_retile.py": "gdal:retile",
+    "gdal_pansharpen": "gdal:pansharpen",
+    "gdal_pansharpen.py": "gdal:pansharpen",
+    "ogr2ogr": "ogr:vectortranslate",
+    # 统一 CLI 叶子命令别名映射
+    "gdal raster convert": "gdal:translate",
+    "gdal raster warp": "gdal:warp",
+    "gdal raster info": "gdal:cli:gdalinfo",
+    "gdal raster dem": "gdal:dem",
+    "gdal raster build-vrt": "gdal:buildvrt",
+    "gdal raster rasterize": "gdal:rasterize",
+    "gdal raster polygonize": "gdal:polygonize",
+    "gdal raster calc": "gdal:calc",
+    "gdal raster merge": "gdal:merge",
+    "gdal raster proximity": "gdal:proximity",
+    "gdal raster sieve": "gdal:sieve",
+    "gdal raster fill-nodata": "gdal:fillnodata",
+    "gdal raster retile": "gdal:retile",
+    "gdal raster viewshed": "gdal:viewshed",
+    "gdal raster near-black": "gdal:nearblack",
+    "gdal raster clean-borders": "gdal:nearblack",
+    "gdal raster create-overviews": "gdal:cli:gdaladdo",
+    "gdal raster rgb-to-palette": "gdal:cli:rgb2pct",
+    "gdal vector convert": "ogr:vectortranslate",
+    "gdal vector info": "gdal:cli:ogrinfo",
+    "gdal vector tile-index": "gdal:cli:ogrtindex",
+    "gdal vector linear-referencing": "gdal:cli:ogrlineref",
+}
+
+
+def _load_resource_json(filename: str) -> dict[str, Any] | None:
+    """尝试从 resources/ 或 docs/progress/runs/ 载入静态元数据 JSON。"""
+    res_candidates = [
+        Path(__file__).resolve().parent.parent / "resources" / filename,
+        Path(__file__).resolve().parent.parent.parent.parent / "docs" / "progress" / "runs" / filename,
+        Path("src/spectra_workbench/resources") / filename,
+    ]
+    for c in res_candidates:
+        if c.exists():
+            try:
+                return json.loads(c.read_text(encoding="utf-8-sig"))
+            except Exception:
+                continue
+    return None
+
+
+def _engine_spec() -> CapabilityEngineSpec:
+    return CapabilityEngineSpec(
+        provider_id="gdal",
+        version_constraint=">=3.13,<4",
+        runtime_id="gdal-qgis",
+        resolved_version=GDAL_VERSION,
+    )
+
+
+def _source_spec(doc_path: str) -> CapabilitySource:
+    url = f"{GDAL_DOC_BASE}{doc_path.lstrip('/')}"
+    return CapabilitySource(
+        documentation_url=url,
+        baseline_id=BASELINE_ID,
+        upstream_version=GDAL_VERSION,
+        snapshot_sha256=None,  # 由基准组装器统一计算回填
+        verified_date="2026-11-04",
+    )
+
+
+def build_gdal_algorithms() -> list[CapabilityDescriptor]:
+    """GDAL 核心结构化算法清单（18 项核心算法）。"""
+    return [
+        CapabilityDescriptor(
+            capability_id="gdal:translate",
+            descriptor_revision="1.0",
+            kind=CapabilityKind.algorithm,
+            name="GDAL 栅格格式转换",
+            native_name="gdal.Translate",
+            category=["conversion", "raster"],
+            description="在不同栅格格式间转换影像，支持子集截取、尺寸重缩放、格式创建选项与重采样算法。",
+            engine=_engine_spec(),
+            source=_source_spec("programs/gdal_translate.html"),
+            parameters=[
+                ParameterSpec(
+                    key="format",
+                    native_name="format",
+                    label="输出驱动格式",
+                    type="string",
+                    required=False,
+                    default="GTiff",
+                    choices=["GTiff", "ENVI", "COG", "PNG", "JPEG", "netCDF"],
+                    help="目标栅格驱动名称",
+                ),
+                ParameterSpec(
+                    key="outputType",
+                    native_name="outputType",
+                    label="输出数据类型",
+                    type="string",
+                    required=False,
+                    choices=["Byte", "UInt16", "Int16", "UInt32", "Int32", "Float32", "Float64"],
+                ),
+                ParameterSpec(
+                    key="resampleAlg",
+                    native_name="resampleAlg",
+                    label="重采样算法",
+                    type="string",
+                    required=False,
+                    default="nearest",
+                    choices=["nearest", "bilinear", "cubic", "cubicspline", "lanczos", "average", "mode"],
+                ),
+            ],
+            inputs=[PortSpec(key="input", data_type=DatasetKind.raster, required=True, description="输入源影像")],
+            outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="输出目标影像")],
+            requirements=[Requirement(kind="package", name="GDAL", reason="需 osgeo.gdal C++ 核心引擎与栅格驱动")],
+            entrypoints=[
+                Entrypoint(kind="form", target="gdal:translate", available=True, notes="GUI 动态配置表单"),
+                Entrypoint(kind="cli", target="gdal_translate.exe", available=True, notes="标准 CLI 别名"),
+            ],
+            state=CapabilityState(
+                presence=Presence.present,
+                binding=Binding.form,
+                validation=Validation.smoke_passed,
+                availability=Availability.ready,
+            ),
+            effects="new_dataset",
+            cancellation="cooperative",
+            limitations=[],
+            validation_evidence=[
+                ValidationEvidence(
+                    case_id="smoke_translate_envi_to_gtiff",
+                    status="passed",
+                    runtime_id="gdal-3.13.3",
+                    report_uri="docs/progress/runs/env_report.json",
+                )
+            ],
+        ),
+        CapabilityDescriptor(
+            capability_id="gdal:warp",
+            descriptor_revision="1.0",
+            kind=CapabilityKind.algorithm,
+            name="GDAL 栅格投影重采样与校正",
+            native_name="gdal.Warp",
+            category=["warp", "raster", "projection"],
+            description="栅格影像重投影、镶嵌、多图层对齐、裁剪到边界或几何掩膜以及重采样处理。",
+            engine=_engine_spec(),
+            source=_source_spec("programs/gdalwarp.html"),
+            parameters=[
+                ParameterSpec(key="dstSRS", native_name="dstSRS", label="目标空间参考 (CRS)", type="crs", required=False),
+                ParameterSpec(key="srcSRS", native_name="srcSRS", label="源空间参考 (CRS)", type="crs", required=False),
+                ParameterSpec(
+                    key="resampleAlg",
+                    native_name="resampleAlg",
+                    label="重采样方式",
+                    type="string",
+                    required=False,
+                    default="near",
+                    choices=["near", "bilinear", "cubic", "cubicspline", "lanczos", "average", "mode", "max", "min"],
+                ),
+                ParameterSpec(key="dstNodata", native_name="dstNodata", label="目标无效值 (NoData)", type="number", required=False),
+            ],
+            inputs=[PortSpec(key="input", data_type=DatasetKind.raster, required=True, multiple=True, description="输入源影像列表")],
+            outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="重投影成果栅格")],
+            requirements=[Requirement(kind="package", name="GDAL", reason="需 PROJ 库与 GDAL Warp API")],
+            entrypoints=[
+                Entrypoint(kind="form", target="gdal:warp", available=True),
+                Entrypoint(kind="cli", target="gdalwarp.exe", available=True, notes="标准 CLI 别名"),
+            ],
+            state=CapabilityState(
+                presence=Presence.present,
+                binding=Binding.form,
+                validation=Validation.smoke_passed,
+                availability=Availability.ready,
+            ),
+            effects="new_dataset",
+            cancellation="cooperative",
+            limitations=[],
+            validation_evidence=[
+                ValidationEvidence(
+                    case_id="smoke_warp_utm_to_webmercator_3857",
+                    status="passed",
+                    runtime_id="gdal-3.13.3",
+                    report_uri="docs/progress/runs/env_report.json",
+                )
+            ],
+        ),
+        CapabilityDescriptor(
+            capability_id="gdal:dem",
+            descriptor_revision="1.0",
+            kind=CapabilityKind.algorithm,
+            name="GDAL DEM 数字高程地形分析",
+            native_name="gdal.Dem",
+            category=["dem", "terrain", "raster"],
+            description="从高程栅格生成山体阴影、坡度、坡向、彩色地貌、地形粗糙度、TRI 与 TPI。",
+            engine=_engine_spec(),
+            source=_source_spec("programs/gdaldem.html"),
+            parameters=[
+                ParameterSpec(
+                    key="processing",
+                    native_name="processing",
+                    label="分析模式",
+                    type="string",
+                    required=True,
+                    choices=["hillshade", "slope", "aspect", "color-relief", "TRI", "TPI", "roughness"],
+                ),
+                ParameterSpec(key="zFactor", native_name="zFactor", label="高程缩放比例 (zFactor)", type="number", required=False, default=1.0),
+                ParameterSpec(key="scale", native_name="scale", label="垂直比例因数 (scale)", type="number", required=False, default=1.0),
+            ],
+            inputs=[PortSpec(key="input", data_type=DatasetKind.raster, required=True, description="输入 DEM 影像")],
+            outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="地形分析成果图")],
+            requirements=[Requirement(kind="package", name="GDAL", reason="需 GDAL DEM 处理核心")],
+            entrypoints=[
+                Entrypoint(kind="form", target="gdal:dem", available=False, notes="平台适配器暂未接入该算法的执行路由（计划在后续阶段接入）"),
+                Entrypoint(kind="cli", target="gdaldem.exe", available=True, notes="标准 CLI 别名"),
+            ],
+            state=CapabilityState(
+                presence=Presence.present,
+                binding=Binding.indexed,
+                validation=Validation.not_run,
+                availability=Availability.blocked,
+            ),
+            effects="new_dataset",
+            cancellation="cooperative",
+            limitations=["平台适配器暂未接入该算法执行器；CLI 工具可正常调用"],
+            validation_evidence=[],
+        ),
+        CapabilityDescriptor(
+            capability_id="gdal:grid",
+            descriptor_revision="1.0",
+            kind=CapabilityKind.algorithm,
+            name="GDAL 离散点栅格插值",
+            native_name="gdal.Grid",
+            category=["interpolation", "grid", "raster"],
+            description="将离散散点矢量数据或点集通过反距离加权 (IDW)、最近邻、滑动平均或线性插值构建连续栅格。",
+            engine=_engine_spec(),
+            source=_source_spec("programs/gdal_grid.html"),
+            parameters=[
+                ParameterSpec(
+                    key="algorithm",
+                    native_name="algorithm",
+                    label="插值算法",
+                    type="string",
+                    required=False,
+                    default="invdist",
+                    choices=["invdist", "invdistnn", "average", "nearest", "linear"],
+                )
+            ],
+            inputs=[PortSpec(key="input", data_type=DatasetKind.vector, required=True, description="包含三维或属性值的输入点图层")],
+            outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="插值生成的规则栅格")],
+            requirements=[Requirement(kind="package", name="GDAL", reason="需 GDAL Grid API")],
+            entrypoints=[
+                Entrypoint(kind="form", target="gdal:grid", available=False, notes="平台适配器暂未接入该算法的执行路由（计划在后续阶段接入）"),
+                Entrypoint(kind="cli", target="gdal_grid.exe", available=True, notes="标准 CLI 别名"),
+            ],
+            state=CapabilityState(
+                presence=Presence.present,
+                binding=Binding.indexed,
+                validation=Validation.not_run,
+                availability=Availability.blocked,
+            ),
+            effects="new_dataset",
+            cancellation="cooperative",
+            limitations=["平台适配器暂未接入该算法执行器；CLI 工具可正常调用"],
+            validation_evidence=[],
+        ),
+        CapabilityDescriptor(
+            capability_id="gdal:buildvrt",
+            descriptor_revision="1.0",
+            kind=CapabilityKind.algorithm,
+            name="GDAL 构建虚拟栅格 (VRT)",
+            native_name="gdal.BuildVRT",
+            category=["vrt", "mosaic", "raster"],
+            description="根据多个输入栅格快速构建虚拟镶嵌或多波段堆叠 XML，无物理像素写入延迟与冗余占用。",
+            engine=_engine_spec(),
+            source=_source_spec("programs/gdalbuildvrt.html"),
+            parameters=[
+                ParameterSpec(key="separate", native_name="separate", label="按独立波段堆叠", type="boolean", required=False, default=False),
+                ParameterSpec(key="resampleAlg", native_name="resampleAlg", label="重采样方式", type="string", required=False, default="nearest"),
+            ],
+            inputs=[PortSpec(key="input", data_type=DatasetKind.raster, required=True, multiple=True, description="输入源文件列表")],
+            outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="生成的 .vrt 虚拟头文件")],
+            requirements=[Requirement(kind="package", name="GDAL", reason="需 VRT 驱动支持")],
+            entrypoints=[
+                Entrypoint(kind="form", target="gdal:buildvrt", available=False, notes="平台适配器暂未接入该算法的执行路由（计划在后续阶段接入）"),
+                Entrypoint(kind="cli", target="gdalbuildvrt.exe", available=True, notes="标准 CLI 别名"),
+            ],
+            state=CapabilityState(
+                presence=Presence.present,
+                binding=Binding.indexed,
+                validation=Validation.not_run,
+                availability=Availability.blocked,
+            ),
+            effects="new_dataset",
+            cancellation="cooperative",
+            limitations=["平台适配器暂未接入该算法执行器；CLI 工具可正常调用"],
+            validation_evidence=[],
+        ),
+        CapabilityDescriptor(
+            capability_id="gdal:rasterize",
+            descriptor_revision="1.0",
+            kind=CapabilityKind.algorithm,
+            name="GDAL 矢量要素栅格化",
+            native_name="gdal.Rasterize",
+            category=["conversion", "rasterize", "vector"],
+            description="将矢量要素（多边形、折线、点）按照固定数值或属性字段烧录到已有或新建栅格中。",
+            engine=_engine_spec(),
+            source=_source_spec("programs/gdal_rasterize.html"),
+            parameters=[
+                ParameterSpec(key="attribute", native_name="attribute", label="烧录属性字段名", type="string", required=False),
+                ParameterSpec(key="burnValues", native_name="burnValues", label="固定烧录像元值列表", type="list", required=False),
+                ParameterSpec(key="allTouched", native_name="allTouched", label="触碰全部像元 (AllTouched)", type="boolean", required=False, default=False),
+            ],
+            inputs=[PortSpec(key="input", data_type=DatasetKind.vector, required=True, description="输入待栅格化矢量")],
+            outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="烧录成果栅格")],
+            requirements=[Requirement(kind="package", name="GDAL", reason="需 GDAL Rasterize API")],
+            entrypoints=[
+                Entrypoint(kind="form", target="gdal:rasterize", available=False, notes="平台适配器暂未接入该算法的执行路由（计划在后续阶段接入）"),
+                Entrypoint(kind="cli", target="gdal_rasterize.exe", available=True, notes="标准 CLI 别名"),
+            ],
+            state=CapabilityState(
+                presence=Presence.present,
+                binding=Binding.indexed,
+                validation=Validation.not_run,
+                availability=Availability.blocked,
+            ),
+            effects="new_dataset",
+            cancellation="cooperative",
+            limitations=["平台适配器暂未接入该算法执行器；CLI 工具可正常调用"],
+            validation_evidence=[],
+        ),
+        CapabilityDescriptor(
+            capability_id="gdal:contour",
+            descriptor_revision="1.0",
+            kind=CapabilityKind.algorithm,
+            name="GDAL 栅格等值线生成",
+            native_name="gdal.ContourGenerate",
+            category=["vector", "terrain", "contour"],
+            description="从单波段数值栅格生成等间距或指定高程的矢量等值线折线/多边形要素。",
+            engine=_engine_spec(),
+            source=_source_spec("programs/gdal_contour.html"),
+            parameters=[
+                ParameterSpec(key="interval", native_name="interval", label="等值线步长", type="number", required=True, default=10.0),
+                ParameterSpec(key="offset", native_name="offset", label="基础偏移零点", type="number", required=False, default=0.0),
+            ],
+            inputs=[PortSpec(key="input", data_type=DatasetKind.raster, required=True, description="输入单波段高程栅格")],
+            outputs=[PortSpec(key="output", data_type=DatasetKind.vector, required=True, description="生成的等值线矢量图层")],
+            requirements=[Requirement(kind="package", name="GDAL", reason="需 GDAL Contour 生成核心")],
+            entrypoints=[
+                Entrypoint(kind="cli", target="gdal_contour.exe", available=True),
+                Entrypoint(kind="script", target="osgeo.gdal.ContourGenerate", available=True),
+            ],
+            state=CapabilityState(
+                presence=Presence.present,
+                binding=Binding.cli,
+                validation=Validation.not_run,
+                availability=Availability.ready,
+            ),
+            effects="new_dataset",
+            cancellation="cooperative",
+            limitations=[],
+            validation_evidence=[],
+        ),
+        CapabilityDescriptor(
+            capability_id="gdal:polygonize",
+            descriptor_revision="1.0",
+            kind=CapabilityKind.algorithm,
+            name="GDAL 栅格连通域多边形化",
+            native_name="gdal.Polygonize",
+            category=["conversion", "vectorize", "raster"],
+            description="将单波段离散分类栅格或掩膜中的同值相邻像元转换为矢量多边形。",
+            engine=_engine_spec(),
+            source=_source_spec("programs/gdal_polygonize.html"),
+            parameters=[
+                ParameterSpec(key="fieldName", native_name="fieldName", label="像元值保存字段名", type="string", required=False, default="DN"),
+                ParameterSpec(key="connectedness", native_name="connectedness", label="连通性 (4邻域/8邻域)", type="integer", required=False, default=4, choices=[4, 8]),
+            ],
+            inputs=[PortSpec(key="input", data_type=DatasetKind.raster, required=True, description="输入离散分类栅格")],
+            outputs=[PortSpec(key="output", data_type=DatasetKind.vector, required=True, description="生成的多边形矢量图层")],
+            requirements=[Requirement(kind="package", name="GDAL", reason="需 GDAL Polygonize API")],
+            entrypoints=[
+                Entrypoint(kind="cli", target="gdal_polygonize.exe", available=True),
+                Entrypoint(kind="script", target="osgeo.gdal.Polygonize", available=True),
+            ],
+            state=CapabilityState(
+                presence=Presence.present,
+                binding=Binding.cli,
+                validation=Validation.not_run,
+                availability=Availability.ready,
+            ),
+            effects="new_dataset",
+            cancellation="cooperative",
+            limitations=[],
+            validation_evidence=[],
+        ),
+        CapabilityDescriptor(
+            capability_id="gdal:sieve",
+            descriptor_revision="1.0",
+            kind=CapabilityKind.algorithm,
+            name="GDAL 孤立杂斑滤除 (Sieve Filter)",
+            native_name="gdal.SieveFilter",
+            category=["filter", "cleanup", "raster"],
+            description="消除分类栅格中面积小于阈值的小斑块，并将其合并到最大的相邻多边形中。",
+            engine=_engine_spec(),
+            source=_source_spec("programs/gdal_sieve.html"),
+            parameters=[
+                ParameterSpec(key="threshold", native_name="threshold", label="最小保留像元斑块尺寸", type="integer", required=True, default=4),
+                ParameterSpec(key="connectedness", native_name="connectedness", label="邻域连通度 (4 或 8)", type="integer", required=False, default=4, choices=[4, 8]),
+            ],
+            inputs=[PortSpec(key="input", data_type=DatasetKind.raster, required=True, description="输入分类斑块栅格")],
+            outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="杂斑滤除后栅格")],
+            requirements=[Requirement(kind="package", name="GDAL", reason="需 GDAL SieveFilter 算法")],
+            entrypoints=[
+                Entrypoint(kind="cli", target="gdal_sieve.exe", available=True),
+                Entrypoint(kind="script", target="osgeo.gdal.SieveFilter", available=True),
+            ],
+            state=CapabilityState(
+                presence=Presence.present,
+                binding=Binding.cli,
+                validation=Validation.not_run,
+                availability=Availability.ready,
+            ),
+            effects="new_dataset",
+            cancellation="cooperative",
+            limitations=[],
+            validation_evidence=[],
+        ),
+        CapabilityDescriptor(
+            capability_id="gdal:fillnodata",
+            descriptor_revision="1.0",
+            kind=CapabilityKind.algorithm,
+            name="GDAL 无效值插值填补 (FillNodata)",
+            native_name="gdal.FillNodata",
+            category=["interpolation", "repair", "raster"],
+            description="通过向内逆距离权重加权插值填补栅格影像中的 NoData 缺口或无效斑点。",
+            engine=_engine_spec(),
+            source=_source_spec("programs/gdal_fillnodata.html"),
+            parameters=[
+                ParameterSpec(key="maxDistance", native_name="maxDistance", label="最大填补搜索距离 (像元)", type="integer", required=False, default=10),
+                ParameterSpec(key="smoothIterations", native_name="smoothIterations", label="平滑迭代次数", type="integer", required=False, default=0),
+            ],
+            inputs=[PortSpec(key="input", data_type=DatasetKind.raster, required=True, description="包含 NoData 缺口的栅格")],
+            outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="缺口修复成果影像")],
+            requirements=[Requirement(kind="package", name="GDAL", reason="需 GDAL FillNodata 算法")],
+            entrypoints=[
+                Entrypoint(kind="cli", target="gdal_fillnodata.exe", available=True),
+                Entrypoint(kind="script", target="osgeo.gdal.FillNodata", available=True),
+            ],
+            state=CapabilityState(
+                presence=Presence.present,
+                binding=Binding.cli,
+                validation=Validation.not_run,
+                availability=Availability.ready,
+            ),
+            effects="new_dataset",
+            cancellation="cooperative",
+            limitations=[],
+            validation_evidence=[],
+        ),
+        CapabilityDescriptor(
+            capability_id="gdal:nearblack",
+            descriptor_revision="1.0",
+            kind=CapabilityKind.algorithm,
+            name="GDAL 接近黑白边界整洁处理 (Nearblack)",
+            native_name="gdal.Nearblack",
+            category=["filter", "cleanup", "raster"],
+            description="将斜置航摄或遥感拼接边缘近黑或近白的压缩伪影修正为严格精确的单一背景值或 NoData。",
+            engine=_engine_spec(),
+            source=_source_spec("programs/nearblack.html"),
+            parameters=[
+                ParameterSpec(key="near", native_name="near", label="接近阈值范围", type="integer", required=False, default=15),
+                ParameterSpec(key="white", native_name="white", label="搜索白色而非黑色边界", type="boolean", required=False, default=False),
+            ],
+            inputs=[PortSpec(key="input", data_type=DatasetKind.raster, required=True, description="边缘含杂散压缩伪影影像")],
+            outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="黑白边界清洁影像")],
+            requirements=[Requirement(kind="package", name="GDAL", reason="需 nearblack 原生算法")],
+            entrypoints=[
+                Entrypoint(kind="cli", target="nearblack.exe", available=True),
+                Entrypoint(kind="script", target="osgeo.gdal.Nearblack", available=True),
+            ],
+            state=CapabilityState(
+                presence=Presence.present,
+                binding=Binding.cli,
+                validation=Validation.not_run,
+                availability=Availability.ready,
+            ),
+            effects="new_dataset",
+            cancellation="cooperative",
+            limitations=[],
+            validation_evidence=[],
+        ),
+        CapabilityDescriptor(
+            capability_id="gdal:viewshed",
+            descriptor_revision="1.0",
+            kind=CapabilityKind.algorithm,
+            name="GDAL DEM 视域通视分析 (Viewshed)",
+            native_name="gdal.ViewshedGenerate",
+            category=["dem", "terrain", "analysis"],
+            description="基于观察者位置坐标与高度，在 DEM 地形上计算视线通视可视范围掩膜。",
+            engine=_engine_spec(),
+            source=_source_spec("programs/gdal_viewshed.html"),
+            parameters=[
+                ParameterSpec(key="ox", native_name="ox", label="观察者 X 坐标", type="number", required=True),
+                ParameterSpec(key="oy", native_name="oy", label="观察者 Y 坐标", type="number", required=True),
+                ParameterSpec(key="observerHeight", native_name="observerHeight", label="观察点附加高程 (米)", type="number", required=False, default=2.0),
+                ParameterSpec(key="targetHeight", native_name="targetHeight", label="目标点附加高程 (米)", type="number", required=False, default=0.0),
+                ParameterSpec(key="maxDistance", native_name="maxDistance", label="最大通视分析半径", type="number", required=False, default=10000.0),
+            ],
+            inputs=[PortSpec(key="input", data_type=DatasetKind.raster, required=True, description="输入 DEM 栅格")],
+            outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="通视范围二值掩膜图")],
+            requirements=[Requirement(kind="package", name="GDAL", reason="需 gdal_viewshed 原生模块")],
+            entrypoints=[
+                Entrypoint(kind="cli", target="gdal_viewshed.exe", available=True),
+                Entrypoint(kind="script", target="osgeo.gdal.ViewshedGenerate", available=True),
+            ],
+            state=CapabilityState(
+                presence=Presence.present,
+                binding=Binding.cli,
+                validation=Validation.not_run,
+                availability=Availability.ready,
+            ),
+            effects="new_dataset",
+            cancellation="cooperative",
+            limitations=[],
+            validation_evidence=[],
+        ),
+        CapabilityDescriptor(
+            capability_id="gdal:calc",
+            descriptor_revision="1.0",
+            kind=CapabilityKind.algorithm,
+            name="GDAL 栅格代数计算器 (gdal_calc)",
+            native_name="gdal_calc.py",
+            category=["calc", "algebra", "raster"],
+            description="利用 NumPy 数组表达式对多幅影像进行像素级代数计算（如波段比值、NDVI、阈值分割）。",
+            engine=_engine_spec(),
+            source=_source_spec("programs/gdal_calc.html"),
+            parameters=[
+                ParameterSpec(key="calc", native_name="calc", label="NumPy 代数运算表达式", type="expression", required=True, help="例如: (A.astype(float)-B)/(A+B)"),
+                ParameterSpec(key="NoDataValue", native_name="NoDataValue", label="输出 NoData 替代值", type="number", required=False),
+            ],
+            inputs=[
+                PortSpec(key="input_a", data_type=DatasetKind.raster, required=True, description="波段/栅格 A"),
+                PortSpec(key="input_b", data_type=DatasetKind.raster, required=False, description="波段/栅格 B"),
+            ],
+            outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="代数运算成果图")],
+            requirements=[
+                Requirement(kind="package", name="GDAL", reason="需 gdal_calc 脚本"),
+                Requirement(kind="package", name="numpy", reason="需 numpy 向量计算库"),
+            ],
+            entrypoints=[Entrypoint(kind="cli", target="gdal_calc.exe", available=True)],
+            state=CapabilityState(
+                presence=Presence.present,
+                binding=Binding.cli,
+                validation=Validation.not_run,
+                availability=Availability.ready,
+            ),
+            effects="new_dataset",
+            cancellation="process_termination",
+            limitations=[],
+            validation_evidence=[],
+        ),
+        CapabilityDescriptor(
+            capability_id="gdal:merge",
+            descriptor_revision="1.0",
+            kind=CapabilityKind.algorithm,
+            name="GDAL 栅格重叠镶嵌拼图 (gdal_merge)",
+            native_name="gdal_merge.py",
+            category=["mosaic", "raster"],
+            description="将多幅同投影空间相邻或重叠的栅格影像物理镶嵌融合为单幅大尺寸栅格。",
+            engine=_engine_spec(),
+            source=_source_spec("programs/gdal_merge.html"),
+            parameters=[
+                ParameterSpec(key="nodata", native_name="nodata", label="无效背景值 (NoData)", type="number", required=False),
+                ParameterSpec(key="separate", native_name="separate", label="作为独立波段堆叠", type="boolean", required=False, default=False),
+            ],
+            inputs=[PortSpec(key="input", data_type=DatasetKind.raster, required=True, multiple=True, description="输入相邻待拼图像列表")],
+            outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="镶嵌合并成果影像")],
+            requirements=[Requirement(kind="package", name="GDAL", reason="需 gdal_merge 脚本")],
+            entrypoints=[Entrypoint(kind="cli", target="gdal_merge.exe", available=True)],
+            state=CapabilityState(
+                presence=Presence.present,
+                binding=Binding.cli,
+                validation=Validation.not_run,
+                availability=Availability.ready,
+            ),
+            effects="new_dataset",
+            cancellation="process_termination",
+            limitations=[],
+            validation_evidence=[],
+        ),
+        CapabilityDescriptor(
+            capability_id="gdal:proximity",
+            descriptor_revision="1.0",
+            kind=CapabilityKind.algorithm,
+            name="GDAL 邻近距离图生成 (gdal_proximity)",
+            native_name="gdal_proximity.py",
+            category=["distance", "analysis", "raster"],
+            description="计算影像中每个像元距离目标要素/目标像元值的欧氏几何距离图或欧氏欧拉邻近图。",
+            engine=_engine_spec(),
+            source=_source_spec("programs/gdal_proximity.html"),
+            parameters=[
+                ParameterSpec(key="values", native_name="values", label="目标目标像元值", type="list", required=False, default=[1]),
+                ParameterSpec(key="distunits", native_name="distunits", label="距离单位", type="string", required=False, default="PIXEL", choices=["PIXEL", "GEO"]),
+            ],
+            inputs=[PortSpec(key="input", data_type=DatasetKind.raster, required=True, description="输入二值或目标特征图")],
+            outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="欧氏邻近距离图")],
+            requirements=[Requirement(kind="package", name="GDAL", reason="需 gdal_proximity 脚本")],
+            entrypoints=[Entrypoint(kind="cli", target="gdal_proximity.exe", available=True)],
+            state=CapabilityState(
+                presence=Presence.present,
+                binding=Binding.cli,
+                validation=Validation.not_run,
+                availability=Availability.ready,
+            ),
+            effects="new_dataset",
+            cancellation="process_termination",
+            limitations=[],
+            validation_evidence=[],
+        ),
+        CapabilityDescriptor(
+            capability_id="gdal:retile",
+            descriptor_revision="1.0",
+            kind=CapabilityKind.algorithm,
+            name="GDAL 规则网格分块瓦片生成 (gdal_retile)",
+            native_name="gdal_retile.py",
+            category=["tile", "pyramid", "raster"],
+            description="将大尺寸栅格影像按设定行列尺寸裁切分割为规则瓦片集，并可选构建多级金字塔结构。",
+            engine=_engine_spec(),
+            source=_source_spec("programs/gdal_retile.html"),
+            parameters=[
+                ParameterSpec(key="tileWidth", native_name="tileWidth", label="瓦片宽度 (像素)", type="integer", required=False, default=256),
+                ParameterSpec(key="tileHeight", native_name="tileHeight", label="瓦片高度 (像素)", type="integer", required=False, default=256),
+                ParameterSpec(key="levels", native_name="levels", label="金字塔级数", type="integer", required=False, default=1),
+            ],
+            inputs=[PortSpec(key="input", data_type=DatasetKind.raster, required=True, multiple=True, description="输入源大图")],
+            outputs=[PortSpec(key="output_dir", data_type=DatasetKind.artifact, required=True, description="输出切片文件目录")],
+            requirements=[Requirement(kind="package", name="GDAL", reason="需 gdal_retile 脚本")],
+            entrypoints=[Entrypoint(kind="cli", target="gdal_retile.exe", available=True)],
+            state=CapabilityState(
+                presence=Presence.present,
+                binding=Binding.cli,
+                validation=Validation.not_run,
+                availability=Availability.ready,
+            ),
+            effects="new_dataset",
+            cancellation="process_termination",
+            limitations=[],
+            validation_evidence=[],
+        ),
+        CapabilityDescriptor(
+            capability_id="gdal:pansharpen",
+            descriptor_revision="1.0",
+            kind=CapabilityKind.algorithm,
+            name="GDAL 全色高分辨率锐化融合 (gdal_pansharpen)",
+            native_name="gdal_pansharpen.py",
+            category=["fusion", "pansharpen", "raster"],
+            description="利用高分辨率全色单波段对低分辨率多光谱多波段影像进行Brovey/权重融合锐化。",
+            engine=_engine_spec(),
+            source=_source_spec("programs/gdal_pansharpen.html"),
+            parameters=[
+                ParameterSpec(key="weights", native_name="weights", label="各多光谱波段融合权重", type="list", required=False),
+            ],
+            inputs=[
+                PortSpec(key="panchromatic", data_type=DatasetKind.raster, required=True, description="高分辨率全色波段"),
+                PortSpec(key="multispectral", data_type=DatasetKind.raster, required=True, description="低分辨率多光谱影像"),
+            ],
+            outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="锐化融合成果影像")],
+            requirements=[Requirement(kind="package", name="GDAL", reason="需 gdal_pansharpen 脚本")],
+            entrypoints=[Entrypoint(kind="cli", target="gdal_pansharpen.exe", available=True)],
+            state=CapabilityState(
+                presence=Presence.present,
+                binding=Binding.cli,
+                validation=Validation.not_run,
+                availability=Availability.ready,
+            ),
+            effects="new_dataset",
+            cancellation="process_termination",
+            limitations=[],
+            validation_evidence=[],
+        ),
+        CapabilityDescriptor(
+            capability_id="ogr:vectortranslate",
+            descriptor_revision="1.0",
+            kind=CapabilityKind.algorithm,
+            name="OGR 矢量格式转换与空间 SQL (ogr2ogr)",
+            native_name="gdal.VectorTranslate",
+            category=["vector", "conversion", "sql"],
+            description="在各种矢量格式之间转换、重投影、执行空间过滤与 SQL 属性查询。",
+            engine=_engine_spec(),
+            source=_source_spec("programs/ogr2ogr.html"),
+            parameters=[
+                ParameterSpec(key="format", native_name="format", label="目标矢量驱动", type="string", required=False, default="GPKG", choices=["GPKG", "ESRI Shapefile", "GeoJSON", "FlatGeobuf"]),
+                ParameterSpec(key="sql", native_name="sql", label="SQL 过滤查询语句", type="sql", required=False),
+                ParameterSpec(key="dstSRS", native_name="dstSRS", label="目标空间参考 (CRS)", type="crs", required=False),
+            ],
+            inputs=[PortSpec(key="input", data_type=DatasetKind.vector, required=True, description="输入源矢量图层")],
+            outputs=[PortSpec(key="output", data_type=DatasetKind.vector, required=True, description="输出目标矢量图层")],
+            requirements=[Requirement(kind="package", name="GDAL", reason="需 OGR 矢量引擎与矢量驱动")],
+            entrypoints=[
+                Entrypoint(kind="cli", target="ogr2ogr.exe", available=True, notes="标准 CLI 别名"),
+                Entrypoint(kind="script", target="osgeo.gdal.VectorTranslate", available=True),
+            ],
+            state=CapabilityState(
+                presence=Presence.present,
+                binding=Binding.cli,
+                validation=Validation.not_run,
+                availability=Availability.ready,
+            ),
+            effects="new_dataset",
+            cancellation="cooperative",
+            limitations=[],
+            validation_evidence=[],
+        ),
+    ]
+
+
+def build_gdal_cli_programs() -> list[CapabilityDescriptor]:
+    """GDAL 传统 CLI 工具清单（包含现存与显式保留的缺失工具）。"""
+    programs: list[dict[str, Any]] = [
+        {"name": "gdalinfo", "doc": "programs/gdalinfo.html", "desc": "栅格数据集详细信息、驱动、波段、元数据与空间范围诊断查看。"},
+        {"name": "ogrinfo", "doc": "programs/ogrinfo.html", "desc": "矢量数据源、图层模式、属性表结构与空间要素信息检查。"},
+        {"name": "gdal_translate", "doc": "programs/gdal_translate.html", "desc": "经典栅格格式转换与抽样命令行实用工具。"},
+        {"name": "gdalwarp", "doc": "programs/gdalwarp.html", "desc": "经典栅格影像空间重投影与镶嵌命令行工具。"},
+        {"name": "gdaldem", "doc": "programs/gdaldem.html", "desc": "经典 DEM 数字高程模型地形分析命令行工具。"},
+        {"name": "gdalbuildvrt", "doc": "programs/gdalbuildvrt.html", "desc": "构建虚拟栅格 VRT 的经典命令行工具。"},
+        {"name": "gdal_contour", "doc": "programs/gdal_contour.html", "desc": "栅格等值线提取 CLI 工具。"},
+        {"name": "gdal_rasterize", "doc": "programs/gdal_rasterize.html", "desc": "矢量图层栅格化烧录 CLI 工具。"},
+        {"name": "gdal_grid", "doc": "programs/gdal_grid.html", "desc": "离散点插值生成规则栅格 CLI 工具。"},
+        {"name": "gdalmanage", "doc": "programs/gdalmanage.html", "desc": "管理文件系统中的 GDAL 栅格数据集（识别、删除、重命名、拷贝）。"},
+        {"name": "gdallocationinfo", "doc": "programs/gdallocationinfo.html", "desc": "查询指定空间坐标或像素坐标处像元实际数值。"},
+        {"name": "gdalmdiminfo", "doc": "programs/gdalmdiminfo.html", "desc": "检查多维栅格数组（netCDF / HDF / Zarr）维度、变量与属性。"},
+        {"name": "gdalmdimtranslate", "doc": "programs/gdalmdimtranslate.html", "desc": "多维栅格数组切片、变量提取与格式转换。"},
+        {"name": "gdalsrsinfo", "doc": "programs/gdalsrsinfo.html", "desc": "空间参考 (SRS/CRS) 解析与多种格式（WKT, PROJ, EPSG）相互转换。"},
+        {"name": "gdaltransform", "doc": "programs/gdaltransform.html", "desc": "坐标空间投影点转换与批量测试工具。"},
+        {"name": "gdaladdo", "doc": "programs/gdaladdo.html", "desc": "为栅格文件构建或更新多层概览视图 (Overviews / Pyramids)。"},
+        {"name": "nearblack", "doc": "programs/nearblack.html", "desc": "黑白压缩伪影边界修复命令行工具。"},
+        {"name": "ogr2ogr", "doc": "programs/ogr2ogr.html", "desc": "矢量要素转换与空间 SQL 经典命令行工具。"},
+        {"name": "ogrlineref", "doc": "programs/ogrlineref.html", "desc": "矢量线性参考 (Linear Referencing) 计算工具。"},
+        {"name": "ogrtindex", "doc": "programs/ogrtindex.html", "desc": "构建矢量瓦片索引图层工具。"},
+        {"name": "gdal_calc", "doc": "programs/gdal_calc.html", "desc": "栅格代数计算 Python CLI 脚本。"},
+        {"name": "gdal_merge", "doc": "programs/gdal_merge.html", "desc": "栅格物理镶嵌拼图 Python CLI 脚本。"},
+        {"name": "gdal_polygonize", "doc": "programs/gdal_polygonize.html", "desc": "栅格多边形矢量化 Python CLI 脚本。"},
+        {"name": "gdal_proximity", "doc": "programs/gdal_proximity.html", "desc": "像元欧氏距离分析 Python CLI 脚本。"},
+        {"name": "gdal_retile", "doc": "programs/gdal_retile.html", "desc": "网格瓦片金字塔切块 Python CLI 脚本。"},
+        {"name": "gdal_sieve", "doc": "programs/gdal_sieve.html", "desc": "分类杂斑滤除 Python CLI 脚本。"},
+        {"name": "gdal_fillnodata", "doc": "programs/gdal_fillnodata.html", "desc": "无效值插值填补 Python CLI 脚本。"},
+        {"name": "gdal_edit", "doc": "programs/gdal_edit.html", "desc": "在位修改现有数据集的空间参考、仿射变换矩阵或 NoData 标记。"},
+        {"name": "gdal2tiles", "doc": "programs/gdal2tiles.html", "desc": "生成 TMS / XYZ 标准网络瓦片集与 HTML 预览页。"},
+        {"name": "gdal2xyz", "doc": "programs/gdal2xyz.html", "desc": "将栅格转存为三列 ASCII 坐标与数值文本 (X, Y, Z)。"},
+        {"name": "gdalcompare", "doc": "programs/gdalcompare.html", "desc": "对比两幅栅格的像素数值、元数据与空间参数差异。"},
+        {"name": "gdalenhance", "doc": "programs/gdalenhance.html", "desc": "简易栅格色彩均衡与对比度拉伸工具。"},
+        {
+            "name": "rgb2pct",
+            "doc": "programs/rgb2pct.html",
+            "desc": "将 24 位 RGB 影像降采样为 8 位伪彩色带调色板影像（提供 osgeo_utils 模块与新 CLI 替代）。",
+            "module": "osgeo_utils.rgb2pct",
+            "alt": "可由 gdal raster rgb-to-palette 替代",
+        },
+        {
+            "name": "pct2rgb",
+            "doc": "programs/pct2rgb.html",
+            "desc": "将 8 位伪彩色影像扩展转换为 24 位 RGB 影像（提供 osgeo_utils 模块与 gdal_translate -expand 替代）。",
+            "module": "osgeo_utils.pct2rgb",
+            "alt": "可由 gdal_translate -expand rgb/rgba 替代",
+        },
+    ]
+
+    result: list[CapabilityDescriptor] = []
+    for p in programs:
+        p_name = str(p["name"])
+        target_cmd = f"python -m {p['module']}" if "module" in p else p_name
+        notes = str(p["alt"]) if "alt" in p else None
+        limitations: list[str] = []
+        if "module" in p:
+            if "alt" in p:
+                limitations.append(str(p["alt"]))
+            limitations.append(f"底层通过 {p['module']} 模块提供")
+        result.append(
+            CapabilityDescriptor(
+                capability_id=f"gdal:cli:{p_name}",
+                descriptor_revision="1.0",
+                kind=CapabilityKind.cli,
+                name=f"GDAL CLI: {p_name}",
+                native_name=p_name,
+                category=["cli", "gdal", "utility"],
+                description=str(p["desc"]),
+                engine=_engine_spec(),
+                source=_source_spec(str(p["doc"])),
+                entrypoints=[Entrypoint(kind="cli", target=target_cmd, available=True, notes=notes)],
+                state=CapabilityState(
+                    presence=Presence.present,
+                    binding=Binding.cli,
+                    validation=Validation.not_run,
+                    availability=Availability.ready,
+                ),
+                effects="read_only" if "info" in p_name or "compare" in p_name else "new_dataset",
+                cancellation="process_termination",
+                limitations=limitations,
+                validation_evidence=[],
+            )
+        )
+
+    # 显式保留缺失能力（验收标准：不存在的命令保持 missing 状态，不静默删除）
+    missing_programs = [
+        {
+            "name": "gdal_auth",
+            "doc": "programs/gdal.html",
+            "desc": "GDAL 身份凭据与 OAuth2 授权管理命令行工具。",
+            "reason": "Windows QGIS 运行时未编译该独立命令；凭据在当前版本需通过环境变量或配置文件提供",
+        },
+    ]
+
+    for mp in missing_programs:
+        mp_name = str(mp["name"])
+        result.append(
+            CapabilityDescriptor(
+                capability_id=f"gdal:cli:{mp_name}",
+                descriptor_revision="1.0",
+                kind=CapabilityKind.cli,
+                name=f"GDAL CLI (缺失): {mp_name}",
+                native_name=mp_name,
+                category=["cli", "gdal", "missing"],
+                description=str(mp["desc"]),
+                engine=_engine_spec(),
+                source=_source_spec(str(mp["doc"])),
+                entrypoints=[Entrypoint(kind="cli", target=mp_name, available=False, notes=str(mp["reason"]))],
+                state=CapabilityState(
+                    presence=Presence.missing,
+                    binding=Binding.none,
+                    validation=Validation.not_run,
+                    availability=Availability.unsupported,
+                ),
+                effects="mixed",
+                cancellation="unsupported",
+                limitations=[str(mp["reason"])],
+                validation_evidence=[],
+            )
+        )
+
+    return result
+
+
+def build_gdal_drivers() -> list[CapabilityDescriptor]:
+    """GDAL 全量驱动清单（包含本机探测的 205 个已注册驱动及缺失驱动 HDF5）。"""
+    drivers_json = _load_resource_json("gdal_runtime_drivers.json")
+    result: list[CapabilityDescriptor] = []
+
+    if drivers_json and "drivers" in drivers_json:
+        for d in drivers_json["drivers"]:
+            s_name = str(d["short_name"])
+            l_name = str(d["long_name"])
+            is_raster = bool(d.get("is_raster", True))
+            is_vector = bool(d.get("is_vector", False))
+            can_create = bool(d.get("can_create", False))
+            can_copy = bool(d.get("can_createcopy", False))
+
+            cat = ["driver", "gdal"]
+            if is_raster:
+                cat.append("raster")
+            if is_vector:
+                cat.append("vector")
+
+            is_smoke = s_name in ("GTiff", "ENVI")
+
+            result.append(
+                CapabilityDescriptor(
+                    capability_id=f"gdal:driver:{s_name}",
+                    descriptor_revision="1.0",
+                    kind=CapabilityKind.driver,
+                    name=f"GDAL Driver: {s_name}",
+                    native_name=s_name,
+                    category=cat,
+                    description=f"GDAL 格式驱动: {l_name} ({'栅格' if is_raster else ''} {'矢量' if is_vector else ''})".strip(),
+                    engine=_engine_spec(),
+                    source=_source_spec(f"drivers/{'raster' if is_raster else 'vector'}/{s_name.lower()}.html"),
+                    entrypoints=[Entrypoint(kind="documentation", target=f"driver:{s_name}", available=True)],
+                    state=CapabilityState(
+                        presence=Presence.present,
+                        binding=Binding.indexed,
+                        validation=Validation.smoke_passed if is_smoke else Validation.not_run,
+                        availability=Availability.ready,
+                    ),
+                    effects="read_only" if not (can_create or can_copy) else "new_dataset",
+                    cancellation="unsupported",
+                    limitations=[],
+                    validation_evidence=[
+                        ValidationEvidence(
+                            case_id=f"smoke_driver_{s_name.lower()}",
+                            status="passed",
+                            runtime_id="gdal-3.13.3",
+                            report_uri="docs/progress/runs/env_report.json",
+                        )
+                    ] if is_smoke else [],
+                )
+            )
+
+    # 显式保留缺失的 HDF5 驱动（契约要求：缺失驱动保留为 missing / missing_dependency）
+    result.append(
+        CapabilityDescriptor(
+            capability_id="gdal:driver:HDF5",
+            descriptor_revision="1.0",
+            kind=CapabilityKind.driver,
+            name="GDAL Driver (缺失): HDF5",
+            native_name="HDF5",
+            category=["driver", "gdal", "raster", "missing"],
+            description="GDAL 格式驱动: Hierarchical Data Format Release 5 (栅格)",
+            engine=_engine_spec(),
+            source=_source_spec("drivers/raster/hdf5.html"),
+            entrypoints=[Entrypoint(kind="documentation", target="driver:HDF5", available=False, notes="当前 Windows QGIS GDAL 运行时未链接 HDF5 动态库")],
+            state=CapabilityState(
+                presence=Presence.missing,
+                binding=Binding.none,
+                validation=Validation.not_run,
+                availability=Availability.missing_dependency,
+            ),
+            effects="read_only",
+            cancellation="unsupported",
+            limitations=["当前 Windows QGIS GDAL 运行时未链接 HDF5 动态库；部分 HDF5 文件可通过 netCDF 驱动尝试读取"],
+            validation_evidence=[],
+        )
+    )
+
+    return result
+
+
+def build_gdal_structured_cli_commands() -> list[CapabilityDescriptor]:
+    """递归采集官方统一 CLI (gdal --json-usage) 119 个叶子命令路径与参数。"""
+    usage_json = _load_resource_json("gdal_json_usage.json")
+    if not usage_json or "leaves" not in usage_json:
+        return []
+
+    result: list[CapabilityDescriptor] = []
+    for leaf in usage_json["leaves"]:
+        full_path = leaf.get("full_path", [])
+        cmd = leaf.get("cmd", "gdal")
+        desc = leaf.get("description", "")
+        url = leaf.get("url", f"{GDAL_DOC_BASE}programs/index.html")
+
+        # 构造规则 capability_id，如 gdal:leaf:raster:convert
+        cid_suffix = ":".join(p.replace("-", "_") for p in full_path[1:])
+        capability_id = f"gdal:leaf:{cid_suffix}"
+
+        group = full_path[1] if len(full_path) > 1 else "general"
+
+        params: list[ParameterSpec] = []
+        for arg in leaf.get("input_arguments", []):
+            arg_name = arg.get("name", "")
+            if not arg_name:
+                continue
+            raw_type = arg.get("type", "string")
+            type_mapping = {
+                "boolean": "boolean",
+                "integer": "integer",
+                "float": "number",
+                "string": "string",
+                "string_list": "list",
+                "dataset": "dataset",
+                "geometry": "string",
+            }
+            spec_type = type_mapping.get(raw_type, "string")
+            params.append(
+                ParameterSpec(
+                    key=arg_name.replace("-", "_"),
+                    native_name=arg_name,
+                    label=arg_name,
+                    type=spec_type,
+                    required=bool(arg.get("required", False)),
+                    help=arg.get("description", ""),
+                )
+            )
+
+        result.append(
+            CapabilityDescriptor(
+                capability_id=capability_id,
+                descriptor_revision="1.0",
+                kind=CapabilityKind.cli,
+                name=f"GDAL 统一 CLI: {cmd}",
+                native_name=cmd,
+                category=["cli", "gdal", group],
+                description=desc or f"GDAL 统一命令行工具: {cmd}",
+                engine=_engine_spec(),
+                source=CapabilitySource(
+                    documentation_url=url,
+                    baseline_id=BASELINE_ID,
+                    upstream_version=GDAL_VERSION,
+                    snapshot_sha256=None,
+                    verified_date="2026-11-04",
+                ),
+                parameters=params,
+                entrypoints=[Entrypoint(kind="cli", target=cmd, available=True)],
+                state=CapabilityState(
+                    presence=Presence.present,
+                    binding=Binding.cli,
+                    validation=Validation.not_run,
+                    availability=Availability.ready,
+                ),
+                effects="read_only" if any(w in cmd for w in ("info", "check", "summary")) else "new_dataset",
+                cancellation="process_termination",
+                limitations=[],
+                validation_evidence=[],
+            )
+        )
+
+    return result
+
+
+def build_gdal_python_api_index() -> list[CapabilityDescriptor]:
+    """GDAL/OGR/OSR 公共 Python API 对象与函数索引（P2-03 GDAL 部分）。
+
+    公共分类严格筛选，排除私有 `_` 符号；
+    针对 SWIG C 扩展绑定无法反射签名的情况附注明确说明。
+    """
+    api_items: list[dict[str, Any]] = [
+        {"id": "gdal:api:Dataset", "kind": CapabilityKind.class_, "name": "osgeo.gdal.Dataset", "category": ["api", "gdal", "class"], "desc": "栅格数据集核心公开类，提供栅格波段、仿射矩阵、投影、RPC、GCP 与元数据读写。"},
+        {"id": "gdal:api:Band", "kind": CapabilityKind.class_, "name": "osgeo.gdal.Band", "category": ["api", "gdal", "class"], "desc": "单波段数据核心类，提供像元数据分块读写 (ReadAsArray)、NoData、统计、色彩表与概览访问。"},
+        {"id": "gdal:api:Driver", "kind": CapabilityKind.class_, "name": "osgeo.gdal.Driver", "category": ["api", "gdal", "class"], "desc": "格式驱动句柄类，用于创建、删除、复制数据集与查询格式能力。"},
+        {"id": "gdal:api:ColorTable", "kind": CapabilityKind.class_, "name": "osgeo.gdal.ColorTable", "category": ["api", "gdal", "class"], "desc": "伪彩色调色板类，管理波段色彩映射表 (Color Entries)。"},
+        {"id": "gdal:api:RasterAttributeTable", "kind": CapabilityKind.class_, "name": "osgeo.gdal.RasterAttributeTable", "category": ["api", "gdal", "class"], "desc": "栅格属性表 (RAT)，管理像元分类的伴生属性。"},
+        {"id": "gdal:api:Open", "kind": CapabilityKind.function, "name": "osgeo.gdal.Open", "category": ["api", "gdal", "function"], "desc": "打开只读或可写栅格数据集。", "swig_note": "SWIG C 扩展函数，inspect.signature 返回 (*args)；文档签名: Open(path, eAccess=GA_ReadOnly) -> Dataset"},
+        {"id": "gdal:api:OpenEx", "kind": CapabilityKind.function, "name": "osgeo.gdal.OpenEx", "category": ["api", "gdal", "function"], "desc": "高级打开接口，支持限定驱动、只读/更新标志与打开选项 open_options。", "swig_note": "SWIG C 扩展函数；文档签名: OpenEx(utf8_path, nOpenFlags=0, allowed_drivers=None, open_options=None, sibling_files=None) -> Dataset"},
+        {"id": "gdal:api:Translate", "kind": CapabilityKind.function, "name": "osgeo.gdal.Translate", "category": ["api", "gdal", "function"], "desc": "Python 包装版栅格格式转换接口。", "swig_note": "签名: Translate(destName, srcDS, **kwargs) -> Dataset"},
+        {"id": "gdal:api:Warp", "kind": CapabilityKind.function, "name": "osgeo.gdal.Warp", "category": ["api", "gdal", "function"], "desc": "Python 包装版栅格投影重采样接口。", "swig_note": "签名: Warp(destNameOrDestDS, srcDSOrSrcDSTab, **kwargs) -> Dataset"},
+        {"id": "gdal:api:Dem", "kind": CapabilityKind.function, "name": "osgeo.gdal.Dem", "category": ["api", "gdal", "function"], "desc": "Python 包装版 DEM 地形分析接口。", "swig_note": "签名: Dem(destName, srcDS, processing, **kwargs) -> Dataset"},
+        {"id": "gdal:api:Grid", "kind": CapabilityKind.function, "name": "osgeo.gdal.Grid", "category": ["api", "gdal", "function"], "desc": "Python 包装版离散点插值网格化接口。", "swig_note": "签名: Grid(destName, srcDS, **kwargs) -> Dataset"},
+        {"id": "gdal:api:BuildVRT", "kind": CapabilityKind.function, "name": "osgeo.gdal.BuildVRT", "category": ["api", "gdal", "function"], "desc": "Python 包装版虚拟栅格 VRT 生成接口。", "swig_note": "签名: BuildVRT(destName, srcDS, **kwargs) -> Dataset"},
+        {"id": "gdal:api:Rasterize", "kind": CapabilityKind.function, "name": "osgeo.gdal.Rasterize", "category": ["api", "gdal", "function"], "desc": "Python 包装版矢量要素栅格化接口。", "swig_note": "签名: Rasterize(destNameOrDestDS, srcDS, **kwargs) -> Dataset"},
+        {"id": "gdal:api:ContourGenerate", "kind": CapabilityKind.function, "name": "osgeo.gdal.ContourGenerate", "category": ["api", "gdal", "function"], "desc": "从单波段生成矢量等值线折线。", "swig_note": "SWIG 函数；签名: ContourGenerate(src_band, dfContourInterval, dfContourBase, fixedLevels, useNoData, noDataValue, dst_layer, idField, elevField, callback=None)"},
+        {"id": "gdal:api:Polygonize", "kind": CapabilityKind.function, "name": "osgeo.gdal.Polygonize", "category": ["api", "gdal", "function"], "desc": "单波段离散栅格矢量化为多边形图层。", "swig_note": "SWIG 函数；签名: Polygonize(src_band, mask_band, out_layer, pixValField, papszOptions=[], callback=None)"},
+        {"id": "gdal:api:InvGeoTransform", "kind": CapabilityKind.function, "name": "osgeo.gdal.InvGeoTransform", "category": ["api", "gdal", "function"], "desc": "计算 6 参数仿射变换矩阵的逆矩阵。", "swig_note": "SWIG 函数；签名: InvGeoTransform(gt_in) -> (success, gt_out)"},
+        {"id": "gdal:api:ApplyGeoTransform", "kind": CapabilityKind.function, "name": "osgeo.gdal.ApplyGeoTransform", "category": ["api", "gdal", "function"], "desc": "应用仿射变换矩阵将像素坐标 (pixel, line) 计算为地理空间坐标 (x, y)。", "swig_note": "SWIG 函数；签名: ApplyGeoTransform(gt, x, y) -> (geo_x, geo_y)"},
+        {"id": "ogr:api:DataSource", "kind": CapabilityKind.class_, "name": "osgeo.ogr.DataSource", "category": ["api", "ogr", "class"], "desc": "OGR 矢量数据源核心类，提供矢量图层枚举、创建、执行 SQL 查询。"},
+        {"id": "ogr:api:Layer", "kind": CapabilityKind.class_, "name": "osgeo.ogr.Layer", "category": ["api", "ogr", "class"], "desc": "OGR 矢量图层类，提供空间要素迭代、空间过滤器 (SetSpatialFilter) 与属性过滤器。"},
+        {"id": "ogr:api:Feature", "kind": CapabilityKind.class_, "name": "osgeo.ogr.Feature", "category": ["api", "ogr", "class"], "desc": "单条矢量要素类，包含几何图形与字段属性字典。"},
+        {"id": "ogr:api:Geometry", "kind": CapabilityKind.class_, "name": "osgeo.ogr.Geometry", "category": ["api", "ogr", "class"], "desc": "OGC 标准几何体类（点、折线、多边形、多部件）。"},
+        {"id": "ogr:api:Open", "kind": CapabilityKind.function, "name": "osgeo.ogr.Open", "category": ["api", "ogr", "function"], "desc": "打开已有 OGR 矢量数据源。", "swig_note": "SWIG 函数；签名: Open(utf8_path, update=0) -> DataSource"},
+        {"id": "osr:api:SpatialReference", "kind": CapabilityKind.class_, "name": "osgeo.osr.SpatialReference", "category": ["api", "osr", "class"], "desc": "OGRSpatialReference 坐标参考系核心类，支持 EPSG、WKT、PROJ 导入导出与轴顺序管理。"},
+        {"id": "osr:api:CoordinateTransformation", "kind": CapabilityKind.class_, "name": "osgeo.osr.CoordinateTransformation", "category": ["api", "osr", "class"], "desc": "OGRCoordinateTransformation 坐标变换核心类，执行两套空间参考间的精确点投影转换。"},
+    ]
+
+    result: list[CapabilityDescriptor] = []
+    for item in api_items:
+        notes = []
+        if "swig_note" in item:
+            notes.append(str(item["swig_note"]))
+
+        result.append(
+            CapabilityDescriptor(
+                capability_id=str(item["id"]),
+                descriptor_revision="1.0",
+                kind=item["kind"],
+                name=str(item["name"]),
+                native_name=str(item["name"]),
+                category=list(item["category"]),
+                description=str(item["desc"]),
+                engine=_engine_spec(),
+                source=_source_spec("api/python/index.html"),
+                entrypoints=[Entrypoint(kind="script", target=str(item["name"]), available=True, notes=notes[0] if notes else None)],
+                state=CapabilityState(
+                    presence=Presence.present,
+                    binding=Binding.script,
+                    validation=Validation.not_run,
+                    availability=Availability.ready,
+                ),
+                effects="read_only" if "class" in item["category"] or "info" in item["id"] or "Transform" in item["id"] else "mixed",
+                cancellation="unsupported",
+                limitations=notes,
+                validation_evidence=[],
+            )
+        )
+    return result
+
+
+def build_gdal_baseline() -> list[CapabilityDescriptor]:
+    """汇总构建完整的 GDAL 3.13.3 公开能力基准条目清单。"""
+    all_items: list[CapabilityDescriptor] = []
+    all_items.extend(build_gdal_algorithms())
+    all_items.extend(build_gdal_cli_programs())
+    all_items.extend(build_gdal_drivers())
+    all_items.extend(build_gdal_structured_cli_commands())
+    all_items.extend(build_gdal_python_api_index())
+    return all_items

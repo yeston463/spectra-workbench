@@ -1,0 +1,13 @@
+name: sw-ui
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - pip
+  - pyside6
+  - pyqtgraph
+  - numpy
+  - pydantic>=2,<3
+  - jsonschema
+  - pytest
+  - pytest-qt

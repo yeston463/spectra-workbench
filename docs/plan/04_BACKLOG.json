@@ -1,0 +1,911 @@
+{
+  "schema_version": "1.0",
+  "project": "Spectra Workbench",
+  "created_date": "2026-11-03",
+  "description": "初始任务基线；全部尚未执行。复制到 docs/progress/BACKLOG.json 后维护实际状态。",
+  "status_values": [
+    "todo",
+    "in_progress",
+    "implemented",
+    "awaiting_data",
+    "blocked",
+    "done"
+  ],
+  "done_definition": "对应里程碑验收真实通过，evidence 记录实际命令、结果和报告；仅写代码不能标 done。",
+  "tasks": [
+    {
+      "id": "P0-01",
+      "milestone": "P0",
+      "title": "检查开发目录、建仓库与文档结构",
+      "acceptance": [
+        "不覆盖无关文件；保留已有改动；README 有运行与开发入口"
+      ],
+      "depends_on": [],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P0-02",
+      "milestone": "P0",
+      "title": "解析并锁定 UI/GDAL/Rasterio/science 环境",
+      "acceptance": [
+        "提交精确版本、构建与 win-64 环境锁；独立进程能分别导入引擎"
+      ],
+      "depends_on": [
+        "P0-01"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P0-03",
+      "milestone": "P0",
+      "title": "实现 doctor 和小型 fixture 生成",
+      "acceptance": [
+        "GTiff 往返、坐标转换、CLI、资源目录和驱动分别报告；无 HDF4 仍可打开 GUI"
+      ],
+      "depends_on": [
+        "P0-02"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P0-04",
+      "milestone": "P0",
+      "title": "建立最小检查与自动化流水线",
+      "acceptance": [
+        "Ruff、核心类型检查、小型 pytest 在新环境可运行；原生集成检查独立分组"
+      ],
+      "depends_on": [
+        "P0-01",
+        "P0-02"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P0-05",
+      "milestone": "P0",
+      "title": "提前验证 Windows runtime 打包可行性",
+      "acceptance": [
+        "最小 Qt 窗口和两个引擎在另一目录启动；发现重定位或 DLL 问题写 ADR 并解决"
+      ],
+      "depends_on": [
+        "P0-03"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P1-01",
+      "milestone": "P1",
+      "title": "实现能力、数据引用、任务、成果模型",
+      "acceptance": [
+        "合法输入通过；缺字段、错误类型和不支持版本拒绝；错误能定位字段"
+      ],
+      "depends_on": [
+        "P0-01"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P1-02",
+      "milestone": "P1",
+      "title": "实现 JSONL 客户端/worker 启动",
+      "acceptance": [
+        "分包、粘包、中文、stderr、非法消息和超时处理通过"
+      ],
+      "depends_on": [
+        "P1-01",
+        "P0-03"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P1-03",
+      "milestone": "P1",
+      "title": "实现 ProviderAdapter 和真实 smoke 作业",
+      "acceptance": [
+        "Qt 提交一项真实格式转换；worker 执行，输出可重新打开，日志有版本"
+      ],
+      "depends_on": [
+        "P1-02",
+        "P0-05"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P1-04",
+      "milestone": "P1",
+      "title": "实现队列、取消、心跳和崩溃恢复",
+      "acceptance": [
+        "协作取消和无法协作取消都测试；GUI 不退出；作业子进程不残留"
+      ],
+      "depends_on": [
+        "P1-03"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P1-05",
+      "milestone": "P1",
+      "title": "实现 staging、提交清单和状态持久化",
+      "acceptance": [
+        "单文件、多文件成果失败恢复通过；残缺文件不登记为 succeeded"
+      ],
+      "depends_on": [
+        "P1-03",
+        "P1-04"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P2-01",
+      "milestone": "P2",
+      "title": "建立目标版本上游基准",
+      "acceptance": [
+        "各基准有来源、版本、哈希、kind；手工随机抽查与官方目录一致"
+      ],
+      "depends_on": [
+        "P0-03"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P2-02",
+      "milestone": "P2",
+      "title": "接入 GDAL 结构化算法、传统命令与驱动探测",
+      "acceptance": [
+        "保存原始描述；新旧别名关联；不存在的命令保持 missing 状态"
+      ],
+      "depends_on": [
+        "P2-01",
+        "P1-02"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P2-03",
+      "milestone": "P2",
+      "title": "接入 Rasterio API/rio 与 GDAL/OGR/OSR API 索引",
+      "acceptance": [
+        "公共对象分类；避免私有符号盲扫；不能反射签名的接口有说明"
+      ],
+      "depends_on": [
+        "P2-01",
+        "P1-02"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P2-04",
+      "milestone": "P2",
+      "title": "建立可搜索工具箱与自动表单",
+      "acceptance": [
+        "必填/可选/列表/互斥/CRS/范围/创建选项通过；高级参数不丢失"
+      ],
+      "depends_on": [
+        "P2-02",
+        "P2-03",
+        "P1-03"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P2-05",
+      "milestone": "P2",
+      "title": "建立覆盖审计与版本差异",
+      "acceptance": [
+        "基准分母非零；缺失能力可列出；有面板但未验证的项不显示已验收"
+      ],
+      "depends_on": [
+        "P2-02",
+        "P2-03",
+        "P2-04"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P3-01",
+      "milestone": "P3",
+      "title": "主窗口、Dock、项目树、图层模型",
+      "acceptance": [
+        "基础项目可保存重开源/样式/视图；布局可恢复；关闭图层释放文件；中文高 DPI 可用"
+      ],
+      "depends_on": [
+        "P1-03"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P3-02",
+      "milestone": "P3",
+      "title": "栅格/矢量/子数据集的元数据读取",
+      "acceptance": [
+        "数据类型、NoData、mask、单位、波段与空间模型准确；不完整数据明确报错"
+      ],
+      "depends_on": [
+        "P1-02",
+        "P2-02"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P3-03",
+      "milestone": "P3",
+      "title": "瓦片请求、概览、缓存、过期请求处理",
+      "acceptance": [
+        "只读可见窗口；切换波段不出现旧图；内存增长受缓存预算限制"
+      ],
+      "depends_on": [
+        "P3-01",
+        "P3-02",
+        "P1-04"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P3-04",
+      "milestone": "P3",
+      "title": "灰度/RGB/伪彩、拉伸、透明度与分屏",
+      "acceptance": [
+        "显示改变不改原始像元；抽样统计有标识；跨视图同步模式正确"
+      ],
+      "depends_on": [
+        "P3-03"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P3-05",
+      "milestone": "P3",
+      "title": "view CRS、重投影、查询与 ROI",
+      "acceptance": [
+        "旋转 affine、不同 CRS、无 CRS 视图、像元中心/角点均有样例"
+      ],
+      "depends_on": [
+        "P3-04",
+        "P3-02"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P4-01",
+      "milestone": "P4",
+      "title": "转换、裁剪、重投影与重采样",
+      "acceptance": [
+        "输出网格、dtype、mask、CRS 和像元值按明确参数验收"
+      ],
+      "depends_on": [
+        "P2-04",
+        "P3-05",
+        "P1-05"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P4-02",
+      "milestone": "P4",
+      "title": "拼接、VRT、堆叠与波段管理",
+      "acceptance": [
+        "重叠策略、缺口、NoData、源路径变化及波段顺序正确"
+      ],
+      "depends_on": [
+        "P4-01"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P4-03",
+      "milestone": "P4",
+      "title": "元数据/ENVI 头文件、概览与格式选项",
+      "acceptance": [
+        "不覆盖未知字段；不改原始数据尺寸契约；多文件提交可恢复"
+      ],
+      "depends_on": [
+        "P4-01",
+        "P1-05"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P4-04",
+      "milestone": "P4",
+      "title": "表达式、直方图与基础统计",
+      "acceptance": [
+        "解析错误、除零、整数溢出、mask、抽样/全量统计模式有证据"
+      ],
+      "depends_on": [
+        "P4-01"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P4-05",
+      "milestone": "P4",
+      "title": "首个完整用户流程",
+      "acceptance": [
+        "打开→选择工具→配置→执行→取消/重试→加载→导出→保存项目→重开均真实可用"
+      ],
+      "depends_on": [
+        "P4-02",
+        "P4-03",
+        "P4-04",
+        "P2-05"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P5-01",
+      "milestone": "P5",
+      "title": "补齐栅格算法/传统工具入口",
+      "acceptance": [
+        "以基准逐项对账，包含目标版本新增工具；缺口有具体原因"
+      ],
+      "depends_on": [
+        "P4-05",
+        "P2-05"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P5-02",
+      "milestone": "P5",
+      "title": "栅格化、多边形化、等值线及地形工具",
+      "acceptance": [
+        "已知矩形/标签图和解析平面验证；不能只检查文件存在"
+      ],
+      "depends_on": [
+        "P4-01",
+        "P5-01"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P5-03",
+      "milestone": "P5",
+      "title": "矢量图层与分页属性表",
+      "acceptance": [
+        "按范围查询；字段、空几何、多部件和编码保留；大图层无一次性全读"
+      ],
+      "depends_on": [
+        "P3-05",
+        "P4-05"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P5-04",
+      "milestone": "P5",
+      "title": "矢量处理、SQL 与坐标转换",
+      "acceptance": [
+        "独立已知坐标、空间关系与字段值验证；轴顺序与距离单位明确"
+      ],
+      "depends_on": [
+        "P5-03",
+        "P5-01"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P5-05",
+      "milestone": "P5",
+      "title": "驱动读写能力及高级选项",
+      "acceptance": [
+        "读/建/复制建/更新分开；ENVI/GPKG/GTiff/COG 和已装扩展驱动实测"
+      ],
+      "depends_on": [
+        "P5-01",
+        "P5-04",
+        "P4-03"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P6-01",
+      "milestone": "P6",
+      "title": "光谱、剖面、NDVI 等指数",
+      "acceptance": [
+        "物理量/原值与波段元数据对应；合成值和无效区符合公式"
+      ],
+      "depends_on": [
+        "P4-04",
+        "P3-05"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P6-02",
+      "milestone": "P6",
+      "title": "FFT 专用界面与去条纹",
+      "acceptance": [
+        "往返、频率定位、掩膜对称性、复数/奇偶尺寸通过；保存掩膜可复现"
+      ],
+      "depends_on": [
+        "P3-04",
+        "P4-04",
+        "P1-05"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P6-03",
+      "milestone": "P6",
+      "title": "PCA、逆变换与缨帽",
+      "acceptance": [
+        "PCA 完整重建与降维误差符合定义；缨帽系数来源、传感器匹配可检查"
+      ],
+      "depends_on": [
+        "P6-01",
+        "P4-04"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P6-04",
+      "milestone": "P6",
+      "title": "GCP、配准、差值与融合",
+      "acceptance": [
+        "合成已知变换和独立检查点验证；各融合算法准确命名"
+      ],
+      "depends_on": [
+        "P5-04",
+        "P3-05",
+        "P4-01"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P6-05",
+      "milestone": "P6",
+      "title": "分类与 FVC 完整流程",
+      "acceptance": [
+        "ROI→分类/掩膜→分位端元→FVC→分级统计；独立验证与无效区策略清楚"
+      ],
+      "depends_on": [
+        "P6-01",
+        "P5-03",
+        "P4-04"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P6-06",
+      "milestone": "P6",
+      "title": "辐射处理、去云、农业及外部引擎适配",
+      "acceptance": [
+        "每项有方法、依赖与真实证据；缺少输入/引擎时如实标注待验，继续其他项"
+      ],
+      "depends_on": [
+        "P6-04",
+        "P6-05",
+        "P5-05"
+      ],
+      "status": "todo",
+      "release_requirement": "conditional",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P7-01",
+      "milestone": "P7",
+      "title": "项目保存、迁移、重定位与恢复",
+      "acceptance": [
+        "移动项目后重新关联；旧 schema 可迁移；异常退出不破坏上次保存"
+      ],
+      "depends_on": [
+        "P4-05"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P7-02",
+      "milestone": "P7",
+      "title": "隔离脚本会话",
+      "acceptance": [
+        "GDAL/Rasterio 会话分别导入原生 API；停止、日志、成果登记和会话重启可用"
+      ],
+      "depends_on": [
+        "P1-04",
+        "P2-03",
+        "P3-01"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P7-03",
+      "milestone": "P7",
+      "title": "批处理",
+      "acceptance": [
+        "多输入、多输出、参数变化、同名冲突、单项失败继续策略通过"
+      ],
+      "depends_on": [
+        "P4-05",
+        "P1-05"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P7-04",
+      "milestone": "P7",
+      "title": "DAG 工作流",
+      "acceptance": [
+        "环/端口错配拒绝；失败、恢复、缓存失效和跨引擎物化通过"
+      ],
+      "depends_on": [
+        "P7-03",
+        "P2-04",
+        "P7-01"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P7-05",
+      "milestone": "P7",
+      "title": "历史与可复现导出",
+      "acceptance": [
+        "从历史重开参数；记录输入/版本/关键配置；导出的执行入口跑出同类成果"
+      ],
+      "depends_on": [
+        "P7-01",
+        "P7-02",
+        "P7-04"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P8-01",
+      "milestone": "P8",
+      "title": "多维数据树与二维切片",
+      "acceptance": [
+        "合成 netCDF/HDF5 的 time/depth/x/y、单位和切片像元正确"
+      ],
+      "depends_on": [
+        "P5-01",
+        "P3-05"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P8-02",
+      "milestone": "P8",
+      "title": "VSI/归档/远程数据",
+      "acceptance": [
+        "本地归档和 HTTP 测试服务的范围读取、超时、重试及取消通过"
+      ],
+      "depends_on": [
+        "P5-05",
+        "P1-04"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P8-03",
+      "milestone": "P8",
+      "title": "凭据 profile 与脱敏",
+      "acceptance": [
+        "token 不写项目/日志/诊断；离线启动可正常处理本地数据"
+      ],
+      "depends_on": [
+        "P8-02",
+        "P7-01"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P8-04",
+      "milestone": "P8",
+      "title": "插件协议与示范插件",
+      "acceptance": [
+        "安装→发现→执行→禁用→不兼容→崩溃恢复均真实可用"
+      ],
+      "depends_on": [
+        "P2-05",
+        "P7-02",
+        "P1-04"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P8-05",
+      "milestone": "P8",
+      "title": "可选引擎扩展登记",
+      "acceptance": [
+        "Xarray/Dask/机器学习/点云等明确范围、依赖、入口与缺口；不作为已实现宣传"
+      ],
+      "depends_on": [
+        "P8-04",
+        "P8-01"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P9-01",
+      "milestone": "P9",
+      "title": "基准全量对账与参数审计",
+      "acceptance": [
+        "公开目标清单全部有状态；没有静默排除或只用运行时子集当分母"
+      ],
+      "depends_on": [
+        "P5-05",
+        "P8-05",
+        "P2-05"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P9-02",
+      "milestone": "P9",
+      "title": "能力路由补齐",
+      "acceptance": [
+        "适合参数化的已支持算法有通用/专用面板，复杂 API 有对应可运行会话入口"
+      ],
+      "depends_on": [
+        "P9-01",
+        "P7-02"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P9-03",
+      "milestone": "P9",
+      "title": "数据与数值边界回归",
+      "acceptance": [
+        "dtype、mask、坐标、负值、NaN、复数、波段与多文件边界通过"
+      ],
+      "depends_on": [
+        "P6-01",
+        "P6-02",
+        "P6-03",
+        "P6-04",
+        "P6-05",
+        "P8-01",
+        "P7-05"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P9-04",
+      "milestone": "P9",
+      "title": "性能基准与资源治理",
+      "acceptance": [
+        "按下面约定报告实际设备、样本、缓存状态、耗时和内存"
+      ],
+      "depends_on": [
+        "P9-02",
+        "P3-03",
+        "P7-04"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P9-05",
+      "milestone": "P9",
+      "title": "故障注入与恢复审计",
+      "acceptance": [
+        "worker 崩溃、磁盘满、无权限、网络失败、取消、损坏项目可恢复"
+      ],
+      "depends_on": [
+        "P9-03",
+        "P1-05",
+        "P8-03"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P10-01",
+      "milestone": "P10",
+      "title": "Windows onedir UI 与 engine runtimes",
+      "acceptance": [
+        "迁到中文/空格目录可运行；引擎、Qt 插件、CRS 资源完整"
+      ],
+      "depends_on": [
+        "P0-05",
+        "P9-02",
+        "P9-03"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P10-02",
+      "milestone": "P10",
+      "title": "安装/升级/卸载和干净机测试",
+      "acceptance": [
+        "无全局 Python、无开发目录、离线可启动并完成主要处理；用户项目保留"
+      ],
+      "depends_on": [
+        "P10-01",
+        "P9-05"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P10-03",
+      "milestone": "P10",
+      "title": "用户说明、开发说明和诊断",
+      "acceptance": [
+        "有工具索引、项目/流程示例、插件协议、故障定位、版本与依赖清单"
+      ],
+      "depends_on": [
+        "P7-05",
+        "P9-01"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P10-04",
+      "milestone": "P10",
+      "title": "最终发布审计",
+      "acceptance": [
+        "检查表和所有能力状态/未验项准确；主要功能有录屏/截图及计算证据；发布包可复建"
+      ],
+      "depends_on": [
+        "P0-04",
+        "P5-02",
+        "P10-02",
+        "P10-03",
+        "P9-04",
+        "P9-05"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    }
+  ]
+}

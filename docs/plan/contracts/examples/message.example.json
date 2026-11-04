@@ -1,0 +1,15 @@
+{
+  "protocol_version": "1.0",
+  "template_only": true,
+  "kind": "progress",
+  "message_id": "example-message",
+  "request_id": "example-request",
+  "task_id": "example-convert-not-executable",
+  "worker_id": "example-gdal-worker",
+  "generation": 1,
+  "payload": {
+    "ratio": 0.5,
+    "phase": "example-only",
+    "message": "仅为消息格式样例，不是实际运行进度。"
+  }
+}

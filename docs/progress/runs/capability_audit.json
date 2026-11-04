@@ -1,0 +1,299 @@
+{
+  "provider_filter": "all",
+  "completeness": "partial",
+  "total_baseline_count": 443,
+  "discovered": {
+    "count": 438,
+    "ratio": 0.9887
+  },
+  "callable": {
+    "count": 229,
+    "ratio": 0.5169
+  },
+  "platform_executable": {
+    "count": 3,
+    "ratio": 0.0068
+  },
+  "verified": {
+    "count": 5,
+    "ratio": 0.0113
+  },
+  "missing": {
+    "count": 9,
+    "ratio": 0.0203,
+    "items": [
+      {
+        "capability_id": "gdal:buildvrt",
+        "name": "GDAL 构建虚拟栅格 (VRT)",
+        "provider": "gdal",
+        "kind": "algorithm",
+        "presence": "present",
+        "availability": "blocked",
+        "binding": "indexed",
+        "limitations": [
+          "平台适配器暂未接入该算法执行器；CLI 工具可正常调用"
+        ]
+      },
+      {
+        "capability_id": "gdal:cli:gdal_auth",
+        "name": "GDAL CLI (缺失): gdal_auth",
+        "provider": "gdal",
+        "kind": "cli",
+        "presence": "missing",
+        "availability": "unsupported",
+        "binding": "none",
+        "limitations": [
+          "Windows QGIS 运行时未编译该独立命令；凭据在当前版本需通过环境变量或配置文件提供"
+        ]
+      },
+      {
+        "capability_id": "gdal:dem",
+        "name": "GDAL DEM 数字高程地形分析",
+        "provider": "gdal",
+        "kind": "algorithm",
+        "presence": "present",
+        "availability": "blocked",
+        "binding": "indexed",
+        "limitations": [
+          "平台适配器暂未接入该算法执行器；CLI 工具可正常调用"
+        ]
+      },
+      {
+        "capability_id": "gdal:driver:HDF5",
+        "name": "GDAL Driver (缺失): HDF5",
+        "provider": "gdal",
+        "kind": "driver",
+        "presence": "missing",
+        "availability": "missing_dependency",
+        "binding": "none",
+        "limitations": [
+          "当前 Windows QGIS GDAL 运行时未链接 HDF5 动态库；部分 HDF5 文件可通过 netCDF 驱动尝试读取"
+        ]
+      },
+      {
+        "capability_id": "gdal:grid",
+        "name": "GDAL 离散点栅格插值",
+        "provider": "gdal",
+        "kind": "algorithm",
+        "presence": "present",
+        "availability": "blocked",
+        "binding": "indexed",
+        "limitations": [
+          "平台适配器暂未接入该算法执行器；CLI 工具可正常调用"
+        ]
+      },
+      {
+        "capability_id": "gdal:rasterize",
+        "name": "GDAL 矢量要素栅格化",
+        "provider": "gdal",
+        "kind": "algorithm",
+        "presence": "present",
+        "availability": "blocked",
+        "binding": "indexed",
+        "limitations": [
+          "平台适配器暂未接入该算法执行器；CLI 工具可正常调用"
+        ]
+      },
+      {
+        "capability_id": "rio:cli:cogeo",
+        "name": "rio cogeo (缺失插件)",
+        "provider": "rasterio",
+        "kind": "cli",
+        "presence": "missing",
+        "availability": "missing_dependency",
+        "binding": "none",
+        "limitations": [
+          "sw-rasterio 环境未安装可选插件 rio-cogeo；可通过 GDAL COG 驱动直接输出"
+        ]
+      },
+      {
+        "capability_id": "rio:cli:color",
+        "name": "rio color (缺失插件)",
+        "provider": "rasterio",
+        "kind": "cli",
+        "presence": "missing",
+        "availability": "missing_dependency",
+        "binding": "none",
+        "limitations": [
+          "sw-rasterio 环境未安装可选插件 rio-color"
+        ]
+      },
+      {
+        "capability_id": "rio:cli:mbtiles",
+        "name": "rio mbtiles (缺失插件)",
+        "provider": "rasterio",
+        "kind": "cli",
+        "presence": "missing",
+        "availability": "missing_dependency",
+        "binding": "none",
+        "limitations": [
+          "sw-rasterio 环境未安装可选插件 rio-mbtiles"
+        ]
+      }
+    ]
+  },
+  "by_provider": {
+    "gdal": {
+      "provider_filter": "gdal",
+      "completeness": "partial",
+      "total_baseline_count": 402,
+      "discovered": {
+        "count": 400,
+        "ratio": 0.995
+      },
+      "callable": {
+        "count": 191,
+        "ratio": 0.4751
+      },
+      "platform_executable": {
+        "count": 2,
+        "ratio": 0.005
+      },
+      "verified": {
+        "count": 4,
+        "ratio": 0.01
+      },
+      "missing": {
+        "count": 6,
+        "ratio": 0.0149,
+        "items": [
+          {
+            "capability_id": "gdal:buildvrt",
+            "name": "GDAL 构建虚拟栅格 (VRT)",
+            "provider": "gdal",
+            "kind": "algorithm",
+            "presence": "present",
+            "availability": "blocked",
+            "binding": "indexed",
+            "limitations": [
+              "平台适配器暂未接入该算法执行器；CLI 工具可正常调用"
+            ]
+          },
+          {
+            "capability_id": "gdal:cli:gdal_auth",
+            "name": "GDAL CLI (缺失): gdal_auth",
+            "provider": "gdal",
+            "kind": "cli",
+            "presence": "missing",
+            "availability": "unsupported",
+            "binding": "none",
+            "limitations": [
+              "Windows QGIS 运行时未编译该独立命令；凭据在当前版本需通过环境变量或配置文件提供"
+            ]
+          },
+          {
+            "capability_id": "gdal:dem",
+            "name": "GDAL DEM 数字高程地形分析",
+            "provider": "gdal",
+            "kind": "algorithm",
+            "presence": "present",
+            "availability": "blocked",
+            "binding": "indexed",
+            "limitations": [
+              "平台适配器暂未接入该算法执行器；CLI 工具可正常调用"
+            ]
+          },
+          {
+            "capability_id": "gdal:driver:HDF5",
+            "name": "GDAL Driver (缺失): HDF5",
+            "provider": "gdal",
+            "kind": "driver",
+            "presence": "missing",
+            "availability": "missing_dependency",
+            "binding": "none",
+            "limitations": [
+              "当前 Windows QGIS GDAL 运行时未链接 HDF5 动态库；部分 HDF5 文件可通过 netCDF 驱动尝试读取"
+            ]
+          },
+          {
+            "capability_id": "gdal:grid",
+            "name": "GDAL 离散点栅格插值",
+            "provider": "gdal",
+            "kind": "algorithm",
+            "presence": "present",
+            "availability": "blocked",
+            "binding": "indexed",
+            "limitations": [
+              "平台适配器暂未接入该算法执行器；CLI 工具可正常调用"
+            ]
+          },
+          {
+            "capability_id": "gdal:rasterize",
+            "name": "GDAL 矢量要素栅格化",
+            "provider": "gdal",
+            "kind": "algorithm",
+            "presence": "present",
+            "availability": "blocked",
+            "binding": "indexed",
+            "limitations": [
+              "平台适配器暂未接入该算法执行器；CLI 工具可正常调用"
+            ]
+          }
+        ]
+      }
+    },
+    "rasterio": {
+      "provider_filter": "rasterio",
+      "completeness": "partial",
+      "total_baseline_count": 41,
+      "discovered": {
+        "count": 38,
+        "ratio": 0.9268
+      },
+      "callable": {
+        "count": 38,
+        "ratio": 0.9268
+      },
+      "platform_executable": {
+        "count": 1,
+        "ratio": 0.0244
+      },
+      "verified": {
+        "count": 1,
+        "ratio": 0.0244
+      },
+      "missing": {
+        "count": 3,
+        "ratio": 0.0732,
+        "items": [
+          {
+            "capability_id": "rio:cli:cogeo",
+            "name": "rio cogeo (缺失插件)",
+            "provider": "rasterio",
+            "kind": "cli",
+            "presence": "missing",
+            "availability": "missing_dependency",
+            "binding": "none",
+            "limitations": [
+              "sw-rasterio 环境未安装可选插件 rio-cogeo；可通过 GDAL COG 驱动直接输出"
+            ]
+          },
+          {
+            "capability_id": "rio:cli:color",
+            "name": "rio color (缺失插件)",
+            "provider": "rasterio",
+            "kind": "cli",
+            "presence": "missing",
+            "availability": "missing_dependency",
+            "binding": "none",
+            "limitations": [
+              "sw-rasterio 环境未安装可选插件 rio-color"
+            ]
+          },
+          {
+            "capability_id": "rio:cli:mbtiles",
+            "name": "rio mbtiles (缺失插件)",
+            "provider": "rasterio",
+            "kind": "cli",
+            "presence": "missing",
+            "availability": "missing_dependency",
+            "binding": "none",
+            "limitations": [
+              "sw-rasterio 环境未安装可选插件 rio-mbtiles"
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

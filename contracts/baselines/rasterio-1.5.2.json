@@ -1,0 +1,2137 @@
+{
+  "baseline_id": "rasterio-1.5.2",
+  "provider_id": "rasterio",
+  "upstream_version": "1.5.2",
+  "target_version": "1.5.2",
+  "completeness": "partial",
+  "generator_version": "1.0.0",
+  "source": {
+    "documentation_url": "https://rasterio.readthedocs.io/en/1.5.2/",
+    "repository_url": "https://github.com/rasterio/rasterio",
+    "upstream_tag": "1.5.2",
+    "release_date": "2024-10-15",
+    "raw_source_sha256": "a2802613d7120fe1e4856f6bc42f5348bbab905feea541e204b6b60098f997cb",
+    "runtime_inventory_sha256": "a2802613d7120fe1e4856f6bc42f5348bbab905feea541e204b6b60098f997cb"
+  },
+  "generated_at": "2026-11-04T00:00:00Z",
+  "items_sha256": "ee936a1e2cb4e5e22b14be102a9a036be788f8cc595180c39caa6d0b27608c96",
+  "normalized_catalog_sha256": "ee936a1e2cb4e5e22b14be102a9a036be788f8cc595180c39caa6d0b27608c96",
+  "capabilities": [
+    {
+      "schema_version": "1.0",
+      "template_only": false,
+      "capability_id": "rasterio:api:MemoryFile",
+      "descriptor_revision": "1.0",
+      "kind": "class",
+      "name": "rasterio.io.MemoryFile",
+      "native_name": "rasterio.io.MemoryFile",
+      "category": [
+        "api",
+        "rasterio",
+        "io",
+        "memory"
+      ],
+      "description": "在内存缓冲（/vsimem/）中创建虚拟栅格文件，支持无需磁盘写入的快速内存管线流式处理。",
+      "engine": {
+        "provider_id": "rasterio",
+        "version_constraint": ">=1.5,<2",
+        "runtime_id": "sw-rasterio",
+        "resolved_version": "1.5.2"
+      },
+      "source": {
+        "documentation_url": "https://rasterio.readthedocs.io/en/1.5.2/api/rasterio.io.html#rasterio.io.MemoryFile",
+        "baseline_id": "rasterio-1.5.2",
+        "upstream_version": "1.5.2",
+        "snapshot_sha256": "ee936a1e2cb4e5e22b14be102a9a036be788f8cc595180c39caa6d0b27608c96",
+        "verified_date": "2026-11-04"
+      },
+      "parameters": [],
+      "inputs": [],
+      "outputs": [],
+      "requirements": [],
+      "entrypoints": [
+        {
+          "kind": "script",
+          "target": "rasterio.io.MemoryFile",
+          "available": true,
+          "notes": "签名: MemoryFile(file_or_bytes=None, filename=None, ext='')"
+        }
+      ],
+      "state": {
+        "presence": "present",
+        "binding": "script",
+        "validation": "not_run",
+        "availability": "ready"
+      },
+      "effects": "mixed",
+      "cancellation": "unsupported",
+      "limitations": [
+        "接口签名: MemoryFile(file_or_bytes=None, filename=None, ext='')"
+      ],
+      "validation_evidence": []
+    },
+    {
+      "schema_version": "1.0",
+      "template_only": false,
+      "capability_id": "rasterio:api:Window",
+      "descriptor_revision": "1.0",
+      "kind": "class",
+      "name": "rasterio.windows.Window",
+      "native_name": "rasterio.windows.Window",
+      "category": [
+        "api",
+        "rasterio",
+        "windows"
+      ],
+      "description": "栅格局部子窗口规格类（col_off, row_off, width, height），用于大图分块按需读取与流式处理。",
+      "engine": {
+        "provider_id": "rasterio",
+        "version_constraint": ">=1.5,<2",
+        "runtime_id": "sw-rasterio",
+        "resolved_version": "1.5.2"
+      },
+      "source": {
+        "documentation_url": "https://rasterio.readthedocs.io/en/1.5.2/api/rasterio.windows.html#rasterio.windows.Window",
+        "baseline_id": "rasterio-1.5.2",
+        "upstream_version": "1.5.2",
+        "snapshot_sha256": "ee936a1e2cb4e5e22b14be102a9a036be788f8cc595180c39caa6d0b27608c96",
+        "verified_date": "2026-11-04"
+      },
+      "parameters": [],
+      "inputs": [],
+      "outputs": [],
+      "requirements": [],
+      "entrypoints": [
+        {
+          "kind": "script",
+          "target": "rasterio.windows.Window",
+          "available": true,
+          "notes": "签名: Window(col_off, row_off, width, height)"
+        }
+      ],
+      "state": {
+        "presence": "present",
+        "binding": "script",
+        "validation": "not_run",
+        "availability": "ready"
+      },
+      "effects": "read_only",
+      "cancellation": "unsupported",
+      "limitations": [
+        "接口签名: Window(col_off, row_off, width, height)"
+      ],
+      "validation_evidence": []
+    },
+    {
+      "schema_version": "1.0",
+      "template_only": false,
+      "capability_id": "rasterio:api:band",
+      "descriptor_revision": "1.0",
+      "kind": "function",
+      "name": "rasterio.band",
+      "native_name": "rasterio.band",
+      "category": [
+        "api",
+        "rasterio",
+        "io"
+      ],
+      "description": "从数据集句柄获取指定波段索引的轻量级波段代理引用。",
+      "engine": {
+        "provider_id": "rasterio",
+        "version_constraint": ">=1.5,<2",
+        "runtime_id": "sw-rasterio",
+        "resolved_version": "1.5.2"
+      },
+      "source": {
+        "documentation_url": "https://rasterio.readthedocs.io/en/1.5.2/api/rasterio.html#rasterio.band",
+        "baseline_id": "rasterio-1.5.2",
+        "upstream_version": "1.5.2",
+        "snapshot_sha256": "ee936a1e2cb4e5e22b14be102a9a036be788f8cc595180c39caa6d0b27608c96",
+        "verified_date": "2026-11-04"
+      },
+      "parameters": [],
+      "inputs": [],
+      "outputs": [],
+      "requirements": [],
+      "entrypoints": [
+        {
+          "kind": "script",
+          "target": "rasterio.band",
+          "available": true,
+          "notes": "签名: (ds, bidx)"
+        }
+      ],
+      "state": {
+        "presence": "present",
+        "binding": "script",
+        "validation": "not_run",
+        "availability": "ready"
+      },
+      "effects": "mixed",
+      "cancellation": "unsupported",
+      "limitations": [
+        "接口签名: (ds, bidx)"
+      ],
+      "validation_evidence": []
+    },
+    {
+      "schema_version": "1.0",
+      "template_only": false,
+      "capability_id": "rasterio:api:calculate_default_transform",
+      "descriptor_revision": "1.0",
+      "kind": "function",
+      "name": "rasterio.warp.calculate_default_transform",
+      "native_name": "rasterio.warp.calculate_default_transform",
+      "category": [
+        "api",
+        "rasterio",
+        "warp"
+      ],
+      "description": "根据源坐标系、目标坐标系与尺寸，预估重投影后的最佳输出网格尺寸与仿射变换矩阵。",
+      "engine": {
+        "provider_id": "rasterio",
+        "version_constraint": ">=1.5,<2",
+        "runtime_id": "sw-rasterio",
+        "resolved_version": "1.5.2"
+      },
+      "source": {
+        "documentation_url": "https://rasterio.readthedocs.io/en/1.5.2/api/rasterio.warp.html#rasterio.warp.calculate_default_transform",
+        "baseline_id": "rasterio-1.5.2",
+        "upstream_version": "1.5.2",
+        "snapshot_sha256": "ee936a1e2cb4e5e22b14be102a9a036be788f8cc595180c39caa6d0b27608c96",
+        "verified_date": "2026-11-04"
+      },
+      "parameters": [],
+      "inputs": [],
+      "outputs": [],
+      "requirements": [],
+      "entrypoints": [
+        {
+          "kind": "script",
+          "target": "rasterio.warp.calculate_default_transform",
+          "available": true,
+          "notes": "签名: (src_crs, dst_crs, width, height, left=None, bottom=None, right=None, top=None, gcps=None, rpcs=None, resolution=None, dst_width=None, dst_height=None)"
+        }
+      ],
+      "state": {
+        "presence": "present",
+        "binding": "script",
+        "validation": "not_run",
+        "availability": "ready"
+      },
+      "effects": "mixed",
+      "cancellation": "unsupported",
+      "limitations": [
+        "接口签名: (src_crs, dst_crs, width, height, left=None, bottom=None, right=None, top=None, gcps=None, rpcs=None, resolution=None, dst_width=None, dst_height=None)"
+      ],
+      "validation_evidence": []
+    },
+    {
+      "schema_version": "1.0",
+      "template_only": false,
+      "capability_id": "rasterio:api:copy",
+      "descriptor_revision": "1.0",
+      "kind": "function",
+      "name": "rasterio.shutil.copy",
+      "native_name": "rasterio.shutil.copy",
+      "category": [
+        "api",
+        "rasterio",
+        "shutil"
+      ],
+      "description": "完整拷贝已有栅格数据集及其辅助文件（如 .hdr、.xml、.ovr），支持驱动格式转换与重缩放。",
+      "engine": {
+        "provider_id": "rasterio",
+        "version_constraint": ">=1.5,<2",
+        "runtime_id": "sw-rasterio",
+        "resolved_version": "1.5.2"
+      },
+      "source": {
+        "documentation_url": "https://rasterio.readthedocs.io/en/1.5.2/api/rasterio.shutil.html#rasterio.shutil.copy",
+        "baseline_id": "rasterio-1.5.2",
+        "upstream_version": "1.5.2",
+        "snapshot_sha256": "ee936a1e2cb4e5e22b14be102a9a036be788f8cc595180c39caa6d0b27608c96",
+        "verified_date": "2026-11-04"
+      },
+      "parameters": [],
+      "inputs": [],
+      "outputs": [],
+      "requirements": [],
+      "entrypoints": [
+        {
+          "kind": "script",
+          "target": "rasterio.shutil.copy",
+          "available": true,
+          "notes": "签名: (src, dst, driver=None, strict=True, **creation_options)"
+        }
+      ],
+      "state": {
+        "presence": "present",
+        "binding": "script",
+        "validation": "not_run",
+        "availability": "ready"
+      },
+      "effects": "mixed",
+      "cancellation": "unsupported",
+      "limitations": [
+        "接口签名: (src, dst, driver=None, strict=True, **creation_options)"
+      ],
+      "validation_evidence": []
+    },
+    {
+      "schema_version": "1.0",
+      "template_only": false,
+      "capability_id": "rasterio:api:from_bounds",
+      "descriptor_revision": "1.0",
+      "kind": "function",
+      "name": "rasterio.windows.from_bounds",
+      "native_name": "rasterio.windows.from_bounds",
+      "category": [
+        "api",
+        "rasterio",
+        "windows"
+      ],
+      "description": "根据地理空间范围外包框 (left, bottom, right, top) 计算对应的像素行列窗口 Window。",
+      "engine": {
+        "provider_id": "rasterio",
+        "version_constraint": ">=1.5,<2",
+        "runtime_id": "sw-rasterio",
+        "resolved_version": "1.5.2"
+      },
+      "source": {
+        "documentation_url": "https://rasterio.readthedocs.io/en/1.5.2/api/rasterio.windows.html#rasterio.windows.from_bounds",
+        "baseline_id": "rasterio-1.5.2",
+        "upstream_version": "1.5.2",
+        "snapshot_sha256": "ee936a1e2cb4e5e22b14be102a9a036be788f8cc595180c39caa6d0b27608c96",
+        "verified_date": "2026-11-04"
+      },
+      "parameters": [],
+      "inputs": [],
+      "outputs": [],
+      "requirements": [],
+      "entrypoints": [
+        {
+          "kind": "script",
+          "target": "rasterio.windows.from_bounds",
+          "available": true,
+          "notes": "签名: (left, bottom, right, top, transform, height=None, width=None, precision=None)"
+        }
+      ],
+      "state": {
+        "presence": "present",
+        "binding": "script",
+        "validation": "not_run",
+        "availability": "ready"
+      },
+      "effects": "read_only",
+      "cancellation": "unsupported",
+      "limitations": [
+        "接口签名: (left, bottom, right, top, transform, height=None, width=None, precision=None)"
+      ],
+      "validation_evidence": []
+    },
+    {
+      "schema_version": "1.0",
+      "template_only": false,
+      "capability_id": "rasterio:api:geometry_mask",
+      "descriptor_revision": "1.0",
+      "kind": "function",
+      "name": "rasterio.features.geometry_mask",
+      "native_name": "rasterio.features.geometry_mask",
+      "category": [
+        "api",
+        "rasterio",
+        "features"
+      ],
+      "description": "根据几何形状生成布尔掩膜数组（目标内部或外部为 True）。",
+      "engine": {
+        "provider_id": "rasterio",
+        "version_constraint": ">=1.5,<2",
+        "runtime_id": "sw-rasterio",
+        "resolved_version": "1.5.2"
+      },
+      "source": {
+        "documentation_url": "https://rasterio.readthedocs.io/en/1.5.2/api/rasterio.features.html#rasterio.features.geometry_mask",
+        "baseline_id": "rasterio-1.5.2",
+        "upstream_version": "1.5.2",
+        "snapshot_sha256": "ee936a1e2cb4e5e22b14be102a9a036be788f8cc595180c39caa6d0b27608c96",
+        "verified_date": "2026-11-04"
+      },
+      "parameters": [],
+      "inputs": [],
+      "outputs": [],
+      "requirements": [],
+      "entrypoints": [
+        {
+          "kind": "script",
+          "target": "rasterio.features.geometry_mask",
+          "available": true,
+          "notes": "签名: (geometries, out_shape, transform, all_touched=False, invert=False)"
+        }
+      ],
+      "state": {
+        "presence": "present",
+        "binding": "script",
+        "validation": "not_run",
+        "availability": "ready"
+      },
+      "effects": "mixed",
+      "cancellation": "unsupported",
+      "limitations": [
+        "接口签名: (geometries, out_shape, transform, all_touched=False, invert=False)"
+      ],
+      "validation_evidence": []
+    },
+    {
+      "schema_version": "1.0",
+      "template_only": false,
+      "capability_id": "rasterio:api:mask",
+      "descriptor_revision": "1.0",
+      "kind": "function",
+      "name": "rasterio.mask.mask",
+      "native_name": "rasterio.mask.mask",
+      "category": [
+        "api",
+        "rasterio",
+        "mask"
+      ],
+      "description": "利用 GeoJSON 几何多边形对打开的栅格数据集提取掩膜切片与更新后的仿射变换。",
+      "engine": {
+        "provider_id": "rasterio",
+        "version_constraint": ">=1.5,<2",
+        "runtime_id": "sw-rasterio",
+        "resolved_version": "1.5.2"
+      },
+      "source": {
+        "documentation_url": "https://rasterio.readthedocs.io/en/1.5.2/api/rasterio.mask.html#rasterio.mask.mask",
+        "baseline_id": "rasterio-1.5.2",
+        "upstream_version": "1.5.2",
+        "snapshot_sha256": "ee936a1e2cb4e5e22b14be102a9a036be788f8cc595180c39caa6d0b27608c96",
+        "verified_date": "2026-11-04"
+      },
+      "parameters": [],
+      "inputs": [],
+      "outputs": [],
+      "requirements": [],
+      "entrypoints": [
+        {
+          "kind": "script",
+          "target": "rasterio.mask.mask",
+          "available": true,
+          "notes": "签名: (dataset, shapes, all_touched=False, invert=False, nodata=None, filled=True, crop=False, pad=False, pad_width=0.5, indexes=None)"
+        }
+      ],
+      "state": {
+        "presence": "present",
+        "binding": "script",
+        "validation": "not_run",
+        "availability": "ready"
+      },
+      "effects": "mixed",
+      "cancellation": "unsupported",
+      "limitations": [
+        "接口签名: (dataset, shapes, all_touched=False, invert=False, nodata=None, filled=True, crop=False, pad=False, pad_width=0.5, indexes=None)"
+      ],
+      "validation_evidence": []
+    },
+    {
+      "schema_version": "1.0",
+      "template_only": false,
+      "capability_id": "rasterio:api:merge",
+      "descriptor_revision": "1.0",
+      "kind": "function",
+      "name": "rasterio.merge.merge",
+      "native_name": "rasterio.merge.merge",
+      "category": [
+        "api",
+        "rasterio",
+        "mosaic"
+      ],
+      "description": "将多个 DatasetReader 句柄像素物理镶嵌融合成单个多波段 NumPy 数组与变换矩阵。",
+      "engine": {
+        "provider_id": "rasterio",
+        "version_constraint": ">=1.5,<2",
+        "runtime_id": "sw-rasterio",
+        "resolved_version": "1.5.2"
+      },
+      "source": {
+        "documentation_url": "https://rasterio.readthedocs.io/en/1.5.2/api/rasterio.merge.html#rasterio.merge.merge",
+        "baseline_id": "rasterio-1.5.2",
+        "upstream_version": "1.5.2",
+        "snapshot_sha256": "ee936a1e2cb4e5e22b14be102a9a036be788f8cc595180c39caa6d0b27608c96",
+        "verified_date": "2026-11-04"
+      },
+      "parameters": [],
+      "inputs": [],
+      "outputs": [],
+      "requirements": [],
+      "entrypoints": [
+        {
+          "kind": "script",
+          "target": "rasterio.merge.merge",
+          "available": true,
+          "notes": "签名: (sources, bounds=None, res=None, nodata=None, precision=None, indexes=None, method='first', target_aligned_pixels=False, dst_path=None, dst_kwds=None)"
+        }
+      ],
+      "state": {
+        "presence": "present",
+        "binding": "script",
+        "validation": "not_run",
+        "availability": "ready"
+      },
+      "effects": "mixed",
+      "cancellation": "unsupported",
+      "limitations": [
+        "接口签名: (sources, bounds=None, res=None, nodata=None, precision=None, indexes=None, method='first', target_aligned_pixels=False, dst_path=None, dst_kwds=None)"
+      ],
+      "validation_evidence": []
+    },
+    {
+      "schema_version": "1.0",
+      "template_only": false,
+      "capability_id": "rasterio:api:open",
+      "descriptor_revision": "1.0",
+      "kind": "function",
+      "name": "rasterio.open",
+      "native_name": "rasterio.open",
+      "category": [
+        "api",
+        "rasterio",
+        "io"
+      ],
+      "description": "打开栅格数据集句柄（支持只读 'r'、新建 'w' 或内存模式），返回 DatasetReader 或 DatasetWriter。",
+      "engine": {
+        "provider_id": "rasterio",
+        "version_constraint": ">=1.5,<2",
+        "runtime_id": "sw-rasterio",
+        "resolved_version": "1.5.2"
+      },
+      "source": {
+        "documentation_url": "https://rasterio.readthedocs.io/en/1.5.2/api/rasterio.html#rasterio.open",
+        "baseline_id": "rasterio-1.5.2",
+        "upstream_version": "1.5.2",
+        "snapshot_sha256": "ee936a1e2cb4e5e22b14be102a9a036be788f8cc595180c39caa6d0b27608c96",
+        "verified_date": "2026-11-04"
+      },
+      "parameters": [],
+      "inputs": [],
+      "outputs": [],
+      "requirements": [],
+      "entrypoints": [
+        {
+          "kind": "script",
+          "target": "rasterio.open",
+          "available": true,
+          "notes": "签名: (fp, mode='r', driver=None, width=None, height=None, count=None, crs=None, transform=None, dtype=None, nodata=None, sharing=False, **kwargs)"
+        }
+      ],
+      "state": {
+        "presence": "present",
+        "binding": "script",
+        "validation": "not_run",
+        "availability": "ready"
+      },
+      "effects": "mixed",
+      "cancellation": "unsupported",
+      "limitations": [
+        "接口签名: (fp, mode='r', driver=None, width=None, height=None, count=None, crs=None, transform=None, dtype=None, nodata=None, sharing=False, **kwargs)"
+      ],
+      "validation_evidence": []
+    },
+    {
+      "schema_version": "1.0",
+      "template_only": false,
+      "capability_id": "rasterio:api:pad",
+      "descriptor_revision": "1.0",
+      "kind": "function",
+      "name": "rasterio.pad",
+      "native_name": "rasterio.pad",
+      "category": [
+        "api",
+        "rasterio",
+        "array"
+      ],
+      "description": "沿栅格数组边缘扩展填充指定像元或镜像边缘像元。",
+      "engine": {
+        "provider_id": "rasterio",
+        "version_constraint": ">=1.5,<2",
+        "runtime_id": "sw-rasterio",
+        "resolved_version": "1.5.2"
+      },
+      "source": {
+        "documentation_url": "https://rasterio.readthedocs.io/en/1.5.2/api/rasterio.html#rasterio.pad",
+        "baseline_id": "rasterio-1.5.2",
+        "upstream_version": "1.5.2",
+        "snapshot_sha256": "ee936a1e2cb4e5e22b14be102a9a036be788f8cc595180c39caa6d0b27608c96",
+        "verified_date": "2026-11-04"
+      },
+      "parameters": [],
+      "inputs": [],
+      "outputs": [],
+      "requirements": [],
+      "entrypoints": [
+        {
+          "kind": "script",
+          "target": "rasterio.pad",
+          "available": true,
+          "notes": "签名: (array, transform, pad_width, mode='edge', **kwargs)"
+        }
+      ],
+      "state": {
+        "presence": "present",
+        "binding": "script",
+        "validation": "not_run",
+        "availability": "ready"
+      },
+      "effects": "mixed",
+      "cancellation": "unsupported",
+      "limitations": [
+        "接口签名: (array, transform, pad_width, mode='edge', **kwargs)"
+      ],
+      "validation_evidence": []
+    },
+    {
+      "schema_version": "1.0",
+      "template_only": false,
+      "capability_id": "rasterio:api:rasterize",
+      "descriptor_revision": "1.0",
+      "kind": "function",
+      "name": "rasterio.features.rasterize",
+      "native_name": "rasterio.features.rasterize",
+      "category": [
+        "api",
+        "rasterio",
+        "features"
+      ],
+      "description": "将几何形状迭代器烧录成指定尺寸的 NumPy 栅格布尔或数值数组。",
+      "engine": {
+        "provider_id": "rasterio",
+        "version_constraint": ">=1.5,<2",
+        "runtime_id": "sw-rasterio",
+        "resolved_version": "1.5.2"
+      },
+      "source": {
+        "documentation_url": "https://rasterio.readthedocs.io/en/1.5.2/api/rasterio.features.html#rasterio.features.rasterize",
+        "baseline_id": "rasterio-1.5.2",
+        "upstream_version": "1.5.2",
+        "snapshot_sha256": "ee936a1e2cb4e5e22b14be102a9a036be788f8cc595180c39caa6d0b27608c96",
+        "verified_date": "2026-11-04"
+      },
+      "parameters": [],
+      "inputs": [],
+      "outputs": [],
+      "requirements": [],
+      "entrypoints": [
+        {
+          "kind": "script",
+          "target": "rasterio.features.rasterize",
+          "available": true,
+          "notes": "签名: (shapes, out_shape=None, fill=0, out=None, transform=IDENTITY, all_touched=False, merge_alg=MergeAlg.replace, default_value=1, dtype=None)"
+        }
+      ],
+      "state": {
+        "presence": "present",
+        "binding": "script",
+        "validation": "not_run",
+        "availability": "ready"
+      },
+      "effects": "mixed",
+      "cancellation": "unsupported",
+      "limitations": [
+        "接口签名: (shapes, out_shape=None, fill=0, out=None, transform=IDENTITY, all_touched=False, merge_alg=MergeAlg.replace, default_value=1, dtype=None)"
+      ],
+      "validation_evidence": []
+    },
+    {
+      "schema_version": "1.0",
+      "template_only": false,
+      "capability_id": "rasterio:api:reproject",
+      "descriptor_revision": "1.0",
+      "kind": "function",
+      "name": "rasterio.warp.reproject",
+      "native_name": "rasterio.warp.reproject",
+      "category": [
+        "api",
+        "rasterio",
+        "warp"
+      ],
+      "description": "底层重投影引擎，支持在不同 CRS 栅格数组或内存块之间执行重投影与重采样运算。",
+      "engine": {
+        "provider_id": "rasterio",
+        "version_constraint": ">=1.5,<2",
+        "runtime_id": "sw-rasterio",
+        "resolved_version": "1.5.2"
+      },
+      "source": {
+        "documentation_url": "https://rasterio.readthedocs.io/en/1.5.2/api/rasterio.warp.html#rasterio.warp.reproject",
+        "baseline_id": "rasterio-1.5.2",
+        "upstream_version": "1.5.2",
+        "snapshot_sha256": "ee936a1e2cb4e5e22b14be102a9a036be788f8cc595180c39caa6d0b27608c96",
+        "verified_date": "2026-11-04"
+      },
+      "parameters": [],
+      "inputs": [],
+      "outputs": [],
+      "requirements": [],
+      "entrypoints": [
+        {
+          "kind": "script",
+          "target": "rasterio.warp.reproject",
+          "available": true,
+          "notes": "签名: (source, destination=None, src_transform=None, gcps=None, src_crs=None, src_nodata=None, dst_transform=None, dst_crs=None, dst_nodata=None, dst_resolution=None, resampling=Resampling.nearest, init_dest_nodata=True, warp_mem_limit=0, **kwargs)"
+        }
+      ],
+      "state": {
+        "presence": "present",
+        "binding": "script",
+        "validation": "not_run",
+        "availability": "ready"
+      },
+      "effects": "mixed",
+      "cancellation": "unsupported",
+      "limitations": [
+        "接口签名: (source, destination=None, src_transform=None, gcps=None, src_crs=None, src_nodata=None, dst_transform=None, dst_crs=None, dst_nodata=None, dst_resolution=None, resampling=Resampling.nearest, init_dest_nodata=True, warp_mem_limit=0, **kwargs)"
+      ],
+      "validation_evidence": []
+    },
+    {
+      "schema_version": "1.0",
+      "template_only": false,
+      "capability_id": "rasterio:api:shapes",
+      "descriptor_revision": "1.0",
+      "kind": "function",
+      "name": "rasterio.features.shapes",
+      "native_name": "rasterio.features.shapes",
+      "category": [
+        "api",
+        "rasterio",
+        "features"
+      ],
+      "description": "高效提取栅格图像中的同值连通域，以 (geojson_geometry, value) 生成器迭代返回。",
+      "engine": {
+        "provider_id": "rasterio",
+        "version_constraint": ">=1.5,<2",
+        "runtime_id": "sw-rasterio",
+        "resolved_version": "1.5.2"
+      },
+      "source": {
+        "documentation_url": "https://rasterio.readthedocs.io/en/1.5.2/api/rasterio.features.html#rasterio.features.shapes",
+        "baseline_id": "rasterio-1.5.2",
+        "upstream_version": "1.5.2",
+        "snapshot_sha256": "ee936a1e2cb4e5e22b14be102a9a036be788f8cc595180c39caa6d0b27608c96",
+        "verified_date": "2026-11-04"
+      },
+      "parameters": [],
+      "inputs": [],
+      "outputs": [],
+      "requirements": [],
+      "entrypoints": [
+        {
+          "kind": "script",
+          "target": "rasterio.features.shapes",
+          "available": true,
+          "notes": "签名: (image, mask=None, connectivity=4, transform=IDENTITY)"
+        }
+      ],
+      "state": {
+        "presence": "present",
+        "binding": "script",
+        "validation": "not_run",
+        "availability": "ready"
+      },
+      "effects": "mixed",
+      "cancellation": "unsupported",
+      "limitations": [
+        "接口签名: (image, mask=None, connectivity=4, transform=IDENTITY)"
+      ],
+      "validation_evidence": []
+    },
+    {
+      "schema_version": "1.0",
+      "template_only": false,
+      "capability_id": "rasterio:api:sieve",
+      "descriptor_revision": "1.0",
+      "kind": "function",
+      "name": "rasterio.features.sieve",
+      "native_name": "rasterio.features.sieve",
+      "category": [
+        "api",
+        "rasterio",
+        "features"
+      ],
+      "description": "快速去除单波段二值或分类数组中小于指定像素阈值的孤立噪声小斑点。",
+      "engine": {
+        "provider_id": "rasterio",
+        "version_constraint": ">=1.5,<2",
+        "runtime_id": "sw-rasterio",
+        "resolved_version": "1.5.2"
+      },
+      "source": {
+        "documentation_url": "https://rasterio.readthedocs.io/en/1.5.2/api/rasterio.features.html#rasterio.features.sieve",
+        "baseline_id": "rasterio-1.5.2",
+        "upstream_version": "1.5.2",
+        "snapshot_sha256": "ee936a1e2cb4e5e22b14be102a9a036be788f8cc595180c39caa6d0b27608c96",
+        "verified_date": "2026-11-04"
+      },
+      "parameters": [],
+      "inputs": [],
+      "outputs": [],
+      "requirements": [],
+      "entrypoints": [
+        {
+          "kind": "script",
+          "target": "rasterio.features.sieve",
+          "available": true,
+          "notes": "签名: (image, size, out=None, mask=None, connectivity=4)"
+        }
+      ],
+      "state": {
+        "presence": "present",
+        "binding": "script",
+        "validation": "not_run",
+        "availability": "ready"
+      },
+      "effects": "mixed",
+      "cancellation": "unsupported",
+      "limitations": [
+        "接口签名: (image, size, out=None, mask=None, connectivity=4)"
+      ],
+      "validation_evidence": []
+    },
+    {
+      "schema_version": "1.0",
+      "template_only": false,
+      "capability_id": "rasterio:api:transform_bounds",
+      "descriptor_revision": "1.0",
+      "kind": "function",
+      "name": "rasterio.warp.transform_bounds",
+      "native_name": "rasterio.warp.transform_bounds",
+      "category": [
+        "api",
+        "rasterio",
+        "warp"
+      ],
+      "description": "在两套不同 CRS 之间精确换算外包矩形经纬度或投影坐标范围。",
+      "engine": {
+        "provider_id": "rasterio",
+        "version_constraint": ">=1.5,<2",
+        "runtime_id": "sw-rasterio",
+        "resolved_version": "1.5.2"
+      },
+      "source": {
+        "documentation_url": "https://rasterio.readthedocs.io/en/1.5.2/api/rasterio.warp.html#rasterio.warp.transform_bounds",
+        "baseline_id": "rasterio-1.5.2",
+        "upstream_version": "1.5.2",
+        "snapshot_sha256": "ee936a1e2cb4e5e22b14be102a9a036be788f8cc595180c39caa6d0b27608c96",
+        "verified_date": "2026-11-04"
+      },
+      "parameters": [],
+      "inputs": [],
+      "outputs": [],
+      "requirements": [],
+      "entrypoints": [
+        {
+          "kind": "script",
+          "target": "rasterio.warp.transform_bounds",
+          "available": true,
+          "notes": "签名: (src_crs, dst_crs, left, bottom, right, top, densify_pts=21)"
+        }
+      ],
+      "state": {
+        "presence": "present",
+        "binding": "script",
+        "validation": "not_run",
+        "availability": "ready"
+      },
+      "effects": "mixed",
+      "cancellation": "unsupported",
+      "limitations": [
+        "接口签名: (src_crs, dst_crs, left, bottom, right, top, densify_pts=21)"
+      ],
+      "validation_evidence": []
+    },
+    {
+      "schema_version": "1.0",
+      "template_only": false,
+      "capability_id": "rasterio:convert",
+      "descriptor_revision": "1.0",
+      "kind": "algorithm",
+      "name": "Rasterio 栅格格式转换与分块拷贝",
+      "native_name": "rasterio.open",
+      "category": [
+        "conversion",
+        "raster",
+        "rasterio"
+      ],
+      "description": "在不同栅格格式间按分块窗口转换与拷贝影像，支持设置创建选项与分块读取，防止大内存占用。",
+      "engine": {
+        "provider_id": "rasterio",
+        "version_constraint": ">=1.5,<2",
+        "runtime_id": "sw-rasterio",
+        "resolved_version": "1.5.2"
+      },
+      "source": {
+        "documentation_url": "https://rasterio.readthedocs.io/en/1.5.2/topics/reading.html",
+        "baseline_id": "rasterio-1.5.2",
+        "upstream_version": "1.5.2",
+        "snapshot_sha256": "ee936a1e2cb4e5e22b14be102a9a036be788f8cc595180c39caa6d0b27608c96",
+        "verified_date": "2026-11-04"
+      },
+      "parameters": [
+        {
+          "key": "driver",
+          "native_name": "driver",
+          "label": "目标栅格驱动格式",
+          "type": "string",
+          "required": false,
+          "default": "GTiff",
+          "choices": [
+            "GTiff",
+            "PNG",
+            "JPEG"
+          ],
+          "help": "目标栅格驱动名称"
+        }
+      ],
+      "inputs": [
+        {
+          "key": "input",
+          "data_type": "raster",
+          "required": true,
+          "description": "输入源影像"
+        }
+      ],
+      "outputs": [
+        {
+          "key": "output",
+          "data_type": "raster",
+          "required": true,
+          "description": "输出目标影像"
+        }
+      ],
+      "requirements": [
+        {
+          "kind": "package",
+          "name": "rasterio",
+          "reason": "需 rasterio 核心库与底层 GDAL 动态库"
+        }
+      ],
+      "entrypoints": [
+        {
+          "kind": "form",
+          "target": "rasterio:convert",
+          "available": true,
+          "notes": "平台分块转换执行器"
+        },
+        {
+          "kind": "cli",
+          "target": "rio convert",
+          "available": true,
+          "notes": "标准 rio CLI 别名"
+        }
+      ],
+      "state": {
+        "presence": "present",
+        "binding": "form",
+        "validation": "smoke_passed",
+        "availability": "ready"
+      },
+      "effects": "new_dataset",
+      "cancellation": "cooperative",
+      "limitations": [],
+      "validation_evidence": [
+        {
+          "case_id": "smoke_rasterio_convert",
+          "status": "passed",
+          "report_uri": "docs/progress/runs/env_report.json",
+          "runtime_id": "sw-rasterio"
+        }
+      ]
+    },
+    {
+      "schema_version": "1.0",
+      "template_only": false,
+      "capability_id": "rio:cli:blocks",
+      "descriptor_revision": "1.0",
+      "kind": "cli",
+      "name": "rio blocks",
+      "native_name": "rio blocks",
+      "category": [
+        "cli",
+        "rasterio",
+        "rio"
+      ],
+      "description": "以 GeoJSON 多边形流形式输出栅格文件的底层物理瓦片块结构布局。",
+      "engine": {
+        "provider_id": "rasterio",
+        "version_constraint": ">=1.5,<2",
+        "runtime_id": "sw-rasterio",
+        "resolved_version": "1.5.2"
+      },
+      "source": {
+        "documentation_url": "https://rasterio.readthedocs.io/en/1.5.2/cli.html",
+        "baseline_id": "rasterio-1.5.2",
+        "upstream_version": "1.5.2",
+        "snapshot_sha256": "ee936a1e2cb4e5e22b14be102a9a036be788f8cc595180c39caa6d0b27608c96",
+        "verified_date": "2026-11-04"
+      },
+      "parameters": [],
+      "inputs": [],
+      "outputs": [],
+      "requirements": [],
+      "entrypoints": [
+        {
+          "kind": "cli",
+          "target": "rio blocks",
+          "available": true
+        }
+      ],
+      "state": {
+        "presence": "present",
+        "binding": "cli",
+        "validation": "not_run",
+        "availability": "ready"
+      },
+      "effects": "read_only",
+      "cancellation": "process_termination",
+      "limitations": [],
+      "validation_evidence": []
+    },
+    {
+      "schema_version": "1.0",
+      "template_only": false,
+      "capability_id": "rio:cli:bounds",
+      "descriptor_revision": "1.0",
+      "kind": "cli",
+      "name": "rio bounds",
+      "native_name": "rio bounds",
+      "category": [
+        "cli",
+        "rasterio",
+        "rio"
+      ],
+      "description": "计算并输出栅格文件的地理空间外包框 (Bounding Box) 坐标或 GeoJSON 多边形。",
+      "engine": {
+        "provider_id": "rasterio",
+        "version_constraint": ">=1.5,<2",
+        "runtime_id": "sw-rasterio",
+        "resolved_version": "1.5.2"
+      },
+      "source": {
+        "documentation_url": "https://rasterio.readthedocs.io/en/1.5.2/cli.html",
+        "baseline_id": "rasterio-1.5.2",
+        "upstream_version": "1.5.2",
+        "snapshot_sha256": "ee936a1e2cb4e5e22b14be102a9a036be788f8cc595180c39caa6d0b27608c96",
+        "verified_date": "2026-11-04"
+      },
+      "parameters": [],
+      "inputs": [],
+      "outputs": [],
+      "requirements": [],
+      "entrypoints": [
+        {
+          "kind": "cli",
+          "target": "rio bounds",
+          "available": true
+        }
+      ],
+      "state": {
+        "presence": "present",
+        "binding": "cli",
+        "validation": "not_run",
+        "availability": "ready"
+      },
+      "effects": "read_only",
+      "cancellation": "process_termination",
+      "limitations": [],
+      "validation_evidence": []
+    },
+    {
+      "schema_version": "1.0",
+      "template_only": false,
+      "capability_id": "rio:cli:calc",
+      "descriptor_revision": "1.0",
+      "kind": "cli",
+      "name": "rio calc",
+      "native_name": "rio calc",
+      "category": [
+        "cli",
+        "rasterio",
+        "rio"
+      ],
+      "description": "通过数学表达式对栅格像元数组进行按行运算（例如计算 NDVI）。",
+      "engine": {
+        "provider_id": "rasterio",
+        "version_constraint": ">=1.5,<2",
+        "runtime_id": "sw-rasterio",
+        "resolved_version": "1.5.2"
+      },
+      "source": {
+        "documentation_url": "https://rasterio.readthedocs.io/en/1.5.2/cli.html",
+        "baseline_id": "rasterio-1.5.2",
+        "upstream_version": "1.5.2",
+        "snapshot_sha256": "ee936a1e2cb4e5e22b14be102a9a036be788f8cc595180c39caa6d0b27608c96",
+        "verified_date": "2026-11-04"
+      },
+      "parameters": [],
+      "inputs": [],
+      "outputs": [],
+      "requirements": [],
+      "entrypoints": [
+        {
+          "kind": "cli",
+          "target": "rio calc",
+          "available": true
+        }
+      ],
+      "state": {
+        "presence": "present",
+        "binding": "cli",
+        "validation": "not_run",
+        "availability": "ready"
+      },
+      "effects": "new_dataset",
+      "cancellation": "process_termination",
+      "limitations": [],
+      "validation_evidence": []
+    },
+    {
+      "schema_version": "1.0",
+      "template_only": false,
+      "capability_id": "rio:cli:clip",
+      "descriptor_revision": "1.0",
+      "kind": "cli",
+      "name": "rio clip",
+      "native_name": "rio clip",
+      "category": [
+        "cli",
+        "rasterio",
+        "rio"
+      ],
+      "description": "按给定的地理经纬度或投影外包矩形快速裁切栅格窗口。",
+      "engine": {
+        "provider_id": "rasterio",
+        "version_constraint": ">=1.5,<2",
+        "runtime_id": "sw-rasterio",
+        "resolved_version": "1.5.2"
+      },
+      "source": {
+        "documentation_url": "https://rasterio.readthedocs.io/en/1.5.2/cli.html",
+        "baseline_id": "rasterio-1.5.2",
+        "upstream_version": "1.5.2",
+        "snapshot_sha256": "ee936a1e2cb4e5e22b14be102a9a036be788f8cc595180c39caa6d0b27608c96",
+        "verified_date": "2026-11-04"
+      },
+      "parameters": [],
+      "inputs": [],
+      "outputs": [],
+      "requirements": [],
+      "entrypoints": [
+        {
+          "kind": "cli",
+          "target": "rio clip",
+          "available": true
+        }
+      ],
+      "state": {
+        "presence": "present",
+        "binding": "cli",
+        "validation": "not_run",
+        "availability": "ready"
+      },
+      "effects": "new_dataset",
+      "cancellation": "process_termination",
+      "limitations": [],
+      "validation_evidence": []
+    },
+    {
+      "schema_version": "1.0",
+      "template_only": false,
+      "capability_id": "rio:cli:cogeo",
+      "descriptor_revision": "1.0",
+      "kind": "cli",
+      "name": "rio cogeo (缺失插件)",
+      "native_name": "rio cogeo",
+      "category": [
+        "cli",
+        "rasterio",
+        "missing_plugin"
+      ],
+      "description": "生成 Cloud-Optimized GeoTIFF 工具（需独立安装 rio-cogeo）。",
+      "engine": {
+        "provider_id": "rasterio",
+        "version_constraint": ">=1.5,<2",
+        "runtime_id": "sw-rasterio",
+        "resolved_version": "1.5.2"
+      },
+      "source": {
+        "documentation_url": "https://rasterio.readthedocs.io/en/1.5.2/cli.html",
+        "baseline_id": "rasterio-1.5.2",
+        "upstream_version": "1.5.2",
+        "snapshot_sha256": "ee936a1e2cb4e5e22b14be102a9a036be788f8cc595180c39caa6d0b27608c96",
+        "verified_date": "2026-11-04"
+      },
+      "parameters": [],
+      "inputs": [],
+      "outputs": [],
+      "requirements": [],
+      "entrypoints": [
+        {
+          "kind": "cli",
+          "target": "rio cogeo",
+          "available": false,
+          "notes": "sw-rasterio 环境未安装可选插件 rio-cogeo；可通过 GDAL COG 驱动直接输出"
+        }
+      ],
+      "state": {
+        "presence": "missing",
+        "binding": "none",
+        "validation": "not_run",
+        "availability": "missing_dependency"
+      },
+      "effects": "mixed",
+      "cancellation": "unsupported",
+      "limitations": [
+        "sw-rasterio 环境未安装可选插件 rio-cogeo；可通过 GDAL COG 驱动直接输出"
+      ],
+      "validation_evidence": []
+    },
+    {
+      "schema_version": "1.0",
+      "template_only": false,
+      "capability_id": "rio:cli:color",
+      "descriptor_revision": "1.0",
+      "kind": "cli",
+      "name": "rio color (缺失插件)",
+      "native_name": "rio color",
+      "category": [
+        "cli",
+        "rasterio",
+        "missing_plugin"
+      ],
+      "description": "色彩饱和度、曲线与色调调整插件（需独立安装 rio-color）。",
+      "engine": {
+        "provider_id": "rasterio",
+        "version_constraint": ">=1.5,<2",
+        "runtime_id": "sw-rasterio",
+        "resolved_version": "1.5.2"
+      },
+      "source": {
+        "documentation_url": "https://rasterio.readthedocs.io/en/1.5.2/cli.html",
+        "baseline_id": "rasterio-1.5.2",
+        "upstream_version": "1.5.2",
+        "snapshot_sha256": "ee936a1e2cb4e5e22b14be102a9a036be788f8cc595180c39caa6d0b27608c96",
+        "verified_date": "2026-11-04"
+      },
+      "parameters": [],
+      "inputs": [],
+      "outputs": [],
+      "requirements": [],
+      "entrypoints": [
+        {
+          "kind": "cli",
+          "target": "rio color",
+          "available": false,
+          "notes": "sw-rasterio 环境未安装可选插件 rio-color"
+        }
+      ],
+      "state": {
+        "presence": "missing",
+        "binding": "none",
+        "validation": "not_run",
+        "availability": "missing_dependency"
+      },
+      "effects": "mixed",
+      "cancellation": "unsupported",
+      "limitations": [
+        "sw-rasterio 环境未安装可选插件 rio-color"
+      ],
+      "validation_evidence": []
+    },
+    {
+      "schema_version": "1.0",
+      "template_only": false,
+      "capability_id": "rio:cli:convert",
+      "descriptor_revision": "1.0",
+      "kind": "cli",
+      "name": "rio convert",
+      "native_name": "rio convert",
+      "category": [
+        "cli",
+        "rasterio",
+        "rio"
+      ],
+      "description": "在不同栅格格式间转换、改变数据类型或应用缩放因数。",
+      "engine": {
+        "provider_id": "rasterio",
+        "version_constraint": ">=1.5,<2",
+        "runtime_id": "sw-rasterio",
+        "resolved_version": "1.5.2"
+      },
+      "source": {
+        "documentation_url": "https://rasterio.readthedocs.io/en/1.5.2/cli.html",
+        "baseline_id": "rasterio-1.5.2",
+        "upstream_version": "1.5.2",
+        "snapshot_sha256": "ee936a1e2cb4e5e22b14be102a9a036be788f8cc595180c39caa6d0b27608c96",
+        "verified_date": "2026-11-04"
+      },
+      "parameters": [],
+      "inputs": [],
+      "outputs": [],
+      "requirements": [],
+      "entrypoints": [
+        {
+          "kind": "cli",
+          "target": "rio convert",
+          "available": true
+        }
+      ],
+      "state": {
+        "presence": "present",
+        "binding": "cli",
+        "validation": "not_run",
+        "availability": "ready"
+      },
+      "effects": "new_dataset",
+      "cancellation": "process_termination",
+      "limitations": [],
+      "validation_evidence": []
+    },
+    {
+      "schema_version": "1.0",
+      "template_only": false,
+      "capability_id": "rio:cli:create",
+      "descriptor_revision": "1.0",
+      "kind": "cli",
+      "name": "rio create",
+      "native_name": "rio create",
+      "category": [
+        "cli",
+        "rasterio",
+        "rio"
+      ],
+      "description": "依据指定尺寸、CRS 与变换矩阵创建空白栅格模板。",
+      "engine": {
+        "provider_id": "rasterio",
+        "version_constraint": ">=1.5,<2",
+        "runtime_id": "sw-rasterio",
+        "resolved_version": "1.5.2"
+      },
+      "source": {
+        "documentation_url": "https://rasterio.readthedocs.io/en/1.5.2/cli.html",
+        "baseline_id": "rasterio-1.5.2",
+        "upstream_version": "1.5.2",
+        "snapshot_sha256": "ee936a1e2cb4e5e22b14be102a9a036be788f8cc595180c39caa6d0b27608c96",
+        "verified_date": "2026-11-04"
+      },
+      "parameters": [],
+      "inputs": [],
+      "outputs": [],
+      "requirements": [],
+      "entrypoints": [
+        {
+          "kind": "cli",
+          "target": "rio create",
+          "available": true
+        }
+      ],
+      "state": {
+        "presence": "present",
+        "binding": "cli",
+        "validation": "not_run",
+        "availability": "ready"
+      },
+      "effects": "new_dataset",
+      "cancellation": "process_termination",
+      "limitations": [],
+      "validation_evidence": []
+    },
+    {
+      "schema_version": "1.0",
+      "template_only": false,
+      "capability_id": "rio:cli:edit-info",
+      "descriptor_revision": "1.0",
+      "kind": "cli",
+      "name": "rio edit-info",
+      "native_name": "rio edit-info",
+      "category": [
+        "cli",
+        "rasterio",
+        "rio"
+      ],
+      "description": "就地编辑现有栅格文件的元数据、NODATA 值、标签或坐标变换矩阵。",
+      "engine": {
+        "provider_id": "rasterio",
+        "version_constraint": ">=1.5,<2",
+        "runtime_id": "sw-rasterio",
+        "resolved_version": "1.5.2"
+      },
+      "source": {
+        "documentation_url": "https://rasterio.readthedocs.io/en/1.5.2/cli.html",
+        "baseline_id": "rasterio-1.5.2",
+        "upstream_version": "1.5.2",
+        "snapshot_sha256": "ee936a1e2cb4e5e22b14be102a9a036be788f8cc595180c39caa6d0b27608c96",
+        "verified_date": "2026-11-04"
+      },
+      "parameters": [],
+      "inputs": [],
+      "outputs": [],
+      "requirements": [],
+      "entrypoints": [
+        {
+          "kind": "cli",
+          "target": "rio edit-info",
+          "available": true
+        }
+      ],
+      "state": {
+        "presence": "present",
+        "binding": "cli",
+        "validation": "not_run",
+        "availability": "ready"
+      },
+      "effects": "new_dataset",
+      "cancellation": "process_termination",
+      "limitations": [],
+      "validation_evidence": []
+    },
+    {
+      "schema_version": "1.0",
+      "template_only": false,
+      "capability_id": "rio:cli:env",
+      "descriptor_revision": "1.0",
+      "kind": "cli",
+      "name": "rio env",
+      "native_name": "rio env",
+      "category": [
+        "cli",
+        "rasterio",
+        "rio"
+      ],
+      "description": "打印当前进程的 GDAL/Rasterio 环境变量与底层配置选项。",
+      "engine": {
+        "provider_id": "rasterio",
+        "version_constraint": ">=1.5,<2",
+        "runtime_id": "sw-rasterio",
+        "resolved_version": "1.5.2"
+      },
+      "source": {
+        "documentation_url": "https://rasterio.readthedocs.io/en/1.5.2/cli.html",
+        "baseline_id": "rasterio-1.5.2",
+        "upstream_version": "1.5.2",
+        "snapshot_sha256": "ee936a1e2cb4e5e22b14be102a9a036be788f8cc595180c39caa6d0b27608c96",
+        "verified_date": "2026-11-04"
+      },
+      "parameters": [],
+      "inputs": [],
+      "outputs": [],
+      "requirements": [],
+      "entrypoints": [
+        {
+          "kind": "cli",
+          "target": "rio env",
+          "available": true
+        }
+      ],
+      "state": {
+        "presence": "present",
+        "binding": "cli",
+        "validation": "not_run",
+        "availability": "ready"
+      },
+      "effects": "read_only",
+      "cancellation": "process_termination",
+      "limitations": [],
+      "validation_evidence": []
+    },
+    {
+      "schema_version": "1.0",
+      "template_only": false,
+      "capability_id": "rio:cli:gcps",
+      "descriptor_revision": "1.0",
+      "kind": "cli",
+      "name": "rio gcps",
+      "native_name": "rio gcps",
+      "category": [
+        "cli",
+        "rasterio",
+        "rio"
+      ],
+      "description": "读取或写入栅格关联的地面控制点 (Ground Control Points)。",
+      "engine": {
+        "provider_id": "rasterio",
+        "version_constraint": ">=1.5,<2",
+        "runtime_id": "sw-rasterio",
+        "resolved_version": "1.5.2"
+      },
+      "source": {
+        "documentation_url": "https://rasterio.readthedocs.io/en/1.5.2/cli.html",
+        "baseline_id": "rasterio-1.5.2",
+        "upstream_version": "1.5.2",
+        "snapshot_sha256": "ee936a1e2cb4e5e22b14be102a9a036be788f8cc595180c39caa6d0b27608c96",
+        "verified_date": "2026-11-04"
+      },
+      "parameters": [],
+      "inputs": [],
+      "outputs": [],
+      "requirements": [],
+      "entrypoints": [
+        {
+          "kind": "cli",
+          "target": "rio gcps",
+          "available": true
+        }
+      ],
+      "state": {
+        "presence": "present",
+        "binding": "cli",
+        "validation": "not_run",
+        "availability": "ready"
+      },
+      "effects": "new_dataset",
+      "cancellation": "process_termination",
+      "limitations": [],
+      "validation_evidence": []
+    },
+    {
+      "schema_version": "1.0",
+      "template_only": false,
+      "capability_id": "rio:cli:info",
+      "descriptor_revision": "1.0",
+      "kind": "cli",
+      "name": "rio info",
+      "native_name": "rio info",
+      "category": [
+        "cli",
+        "rasterio",
+        "rio"
+      ],
+      "description": "以结构化 JSON 或纯文本输出栅格数据集元数据、尺寸、驱动与波段摘要。",
+      "engine": {
+        "provider_id": "rasterio",
+        "version_constraint": ">=1.5,<2",
+        "runtime_id": "sw-rasterio",
+        "resolved_version": "1.5.2"
+      },
+      "source": {
+        "documentation_url": "https://rasterio.readthedocs.io/en/1.5.2/cli.html",
+        "baseline_id": "rasterio-1.5.2",
+        "upstream_version": "1.5.2",
+        "snapshot_sha256": "ee936a1e2cb4e5e22b14be102a9a036be788f8cc595180c39caa6d0b27608c96",
+        "verified_date": "2026-11-04"
+      },
+      "parameters": [],
+      "inputs": [],
+      "outputs": [],
+      "requirements": [],
+      "entrypoints": [
+        {
+          "kind": "cli",
+          "target": "rio info",
+          "available": true
+        }
+      ],
+      "state": {
+        "presence": "present",
+        "binding": "cli",
+        "validation": "not_run",
+        "availability": "ready"
+      },
+      "effects": "read_only",
+      "cancellation": "process_termination",
+      "limitations": [],
+      "validation_evidence": []
+    },
+    {
+      "schema_version": "1.0",
+      "template_only": false,
+      "capability_id": "rio:cli:insp",
+      "descriptor_revision": "1.0",
+      "kind": "cli",
+      "name": "rio insp",
+      "native_name": "rio insp",
+      "category": [
+        "cli",
+        "rasterio",
+        "rio"
+      ],
+      "description": "打开交互式 Python 解释器终端并预载入目标数据集对象。",
+      "engine": {
+        "provider_id": "rasterio",
+        "version_constraint": ">=1.5,<2",
+        "runtime_id": "sw-rasterio",
+        "resolved_version": "1.5.2"
+      },
+      "source": {
+        "documentation_url": "https://rasterio.readthedocs.io/en/1.5.2/cli.html",
+        "baseline_id": "rasterio-1.5.2",
+        "upstream_version": "1.5.2",
+        "snapshot_sha256": "ee936a1e2cb4e5e22b14be102a9a036be788f8cc595180c39caa6d0b27608c96",
+        "verified_date": "2026-11-04"
+      },
+      "parameters": [],
+      "inputs": [],
+      "outputs": [],
+      "requirements": [],
+      "entrypoints": [
+        {
+          "kind": "cli",
+          "target": "rio insp",
+          "available": true
+        }
+      ],
+      "state": {
+        "presence": "present",
+        "binding": "cli",
+        "validation": "not_run",
+        "availability": "ready"
+      },
+      "effects": "read_only",
+      "cancellation": "process_termination",
+      "limitations": [],
+      "validation_evidence": []
+    },
+    {
+      "schema_version": "1.0",
+      "template_only": false,
+      "capability_id": "rio:cli:mask",
+      "descriptor_revision": "1.0",
+      "kind": "cli",
+      "name": "rio mask",
+      "native_name": "rio mask",
+      "category": [
+        "cli",
+        "rasterio",
+        "rio"
+      ],
+      "description": "利用 GeoJSON 矢量多边形对栅格进行空间裁剪掩膜。",
+      "engine": {
+        "provider_id": "rasterio",
+        "version_constraint": ">=1.5,<2",
+        "runtime_id": "sw-rasterio",
+        "resolved_version": "1.5.2"
+      },
+      "source": {
+        "documentation_url": "https://rasterio.readthedocs.io/en/1.5.2/cli.html",
+        "baseline_id": "rasterio-1.5.2",
+        "upstream_version": "1.5.2",
+        "snapshot_sha256": "ee936a1e2cb4e5e22b14be102a9a036be788f8cc595180c39caa6d0b27608c96",
+        "verified_date": "2026-11-04"
+      },
+      "parameters": [],
+      "inputs": [],
+      "outputs": [],
+      "requirements": [],
+      "entrypoints": [
+        {
+          "kind": "cli",
+          "target": "rio mask",
+          "available": true
+        }
+      ],
+      "state": {
+        "presence": "present",
+        "binding": "cli",
+        "validation": "not_run",
+        "availability": "ready"
+      },
+      "effects": "new_dataset",
+      "cancellation": "process_termination",
+      "limitations": [],
+      "validation_evidence": []
+    },
+    {
+      "schema_version": "1.0",
+      "template_only": false,
+      "capability_id": "rio:cli:mbtiles",
+      "descriptor_revision": "1.0",
+      "kind": "cli",
+      "name": "rio mbtiles (缺失插件)",
+      "native_name": "rio mbtiles",
+      "category": [
+        "cli",
+        "rasterio",
+        "missing_plugin"
+      ],
+      "description": "将栅格导出为 MBTiles 切片包（需独立安装 rio-mbtiles 插件）。",
+      "engine": {
+        "provider_id": "rasterio",
+        "version_constraint": ">=1.5,<2",
+        "runtime_id": "sw-rasterio",
+        "resolved_version": "1.5.2"
+      },
+      "source": {
+        "documentation_url": "https://rasterio.readthedocs.io/en/1.5.2/cli.html",
+        "baseline_id": "rasterio-1.5.2",
+        "upstream_version": "1.5.2",
+        "snapshot_sha256": "ee936a1e2cb4e5e22b14be102a9a036be788f8cc595180c39caa6d0b27608c96",
+        "verified_date": "2026-11-04"
+      },
+      "parameters": [],
+      "inputs": [],
+      "outputs": [],
+      "requirements": [],
+      "entrypoints": [
+        {
+          "kind": "cli",
+          "target": "rio mbtiles",
+          "available": false,
+          "notes": "sw-rasterio 环境未安装可选插件 rio-mbtiles"
+        }
+      ],
+      "state": {
+        "presence": "missing",
+        "binding": "none",
+        "validation": "not_run",
+        "availability": "missing_dependency"
+      },
+      "effects": "mixed",
+      "cancellation": "unsupported",
+      "limitations": [
+        "sw-rasterio 环境未安装可选插件 rio-mbtiles"
+      ],
+      "validation_evidence": []
+    },
+    {
+      "schema_version": "1.0",
+      "template_only": false,
+      "capability_id": "rio:cli:merge",
+      "descriptor_revision": "1.0",
+      "kind": "cli",
+      "name": "rio merge",
+      "native_name": "rio merge",
+      "category": [
+        "cli",
+        "rasterio",
+        "rio"
+      ],
+      "description": "将多幅空间重叠或相邻的栅格影像拼合/镶嵌为单幅马赛克。",
+      "engine": {
+        "provider_id": "rasterio",
+        "version_constraint": ">=1.5,<2",
+        "runtime_id": "sw-rasterio",
+        "resolved_version": "1.5.2"
+      },
+      "source": {
+        "documentation_url": "https://rasterio.readthedocs.io/en/1.5.2/cli.html",
+        "baseline_id": "rasterio-1.5.2",
+        "upstream_version": "1.5.2",
+        "snapshot_sha256": "ee936a1e2cb4e5e22b14be102a9a036be788f8cc595180c39caa6d0b27608c96",
+        "verified_date": "2026-11-04"
+      },
+      "parameters": [],
+      "inputs": [],
+      "outputs": [],
+      "requirements": [],
+      "entrypoints": [
+        {
+          "kind": "cli",
+          "target": "rio merge",
+          "available": true
+        }
+      ],
+      "state": {
+        "presence": "present",
+        "binding": "cli",
+        "validation": "not_run",
+        "availability": "ready"
+      },
+      "effects": "new_dataset",
+      "cancellation": "process_termination",
+      "limitations": [],
+      "validation_evidence": []
+    },
+    {
+      "schema_version": "1.0",
+      "template_only": false,
+      "capability_id": "rio:cli:overview",
+      "descriptor_revision": "1.0",
+      "kind": "cli",
+      "name": "rio overview",
+      "native_name": "rio overview",
+      "category": [
+        "cli",
+        "rasterio",
+        "rio"
+      ],
+      "description": "为已有栅格文件建立或重建内部减采样金字塔概览。",
+      "engine": {
+        "provider_id": "rasterio",
+        "version_constraint": ">=1.5,<2",
+        "runtime_id": "sw-rasterio",
+        "resolved_version": "1.5.2"
+      },
+      "source": {
+        "documentation_url": "https://rasterio.readthedocs.io/en/1.5.2/cli.html",
+        "baseline_id": "rasterio-1.5.2",
+        "upstream_version": "1.5.2",
+        "snapshot_sha256": "ee936a1e2cb4e5e22b14be102a9a036be788f8cc595180c39caa6d0b27608c96",
+        "verified_date": "2026-11-04"
+      },
+      "parameters": [],
+      "inputs": [],
+      "outputs": [],
+      "requirements": [],
+      "entrypoints": [
+        {
+          "kind": "cli",
+          "target": "rio overview",
+          "available": true
+        }
+      ],
+      "state": {
+        "presence": "present",
+        "binding": "cli",
+        "validation": "not_run",
+        "availability": "ready"
+      },
+      "effects": "new_dataset",
+      "cancellation": "process_termination",
+      "limitations": [],
+      "validation_evidence": []
+    },
+    {
+      "schema_version": "1.0",
+      "template_only": false,
+      "capability_id": "rio:cli:rasterize",
+      "descriptor_revision": "1.0",
+      "kind": "cli",
+      "name": "rio rasterize",
+      "native_name": "rio rasterize",
+      "category": [
+        "cli",
+        "rasterio",
+        "rio"
+      ],
+      "description": "将 GeoJSON 矢量要素烧录成栅格数据。",
+      "engine": {
+        "provider_id": "rasterio",
+        "version_constraint": ">=1.5,<2",
+        "runtime_id": "sw-rasterio",
+        "resolved_version": "1.5.2"
+      },
+      "source": {
+        "documentation_url": "https://rasterio.readthedocs.io/en/1.5.2/cli.html",
+        "baseline_id": "rasterio-1.5.2",
+        "upstream_version": "1.5.2",
+        "snapshot_sha256": "ee936a1e2cb4e5e22b14be102a9a036be788f8cc595180c39caa6d0b27608c96",
+        "verified_date": "2026-11-04"
+      },
+      "parameters": [],
+      "inputs": [],
+      "outputs": [],
+      "requirements": [],
+      "entrypoints": [
+        {
+          "kind": "cli",
+          "target": "rio rasterize",
+          "available": true
+        }
+      ],
+      "state": {
+        "presence": "present",
+        "binding": "cli",
+        "validation": "not_run",
+        "availability": "ready"
+      },
+      "effects": "new_dataset",
+      "cancellation": "process_termination",
+      "limitations": [],
+      "validation_evidence": []
+    },
+    {
+      "schema_version": "1.0",
+      "template_only": false,
+      "capability_id": "rio:cli:rm",
+      "descriptor_revision": "1.0",
+      "kind": "cli",
+      "name": "rio rm",
+      "native_name": "rio rm",
+      "category": [
+        "cli",
+        "rasterio",
+        "rio"
+      ],
+      "description": "删除指定栅格数据集及其相关联的辅助文件。",
+      "engine": {
+        "provider_id": "rasterio",
+        "version_constraint": ">=1.5,<2",
+        "runtime_id": "sw-rasterio",
+        "resolved_version": "1.5.2"
+      },
+      "source": {
+        "documentation_url": "https://rasterio.readthedocs.io/en/1.5.2/cli.html",
+        "baseline_id": "rasterio-1.5.2",
+        "upstream_version": "1.5.2",
+        "snapshot_sha256": "ee936a1e2cb4e5e22b14be102a9a036be788f8cc595180c39caa6d0b27608c96",
+        "verified_date": "2026-11-04"
+      },
+      "parameters": [],
+      "inputs": [],
+      "outputs": [],
+      "requirements": [],
+      "entrypoints": [
+        {
+          "kind": "cli",
+          "target": "rio rm",
+          "available": true
+        }
+      ],
+      "state": {
+        "presence": "present",
+        "binding": "cli",
+        "validation": "not_run",
+        "availability": "ready"
+      },
+      "effects": "new_dataset",
+      "cancellation": "process_termination",
+      "limitations": [],
+      "validation_evidence": []
+    },
+    {
+      "schema_version": "1.0",
+      "template_only": false,
+      "capability_id": "rio:cli:sample",
+      "descriptor_revision": "1.0",
+      "kind": "cli",
+      "name": "rio sample",
+      "native_name": "rio sample",
+      "category": [
+        "cli",
+        "rasterio",
+        "rio"
+      ],
+      "description": "根据传入的空间坐标点序列抽样提取各波段像元值。",
+      "engine": {
+        "provider_id": "rasterio",
+        "version_constraint": ">=1.5,<2",
+        "runtime_id": "sw-rasterio",
+        "resolved_version": "1.5.2"
+      },
+      "source": {
+        "documentation_url": "https://rasterio.readthedocs.io/en/1.5.2/cli.html",
+        "baseline_id": "rasterio-1.5.2",
+        "upstream_version": "1.5.2",
+        "snapshot_sha256": "ee936a1e2cb4e5e22b14be102a9a036be788f8cc595180c39caa6d0b27608c96",
+        "verified_date": "2026-11-04"
+      },
+      "parameters": [],
+      "inputs": [],
+      "outputs": [],
+      "requirements": [],
+      "entrypoints": [
+        {
+          "kind": "cli",
+          "target": "rio sample",
+          "available": true
+        }
+      ],
+      "state": {
+        "presence": "present",
+        "binding": "cli",
+        "validation": "not_run",
+        "availability": "ready"
+      },
+      "effects": "read_only",
+      "cancellation": "process_termination",
+      "limitations": [],
+      "validation_evidence": []
+    },
+    {
+      "schema_version": "1.0",
+      "template_only": false,
+      "capability_id": "rio:cli:shapes",
+      "descriptor_revision": "1.0",
+      "kind": "cli",
+      "name": "rio shapes",
+      "native_name": "rio shapes",
+      "category": [
+        "cli",
+        "rasterio",
+        "rio"
+      ],
+      "description": "提取栅格同值连通域并输出为 GeoJSON 多边形要素集。",
+      "engine": {
+        "provider_id": "rasterio",
+        "version_constraint": ">=1.5,<2",
+        "runtime_id": "sw-rasterio",
+        "resolved_version": "1.5.2"
+      },
+      "source": {
+        "documentation_url": "https://rasterio.readthedocs.io/en/1.5.2/cli.html",
+        "baseline_id": "rasterio-1.5.2",
+        "upstream_version": "1.5.2",
+        "snapshot_sha256": "ee936a1e2cb4e5e22b14be102a9a036be788f8cc595180c39caa6d0b27608c96",
+        "verified_date": "2026-11-04"
+      },
+      "parameters": [],
+      "inputs": [],
+      "outputs": [],
+      "requirements": [],
+      "entrypoints": [
+        {
+          "kind": "cli",
+          "target": "rio shapes",
+          "available": true
+        }
+      ],
+      "state": {
+        "presence": "present",
+        "binding": "cli",
+        "validation": "not_run",
+        "availability": "ready"
+      },
+      "effects": "new_dataset",
+      "cancellation": "process_termination",
+      "limitations": [],
+      "validation_evidence": []
+    },
+    {
+      "schema_version": "1.0",
+      "template_only": false,
+      "capability_id": "rio:cli:stack",
+      "descriptor_revision": "1.0",
+      "kind": "cli",
+      "name": "rio stack",
+      "native_name": "rio stack",
+      "category": [
+        "cli",
+        "rasterio",
+        "rio"
+      ],
+      "description": "将多个单波段或多波段栅格影像堆叠为多波段合成成果。",
+      "engine": {
+        "provider_id": "rasterio",
+        "version_constraint": ">=1.5,<2",
+        "runtime_id": "sw-rasterio",
+        "resolved_version": "1.5.2"
+      },
+      "source": {
+        "documentation_url": "https://rasterio.readthedocs.io/en/1.5.2/cli.html",
+        "baseline_id": "rasterio-1.5.2",
+        "upstream_version": "1.5.2",
+        "snapshot_sha256": "ee936a1e2cb4e5e22b14be102a9a036be788f8cc595180c39caa6d0b27608c96",
+        "verified_date": "2026-11-04"
+      },
+      "parameters": [],
+      "inputs": [],
+      "outputs": [],
+      "requirements": [],
+      "entrypoints": [
+        {
+          "kind": "cli",
+          "target": "rio stack",
+          "available": true
+        }
+      ],
+      "state": {
+        "presence": "present",
+        "binding": "cli",
+        "validation": "not_run",
+        "availability": "ready"
+      },
+      "effects": "new_dataset",
+      "cancellation": "process_termination",
+      "limitations": [],
+      "validation_evidence": []
+    },
+    {
+      "schema_version": "1.0",
+      "template_only": false,
+      "capability_id": "rio:cli:transform",
+      "descriptor_revision": "1.0",
+      "kind": "cli",
+      "name": "rio transform",
+      "native_name": "rio transform",
+      "category": [
+        "cli",
+        "rasterio",
+        "rio"
+      ],
+      "description": "在像元行/列坐标与地理坐标系坐标之间相互换算。",
+      "engine": {
+        "provider_id": "rasterio",
+        "version_constraint": ">=1.5,<2",
+        "runtime_id": "sw-rasterio",
+        "resolved_version": "1.5.2"
+      },
+      "source": {
+        "documentation_url": "https://rasterio.readthedocs.io/en/1.5.2/cli.html",
+        "baseline_id": "rasterio-1.5.2",
+        "upstream_version": "1.5.2",
+        "snapshot_sha256": "ee936a1e2cb4e5e22b14be102a9a036be788f8cc595180c39caa6d0b27608c96",
+        "verified_date": "2026-11-04"
+      },
+      "parameters": [],
+      "inputs": [],
+      "outputs": [],
+      "requirements": [],
+      "entrypoints": [
+        {
+          "kind": "cli",
+          "target": "rio transform",
+          "available": true
+        }
+      ],
+      "state": {
+        "presence": "present",
+        "binding": "cli",
+        "validation": "not_run",
+        "availability": "ready"
+      },
+      "effects": "new_dataset",
+      "cancellation": "process_termination",
+      "limitations": [],
+      "validation_evidence": []
+    },
+    {
+      "schema_version": "1.0",
+      "template_only": false,
+      "capability_id": "rio:cli:warp",
+      "descriptor_revision": "1.0",
+      "kind": "cli",
+      "name": "rio warp",
+      "native_name": "rio warp",
+      "category": [
+        "cli",
+        "rasterio",
+        "rio"
+      ],
+      "description": "利用 GDAL warp 核心在不同坐标系间重投影栅格影像。",
+      "engine": {
+        "provider_id": "rasterio",
+        "version_constraint": ">=1.5,<2",
+        "runtime_id": "sw-rasterio",
+        "resolved_version": "1.5.2"
+      },
+      "source": {
+        "documentation_url": "https://rasterio.readthedocs.io/en/1.5.2/cli.html",
+        "baseline_id": "rasterio-1.5.2",
+        "upstream_version": "1.5.2",
+        "snapshot_sha256": "ee936a1e2cb4e5e22b14be102a9a036be788f8cc595180c39caa6d0b27608c96",
+        "verified_date": "2026-11-04"
+      },
+      "parameters": [],
+      "inputs": [],
+      "outputs": [],
+      "requirements": [],
+      "entrypoints": [
+        {
+          "kind": "cli",
+          "target": "rio warp",
+          "available": true
+        }
+      ],
+      "state": {
+        "presence": "present",
+        "binding": "cli",
+        "validation": "not_run",
+        "availability": "ready"
+      },
+      "effects": "new_dataset",
+      "cancellation": "process_termination",
+      "limitations": [],
+      "validation_evidence": []
+    }
+  ]
+}

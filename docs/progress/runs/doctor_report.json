@@ -1,0 +1,187 @@
+{
+  "generated_utc": "2026-11-04T03:34:33.917431+00:00",
+  "project_root": "C:\\Users\\赵航\\Desktop\\studio\\spectra-workbench",
+  "overall_ok": true,
+  "gui_can_start": true,
+  "envs": {
+    "ui": {
+      "role": "ui",
+      "status": "ok",
+      "python": "3.12.10",
+      "executable": "C:\\Users\\赵航\\Desktop\\studio\\spectra-workbench\\.venvs\\sw-ui\\Scripts\\python.exe",
+      "version_info": {
+        "PySide6": "6.9.3",
+        "pyqtgraph": "0.14.0",
+        "pydantic": "2.14.2",
+        "jsonschema": "4.26.0",
+        "qt_version": "6.9.3"
+      },
+      "checks": {
+        "isolation_passed": true,
+        "isolation_details": {
+          "osgeo": false,
+          "rasterio": false,
+          "fiona": false,
+          "geopandas": false
+        }
+      },
+      "drivers": {},
+      "cli_tools": {},
+      "messages": [
+        "All core UI packages present and geospatial engines properly isolated."
+      ]
+    },
+    "gdal": {
+      "role": "gdal",
+      "status": "ok",
+      "python": "3.12.14",
+      "executable": "C:\\Program Files\\QGIS 3.44.15\\apps\\Python312\\python.exe",
+      "version_info": {
+        "gdal_version": "3.13.3",
+        "gdal_rev": "GDAL 3.13.3 \"Iowa City\", released 2026/08/13",
+        "proj_version": "9.8.1"
+      },
+      "checks": {
+        "gtiff_roundtrip": {
+          "ok": true,
+          "shape": [
+            4,
+            4
+          ],
+          "dtype": "Float32",
+          "values_matched": true
+        },
+        "coord_transform": {
+          "ok": true,
+          "epsg_in": 4326,
+          "epsg_out": 3857,
+          "input": [
+            116.4,
+            39.9
+          ],
+          "output": [
+            12957588.73,
+            4851421.18
+          ]
+        },
+        "resource_dirs": {
+          "gdal_data": "C:\\Program Files\\QGIS 3.44.15\\apps\\gdal\\share\\gdal",
+          "gdal_data_valid": true,
+          "proj_data_valid": true
+        },
+        "gui_can_start_without_hdf4": true
+      },
+      "drivers": {
+        "GTiff": true,
+        "ENVI": true,
+        "GPKG": true,
+        "HDF4": true,
+        "HDF5": false,
+        "netCDF": true,
+        "COG": true,
+        "VRT": true,
+        "JPEG": true,
+        "PNG": true,
+        "ESRI Shapefile": true
+      },
+      "cli_tools": {
+        "gdal": {
+          "available": true,
+          "path": "C:\\Program Files\\QGIS 3.44.15\\bin\\gdal.exe",
+          "exit_code": 0,
+          "version": "GDAL 3.13.3 \"Iowa City\", released 2026/08/13"
+        },
+        "gdalinfo": {
+          "available": true,
+          "path": "C:\\Program Files\\QGIS 3.44.15\\bin\\gdalinfo.exe",
+          "exit_code": 0,
+          "version": "GDAL 3.13.3 \"Iowa City\", released 2026/08/13"
+        },
+        "ogrinfo": {
+          "available": true,
+          "path": "C:\\Program Files\\QGIS 3.44.15\\bin\\ogrinfo.exe",
+          "exit_code": 0,
+          "version": "GDAL 3.13.3 \"Iowa City\", released 2026/08/13"
+        },
+        "gdal_translate": {
+          "available": true,
+          "path": "C:\\Program Files\\QGIS 3.44.15\\bin\\gdal_translate.exe",
+          "exit_code": 0,
+          "version": "GDAL 3.13.3 \"Iowa City\", released 2026/08/13"
+        },
+        "gdalwarp": {
+          "available": true,
+          "path": "C:\\Program Files\\QGIS 3.44.15\\bin\\gdalwarp.exe",
+          "exit_code": 0,
+          "version": "GDAL 3.13.3 \"Iowa City\", released 2026/08/13"
+        }
+      },
+      "messages": [
+        "HDF4 driver present.",
+        "GDAL 3.13.3 verified (205 drivers, PROJ 9.8.1)."
+      ]
+    },
+    "rasterio": {
+      "role": "rasterio",
+      "status": "ok",
+      "python": "3.12.10",
+      "executable": "C:\\Users\\赵航\\Desktop\\studio\\spectra-workbench\\.venvs\\sw-rasterio\\Scripts\\python.exe",
+      "version_info": {
+        "rasterio_version": "1.5.2",
+        "gdal_version": "3.12.2"
+      },
+      "checks": {
+        "gtiff_roundtrip": {
+          "ok": true,
+          "shape": [
+            4,
+            4
+          ],
+          "crs": "EPSG:4326",
+          "dtype": "float32",
+          "values_matched": true
+        }
+      },
+      "drivers": {},
+      "cli_tools": {
+        "rio": {
+          "available": true,
+          "path": "C:\\Users\\赵航\\Desktop\\studio\\spectra-workbench\\.venvs\\sw-rasterio\\Scripts\\rio.exe",
+          "exit_code": 0,
+          "version": "1.5.2"
+        }
+      },
+      "messages": [
+        "Rasterio 1.5.2 verified (linked GDAL 3.12.2)."
+      ]
+    },
+    "science": {
+      "role": "science",
+      "status": "ok",
+      "python": "3.12.10",
+      "executable": "C:\\Users\\赵航\\Desktop\\studio\\spectra-workbench\\.venvs\\sw-science\\Scripts\\python.exe",
+      "version_info": {
+        "numpy_version": "2.5.4",
+        "scipy_version": "1.18.1"
+      },
+      "checks": {
+        "fft_roundtrip": {
+          "ok": true,
+          "shape": [
+            8,
+            8
+          ],
+          "max_diff": 3.552713678800501e-15,
+          "roundtrip_invariant_passed": true
+        }
+      },
+      "drivers": {},
+      "cli_tools": {},
+      "messages": [
+        "NumPy 2.5.4, SciPy 1.18.1 verified (FFT roundtrip diff < 1e-12)."
+      ]
+    }
+  },
+  "warnings": [],
+  "errors": []
+}

@@ -1,0 +1,133 @@
+{
+  "version": "1.0",
+  "description": "Spectra Workbench A01 验收样例库",
+  "fixtures": {
+    "ramp_16x16": {
+      "name": "ramp_16x16",
+      "description": "A01-1 单波段水平线性渐变 (16x16 Float32)",
+      "samples": 16,
+      "lines": 16,
+      "bands": 1,
+      "dtype": "float32",
+      "envi_data_type": 4,
+      "interleave": "bsq",
+      "byte_order": 0,
+      "nodata_value": null,
+      "stats": {
+        "min": 0.0,
+        "max": 255.0,
+        "mean": 127.5,
+        "first_row": [
+          0.0,
+          17.0,
+          34.0,
+          51.0,
+          68.0,
+          85.0,
+          102.0,
+          119.0,
+          136.0,
+          153.0,
+          170.0,
+          187.0,
+          204.0,
+          221.0,
+          238.0,
+          255.0
+        ]
+      },
+      "hdr_file": "a01_ramp_16x16.hdr",
+      "dat_file": "a01_ramp_16x16.dat"
+    },
+    "constant_8x8": {
+      "name": "constant_8x8",
+      "description": "A01-2 常量栅格 (8x8 Float32)",
+      "samples": 8,
+      "lines": 8,
+      "bands": 1,
+      "dtype": "float32",
+      "envi_data_type": 4,
+      "interleave": "bsq",
+      "byte_order": 0,
+      "nodata_value": null,
+      "stats": {
+        "min": 42.0,
+        "max": 42.0,
+        "mean": 42.0,
+        "unique_values": [
+          42.0
+        ]
+      },
+      "hdr_file": "a01_constant_8x8.hdr",
+      "dat_file": "a01_constant_8x8.dat"
+    },
+    "multiband_4b_8x8": {
+      "name": "multiband_4b_8x8",
+      "description": "A01-3 4波段已知值栅格 (8x8 UInt16)",
+      "samples": 8,
+      "lines": 8,
+      "bands": 4,
+      "dtype": "uint16",
+      "envi_data_type": 12,
+      "interleave": "bsq",
+      "byte_order": 0,
+      "nodata_value": null,
+      "stats": {
+        "bands": 4,
+        "per_band": [
+          {
+            "band_idx": 1,
+            "min": 1000,
+            "max": 1077,
+            "first_pixel": 1000,
+            "last_pixel": 1077
+          },
+          {
+            "band_idx": 2,
+            "min": 2000,
+            "max": 2077,
+            "first_pixel": 2000,
+            "last_pixel": 2077
+          },
+          {
+            "band_idx": 3,
+            "min": 3000,
+            "max": 3077,
+            "first_pixel": 3000,
+            "last_pixel": 3077
+          },
+          {
+            "band_idx": 4,
+            "min": 4000,
+            "max": 4077,
+            "first_pixel": 4000,
+            "last_pixel": 4077
+          }
+        ]
+      },
+      "hdr_file": "a01_multiband_4b_8x8.hdr",
+      "dat_file": "a01_multiband_4b_8x8.dat"
+    },
+    "nodata_masked_8x8": {
+      "name": "nodata_masked_8x8",
+      "description": "A01-4 包含 NoData 与合法 0 值的栅格 (8x8 Float32)",
+      "samples": 8,
+      "lines": 8,
+      "bands": 1,
+      "dtype": "float32",
+      "envi_data_type": 4,
+      "interleave": "bsq",
+      "byte_order": 0,
+      "nodata_value": -9999.0,
+      "stats": {
+        "nodata_value": -9999.0,
+        "nodata_pixels": 8,
+        "zero_pixels": 4,
+        "valid_pixels": 56,
+        "total_pixels": 64
+      },
+      "hdr_file": "a01_nodata_masked_8x8.hdr",
+      "dat_file": "a01_nodata_masked_8x8.dat"
+    }
+  }
+}

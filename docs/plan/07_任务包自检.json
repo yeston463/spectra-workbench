@@ -1,0 +1,21 @@
+{
+  "artifact_type": "development_plan_package_validation",
+  "date": "2026-11-03",
+  "status": "passed",
+  "scope_note": "仅校验开发任务包的结构、契约样例、依赖与打包完整性；未实现或测试遥感软件。",
+  "checks": {
+    "required_input_files_present": 14,
+    "json_schemas_valid": 3,
+    "positive_examples_valid": 3,
+    "template_examples_explicitly_marked": true,
+    "invalid_mutations_rejected": 7,
+    "backlog_tasks": 55,
+    "milestones": 11,
+    "dependency_graph_acyclic": true,
+    "backlog_matches_milestone_tables": true,
+    "conditional_topic_does_not_block_core_release_dag": true,
+    "all_core_tasks_gate_final_release": true,
+    "markdown_fences_balanced": 7,
+    "all_backlog_tasks_initially_todo": true
+  }
+}

@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "spectra-workbench"
+version = "0.0.1"
+description = "Windows x64 remote sensing and GIS desktop workbench (PySide6 UI, engines in separate processes)"
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2,<3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+    "mypy>=1.10",
+    "jsonschema>=4.20",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [".", "src"]
+markers = [
+    "unit: pure-python tests, no native geospatial engine",
+    "integration: crosses process or engine boundaries",
+    "gui: needs a Qt application",
+    "engine: needs a resolved engine environment",
+    "slow: large data or long runtime",
+]
+addopts = "-ra --strict-markers"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.12"
+packages = ["spectra_workbench"]
+mypy_path = "src"
+strict = false
+warn_unused_ignores = true
+exclude = ["docs/"]
+
+[[tool.mypy.overrides]]
+module = ["pyqtgraph.*", "numpy.*"]
+ignore_missing_imports = true

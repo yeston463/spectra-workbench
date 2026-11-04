@@ -1,0 +1,80 @@
+{
+  "schema_version": "1.0",
+  "template_only": true,
+  "capability_id": "gdal.algorithm.raster.convert",
+  "descriptor_revision": "EXAMPLE-NOT-A-REAL-HASH",
+  "kind": "algorithm",
+  "name": "栅格格式转换",
+  "native_name": "raster convert",
+  "category": [
+    "栅格",
+    "数据管理"
+  ],
+  "description": "契约示例，未绑定真实引擎，不可直接提交执行。参数须由目标版本发现并校验。",
+  "engine": {
+    "provider_id": "gdal",
+    "version_constraint": ">=3.11,<4",
+    "runtime_id": null,
+    "resolved_version": null
+  },
+  "source": {
+    "documentation_url": "https://gdal.org/en/stable/programs/gdal.html",
+    "baseline_id": "EXAMPLE-P0-MUST-RESOLVE",
+    "upstream_version": "P0-MUST-RESOLVE",
+    "snapshot_sha256": null,
+    "verified_date": null
+  },
+  "parameters": [
+    {
+      "key": "output_format",
+      "native_name": "output-format",
+      "label": "输出格式",
+      "type": "string",
+      "required": false,
+      "help": "由实际驱动清单提供选择，不能假设所有格式可写。"
+    }
+  ],
+  "inputs": [
+    {
+      "key": "input",
+      "data_type": "raster",
+      "required": true,
+      "multiple": true
+    }
+  ],
+  "outputs": [
+    {
+      "key": "output",
+      "data_type": "raster",
+      "required": true
+    }
+  ],
+  "requirements": [
+    {
+      "kind": "package",
+      "name": "GDAL",
+      "constraint": ">=3.11,<4",
+      "reason": "提供目标算法"
+    }
+  ],
+  "entrypoints": [
+    {
+      "kind": "form",
+      "target": "gdal.algorithm.raster.convert",
+      "available": false,
+      "notes": "待 P2 实现"
+    }
+  ],
+  "state": {
+    "presence": "unknown",
+    "binding": "indexed",
+    "validation": "not_run",
+    "availability": "unknown"
+  },
+  "effects": "new_dataset",
+  "cancellation": "unknown",
+  "limitations": [
+    "仅示例；无真实环境、基准快照或验证结果。"
+  ],
+  "validation_evidence": []
+}

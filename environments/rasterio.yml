@@ -1,0 +1,8 @@
+name: sw-rasterio
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - pip
+  - rasterio>=1.4,<2
+  - numpy

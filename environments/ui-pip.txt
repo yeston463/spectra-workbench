@@ -1,0 +1,7 @@
+PySide6==6.9.3
+pyqtgraph
+pydantic
+jsonschema
+pytest
+pytest-qt
+numpy

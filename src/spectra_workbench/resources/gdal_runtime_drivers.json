@@ -1,0 +1,1850 @@
+{
+  "count": 205,
+  "drivers": [
+    {
+      "short_name": "DERIVED",
+      "long_name": "Derived datasets using VRT pixel functions",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "GTI",
+      "long_name": "GDAL Raster Tile Index",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "SNAP_TIFF",
+      "long_name": "Sentinel Application Processing GeoTIFF",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "GTiff",
+      "long_name": "GeoTIFF",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": true,
+      "can_createcopy": true,
+      "can_open": true
+    },
+    {
+      "short_name": "COG",
+      "long_name": "Cloud optimized GeoTIFF generator",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": true,
+      "can_createcopy": true,
+      "can_open": false
+    },
+    {
+      "short_name": "LIBERTIFF",
+      "long_name": "GeoTIFF (using LIBERTIFF library)",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "VRT",
+      "long_name": "Virtual Raster",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": true,
+      "can_createcopy": true,
+      "can_open": true
+    },
+    {
+      "short_name": "NITF",
+      "long_name": "National Imagery Transmission Format",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": true,
+      "can_createcopy": true,
+      "can_open": true
+    },
+    {
+      "short_name": "RPFTOC",
+      "long_name": "Raster Product Format TOC format",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "ECRGTOC",
+      "long_name": "ECRG TOC format",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "HFA",
+      "long_name": "Erdas Imagine Images (.img)",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": true,
+      "can_createcopy": true,
+      "can_open": true
+    },
+    {
+      "short_name": "SAR_CEOS",
+      "long_name": "CEOS SAR Image",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "CEOS",
+      "long_name": "CEOS Image",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "JAXAPALSAR",
+      "long_name": "JAXA PALSAR Product Reader (Level 1.1/1.5)",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "GFF",
+      "long_name": "Ground-based SAR Applications Testbed File Format (.gff)",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "ESRIC",
+      "long_name": "Esri Compact Cache",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "AIG",
+      "long_name": "Arc/Info Binary Grid",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "AAIGrid",
+      "long_name": "Arc/Info ASCII Grid",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": true,
+      "can_open": true
+    },
+    {
+      "short_name": "GRASSASCIIGrid",
+      "long_name": "GRASS ASCII Grid",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "ISG",
+      "long_name": "International Service for the Geoid",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "DTED",
+      "long_name": "DTED Elevation Raster",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": true,
+      "can_open": true
+    },
+    {
+      "short_name": "PNG",
+      "long_name": "Portable Network Graphics",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": true,
+      "can_open": true
+    },
+    {
+      "short_name": "JPEG",
+      "long_name": "JPEG JFIF",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": true,
+      "can_open": true
+    },
+    {
+      "short_name": "MEM",
+      "long_name": "In Memory raster, vector and multidimensional raster",
+      "is_raster": true,
+      "is_vector": true,
+      "can_create": true,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "JDEM",
+      "long_name": "Japanese DEM (.mem)",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "GIF",
+      "long_name": "Graphics Interchange Format (.gif)",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": true,
+      "can_open": true
+    },
+    {
+      "short_name": "BIGGIF",
+      "long_name": "Graphics Interchange Format (.gif)",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "ESAT",
+      "long_name": "Envisat Image Format",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "BSB",
+      "long_name": "Maptech BSB Nautical Charts",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "BMP",
+      "long_name": "MS Windows Device Independent Bitmap",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": true,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "DIMAP",
+      "long_name": "SPOT DIMAP",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "AirSAR",
+      "long_name": "AirSAR Polarimetric Image",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "RS2",
+      "long_name": "RadarSat 2 XML Product",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "SAFE",
+      "long_name": "Sentinel-1 SAR SAFE Product",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "PCIDSK",
+      "long_name": "PCIDSK Database File",
+      "is_raster": true,
+      "is_vector": true,
+      "can_create": true,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "PCRaster",
+      "long_name": "PCRaster Raster File",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": true,
+      "can_createcopy": true,
+      "can_open": true
+    },
+    {
+      "short_name": "ILWIS",
+      "long_name": "ILWIS Raster Map",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": true,
+      "can_createcopy": true,
+      "can_open": true
+    },
+    {
+      "short_name": "SRTMHGT",
+      "long_name": "SRTMHGT File Format",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": true,
+      "can_open": true
+    },
+    {
+      "short_name": "Leveller",
+      "long_name": "Leveller heightfield",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": true,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "Terragen",
+      "long_name": "Terragen heightfield",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": true,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "netCDF",
+      "long_name": "Network Common Data Format",
+      "is_raster": true,
+      "is_vector": true,
+      "can_create": true,
+      "can_createcopy": true,
+      "can_open": true
+    },
+    {
+      "short_name": "HDF4",
+      "long_name": "Hierarchical Data Format Release 4",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "HDF4Image",
+      "long_name": "HDF4 Dataset",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": true,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "ISIS3",
+      "long_name": "USGS Astrogeology ISIS cube (Version 3)",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": true,
+      "can_createcopy": true,
+      "can_open": true
+    },
+    {
+      "short_name": "ISIS2",
+      "long_name": "USGS Astrogeology ISIS cube (Version 2)",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "PDS",
+      "long_name": "NASA Planetary Data System",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "PDS4",
+      "long_name": "NASA Planetary Data System 4",
+      "is_raster": true,
+      "is_vector": true,
+      "can_create": true,
+      "can_createcopy": true,
+      "can_open": true
+    },
+    {
+      "short_name": "VICAR",
+      "long_name": "MIPL VICAR file",
+      "is_raster": true,
+      "is_vector": true,
+      "can_create": true,
+      "can_createcopy": true,
+      "can_open": true
+    },
+    {
+      "short_name": "TIL",
+      "long_name": "EarthWatch .TIL",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "ERS",
+      "long_name": "ERMapper .ers Labelled",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": true,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "JP2OpenJPEG",
+      "long_name": "JPEG-2000 driver based on JP2OpenJPEG library",
+      "is_raster": true,
+      "is_vector": true,
+      "can_create": false,
+      "can_createcopy": true,
+      "can_open": true
+    },
+    {
+      "short_name": "L1B",
+      "long_name": "NOAA Polar Orbiter Level 1b Data Set",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "GRIB",
+      "long_name": "GRIdded Binary (.grb, .grb2)",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": true,
+      "can_open": true
+    },
+    {
+      "short_name": "RMF",
+      "long_name": "Raster Matrix Format",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": true,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "WCS",
+      "long_name": "OGC Web Coverage Service",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "WMS",
+      "long_name": "OGC Web Map Service",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": true,
+      "can_open": true
+    },
+    {
+      "short_name": "MSGN",
+      "long_name": "EUMETSAT Archive native (.nat)",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "RST",
+      "long_name": "Idrisi Raster A.1",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": true,
+      "can_createcopy": true,
+      "can_open": true
+    },
+    {
+      "short_name": "GSAG",
+      "long_name": "Golden Software ASCII Grid (.grd)",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": true,
+      "can_open": true
+    },
+    {
+      "short_name": "GSBG",
+      "long_name": "Golden Software Binary Grid (.grd)",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": true,
+      "can_createcopy": true,
+      "can_open": true
+    },
+    {
+      "short_name": "GS7BG",
+      "long_name": "Golden Software 7 Binary Grid (.grd)",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": true,
+      "can_createcopy": true,
+      "can_open": true
+    },
+    {
+      "short_name": "COSAR",
+      "long_name": "COSAR Annotated Binary Matrix (TerraSAR-X)",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "TSX",
+      "long_name": "TerraSAR-X Product",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "COASP",
+      "long_name": "DRDC COASP SAR Processor Raster",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "MAP",
+      "long_name": "OziExplorer .MAP",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "KMLSUPEROVERLAY",
+      "long_name": "Kml Super Overlay",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": true,
+      "can_open": true
+    },
+    {
+      "short_name": "WEBP",
+      "long_name": "WEBP",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": true,
+      "can_open": true
+    },
+    {
+      "short_name": "PDF",
+      "long_name": "Geospatial PDF",
+      "is_raster": true,
+      "is_vector": true,
+      "can_create": true,
+      "can_createcopy": true,
+      "can_open": true
+    },
+    {
+      "short_name": "MBTiles",
+      "long_name": "MBTiles",
+      "is_raster": true,
+      "is_vector": true,
+      "can_create": true,
+      "can_createcopy": true,
+      "can_open": true
+    },
+    {
+      "short_name": "PLMOSAIC",
+      "long_name": "Planet Labs Mosaics API",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "CALS",
+      "long_name": "CALS (Type 1)",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": true,
+      "can_open": true
+    },
+    {
+      "short_name": "WMTS",
+      "long_name": "OGC Web Map Tile Service",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": true,
+      "can_open": true
+    },
+    {
+      "short_name": "SENTINEL2",
+      "long_name": "Sentinel 2",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "MRF",
+      "long_name": "Meta Raster Format",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": true,
+      "can_createcopy": true,
+      "can_open": true
+    },
+    {
+      "short_name": "PNM",
+      "long_name": "Portable Pixmap Format (netpbm)",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": true,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "DOQ1",
+      "long_name": "USGS DOQ (Old Style)",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "DOQ2",
+      "long_name": "USGS DOQ (New Style)",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "MFF",
+      "long_name": "Vexcel MFF Raster",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "MFF2",
+      "long_name": "Vexcel MFF2 (HKV) Raster",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "GSC",
+      "long_name": "GSC Geogrid",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "FAST",
+      "long_name": "EOSAT FAST Format",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "BT",
+      "long_name": "VTP .bt (Binary Terrain) 1.3 Format",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": true,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "LAN",
+      "long_name": "Erdas .LAN/.GIS",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "CPG",
+      "long_name": "Convair PolGASP",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "NDF",
+      "long_name": "NLAPS Data Format",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "EIR",
+      "long_name": "Erdas Imagine Raw",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "LCP",
+      "long_name": "FARSITE v.4 Landscape File (.lcp)",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": true,
+      "can_open": true
+    },
+    {
+      "short_name": "GTX",
+      "long_name": "NOAA Vertical Datum .GTX",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": true,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "LOSLAS",
+      "long_name": "NADCON .los/.las Datum Grid Shift",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "NTv2",
+      "long_name": "NTv2 Datum Grid Shift",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "ACE2",
+      "long_name": "ACE2",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "SNODAS",
+      "long_name": "Snow Data Assimilation System",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "KRO",
+      "long_name": "KOLOR Raw",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": true,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "ROI_PAC",
+      "long_name": "ROI_PAC raster",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": true,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "RRASTER",
+      "long_name": "R Raster",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": true,
+      "can_createcopy": true,
+      "can_open": true
+    },
+    {
+      "short_name": "BYN",
+      "long_name": "Natural Resources Canada's Geoid",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "NOAA_B",
+      "long_name": "NOAA GEOCON/NADCON5 .b format",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "NSIDCbin",
+      "long_name": "NSIDC Sea Ice Concentrations binary (.bin)",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "CPHD",
+      "long_name": "Compensated Phase History Data Reader",
+      "is_raster": false,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "RIK",
+      "long_name": "Swedish Grid RIK (.rik)",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "USGSDEM",
+      "long_name": "USGS Optional ASCII DEM (and CDED)",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "GXF",
+      "long_name": "GeoSoft Grid Exchange Format",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "NWT_GRD",
+      "long_name": "Northwood Numeric Grid Format .grd/.tab",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": true,
+      "can_createcopy": true,
+      "can_open": true
+    },
+    {
+      "short_name": "NWT_GRC",
+      "long_name": "Northwood Classified Grid Format .grc/.tab",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "ADRG",
+      "long_name": "ARC Digitized Raster Graphics",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "SRP",
+      "long_name": "Standard Raster Product (ASRP/USRP)",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "PostGISRaster",
+      "long_name": "PostGIS Raster driver",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": true,
+      "can_open": true
+    },
+    {
+      "short_name": "SAGA",
+      "long_name": "SAGA GIS Binary Grid (.sdat, .sg-grd-z)",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": true,
+      "can_createcopy": true,
+      "can_open": true
+    },
+    {
+      "short_name": "XYZ",
+      "long_name": "ASCII Gridded XYZ",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": true,
+      "can_open": true
+    },
+    {
+      "short_name": "HF2",
+      "long_name": "HF2/HFZ heightfield raster",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": true,
+      "can_open": true
+    },
+    {
+      "short_name": "CTG",
+      "long_name": "USGS LULC Composite Theme Grid",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "ZMap",
+      "long_name": "ZMap Plus Grid",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": true,
+      "can_open": true
+    },
+    {
+      "short_name": "NGSGEOID",
+      "long_name": "NOAA NGS Geoid Height Grids",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "IRIS",
+      "long_name": "IRIS data (.PPI, .CAPPi etc)",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "PRF",
+      "long_name": "Racurs PHOTOMOD PRF",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "EEDAI",
+      "long_name": "Earth Engine Data API Image",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "EEDA",
+      "long_name": "Earth Engine Data API",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "DAAS",
+      "long_name": "Airbus DS Intelligence Data As A Service driver",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "SIGDEM",
+      "long_name": "Scaled Integer Gridded DEM .sigdem",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": true,
+      "can_open": true
+    },
+    {
+      "short_name": "TGA",
+      "long_name": "TGA/TARGA Image File Format",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "OGCAPI",
+      "long_name": "OGCAPI",
+      "is_raster": true,
+      "is_vector": true,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "STACTA",
+      "long_name": "Spatio-Temporal Asset Catalog Tiled Assets",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "STACIT",
+      "long_name": "Spatio-Temporal Asset Catalog Items",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "JPEGXL",
+      "long_name": "JPEG-XL",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": true,
+      "can_open": true
+    },
+    {
+      "short_name": "GDALG",
+      "long_name": "GDAL Streamed Algorithm driver",
+      "is_raster": true,
+      "is_vector": true,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "E57",
+      "long_name": "ASTM E57 3D file format (image part)",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "GNMFile",
+      "long_name": "Geographic Network generic file based model",
+      "is_raster": false,
+      "is_vector": false,
+      "can_create": true,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "GNMDatabase",
+      "long_name": "Geographic Network generic DB based model",
+      "is_raster": false,
+      "is_vector": false,
+      "can_create": true,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "ESRI Shapefile",
+      "long_name": "ESRI Shapefile",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": true,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "MapInfo File",
+      "long_name": "MapInfo File",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": true,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "UK .NTF",
+      "long_name": "UK .NTF",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "LVBAG",
+      "long_name": "Kadaster LV BAG Extract 2.0",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "S57",
+      "long_name": "IHO S-57 (ENC)",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": true,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "DGN",
+      "long_name": "Microstation DGN",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": true,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "OGR_VRT",
+      "long_name": "VRT - Virtual Datasource",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "CSV",
+      "long_name": "Comma Separated Value (.csv)",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": true,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "NAS",
+      "long_name": "NAS - ALKIS",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "GML",
+      "long_name": "Geography Markup Language (GML)",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": true,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "GPX",
+      "long_name": "GPX",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": true,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "LIBKML",
+      "long_name": "Keyhole Markup Language (LIBKML)",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": true,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "KML",
+      "long_name": "Keyhole Markup Language (KML)",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": true,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "GeoJSON",
+      "long_name": "GeoJSON",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": true,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "GeoJSONSeq",
+      "long_name": "GeoJSON Sequence",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": true,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "ESRIJSON",
+      "long_name": "ESRIJSON",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "TopoJSON",
+      "long_name": "TopoJSON",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "Interlis 1",
+      "long_name": "Interlis 1",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "Interlis 2",
+      "long_name": "Interlis 2",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "OGR_GMT",
+      "long_name": "GMT ASCII Vectors (.gmt)",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": true,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "GPKG",
+      "long_name": "GeoPackage",
+      "is_raster": true,
+      "is_vector": true,
+      "can_create": true,
+      "can_createcopy": true,
+      "can_open": true
+    },
+    {
+      "short_name": "SQLite",
+      "long_name": "SQLite / Spatialite",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": true,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "ODBC",
+      "long_name": "Open Database Connectivity (ODBC)",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "WAsP",
+      "long_name": "WAsP .map format",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": true,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "PGeo",
+      "long_name": "ESRI Personal GeoDatabase",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "PostgreSQL",
+      "long_name": "PostgreSQL/PostGIS",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": true,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "MySQL",
+      "long_name": "MySQL",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": true,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "OpenFileGDB",
+      "long_name": "ESRI FileGeodatabase (using OpenFileGDB)",
+      "is_raster": true,
+      "is_vector": true,
+      "can_create": true,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "DXF",
+      "long_name": "AutoCAD DXF",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": true,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "CAD",
+      "long_name": "AutoCAD Driver",
+      "is_raster": true,
+      "is_vector": true,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "FlatGeobuf",
+      "long_name": "FlatGeobuf",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": true,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "GeoRSS",
+      "long_name": "GeoRSS",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": true,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "VFK",
+      "long_name": "Czech Cadastral Exchange Data Format",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "PGDUMP",
+      "long_name": "PostgreSQL SQL dump",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": true,
+      "can_createcopy": false,
+      "can_open": false
+    },
+    {
+      "short_name": "OSM",
+      "long_name": "OpenStreetMap XML and PBF",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "GPSBabel",
+      "long_name": "GPSBabel",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": true,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "OGR_PDS",
+      "long_name": "Planetary Data Systems TABLE",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "WFS",
+      "long_name": "OGC WFS (Web Feature Service)",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "OAPIF",
+      "long_name": "OGC API - Features",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "EDIGEO",
+      "long_name": "French EDIGEO exchange format",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "Idrisi",
+      "long_name": "Idrisi Vector (.vct)",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "XLS",
+      "long_name": "MS Excel format",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "ODS",
+      "long_name": "Open Document/ LibreOffice / OpenOffice Spreadsheet",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": true,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "XLSX",
+      "long_name": "MS Office Open XML spreadsheet",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": true,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "Elasticsearch",
+      "long_name": "Elastic Search",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": true,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "Carto",
+      "long_name": "Carto",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": true,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "AmigoCloud",
+      "long_name": "AmigoCloud",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": true,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "SXF",
+      "long_name": "Storage and eXchange Format",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "Selafin",
+      "long_name": "Selafin",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": true,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "JML",
+      "long_name": "OpenJUMP JML",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": true,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "PLSCENES",
+      "long_name": "Planet Labs Scenes API",
+      "is_raster": true,
+      "is_vector": true,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "CSW",
+      "long_name": "OGC CSW (Catalog  Service for the Web)",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "VDV",
+      "long_name": "VDV-451/VDV-452/INTREST Data Format",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": true,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "GMLAS",
+      "long_name": "Geography Markup Language (GML) driven by application schemas",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": false,
+      "can_createcopy": true,
+      "can_open": true
+    },
+    {
+      "short_name": "MVT",
+      "long_name": "Mapbox Vector Tiles",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": true,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "NGW",
+      "long_name": "NextGIS Web",
+      "is_raster": true,
+      "is_vector": true,
+      "can_create": true,
+      "can_createcopy": true,
+      "can_open": true
+    },
+    {
+      "short_name": "MapML",
+      "long_name": "MapML",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": true,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "Parquet",
+      "long_name": "(Geo)Parquet",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": true,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "Arrow",
+      "long_name": "(Geo)Arrow IPC File Format / Stream",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": true,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "GTFS",
+      "long_name": "General Transit Feed Specification",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "PMTiles",
+      "long_name": "ProtoMap Tiles",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": true,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "JSONFG",
+      "long_name": "OGC Features and Geometries JSON",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": true,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "MiraMonVector",
+      "long_name": "MiraMon Vectors (.pol, .arc, .pnt)",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": true,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "ADBC",
+      "long_name": "Arrow Database Connectivity",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "TIGER",
+      "long_name": "U.S. Census TIGER/Line",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "AVCBin",
+      "long_name": "Arc/Info Binary Coverage",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "AVCE00",
+      "long_name": "Arc/Info E00 (ASCII) Coverage",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "AIVector",
+      "long_name": "Artificial Intelligence powered vector driver",
+      "is_raster": false,
+      "is_vector": true,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "PAux",
+      "long_name": "PCI .aux Labelled",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "GenBin",
+      "long_name": "Generic Binary (.hdr Labelled)",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "ENVI",
+      "long_name": "ENVI .hdr Labelled",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": true,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "EHdr",
+      "long_name": "ESRI .hdr Labelled",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": true,
+      "can_createcopy": true,
+      "can_open": true
+    },
+    {
+      "short_name": "ISCE",
+      "long_name": "ISCE raster",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": true,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "Zarr",
+      "long_name": "Zarr",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": true,
+      "can_createcopy": true,
+      "can_open": true
+    },
+    {
+      "short_name": "RCM",
+      "long_name": "Radarsat Constellation Mission XML Product",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    },
+    {
+      "short_name": "MiraMonRaster",
+      "long_name": "MiraMon Raster Images",
+      "is_raster": true,
+      "is_vector": false,
+      "can_create": false,
+      "can_createcopy": true,
+      "can_open": true
+    },
+    {
+      "short_name": "HTTP",
+      "long_name": "HTTP Fetching Wrapper",
+      "is_raster": true,
+      "is_vector": true,
+      "can_create": false,
+      "can_createcopy": false,
+      "can_open": true
+    }
+  ]
+}

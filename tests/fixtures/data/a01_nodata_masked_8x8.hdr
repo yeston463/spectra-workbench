@@ -1,0 +1,12 @@
+ENVI
+description = {A01-4 包含 NoData 与合法 0 值的栅格 (8x8 Float32)}
+samples = 8
+lines   = 8
+bands   = 1
+header offset = 0
+file type = ENVI Standard
+data type = 4
+interleave = bsq
+byte order = 0
+data ignore value = -9999.0
+band names = {NoData_and_Zero}

@@ -1,0 +1,8 @@
+name: sw-gdal
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - pip
+  - gdal>=3.11,<4
+  - numpy

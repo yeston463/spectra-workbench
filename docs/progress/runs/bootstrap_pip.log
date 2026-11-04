@@ -1,0 +1,137 @@
+﻿[16:42:25] === gdal
+[16:49:35] === gdal
+[16:49:37] import osgeo: PASS
+[16:56:17] === gdal
+[16:56:19] import osgeo: PASS
+[16:56:19] === ui
+[16:56:19] 创建 venv：C:\Users\赵航\Desktop\studio\spectra-workbench\.venvs\sw-ui
+[16:56:34] pip install -r C:\Users\赵航\Desktop\studio\spectra-workbench\environments\ui-pip.txt
+Looking in indexes: https://mirrors.aliyun.com/pypi/simple
+Collecting PySide6==6.9.3 (from -r C:\Users\璧佃埅\Desktop\studio\spectra-workbench\environments\ui-pip.txt (line 1))
+  Downloading pyside6-6.9.3-cp39-abi3-win_amd64.whl (561 kB)
+     --------------------------------------- 561.1/561.1 kB 466.4 kB/s  0:00:01
+Collecting pyqtgraph (from -r C:\Users\璧佃埅\Desktop\studio\spectra-workbench\environments\ui-pip.txt (line 2))
+  Downloading pyqtgraph-0.14.0-py3-none-any.whl (1.9 MB)
+     ---------------------------------------- 1.9/1.9 MB 443.4 kB/s  0:00:04
+Collecting pydantic (from -r C:\Users\璧佃埅\Desktop\studio\spectra-workbench\environments\ui-pip.txt (line 3))
+  Using cached pydantic-2.14.2-py3-none-any.whl (490 kB)
+Collecting jsonschema (from -r C:\Users\璧佃埅\Desktop\studio\spectra-workbench\environments\ui-pip.txt (line 4))
+  Downloading jsonschema-4.26.0-py3-none-any.whl (90 kB)
+Collecting pytest (from -r C:\Users\璧佃埅\Desktop\studio\spectra-workbench\environments\ui-pip.txt (line 5))
+  Using cached pytest-9.2.0-py3-none-any.whl (411 kB)
+Collecting pytest-qt (from -r C:\Users\璧佃埅\Desktop\studio\spectra-workbench\environments\ui-pip.txt (line 6))
+  Downloading pytest_qt-4.5.0-py3-none-any.whl (37 kB)
+Collecting numpy (from -r C:\Users\璧佃埅\Desktop\studio\spectra-workbench\environments\ui-pip.txt (line 7))
+  Using cached numpy-2.5.4-cp312-cp312-win_amd64.whl (12.6 MB)
+Collecting shiboken6==6.9.3 (from PySide6==6.9.3->-r C:\Users\璧佃埅\Desktop\studio\spectra-workbench\environments\ui-pip.txt (line 1))
+  Downloading shiboken6-6.9.3-cp39-abi3-win_amd64.whl (1.2 MB)
+     ---------------------------------------- 1.2/1.2 MB 407.6 kB/s  0:00:02
+Collecting PySide6_Essentials==6.9.3 (from PySide6==6.9.3->-r C:\Users\璧佃埅\Desktop\studio\spectra-workbench\environments\ui-pip.txt (line 1))
+  Downloading pyside6_essentials-6.9.3-cp39-abi3-win_amd64.whl (73.6 MB)
+     ---------------------------------------- 73.6/73.6 MB 368.3 kB/s  0:03:17
+Collecting PySide6_Addons==6.9.3 (from PySide6==6.9.3->-r C:\Users\璧佃埅\Desktop\studio\spectra-workbench\environments\ui-pip.txt (line 1))
+  Downloading pyside6_addons-6.9.3-cp39-abi3-win_amd64.whl (160.7 MB)
+     --------------------------------------- 160.7/160.7 MB 388.9 kB/s  0:07:33
+Collecting colorama (from pyqtgraph->-r C:\Users\璧佃埅\Desktop\studio\spectra-workbench\environments\ui-pip.txt (line 2))
+  Using cached colorama-0.4.6-py2.py3-none-any.whl (25 kB)
+Collecting annotated-types>=0.6.0 (from pydantic->-r C:\Users\璧佃埅\Desktop\studio\spectra-workbench\environments\ui-pip.txt (line 3))
+  Downloading annotated_types-0.8.0-py3-none-any.whl (13 kB)
+Collecting pydantic-core==2.50.2 (from pydantic->-r C:\Users\璧佃埅\Desktop\studio\spectra-workbench\environments\ui-pip.txt (line 3))
+  Using cached pydantic_core-2.50.2-cp312-cp312-win_amd64.whl (2.3 MB)
+Collecting typing-extensions>=4.16.0 (from pydantic->-r C:\Users\璧佃埅\Desktop\studio\spectra-workbench\environments\ui-pip.txt (line 3))
+  Downloading typing_extensions-4.16.0-py3-none-any.whl (45 kB)
+Collecting typing-inspection>=0.4.4 (from pydantic->-r C:\Users\璧佃埅\Desktop\studio\spectra-workbench\environments\ui-pip.txt (line 3))
+  Using cached typing_inspection-0.4.4-py3-none-any.whl (14 kB)
+Collecting attrs>=22.2.0 (from jsonschema->-r C:\Users\璧佃埅\Desktop\studio\spectra-workbench\environments\ui-pip.txt (line 4))
+  Downloading attrs-26.1.0-py3-none-any.whl (67 kB)
+Collecting jsonschema-specifications>=2023.03.6 (from jsonschema->-r C:\Users\璧佃埅\Desktop\studio\spectra-workbench\environments\ui-pip.txt (line 4))
+  Downloading jsonschema_specifications-2025.9.1-py3-none-any.whl (18 kB)
+Collecting referencing>=0.28.4 (from jsonschema->-r C:\Users\璧佃埅\Desktop\studio\spectra-workbench\environments\ui-pip.txt (line 4))
+  Downloading referencing-0.37.0-py3-none-any.whl (26 kB)
+Collecting rpds-py>=0.25.0 (from jsonschema->-r C:\Users\璧佃埅\Desktop\studio\spectra-workbench\environments\ui-pip.txt (line 4))
+  Downloading rpds_py-2026.9.1-cp312-cp312-win_amd64.whl (222 kB)
+Collecting iniconfig>=2 (from pytest->-r C:\Users\璧佃埅\Desktop\studio\spectra-workbench\environments\ui-pip.txt (line 5))
+  Using cached iniconfig-2.3.1-py3-none-any.whl (7.6 kB)
+Collecting packaging>=24 (from pytest->-r C:\Users\璧佃埅\Desktop\studio\spectra-workbench\environments\ui-pip.txt (line 5))
+  Using cached packaging-26.3-py3-none-any.whl (129 kB)
+Collecting pluggy<2,>=1.6 (from pytest->-r C:\Users\璧佃埅\Desktop\studio\spectra-workbench\environments\ui-pip.txt (line 5))
+  Using cached pluggy-1.7.0-py3-none-any.whl (27 kB)
+Collecting pygments>=2.15 (from pytest->-r C:\Users\璧佃埅\Desktop\studio\spectra-workbench\environments\ui-pip.txt (line 5))
+  Using cached pygments-2.21.0-py3-none-any.whl (1.3 MB)
+Installing collected packages: typing-extensions, shiboken6, rpds-py, pygments, pluggy, packaging, numpy, iniconfig, colorama, attrs, annotated-types, typing-inspection, referencing, pytest, PySide6_Essentials, pyqtgraph, pydantic-core, pytest-qt, PySide6_Addons, pydantic, jsonschema-specifications, PySide6, jsonschema
+
+Successfully installed PySide6-6.9.3 PySide6_Addons-6.9.3 PySide6_Essentials-6.9.3 annotated-types-0.8.0 attrs-26.1.0 colorama-0.4.6 iniconfig-2.3.1 jsonschema-4.26.0 jsonschema-specifications-2025.9.1 numpy-2.5.4 packaging-26.3 pluggy-1.7.0 pydantic-2.14.2 pydantic-core-2.50.2 pygments-2.21.0 pyqtgraph-0.14.0 pytest-9.2.0 pytest-qt-4.5.0 referencing-0.37.0 rpds-py-2026.9.1 shiboken6-6.9.3 typing-extensions-4.16.0 typing-inspection-0.4.4
+[17:08:24] import PySide6: PASS
+[17:08:24] isolation osgeo: absent(符合隔离)
+[17:08:24] isolation rasterio: absent(符合隔离)
+[17:08:24] isolation fiona: absent(符合隔离)
+[17:08:24] isolation geopandas: absent(符合隔离)
+[17:08:25] === rasterio
+[17:08:25] 创建 venv：C:\Users\赵航\Desktop\studio\spectra-workbench\.venvs\sw-rasterio
+[17:08:38] pip install -r C:\Users\赵航\Desktop\studio\spectra-workbench\environments\rasterio-pip.txt
+Looking in indexes: https://mirrors.aliyun.com/pypi/simple
+Collecting rasterio==1.5.2 (from -r C:\Users\璧佃埅\Desktop\studio\spectra-workbench\environments\rasterio-pip.txt (line 1))
+  Downloading rasterio-1.5.2-cp312-cp312-win_amd64.whl (30.7 MB)
+     ---------------------------------------- 30.7/30.7 MB 392.3 kB/s  0:01:15
+Collecting numpy (from -r C:\Users\璧佃埅\Desktop\studio\spectra-workbench\environments\rasterio-pip.txt (line 2))
+  Using cached numpy-2.5.4-cp312-cp312-win_amd64.whl (12.6 MB)
+Collecting affine (from rasterio==1.5.2->-r C:\Users\璧佃埅\Desktop\studio\spectra-workbench\environments\rasterio-pip.txt (line 1))
+  Downloading affine-3.0.1-py3-none-any.whl (10 kB)
+Collecting attrs (from rasterio==1.5.2->-r C:\Users\璧佃埅\Desktop\studio\spectra-workbench\environments\rasterio-pip.txt (line 1))
+  Using cached attrs-26.1.0-py3-none-any.whl (67 kB)
+Collecting certifi (from rasterio==1.5.2->-r C:\Users\璧佃埅\Desktop\studio\spectra-workbench\environments\rasterio-pip.txt (line 1))
+  Downloading certifi-2026.10.23-py3-none-any.whl (135 kB)
+Collecting click!=8.2.*,>=4.0 (from rasterio==1.5.2->-r C:\Users\璧佃埅\Desktop\studio\spectra-workbench\environments\rasterio-pip.txt (line 1))
+  Downloading click-8.5.0-py3-none-any.whl (125 kB)
+Collecting pyparsing>=3.0 (from rasterio==1.5.2->-r C:\Users\璧佃埅\Desktop\studio\spectra-workbench\environments\rasterio-pip.txt (line 1))
+  Using cached pyparsing-3.3.3-py3-none-any.whl (126 kB)
+Installing collected packages: pyparsing, numpy, click, certifi, attrs, affine, rasterio
+
+Successfully installed affine-3.0.1 attrs-26.1.0 certifi-2026.10.23 click-8.5.0 numpy-2.5.4 pyparsing-3.3.3 rasterio-1.5.2
+[17:10:16] import rasterio: PASS
+[17:10:17] cli rio: 1.5.2
+[17:10:17] === science
+[17:10:17] 创建 venv：C:\Users\赵航\Desktop\studio\spectra-workbench\.venvs\sw-science
+[17:10:28] pip install -r C:\Users\赵航\Desktop\studio\spectra-workbench\environments\science-pip.txt
+Looking in indexes: https://mirrors.aliyun.com/pypi/simple
+Collecting numpy (from -r C:\Users\璧佃埅\Desktop\studio\spectra-workbench\environments\science-pip.txt (line 1))
+  Using cached numpy-2.5.4-cp312-cp312-win_amd64.whl (12.6 MB)
+Collecting scipy (from -r C:\Users\璧佃埅\Desktop\studio\spectra-workbench\environments\science-pip.txt (line 2))
+  Downloading scipy-1.18.1-cp312-cp312-win_amd64.whl (36.7 MB)
+     ---------------------------------------- 36.7/36.7 MB 385.3 kB/s  0:01:35
+Installing collected packages: numpy, scipy
+
+Successfully installed numpy-2.5.4 scipy-1.18.1
+[17:12:22] import numpy: PASS
+[17:12:23] 报告写入 C:\Users\赵航\Desktop\studio\spectra-workbench\docs\progress\runs\env_report.json
+[17:12:23] RESULT PARTIAL/FAIL 非 ok 数=6
+[17:14:59] === gdal
+[17:15:02] import osgeo: PASS
+[17:15:02] === ui
+[17:15:04] import PySide6: PASS
+[17:15:04] isolation osgeo: absent(符合隔离)
+[17:15:04] isolation rasterio: absent(符合隔离)
+[17:15:04] isolation fiona: absent(符合隔离)
+[17:15:04] isolation geopandas: absent(符合隔离)
+[17:15:05] === rasterio
+[17:15:06] import rasterio: PASS
+[17:15:06] cli rio: 1.5.2
+[17:15:07] === science
+[17:15:07] import numpy: PASS
+[17:15:08] 报告写入 C:\Users\赵航\Desktop\studio\spectra-workbench\docs\progress\runs\env_report.json
+[17:15:08] RESULT ALL OK
+[17:32:46] === gdal
+[17:32:48] import osgeo: PASS
+[17:32:49] === ui
+[17:32:50] import PySide6: PASS
+[17:32:50] isolation osgeo: absent(符合隔离)
+[17:32:50] isolation rasterio: absent(符合隔离)
+[17:32:50] isolation fiona: absent(符合隔离)
+[17:32:50] isolation geopandas: absent(符合隔离)
+[17:32:51] === rasterio
+[17:32:52] import rasterio: PASS
+[17:32:52] cli rio: 1.5.2
+[17:32:52] === science
+[17:32:53] import numpy: PASS
+[17:32:54] 报告写入 C:\Users\赵航\Desktop\studio\spectra-workbench\docs\progress\runs\env_report.json
+[17:32:54] RESULT ALL OK

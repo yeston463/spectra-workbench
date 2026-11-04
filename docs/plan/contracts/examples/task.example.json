@@ -1,0 +1,57 @@
+{
+  "schema_version": "1.0",
+  "protocol_version": "1.0",
+  "template_only": true,
+  "task_id": "example-convert-not-executable",
+  "attempt": 1,
+  "capability_id": "gdal.algorithm.raster.convert",
+  "descriptor_revision": "EXAMPLE-NOT-A-REAL-HASH",
+  "engine": {
+    "provider_id": "gdal",
+    "runtime_id": "EXAMPLE-UNRESOLVED",
+    "expected_version": "P0-MUST-RESOLVE"
+  },
+  "project_root": "C:/example/spectra-project",
+  "workspace": "work/tasks/example-convert",
+  "inputs": {
+    "input": {
+      "dataset_id": "example-source",
+      "kind": "raster",
+      "uri": "data/input.tif"
+    }
+  },
+  "parameters": {
+    "output_format": "GTiff"
+  },
+  "outputs": [
+    {
+      "key": "output",
+      "kind": "raster",
+      "uri": "outputs/converted.tif",
+      "driver": "GTiff",
+      "creation_options": {
+        "TILED": "YES"
+      },
+      "overwrite": false,
+      "commit_mode": "new_dataset"
+    }
+  ],
+  "resources": {
+    "max_cpu_threads": 1,
+    "ram_limit_mib": 512,
+    "priority": "normal"
+  },
+  "configuration": {},
+  "cancellation": {
+    "cooperative_timeout_seconds": 5,
+    "allow_process_termination": true
+  },
+  "provenance": {
+    "origin": "example",
+    "notes": "格式示例，不对应实际文件或已解析环境。"
+  },
+  "retry": {
+    "max_automatic_retries": 0,
+    "external_side_effects": false
+  }
+}

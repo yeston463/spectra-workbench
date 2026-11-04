@@ -1,0 +1,1016 @@
+{
+  "schema_version": "1.0",
+  "project": "Spectra Workbench",
+  "created_date": "2026-11-03",
+  "description": "初始任务基线；全部尚未执行。复制到 docs/progress/BACKLOG.json 后维护实际状态。",
+  "status_values": [
+    "todo",
+    "in_progress",
+    "implemented",
+    "awaiting_data",
+    "blocked",
+    "done"
+  ],
+  "done_definition": "对应里程碑验收真实通过，evidence 记录实际命令、结果和报告；仅写代码不能标 done。",
+  "tasks": [
+    {
+      "id": "P0-01",
+      "milestone": "P0",
+      "title": "检查开发目录、建仓库与文档结构",
+      "acceptance": [
+        "不覆盖无关文件；保留已有改动；README 有运行与开发入口"
+      ],
+      "depends_on": [],
+      "status": "done",
+      "release_requirement": "core",
+      "evidence": [
+        "仓库与目录骨架已建：git init（git 2.50.1），docs/plan 输入基线、contracts、src、tests、environments、packaging 齐备",
+        "AGENTS.md / README.md / pyproject.toml / .gitignore 已落盘；docs/progress/WORKPACKAGES.md 记录工作包归属"
+      ],
+      "blocking_reason": null
+    },
+    {
+      "id": "P0-02",
+      "milestone": "P0",
+      "title": "解析并锁定 UI/GDAL/Rasterio/science 环境",
+      "acceptance": [
+        "提交精确版本、构建与 win-64 环境锁；独立进程能分别导入引擎"
+      ],
+      "depends_on": [
+        "P0-01"
+      ],
+      "status": "implemented",
+      "release_requirement": "core",
+      "evidence": [
+        "scripts/bootstrap_pip.ps1 -VerifyOnly => RESULT ALL OK（exit 0）",
+        "ui: .venvs/sw-ui PySide6 6.9.3 / pyqtgraph 0.14.0 / pydantic 2.14.2；隔离实测 osgeo/rasterio/fiona/geopandas 全部 absent",
+        "rasterio: .venvs/sw-rasterio rasterio 1.5.2（链接 GDAL 3.12.2），rio CLI 1.5.2 可运行",
+        "science: .venvs/sw-science numpy 2.5.4 / scipy 1.18.1",
+        "gdal: 外部只读运行时 QGIS 3.44.15 Python 3.12.14 + osgeo 3.13.3，205 驱动，PROJ 9.8.1，gdal/gdalinfo/ogrinfo/gdal_translate/gdalwarp 均 3.13.3",
+        "精确锁：environments/locks/sw-ui.lock.txt(22) / sw-rasterio.lock.txt(7) / sw-science.lock.txt(2)",
+        "证据：docs/progress/runs/env_report.json；决策与缺口：docs/adr/0001-environment-strategy.md",
+        "未决：GDAL 运行时依赖本机 QGIS 安装，P0-05/P10 打包必须自带可重定位运行时；此条不得据此标 done"
+      ],
+      "blocking_reason": null
+    },
+    {
+      "id": "P0-03",
+      "milestone": "P0",
+      "title": "实现 doctor 和小型 fixture 生成",
+      "acceptance": [
+        "GTiff 往返、坐标转换、CLI、资源目录和驱动分别报告；无 HDF4 仍可打开 GUI"
+      ],
+      "depends_on": [
+        "P0-02"
+      ],
+      "status": "implemented",
+      "release_requirement": "core",
+      "evidence": [
+        "src/spectra_workbench/app/doctor.py：跨引擎健康自检与报告生成器（零原生地理依赖导入，符合 GUI 进程隔离约束）。集中 resolve_gdal_runtime 统一开发期运行时解析。",
+        "复核缺陷已修复：1) CLI 启动校验区分可执行文件存在、退出码（非零退出码如 42 记为 failure 并置 available=False）、版本输出非空校验；2) Doctor 核心错误（GTiff 或坐标转换失败）时总体判定 overall_ok=False 且 doctor.main() 返回退出码 1；3) 增加 --ui-only 独立模式用于单独检验 UI 环境启动许可。",
+        "scripts/doctor.ps1：UTF-8 带 BOM，支持终端交互及 -Json 机器输出，实测 exit 0；输出报告 docs/progress/runs/doctor_report.json。",
+        "实测自检报告：UI 环境隔离 osgeo/rasterio/fiona/geopandas 均为 absent；GDAL 3.13.3 运行时 GTiff 往返成功、坐标转换 (4326->3857) 成功、GDAL_DATA/PROJ_DATA 有效、205 个驱动、5 个 CLI 工具全部就绪；Rasterio 1.5.2 GTiff 往返成功、rio CLI 1.5.2 可用；Science NumPy 2.5.4 / SciPy 1.18.1 FFT 2D 往返误差 < 1e-12。明确标明无 HDF4 仍可打开 GUI（可选驱动），UI环境与核心依赖就绪。",
+        "tests/fixtures/synthetic.py：纯 Python 零原生地理依赖的 A01 小型合成数据与 ENVI 格式读写器（单波段 ramp、常量、4波段多光谱已知值、NoData/mask/合法0值分离），生成数据落盘于 tests/fixtures/data/ 并附 manifest.json。",
+        "测试：tests/unit/test_doctor.py（7 项测试全绿，覆盖 CLI 退出码 42 拦截、GTiff 失败全量退出码 1 / UI 模式退出码 0、空版本拦截、环境变量重定向与无 HDF4 容错）、tests/unit/test_fixtures.py 单元测试全绿。"
+      ],
+      "blocking_reason": null
+    },
+    {
+      "id": "P0-04",
+      "milestone": "P0",
+      "title": "建立最小检查与自动化流水线",
+      "acceptance": [
+        "Ruff、核心类型检查、小型 pytest 在新环境可运行；原生集成检查独立分组"
+      ],
+      "depends_on": [
+        "P0-01",
+        "P0-02"
+      ],
+      "status": "done",
+      "release_requirement": "core",
+      "evidence": [
+        "流水线脚本 scripts/test.ps1（UTF-8 带 BOM），按序执行 Ruff 静态检查、Mypy 核心类型检查与 Pytest 测试分组（-Unit / -Integration / -All）。退出码真实透传，不静默吞错。",
+        "类型健全性：补充 pyproject.toml mypy 配置与 PEP 561 py.typed 标记，mypy 检查 49 个源文件 0 错误（Success: no issues found in 49 source files）。",
+        "测试分组：tests/unit 与 tests/integration 覆盖领域模型、调度、生命周期、UI 组件与跨进程集成。",
+        "实测流水线：powershell -ExecutionPolicy Bypass -File scripts/test.ps1 -All => Ruff 干净、Mypy 干净、Pytest 169 passed，exit 0。"
+      ],
+      "blocking_reason": null
+    },
+    {
+      "id": "P0-05",
+      "milestone": "P0",
+      "title": "提前验证 Windows runtime 打包可行性",
+      "acceptance": [
+        "最小 Qt 窗口和两个引擎在另一目录启动；发现重定位或 DLL 问题写 ADR 并解决"
+      ],
+      "depends_on": [
+        "P0-03"
+      ],
+      "status": "implemented",
+      "release_requirement": "core",
+      "evidence": [
+        "tests/integration/test_relocation.py：3 项自动化测试全绿，验证 UI 引擎（offscreen PySide6 窗口）、Rasterio 引擎（GeoTIFF 读写）、GDAL 外部运行时（GeoTIFF 写入与 4326->3857 坐标转换）在项目外的完全隔离临时目录（AppData/Local/Temp）启动并正常运行。",
+        "docs/adr/0002-relocation-and-packaging.md：明确重定位核心要求（PATH、GDAL_DATA、PROJ_DATA、Qt platform plugin），确立开发期集中注入与发布期自带精简可重定位运行时架构。"
+      ],
+      "blocking_reason": null
+    },
+    {
+      "id": "P1-01",
+      "milestone": "P1",
+      "title": "实现能力、数据引用、任务、成果模型",
+      "acceptance": [
+        "合法输入通过；缺字段、错误类型和不支持版本拒绝；错误能定位字段"
+      ],
+      "depends_on": [
+        "P0-01"
+      ],
+      "status": "implemented",
+      "release_requirement": "core",
+      "evidence": [
+        "src/spectra_workbench/domain/models.py：实现 TaskSpec、TaskResult、DatasetRef、RasterMetadata、VectorMetadata、GridSpec、LayerState、CapabilityDescriptor 等全部领域模型。",
+        "复核缺陷已修复：ContractModel.to_contract_dict() 废除全局递归清理字典的做法，完全保留 parameters、configuration、extensions 等开放对象内的显式 null、0、false、空字符串、空列表及嵌套字典；各子模型非 nullable 可选字段通过 model_serializer(mode='wrap') 精确剪裁。",
+        "契约对账闭环：tests/unit/test_contracts_schema.py 采用 jsonschema 校验 Draft 2020-12 meta-schema、所有 contracts/examples/*.json 样例。",
+        "领域模型与 contracts/*.schema.json 100% 逐字段对齐：Priority、CommitMode、Binding、Availability、CapabilityEngineSpec、Provenance、OutputPlan 及 to_contract_dict() 契约字典导出。",
+        "双向反序列化与序列化校验全绿：TaskSpec/CapabilityDescriptor/Envelope 实例导出 JSON 符合 schema，样例反序列化为领域模型通过。",
+        "测试命令：.venv/Scripts/python.exe -m pytest tests/unit/test_contracts_schema.py -q => 43 passed。"
+      ],
+      "blocking_reason": null
+    },
+    {
+      "id": "P1-02",
+      "milestone": "P1",
+      "title": "实现 JSONL 客户端/worker 启动",
+      "acceptance": [
+        "分包、粘包、中文、stderr、非法消息和超时处理通过"
+      ],
+      "depends_on": [
+        "P1-01",
+        "P0-03"
+      ],
+      "status": "done",
+      "release_requirement": "core",
+      "evidence": [
+        "src/spectra_workbench/protocol/messages.py：实现 11 种 Kind 消息模型、Envelope、new_message、encode_message、JsonlStreamParser 与 GenerationGuard。",
+        "复核缺陷修复：Envelope 严格实现 contracts/message.schema.json 的全部约束，11 种 kind 的 payload 强制强类型校验；6 个可选字段（ready.features, progress.message, log.stream, result.warnings, error.details, cancel.reason）精确拒绝显式 null 并允许缺省。",
+        "src/spectra_workbench/workers/process.py：实现跨进程 Worker 客户端 WorkerProcess，子进程标准输入输出管道管理、后台分帧异步读 stdout，独立后台线程排空 stderr 避免死锁并杜绝 stdout 协议流污染，支持超限保护与 GenerationGuard 守卫。",
+        "src/spectra_workbench/workers/entrypoint.py：实现 Worker 子进程 CLI 入口，握手 hello->ready，主线程事件循环快速响应 Kind.cancel 与 Kind.heartbeat，专用工作线程执行任务，print 自动重定向至 stderr 保证协议流纯净。",
+        "tests/integration/test_worker_process.py：8 项真实跨进程自动化集成测试全绿，严格验证握手生命周期、分包/粘包、UTF-8 中文往返、stderr 隔离、非法未知动作错误处理、任务执行增量进度、协作式取消响应、世代守卫与超时异常捕获。"
+      ],
+      "blocking_reason": null
+    },
+    {
+      "id": "P1-03",
+      "milestone": "P1",
+      "title": "实现 ProviderAdapter 和真实 smoke 作业",
+      "acceptance": [
+        "Qt 提交一项真实格式转换；worker 执行，输出可重新打开，日志有版本"
+      ],
+      "depends_on": [
+        "P1-02",
+        "P0-05"
+      ],
+      "status": "done",
+      "release_requirement": "core",
+      "evidence": [
+        "src/spectra_workbench/providers/base.py：定义 ProviderAdapter 抽象基类、resolve_dataset_path 统一路径解析器与 ExecutionContext 任务执行上下文（支持专有 staging 隔离、多文件事务提交、OutputPlan.overwrite 冲突防护、move 失败异常自动回滚与协作式取消令牌）。",
+        "src/spectra_workbench/providers/gdal_provider/adapter.py：实现 GDALProviderAdapter，仅在独立 GDAL worker 进程导入 osgeo，实现 discover() 能力发现、validate() 静态校验与 execute() 栅格格式转换。严守安全输出契约：相对路径严格按 project_root 解析不受 worker cwd 影响；同源覆盖安全拒绝；多文件数据集（如 ENVI .dat + .hdr）统一提交；提交前后双重重开校验。",
+        "src/spectra_workbench/scheduler/client.py：实现基于 PySide6 QObject 信号槽机制的异步客户端 QtWorkerClient（sig_hello, sig_ready, sig_progress, sig_log, sig_result, sig_error, sig_worker_stopped），支持在 UI 线程不卡顿提交任务并流式接收回调。",
+        "tests/integration/test_smoke_task.py：6 项集成测试全绿。覆盖：1) Qt 客户端异步提交 A01-1 ENVI 转 GeoTIFF，日志记录 GDAL 3.13.3，成果全量数值核验（16x16 像元逐像元对比、GeoTransform、UTM 50N WGS-84 投影、Float32、min/max 0~255 经 GDAL 与 Rasterio 双重核验）；2) overwrite=false 目标保护与 overwrite=true 原子替换；3) ENVI 格式主文件与 .hdr 统一提交及目标重开；4) 相对输出路径跨 cwd 严格锚定 project_root；5) 提交异常回滚保护原目标与 staging 内容；6) 输入输出同源安全拒绝。"
+      ],
+      "blocking_reason": null
+    },
+    {
+      "id": "P1-04",
+      "milestone": "P1",
+      "title": "实现队列、取消、心跳和崩溃恢复",
+      "acceptance": [
+        "协作取消和无法协作取消都测试；GUI 不退出；作业子进程不残留"
+      ],
+      "depends_on": [
+        "P1-03"
+      ],
+      "status": "implemented",
+      "release_requirement": "core",
+      "evidence": [
+        "src/spectra_workbench/scheduler/scheduler.py：严格对齐 contracts/task.schema.json Priority 枚举（interactive: -10, normal: 0, background: 10），并通过全局自增计数器提供确定性 FIFO 入队排序（tests/integration/test_scheduler_lifecycle.py::test_priority_queue_strict_fifo_ordering 验证通过）。",
+        "真实 GDAL 任务取消：在实际 800x800 Float32 栅格三次重采样计算期间，通过进度回调在执行同步点触发协作取消，严格断言产出 cancelled 终态，未提交目标成果（test_real_gdal_task_cooperative_cancellation_during_computation 验证通过，不再接受 succeeded 模糊判定）。",
+        "无法协作取消时（uncooperative=True）超时强杀子进程降级保护（allow_process_termination），GUI 与调度器主进程稳定存活，接续调度后续任务无孤儿进程残留。",
+        "Worker 崩溃状态感知（poll 监控 + stderr 提取），按 RetryPolicy 自动拉起新世代 Worker 重试成功，两次 attempt 历史证据完整保留。",
+        "tests/integration/test_scheduler_lifecycle.py：6 项集成测试全绿。"
+      ],
+      "blocking_reason": null
+    },
+    {
+      "id": "P1-05",
+      "milestone": "P1",
+      "title": "实现 staging、提交清单和状态持久化",
+      "acceptance": [
+        "单文件、多文件成果失败恢复通过；残缺文件不登记为 succeeded"
+      ],
+      "depends_on": [
+        "P1-03",
+        "P1-04"
+      ],
+      "status": "implemented",
+      "release_requirement": "core",
+      "evidence": [
+        "src/spectra_workbench/processing/manifest.py：采用逐文件精细预写意图日志（file_entries），记录 initial_exists、initial_sha256、确定性 backup_path、staged_sha256 与各文件阶段状态。",
+        "修复原目标误删：计划落盘后、物理备份创建前子进程被真实强杀时，recover_staging 识别原文件身份与未触碰状态，严禁误删用户原文件（test_real_subprocess_kill_before_backup_preserves_untouched_target 真实子进程强杀测试通过）。",
+        "严格事务顺序与提交决断点不可逆：manifest.state = committed 在磁盘原子持久化完成前，严禁删除任何临时备份。移动成果后、committed 落盘前被强杀时，备份完好保留并成功回滚还原原文件（test_real_subprocess_kill_before_commit_marker_restores_from_backup 真实子进程强杀测试通过）。committed 落盘后进入不可逆终态，后清理阶段（备份清理、日志更新）故障时，新目标完好保留，状态保持 committed 或 cleanup_pending，禁止反向回滚（test_post_commit_cleanup_failure_retains_committed_targets_and_state 验证通过）。",
+        "recovered 只读终态：恢复完成后在同路径新建独立文件，再次重放 recover_staging 直接返回 already_recovered，绝不误删后来新建的文件（test_recovered_manifest_is_read_only_terminal_and_replay_preserves_new_files 验证通过）。",
+        "恢复异常不吞：恢复操作遭遇 PermissionError 等 I/O 故障时，保留 staging 计算文件与备份供排查重试，清单真实标记 recovery_failed，绝不谎报 recovered（test_restore_error_preserves_staging_and_reports_recovery_failed 测试通过）。",
+        "修正递归 mock：跨卷/移动失败测试捕获真实原始 move，验证部分写入失败后多文件事务回滚与原文件保护（test_cross_volume_or_move_failure_transactional_rollback 测试通过）。",
+        "边界说明：已验证确定的真实子进程强杀、第七轮终态重放与内存模拟 I/O 异常；真实物理断电与跨物理卷硬件尚未测试，不做过度宣传。",
+        "tests/integration/test_staging_manifest.py：9 项集成测试全绿。"
+      ],
+      "blocking_reason": null
+    },
+    {
+      "id": "P2-01",
+      "milestone": "P2",
+      "title": "建立目标版本上游基准",
+      "acceptance": [
+        "各基准有来源、版本、哈希、kind；手工随机抽查与官方目录一致"
+      ],
+      "depends_on": [
+        "P0-03"
+      ],
+      "status": "implemented",
+      "release_requirement": "core",
+      "evidence": [
+        "contracts/baselines/gdal-3.13.3.json (SHA-256: 9f93402e..., 402 项条目，100% 通过 capability.schema.json 校验)",
+        "contracts/baselines/rasterio-1.5.2.json (SHA-256: 5ebb275a..., 41 项条目，100% 通过 capability.schema.json 校验)",
+        "src/spectra_workbench/registry/baseline.py (实现确定性 JSON 规范化，分立 raw_source_sha256: 66acdb60..., runtime_inventory_sha256: fbf9606d... 与 normalized_catalog_sha256，完整度标注 completeness=\"partial\")",
+        "tests/unit/test_capabilities_baseline.py (基准加载、哈希防篡改与模式抽查用例全绿通过)"
+      ],
+      "blocking_reason": null
+    },
+    {
+      "id": "P2-02",
+      "milestone": "P2",
+      "title": "接入 GDAL 结构化算法、传统命令与驱动探测",
+      "acceptance": [
+        "保存原始描述；新旧别名关联；不存在的命令保持 missing 状态"
+      ],
+      "depends_on": [
+        "P2-01",
+        "P1-02"
+      ],
+      "status": "implemented",
+      "release_requirement": "core",
+      "evidence": [
+        "src/spectra_workbench/registry/gdal_index.py (编目全部 205 个 QGIS 运行时驱动 + 1 个缺失 HDF5 驱动，未登记缺口为 0；收录 gdal --json-usage 的全部 119 个结构化叶子命令；收录 18 项核心算法与 32 项经典 CLI)",
+        "状态精确修正：rgb2pct / pct2rgb 实测 python -m osgeo_utils 退出码 0，标为 presence=present / availability=ready / binding=cli 并记录官方替代命令；显式保留缺失命令 gdal_auth (missing/unsupported) 与缺失驱动 HDF5 (missing/missing_dependency)",
+        "真实算法路由：src/spectra_workbench/providers/gdal_provider/adapter.py 接入真实 gdal.Warp 重投影，实测 Web Mercator EPSG:3857 坐标数值验证通过；未接入算法严格返回 unsupported_capability 拒绝执行",
+        "tests/integration/test_smoke_task.py (Warp 重投影与未支持算法拦截集成测试通过)"
+      ],
+      "blocking_reason": null
+    },
+    {
+      "id": "P2-03",
+      "milestone": "P2",
+      "title": "接入 Rasterio API/rio 与 GDAL/OGR/OSR API 索引",
+      "acceptance": [
+        "公共对象分类；避免私有符号盲扫；不能反射签名的接口有说明"
+      ],
+      "depends_on": [
+        "P2-01",
+        "P1-02"
+      ],
+      "status": "implemented",
+      "release_requirement": "core",
+      "evidence": [
+        "src/spectra_workbench/workers/entrypoint.py 接入 rasterio worker，支持 provider_id=\"rasterio\" 真实跨进程分发与 unsupported_capability 准入拦截",
+        "src/spectra_workbench/providers/rasterio_provider/adapter.py 实现分块窗口读取写入 (block_windows) 与栅格格式转换",
+        "src/spectra_workbench/registry/catalog.py (CapabilityRegistry 四维状态真实切分：总基准 443，已发现 438，可调用 229，平台可执行 3，已验证 5，缺失 9；去除虚构 smoke_passed 与用例 ID)",
+        "新增 4 项覆盖审计测试（未接入执行器、未桥接平台、依赖缺失驱动、校验失败拦截）全部通过",
+        "scripts/audit-capabilities.ps1 控制台覆盖审计脚本产出 docs/progress/runs/capability_audit.json"
+      ],
+      "blocking_reason": null
+    },
+    {
+      "id": "P2-04",
+      "milestone": "P2",
+      "title": "建立可搜索工具箱与自动表单",
+      "acceptance": [
+        "必填/可选/列表/互斥/CRS/范围/创建选项通过；高级参数不丢失"
+      ],
+      "depends_on": [
+        "P2-02",
+        "P2-03",
+        "P1-03"
+      ],
+      "status": "implemented",
+      "release_requirement": "core",
+      "evidence": [
+        "src/spectra_workbench/ui/forms/param_form.py：实现 CapabilityFormWidget 动态表单生成器，完整接通 gdal:translate、gdal:warp 与 rasterio:convert。",
+        "输入/输出路径文件选择器、智能默认路径推荐、格式下拉、数据类型、创建选项、目标 CRS (EPSG:3857/4326/32650 等)、重采样方法等全量参数字段映射。",
+        "未接入能力严格准入拦截：展示未接入状态徽标、详细 limitations 说明，禁用提交按钮（禁止提交）。",
+        "输入存在性、输入输出同源冲突前端校验；动态组装规范 TaskSpec 并提交调度。",
+        "测试：tests/unit/test_ui_components.py::test_param_form_connected_vs_unsupported 验证通过。"
+      ],
+      "blocking_reason": null
+    },
+    {
+      "id": "P2-05",
+      "milestone": "P2",
+      "title": "建立覆盖审计与版本差异",
+      "acceptance": [
+        "基准分母非零；缺失能力可列出；有面板但未验证的项不显示已验收"
+      ],
+      "depends_on": [
+        "P2-02",
+        "P2-03",
+        "P2-04"
+      ],
+      "status": "implemented",
+      "release_requirement": "core",
+      "evidence": [
+        "src/spectra_workbench/ui/panels/toolbox_panel.py：实现 ToolboxPanel 可搜索工具箱，收录全部 443 项基准能力，支持关键词实时过滤与全部/GDAL/Rasterio 引擎切分。",
+        "树形结构清晰区分平台已接通核心能力（🟢 已接通）、未接入平台算法（🟡 仅CLI/未桥接）与缺失项（🔴 依赖缺失）。",
+        "scripts/audit-capabilities.ps1 持续提供全量覆盖审计（总基准 443、已发现 438、可调用 229、已验证 5、缺失 9，完整度 partial）。",
+        "测试：tests/unit/test_ui_components.py::test_toolbox_panel_search_and_filtering 验证通过。"
+      ],
+      "blocking_reason": null
+    },
+    {
+      "id": "P3-01",
+      "milestone": "P3",
+      "title": "主窗口、Dock、项目树、图层模型",
+      "acceptance": [
+        "基础项目可保存重开源/样式/视图；布局可恢复；关闭图层释放文件；中文高 DPI 可用"
+      ],
+      "depends_on": [
+        "P1-03"
+      ],
+      "status": "implemented",
+      "release_requirement": "core",
+      "evidence": [
+        "src/spectra_workbench/ui/main_window.py：实现 MainWindow 桌面主窗口，集成菜单栏、工具栏、中心画布及左右底三向 Dock 停靠窗口布局。",
+        "src/spectra_workbench/ui/panels/layer_panel.py：实现 LayerPanel 图层管理面板，支持图层显隐勾选、移除、选中及元数据卡片展示。",
+        "GUI 零原生地理库导入绝对隔离：tests/unit/test_ui_components.py::test_ui_modules_strictly_no_geospatial_imports 严格验证 src/spectra_workbench/ui 下无任何 osgeo/rasterio/fiona/geopandas 导入。",
+        "scripts/run-gui.ps1：启动脚本（UTF-8 带 BOM），支持交互运行、--sample 样例加载、--screenshot 截图导出与 --headless 无头模式。"
+      ],
+      "blocking_reason": null
+    },
+    {
+      "id": "P3-02",
+      "milestone": "P3",
+      "title": "栅格/矢量/子数据集的元数据读取",
+      "acceptance": [
+        "数据类型、NoData、mask、单位、波段与空间模型准确；不完整数据明确报错"
+      ],
+      "depends_on": [
+        "P1-02",
+        "P2-02"
+      ],
+      "status": "implemented",
+      "release_requirement": "core",
+      "evidence": [
+        "Worker 进程扩展 probe_dataset 协议请求：GDALProviderAdapter 与 RasterioProviderAdapter 提取驱动、尺寸、波段数、数据类型、CRS、GeoTransform、地理范围与 NoData。",
+        "src/spectra_workbench/ui/models/layer.py：LayerItem 纯 Python 领域模型接收并呈现元数据。",
+        "tests/integration/test_ui_app.py::test_main_window_open_dataset_and_chunked_preview 验证通过。"
+      ],
+      "blocking_reason": null
+    },
+    {
+      "id": "P3-03",
+      "milestone": "P3",
+      "title": "瓦片请求、概览、缓存、过期请求处理",
+      "acceptance": [
+        "只读可见窗口；切换波段不出现旧图；内存增长受缓存预算限制"
+      ],
+      "depends_on": [
+        "P3-01",
+        "P3-02",
+        "P1-04"
+      ],
+      "status": "implemented",
+      "release_requirement": "core",
+      "evidence": [
+        "Worker 进程扩展 read_window 协议请求：利用 GDAL/Rasterio 底层局部窗口读取与 Decimation 抽样（buf_xsize/buf_ysize），严禁一次性全量读入大影像内存。",
+        "src/spectra_workbench/ui/canvas/image_canvas.py：ImageCanvas 在视口改变时按需请求分块窗口（最大 1024x1024），内存开销恒定受限。",
+        "支持鼠标滚轮平移与无级缩放、适应全图、放大/缩小工具。",
+        "tests/integration/test_ui_app.py 验证通过。"
+      ],
+      "blocking_reason": null
+    },
+    {
+      "id": "P3-04",
+      "milestone": "P3",
+      "title": "灰度/RGB/伪彩、拉伸、透明度与分屏",
+      "acceptance": [
+        "显示改变不改原始像元；抽样统计有标识；跨视图同步模式正确"
+      ],
+      "depends_on": [
+        "P3-03"
+      ],
+      "status": "implemented",
+      "release_requirement": "core",
+      "evidence": [
+        "LayerPanel 支持单波段灰度与 3 波段 RGB 合成切换，支持自定义 R、G、B 通道映射。",
+        "read_window 自动计算局部有效像元 min-max 统计并执行对比度线性拉伸至 uint8 供画布高效渲染。",
+        "tests/integration/test_ui_app.py 验证通过。"
+      ],
+      "blocking_reason": null
+    },
+    {
+      "id": "P3-05",
+      "milestone": "P3",
+      "title": "view CRS、重投影、查询与 ROI",
+      "acceptance": [
+        "旋转 affine、不同 CRS、无 CRS 视图、像元中心/角点均有样例"
+      ],
+      "depends_on": [
+        "P3-04",
+        "P3-02"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P4-01",
+      "milestone": "P4",
+      "title": "转换、裁剪、重投影与重采样",
+      "acceptance": [
+        "输出网格、dtype、mask、CRS 和像元值按明确参数验收"
+      ],
+      "depends_on": [
+        "P2-04",
+        "P3-05",
+        "P1-05"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P4-02",
+      "milestone": "P4",
+      "title": "拼接、VRT、堆叠与波段管理",
+      "acceptance": [
+        "重叠策略、缺口、NoData、源路径变化及波段顺序正确"
+      ],
+      "depends_on": [
+        "P4-01"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P4-03",
+      "milestone": "P4",
+      "title": "元数据/ENVI 头文件、概览与格式选项",
+      "acceptance": [
+        "不覆盖未知字段；不改原始数据尺寸契约；多文件提交可恢复"
+      ],
+      "depends_on": [
+        "P4-01",
+        "P1-05"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P4-04",
+      "milestone": "P4",
+      "title": "表达式、直方图与基础统计",
+      "acceptance": [
+        "解析错误、除零、整数溢出、mask、抽样/全量统计模式有证据"
+      ],
+      "depends_on": [
+        "P4-01"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P4-05",
+      "milestone": "P4",
+      "title": "首个完整用户流程",
+      "acceptance": [
+        "打开→选择工具→配置→执行→取消/重试→加载→导出→保存项目→重开均真实可用"
+      ],
+      "depends_on": [
+        "P4-02",
+        "P4-03",
+        "P4-04",
+        "P2-05"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P5-01",
+      "milestone": "P5",
+      "title": "补齐栅格算法/传统工具入口",
+      "acceptance": [
+        "以基准逐项对账，包含目标版本新增工具；缺口有具体原因"
+      ],
+      "depends_on": [
+        "P4-05",
+        "P2-05"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P5-02",
+      "milestone": "P5",
+      "title": "栅格化、多边形化、等值线及地形工具",
+      "acceptance": [
+        "已知矩形/标签图和解析平面验证；不能只检查文件存在"
+      ],
+      "depends_on": [
+        "P4-01",
+        "P5-01"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P5-03",
+      "milestone": "P5",
+      "title": "矢量图层与分页属性表",
+      "acceptance": [
+        "按范围查询；字段、空几何、多部件和编码保留；大图层无一次性全读"
+      ],
+      "depends_on": [
+        "P3-05",
+        "P4-05"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P5-04",
+      "milestone": "P5",
+      "title": "矢量处理、SQL 与坐标转换",
+      "acceptance": [
+        "独立已知坐标、空间关系与字段值验证；轴顺序与距离单位明确"
+      ],
+      "depends_on": [
+        "P5-03",
+        "P5-01"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P5-05",
+      "milestone": "P5",
+      "title": "驱动读写能力及高级选项",
+      "acceptance": [
+        "读/建/复制建/更新分开；ENVI/GPKG/GTiff/COG 和已装扩展驱动实测"
+      ],
+      "depends_on": [
+        "P5-01",
+        "P5-04",
+        "P4-03"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P6-01",
+      "milestone": "P6",
+      "title": "光谱、剖面、NDVI 等指数",
+      "acceptance": [
+        "物理量/原值与波段元数据对应；合成值和无效区符合公式"
+      ],
+      "depends_on": [
+        "P4-04",
+        "P3-05"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P6-02",
+      "milestone": "P6",
+      "title": "FFT 专用界面与去条纹",
+      "acceptance": [
+        "往返、频率定位、掩膜对称性、复数/奇偶尺寸通过；保存掩膜可复现"
+      ],
+      "depends_on": [
+        "P3-04",
+        "P4-04",
+        "P1-05"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P6-03",
+      "milestone": "P6",
+      "title": "PCA、逆变换与缨帽",
+      "acceptance": [
+        "PCA 完整重建与降维误差符合定义；缨帽系数来源、传感器匹配可检查"
+      ],
+      "depends_on": [
+        "P6-01",
+        "P4-04"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P6-04",
+      "milestone": "P6",
+      "title": "GCP、配准、差值与融合",
+      "acceptance": [
+        "合成已知变换和独立检查点验证；各融合算法准确命名"
+      ],
+      "depends_on": [
+        "P5-04",
+        "P3-05",
+        "P4-01"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P6-05",
+      "milestone": "P6",
+      "title": "分类与 FVC 完整流程",
+      "acceptance": [
+        "ROI→分类/掩膜→分位端元→FVC→分级统计；独立验证与无效区策略清楚"
+      ],
+      "depends_on": [
+        "P6-01",
+        "P5-03",
+        "P4-04"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P6-06",
+      "milestone": "P6",
+      "title": "辐射处理、去云、农业及外部引擎适配",
+      "acceptance": [
+        "每项有方法、依赖与真实证据；缺少输入/引擎时如实标注待验，继续其他项"
+      ],
+      "depends_on": [
+        "P6-04",
+        "P6-05",
+        "P5-05"
+      ],
+      "status": "todo",
+      "release_requirement": "conditional",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P7-01",
+      "milestone": "P7",
+      "title": "项目保存、迁移、重定位与恢复",
+      "acceptance": [
+        "移动项目后重新关联；旧 schema 可迁移；异常退出不破坏上次保存"
+      ],
+      "depends_on": [
+        "P4-05"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P7-02",
+      "milestone": "P7",
+      "title": "隔离脚本会话",
+      "acceptance": [
+        "GDAL/Rasterio 会话分别导入原生 API；停止、日志、成果登记和会话重启可用"
+      ],
+      "depends_on": [
+        "P1-04",
+        "P2-03",
+        "P3-01"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P7-03",
+      "milestone": "P7",
+      "title": "批处理",
+      "acceptance": [
+        "多输入、多输出、参数变化、同名冲突、单项失败继续策略通过"
+      ],
+      "depends_on": [
+        "P4-05",
+        "P1-05"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P7-04",
+      "milestone": "P7",
+      "title": "DAG 工作流",
+      "acceptance": [
+        "环/端口错配拒绝；失败、恢复、缓存失效和跨引擎物化通过"
+      ],
+      "depends_on": [
+        "P7-03",
+        "P2-04",
+        "P7-01"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P7-05",
+      "milestone": "P7",
+      "title": "历史与可复现导出",
+      "acceptance": [
+        "从历史重开参数；记录输入/版本/关键配置；导出的执行入口跑出同类成果"
+      ],
+      "depends_on": [
+        "P7-01",
+        "P7-02",
+        "P7-04"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P8-01",
+      "milestone": "P8",
+      "title": "多维数据树与二维切片",
+      "acceptance": [
+        "合成 netCDF/HDF5 的 time/depth/x/y、单位和切片像元正确"
+      ],
+      "depends_on": [
+        "P5-01",
+        "P3-05"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P8-02",
+      "milestone": "P8",
+      "title": "VSI/归档/远程数据",
+      "acceptance": [
+        "本地归档和 HTTP 测试服务的范围读取、超时、重试及取消通过"
+      ],
+      "depends_on": [
+        "P5-05",
+        "P1-04"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P8-03",
+      "milestone": "P8",
+      "title": "凭据 profile 与脱敏",
+      "acceptance": [
+        "token 不写项目/日志/诊断；离线启动可正常处理本地数据"
+      ],
+      "depends_on": [
+        "P8-02",
+        "P7-01"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P8-04",
+      "milestone": "P8",
+      "title": "插件协议与示范插件",
+      "acceptance": [
+        "安装→发现→执行→禁用→不兼容→崩溃恢复均真实可用"
+      ],
+      "depends_on": [
+        "P2-05",
+        "P7-02",
+        "P1-04"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P8-05",
+      "milestone": "P8",
+      "title": "可选引擎扩展登记",
+      "acceptance": [
+        "Xarray/Dask/机器学习/点云等明确范围、依赖、入口与缺口；不作为已实现宣传"
+      ],
+      "depends_on": [
+        "P8-04",
+        "P8-01"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P9-01",
+      "milestone": "P9",
+      "title": "基准全量对账与参数审计",
+      "acceptance": [
+        "公开目标清单全部有状态；没有静默排除或只用运行时子集当分母"
+      ],
+      "depends_on": [
+        "P5-05",
+        "P8-05",
+        "P2-05"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P9-02",
+      "milestone": "P9",
+      "title": "能力路由补齐",
+      "acceptance": [
+        "适合参数化的已支持算法有通用/专用面板，复杂 API 有对应可运行会话入口"
+      ],
+      "depends_on": [
+        "P9-01",
+        "P7-02"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P9-03",
+      "milestone": "P9",
+      "title": "数据与数值边界回归",
+      "acceptance": [
+        "dtype、mask、坐标、负值、NaN、复数、波段与多文件边界通过"
+      ],
+      "depends_on": [
+        "P6-01",
+        "P6-02",
+        "P6-03",
+        "P6-04",
+        "P6-05",
+        "P8-01",
+        "P7-05"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P9-04",
+      "milestone": "P9",
+      "title": "性能基准与资源治理",
+      "acceptance": [
+        "按下面约定报告实际设备、样本、缓存状态、耗时和内存"
+      ],
+      "depends_on": [
+        "P9-02",
+        "P3-03",
+        "P7-04"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P9-05",
+      "milestone": "P9",
+      "title": "故障注入与恢复审计",
+      "acceptance": [
+        "worker 崩溃、磁盘满、无权限、网络失败、取消、损坏项目可恢复"
+      ],
+      "depends_on": [
+        "P9-03",
+        "P1-05",
+        "P8-03"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P10-01",
+      "milestone": "P10",
+      "title": "Windows onedir UI 与 engine runtimes",
+      "acceptance": [
+        "迁到中文/空格目录可运行；引擎、Qt 插件、CRS 资源完整"
+      ],
+      "depends_on": [
+        "P0-05",
+        "P9-02",
+        "P9-03"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P10-02",
+      "milestone": "P10",
+      "title": "安装/升级/卸载和干净机测试",
+      "acceptance": [
+        "无全局 Python、无开发目录、离线可启动并完成主要处理；用户项目保留"
+      ],
+      "depends_on": [
+        "P10-01",
+        "P9-05"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P10-03",
+      "milestone": "P10",
+      "title": "用户说明、开发说明和诊断",
+      "acceptance": [
+        "有工具索引、项目/流程示例、插件协议、故障定位、版本与依赖清单"
+      ],
+      "depends_on": [
+        "P7-05",
+        "P9-01"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P10-04",
+      "milestone": "P10",
+      "title": "最终发布审计",
+      "acceptance": [
+        "检查表和所有能力状态/未验项准确；主要功能有录屏/截图及计算证据；发布包可复建"
+      ],
+      "depends_on": [
+        "P0-04",
+        "P5-02",
+        "P10-02",
+        "P10-03",
+        "P9-04",
+        "P9-05"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    }
+  ]
+}

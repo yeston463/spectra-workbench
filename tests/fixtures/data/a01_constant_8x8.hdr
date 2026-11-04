@@ -1,0 +1,11 @@
+ENVI
+description = {A01-2 常量像元 (8x8 Float32, 值为 42.0)}
+samples = 8
+lines   = 8
+bands   = 1
+header offset = 0
+file type = ENVI Standard
+data type = 4
+interleave = bsq
+byte order = 0
+band names = {Constant_42}

@@ -1,0 +1,350 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Spectra Workbench task specification",
+  "$comment": "Capability-specific parameter validation, paths, resource estimation, side effects and resolved runtime checks are mandatory in addition to JSON validation.",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "protocol_version": {
+      "const": "1.0"
+    },
+    "template_only": {
+      "type": "boolean",
+      "default": false
+    },
+    "task_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "attempt": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "capability_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "descriptor_revision": {
+      "type": "string",
+      "minLength": 1
+    },
+    "engine": {
+      "type": "object",
+      "properties": {
+        "provider_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "runtime_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "expected_version": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "provider_id",
+        "runtime_id",
+        "expected_version"
+      ],
+      "additionalProperties": false
+    },
+    "project_root": {
+      "type": "string",
+      "minLength": 1
+    },
+    "workspace": {
+      "type": "string",
+      "minLength": 1
+    },
+    "inputs": {
+      "type": "object",
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "dataset_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "raster",
+                  "vector",
+                  "table",
+                  "array",
+                  "scalar",
+                  "artifact",
+                  "any"
+                ]
+              },
+              "uri": {
+                "type": "string",
+                "minLength": 1
+              },
+              "selection": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "fingerprint": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "auth_profile_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "dataset_id",
+              "kind",
+              "uri"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "dataset_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "raster",
+                    "vector",
+                    "table",
+                    "array",
+                    "scalar",
+                    "artifact",
+                    "any"
+                  ]
+                },
+                "uri": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "selection": {
+                  "type": "object",
+                  "additionalProperties": true
+                },
+                "fingerprint": {
+                  "type": "object",
+                  "additionalProperties": true
+                },
+                "auth_profile_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "dataset_id",
+                "kind",
+                "uri"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      }
+    },
+    "parameters": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "outputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "raster",
+              "vector",
+              "table",
+              "array",
+              "scalar",
+              "artifact"
+            ]
+          },
+          "uri": {
+            "type": "string",
+            "minLength": 1
+          },
+          "driver": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "creation_options": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "overwrite": {
+            "type": "boolean"
+          },
+          "commit_mode": {
+            "type": "string",
+            "enum": [
+              "new_dataset",
+              "replace",
+              "append",
+              "in_place",
+              "remote_write"
+            ]
+          }
+        },
+        "required": [
+          "key",
+          "kind",
+          "uri",
+          "overwrite",
+          "commit_mode"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "resources": {
+      "type": "object",
+      "properties": {
+        "max_cpu_threads": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "ram_limit_mib": {
+          "type": "integer",
+          "minimum": 64
+        },
+        "priority": {
+          "type": "string",
+          "enum": [
+            "interactive",
+            "normal",
+            "background"
+          ]
+        }
+      },
+      "required": [
+        "max_cpu_threads",
+        "ram_limit_mib",
+        "priority"
+      ],
+      "additionalProperties": false
+    },
+    "configuration": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "cancellation": {
+      "type": "object",
+      "properties": {
+        "cooperative_timeout_seconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "allow_process_termination": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "cooperative_timeout_seconds",
+        "allow_process_termination"
+      ],
+      "additionalProperties": false
+    },
+    "provenance": {
+      "type": "object",
+      "properties": {
+        "origin": {
+          "type": "string",
+          "enum": [
+            "gui",
+            "batch",
+            "workflow",
+            "script",
+            "example"
+          ]
+        },
+        "workflow_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "node_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "notes": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "origin"
+      ],
+      "additionalProperties": false
+    },
+    "retry": {
+      "type": "object",
+      "properties": {
+        "max_automatic_retries": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "external_side_effects": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "max_automatic_retries",
+        "external_side_effects"
+      ],
+      "additionalProperties": false
+    },
+    "extensions": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "required": [
+    "schema_version",
+    "protocol_version",
+    "task_id",
+    "attempt",
+    "capability_id",
+    "descriptor_revision",
+    "engine",
+    "project_root",
+    "workspace",
+    "inputs",
+    "parameters",
+    "outputs",
+    "resources",
+    "configuration",
+    "cancellation",
+    "provenance",
+    "retry"
+  ],
+  "additionalProperties": false
+}

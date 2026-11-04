@@ -1,0 +1,12 @@
+ENVI
+description = {A01-1 单波段 ramp 渐变 (16x16 Float32)}
+samples = 16
+lines   = 16
+bands   = 1
+header offset = 0
+file type = ENVI Standard
+data type = 4
+interleave = bsq
+byte order = 0
+band names = {Ramp_Float32}
+map info = {UTM, 1, 1, 400000.0, 4400000.0, 30.0, 30.0, 50, North, WGS-84}

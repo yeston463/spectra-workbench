@@ -1,0 +1,277 @@
+{
+    "generated_utc":  "2026-11-03T09:32:46Z",
+    "micromamba":  "2.10.0",
+    "root_prefix":  "C:\\Users\\赵航\\Desktop\\studio\\spectra-workbench\\.tooling\\envs",
+    "verify_only":  false,
+    "envs":  {
+                 "science":  {
+                                 "status":  "ok",
+                                 "kind":  "pip_venv",
+                                 "env_name":  "sw-science",
+                                 "prefix":  "C:\\Users\\赵航\\Desktop\\studio\\spectra-workbench\\.venvs\\sw-science",
+                                 "python":  "C:\\Users\\赵航\\Desktop\\studio\\spectra-workbench\\.venvs\\sw-science\\Scripts\\python.exe",
+                                 "spec":  "environments/science-pip.txt",
+                                 "lock":  "C:\\Users\\赵航\\Desktop\\studio\\spectra-workbench\\environments\\locks\\sw-science.lock.txt",
+                                 "require":  "numpy",
+                                 "import_ok":  true,
+                                 "isolation":  {
+
+                                               },
+                                 "cli":  {
+
+                                         },
+                                 "probe":  {
+                                               "role":  "science",
+                                               "python":  "3.12.10",
+                                               "executable":  "C:\\Users\\赵航\\Desktop\\studio\\spectra-workbench\\.venvs\\sw-science\\Scripts\\python.exe",
+                                               "packages":  {
+                                                                "PySide6":  null,
+                                                                "pyqtgraph":  null,
+                                                                "pydantic":  null,
+                                                                "jsonschema":  null,
+                                                                "numpy":  "2.5.4",
+                                                                "scipy":  "1.18.1",
+                                                                "rasterio":  null,
+                                                                "osgeo":  null,
+                                                                "fiona":  null,
+                                                                "shapely":  null,
+                                                                "pyproj":  null,
+                                                                "geopandas":  null
+                                                            },
+                                               "science":  {
+                                                               "numpy_version":  "2.5.4",
+                                                               "scipy_version":  "1.18.1",
+                                                               "fft_roundtrip":  {
+                                                                                     "ok":  true,
+                                                                                     "shape":  [
+                                                                                                   8,
+                                                                                                   8
+                                                                                               ],
+                                                                                     "max_diff":  3.5527136788005009E-15,
+                                                                                     "roundtrip_invariant_passed":  true
+                                                                                 }
+                                                           }
+                                           },
+                                 "raw_probe":  "{\"role\": \"science\", \"python\": \"3.12.10\", \"executable\": \"C:\\\\Users\\\\赵航\\\\Desktop\\\\studio\\\\spectra-workbench\\\\.venvs\\\\sw-science\\\\Scripts\\\\python.exe\", \"packages\": {\"PySide6\": null, \"pyqtgraph\": null, \"pydantic\": null, \"jsonschema\": null, \"numpy\": \"2.5.4\", \"scipy\": \"1.18.1\", \"rasterio\": null, \"osgeo\": null, \"fiona\": null, \"shapely\": null, \"pyproj\": null, \"geopandas\": null}, \"science\": {\"numpy_version\": \"2.5.4\", \"scipy_version\": \"1.18.1\", \"fft_roundtrip\": {\"ok\": true, \"shape\": [8, 8], \"max_diff\": 3.552713678800501e-15, \"roundtrip_invariant_passed\": true}}}",
+                                 "disk_bytes":  201810165,
+                                 "disk_gb":  0.19
+                             },
+                 "gdal":  {
+                              "status":  "ok",
+                              "kind":  "external_runtime_read_only",
+                              "env_name":  "QGIS 3.44.15 / OSGeo4W",
+                              "python":  "C:\\Program Files\\QGIS 3.44.15\\apps\\Python312\\python.exe",
+                              "bin":  "C:\\Program Files\\QGIS 3.44.15\\bin",
+                              "gdal_data":  "C:\\Program Files\\QGIS 3.44.15\\apps\\gdal\\share\\gdal",
+                              "proj_data":  "C:\\Program Files\\QGIS 3.44.15\\share\\proj",
+                              "cli":  {
+                                          "ogrinfo":  {
+                                                          "path":  "C:\\Program Files\\QGIS 3.44.15\\bin\\ogrinfo.exe",
+                                                          "version_output":  "GDAL 3.13.3 \"Iowa City\", released 2026/08/13",
+                                                          "exit_code":  0
+                                                      },
+                                          "gdal_translate":  {
+                                                                 "path":  "C:\\Program Files\\QGIS 3.44.15\\bin\\gdal_translate.exe",
+                                                                 "version_output":  "GDAL 3.13.3 \"Iowa City\", released 2026/08/13",
+                                                                 "exit_code":  0
+                                                             },
+                                          "gdalinfo":  {
+                                                           "path":  "C:\\Program Files\\QGIS 3.44.15\\bin\\gdalinfo.exe",
+                                                           "version_output":  "GDAL 3.13.3 \"Iowa City\", released 2026/08/13",
+                                                           "exit_code":  0
+                                                       },
+                                          "gdal":  {
+                                                       "path":  "C:\\Program Files\\QGIS 3.44.15\\bin\\gdal.exe",
+                                                       "version_output":  "GDAL 3.13.3 \"Iowa City\", released 2026/08/13",
+                                                       "exit_code":  0
+                                                   },
+                                          "gdalwarp":  {
+                                                           "path":  "C:\\Program Files\\QGIS 3.44.15\\bin\\gdalwarp.exe",
+                                                           "version_output":  "GDAL 3.13.3 \"Iowa City\", released 2026/08/13",
+                                                           "exit_code":  0
+                                                       }
+                                      },
+                              "probe":  {
+                                            "role":  "gdal",
+                                            "python":  "3.12.14",
+                                            "executable":  "C:\\Program Files\\QGIS 3.44.15\\apps\\Python312\\python.exe",
+                                            "packages":  {
+                                                             "PySide6":  null,
+                                                             "pyqtgraph":  null,
+                                                             "pydantic":  "2.13.5",
+                                                             "jsonschema":  null,
+                                                             "numpy":  "2.4.6",
+                                                             "scipy":  "1.18.1",
+                                                             "rasterio":  null,
+                                                             "osgeo":  "3.13.3",
+                                                             "fiona":  null,
+                                                             "shapely":  "2.1.2",
+                                                             "pyproj":  "3.8.0",
+                                                             "geopandas":  "1.1.4"
+                                                         },
+                                            "gdal":  {
+                                                         "gdal_release":  "3.13.3",
+                                                         "gdal_rev":  "GDAL 3.13.3 \"Iowa City\", released 2026/08/13",
+                                                         "proj_version":  "9.8.1",
+                                                         "proj_search_paths":  [
+                                                                                   "C:\\Users\\赵航\\AppData\\L",
+                                                                                   "C:\\Program Files\\QGIS 3.44.15\\share\\proj"
+                                                                               ],
+                                                         "resource_dirs":  {
+                                                                               "gdal_data":  "C:\\Program Files\\QGIS 3.44.15\\apps\\gdal\\share\\gdal",
+                                                                               "gdal_data_valid":  true,
+                                                                               "proj_data_valid":  true
+                                                                           },
+                                                         "driver_count":  205,
+                                                         "drivers_of_interest":  {
+                                                                                     "GTiff":  true,
+                                                                                     "ENVI":  true,
+                                                                                     "GPKG":  true,
+                                                                                     "HDF4":  true,
+                                                                                     "HDF5":  false,
+                                                                                     "netCDF":  true,
+                                                                                     "COG":  true,
+                                                                                     "VRT":  true,
+                                                                                     "JPEG":  true,
+                                                                                     "PNG":  true,
+                                                                                     "ESRI Shapefile":  true
+                                                                                 },
+                                                         "coord_transform":  {
+                                                                                 "ok":  true,
+                                                                                 "epsg_in":  4326,
+                                                                                 "epsg_out":  3857,
+                                                                                 "input":  [
+                                                                                               116.4,
+                                                                                               39.9
+                                                                                           ],
+                                                                                 "output":  [
+                                                                                                12957588.73,
+                                                                                                4851421.18
+                                                                                            ]
+                                                                             },
+                                                         "gtiff_roundtrip":  {
+                                                                                 "ok":  true,
+                                                                                 "shape":  [
+                                                                                               4,
+                                                                                               4
+                                                                                           ],
+                                                                                 "dtype":  "Float32",
+                                                                                 "values_matched":  true
+                                                                             },
+                                                         "gui_can_start_without_hdf4":  true
+                                                     }
+                                        },
+                              "raw_probe":  "C:\\Program Files\\QGIS 3.44.15\\apps\\Python312\\Lib\\site-packages\\osgeo\\osr.py:424: FutureWarning: Neither osr.UseExceptions() nor osr.DontUseExceptions() has been explicitly called. In GDAL 4.0, exceptions will be enabled by default.\n  warnings.warn(\n{\"role\": \"gdal\", \"python\": \"3.12.14\", \"executable\": \"C:\\\\Program Files\\\\QGIS 3.44.15\\\\apps\\\\Python312\\\\python.exe\", \"packages\": {\"PySide6\": null, \"pyqtgraph\": null, \"pydantic\": \"2.13.5\", \"jsonschema\": null, \"numpy\": \"2.4.6\", \"scipy\": \"1.18.1\", \"rasterio\": null, \"osgeo\": \"3.13.3\", \"fiona\": null, \"shapely\": \"2.1.2\", \"pyproj\": \"3.8.0\", \"geopandas\": \"1.1.4\"}, \"gdal\": {\"gdal_release\": \"3.13.3\", \"gdal_rev\": \"GDAL 3.13.3 \\\"Iowa City\\\", released 2026/08/13\", \"proj_version\": \"9.8.1\", \"proj_search_paths\": [\"C:\\\\Users\\\\赵航\\\\AppData\\\\L\", \"C:\\\\Program Files\\\\QGIS 3.44.15\\\\share\\\\proj\"], \"resource_dirs\": {\"gdal_data\": \"C:\\\\Program Files\\\\QGIS 3.44.15\\\\apps\\\\gdal\\\\share\\\\gdal\", \"gdal_data_valid\": true, \"proj_data_valid\": true}, \"driver_count\": 205, \"drivers_of_interest\": {\"GTiff\": true, \"ENVI\": true, \"GPKG\": true, \"HDF4\": true, \"HDF5\": false, \"netCDF\": true, \"COG\": true, \"VRT\": true, \"JPEG\": true, \"PNG\": true, \"ESRI Shapefile\": true}, \"coord_transform\": {\"ok\": true, \"epsg_in\": 4326, \"epsg_out\": 3857, \"input\": [116.4, 39.9], \"output\": [12957588.73, 4851421.18]}, \"gtiff_roundtrip\": {\"ok\": true, \"shape\": [4, 4], \"dtype\": \"Float32\", \"values_matched\": true}, \"gui_can_start_without_hdf4\": true}}",
+                              "caveat":  "开发期运行时；P0-05/P10 打包必须自带可重定位 GDAL 运行时，不得依赖本机 QGIS 安装",
+                              "disk_bytes":  0
+                          },
+                 "ui":  {
+                            "status":  "ok",
+                            "kind":  "pip_venv",
+                            "env_name":  "sw-ui",
+                            "prefix":  "C:\\Users\\赵航\\Desktop\\studio\\spectra-workbench\\.venvs\\sw-ui",
+                            "python":  "C:\\Users\\赵航\\Desktop\\studio\\spectra-workbench\\.venvs\\sw-ui\\Scripts\\python.exe",
+                            "spec":  "environments/ui-pip.txt",
+                            "lock":  "C:\\Users\\赵航\\Desktop\\studio\\spectra-workbench\\environments\\locks\\sw-ui.lock.txt",
+                            "require":  "PySide6",
+                            "import_ok":  true,
+                            "isolation":  {
+                                              "fiona":  "absent(符合隔离)",
+                                              "osgeo":  "absent(符合隔离)",
+                                              "rasterio":  "absent(符合隔离)",
+                                              "geopandas":  "absent(符合隔离)"
+                                          },
+                            "cli":  {
+
+                                    },
+                            "probe":  {
+                                          "role":  "ui",
+                                          "python":  "3.12.10",
+                                          "executable":  "C:\\Users\\赵航\\Desktop\\studio\\spectra-workbench\\.venvs\\sw-ui\\Scripts\\python.exe",
+                                          "packages":  {
+                                                           "PySide6":  "6.9.3",
+                                                           "pyqtgraph":  "0.14.0",
+                                                           "pydantic":  "2.14.2",
+                                                           "jsonschema":  "4.26.0",
+                                                           "numpy":  "2.5.4",
+                                                           "scipy":  null,
+                                                           "rasterio":  null,
+                                                           "osgeo":  null,
+                                                           "fiona":  null,
+                                                           "shapely":  null,
+                                                           "pyproj":  null,
+                                                           "geopandas":  null
+                                                       },
+                                          "isolation":  {
+                                                            "osgeo":  false,
+                                                            "rasterio":  false,
+                                                            "fiona":  false,
+                                                            "geopandas":  false
+                                                        },
+                                          "qt_version":  "6.9.3"
+                                      },
+                            "raw_probe":  "{\"role\": \"ui\", \"python\": \"3.12.10\", \"executable\": \"C:\\\\Users\\\\赵航\\\\Desktop\\\\studio\\\\spectra-workbench\\\\.venvs\\\\sw-ui\\\\Scripts\\\\python.exe\", \"packages\": {\"PySide6\": \"6.9.3\", \"pyqtgraph\": \"0.14.0\", \"pydantic\": \"2.14.2\", \"jsonschema\": \"4.26.0\", \"numpy\": \"2.5.4\", \"scipy\": null, \"rasterio\": null, \"osgeo\": null, \"fiona\": null, \"shapely\": null, \"pyproj\": null, \"geopandas\": null}, \"isolation\": {\"osgeo\": false, \"rasterio\": false, \"fiona\": false, \"geopandas\": false}, \"qt_version\": \"6.9.3\"}",
+                            "disk_bytes":  740315576,
+                            "disk_gb":  0.69
+                        },
+                 "rasterio":  {
+                                  "status":  "ok",
+                                  "kind":  "pip_venv",
+                                  "env_name":  "sw-rasterio",
+                                  "prefix":  "C:\\Users\\赵航\\Desktop\\studio\\spectra-workbench\\.venvs\\sw-rasterio",
+                                  "python":  "C:\\Users\\赵航\\Desktop\\studio\\spectra-workbench\\.venvs\\sw-rasterio\\Scripts\\python.exe",
+                                  "spec":  "environments/rasterio-pip.txt",
+                                  "lock":  "C:\\Users\\赵航\\Desktop\\studio\\spectra-workbench\\environments\\locks\\sw-rasterio.lock.txt",
+                                  "require":  "rasterio",
+                                  "import_ok":  true,
+                                  "isolation":  {
+
+                                                },
+                                  "cli":  {
+                                              "rio":  {
+                                                          "path":  "C:\\Users\\赵航\\Desktop\\studio\\spectra-workbench\\.venvs\\sw-rasterio\\Scripts\\rio.exe",
+                                                          "version_output":  "1.5.2",
+                                                          "exit_code":  0
+                                                      }
+                                          },
+                                  "probe":  {
+                                                "role":  "rasterio",
+                                                "python":  "3.12.10",
+                                                "executable":  "C:\\Users\\赵航\\Desktop\\studio\\spectra-workbench\\.venvs\\sw-rasterio\\Scripts\\python.exe",
+                                                "packages":  {
+                                                                 "PySide6":  null,
+                                                                 "pyqtgraph":  null,
+                                                                 "pydantic":  null,
+                                                                 "jsonschema":  null,
+                                                                 "numpy":  "2.5.4",
+                                                                 "scipy":  null,
+                                                                 "rasterio":  "1.5.2",
+                                                                 "osgeo":  null,
+                                                                 "fiona":  null,
+                                                                 "shapely":  null,
+                                                                 "pyproj":  null,
+                                                                 "geopandas":  null
+                                                             },
+                                                "rasterio":  {
+                                                                 "rasterio_version":  "1.5.2",
+                                                                 "gdal_version":  "3.12.2",
+                                                                 "gdal_cpl_version":  null,
+                                                                 "gdal_geos_version":  null,
+                                                                 "gtiff_roundtrip":  {
+                                                                                         "ok":  true,
+                                                                                         "shape":  [
+                                                                                                       4,
+                                                                                                       4
+                                                                                                   ],
+                                                                                         "crs":  "EPSG:4326",
+                                                                                         "dtype":  "float32",
+                                                                                         "values_matched":  true
+                                                                                     }
+                                                             }
+                                            },
+                                  "raw_probe":  "{\"role\": \"rasterio\", \"python\": \"3.12.10\", \"executable\": \"C:\\\\Users\\\\赵航\\\\Desktop\\\\studio\\\\spectra-workbench\\\\.venvs\\\\sw-rasterio\\\\Scripts\\\\python.exe\", \"packages\": {\"PySide6\": null, \"pyqtgraph\": null, \"pydantic\": null, \"jsonschema\": null, \"numpy\": \"2.5.4\", \"scipy\": null, \"rasterio\": \"1.5.2\", \"osgeo\": null, \"fiona\": null, \"shapely\": null, \"pyproj\": null, \"geopandas\": null}, \"rasterio\": {\"rasterio_version\": \"1.5.2\", \"gdal_version\": \"3.12.2\", \"gdal_cpl_version\": null, \"gdal_geos_version\": null, \"gtiff_roundtrip\": {\"ok\": true, \"shape\": [4, 4], \"crs\": \"EPSG:4326\", \"dtype\": \"float32\", \"values_matched\": true}}}",
+                                  "disk_bytes":  168699133,
+                                  "disk_gb":  0.16
+                              }
+             }
+}

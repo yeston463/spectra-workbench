@@ -1,0 +1,11 @@
+ENVI
+description = {A01-3 多波段已知值栅格 (8x8, 4 波段 UInt16)}
+samples = 8
+lines   = 8
+bands   = 4
+header offset = 0
+file type = ENVI Standard
+data type = 12
+interleave = bsq
+byte order = 0
+band names = {Blue, Green, Red, NIR}
