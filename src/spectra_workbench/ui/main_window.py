@@ -228,7 +228,12 @@ class MainWindow(QMainWindow):
             return self.project_path.parent.resolve()
         return self.app_root
 
-    def __init__(self, project_root: Path | str | None = None, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        project_root: Path | str | None = None,
+        parent: QWidget | None = None,
+        cache_budget_bytes: int | None = None,
+    ) -> None:
         super().__init__(parent)
         self.app_root = Path(project_root or Path.cwd()).resolve()
         self.project_root = self.app_root
@@ -242,7 +247,7 @@ class MainWindow(QMainWindow):
         self._clients: dict[str, QtWorkerClient] = {}
         self._active_task_client: QtWorkerClient | None = None
         self._task_subscriptions: dict[str, Callable[[], None]] = {}
-        self._cache = TileCache()
+        self._cache = TileCache(budget_bytes=cache_budget_bytes) if cache_budget_bytes else TileCache()
         self.project_path: Path | None = None
         self.missing_sources: list[MissingSource] = []
         self._pending_active_layer: str | None = None
@@ -321,6 +326,7 @@ class MainWindow(QMainWindow):
         )
 
         self.dock_left = QDockWidget("数据与工具 (Explorer)", self)
+        self.dock_left.setObjectName("dock_left")
         self.dock_left.setAllowedAreas(Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea)
         self.tab_left = QTabWidget()
         self.toolbox_panel = ToolboxPanel()
@@ -331,6 +337,7 @@ class MainWindow(QMainWindow):
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.dock_left)
 
         self.dock_right = QDockWidget("参数与查询 (Inspector)", self)
+        self.dock_right.setObjectName("dock_right")
         self.dock_right.setAllowedAreas(Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea)
         self.tab_right = QTabWidget()
         self.form_widget = CapabilityFormWidget()
@@ -344,6 +351,7 @@ class MainWindow(QMainWindow):
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.dock_right)
 
         self.dock_bottom = QDockWidget("任务监控与日志", self)
+        self.dock_bottom.setObjectName("dock_bottom")
         self.dock_bottom.setAllowedAreas(
             Qt.DockWidgetArea.BottomDockWidgetArea | Qt.DockWidgetArea.TopDockWidgetArea
         )
@@ -436,6 +444,7 @@ class MainWindow(QMainWindow):
         m_help.addAction(act_about)
 
         tb = QToolBar("主快捷栏", self)
+        tb.setObjectName("main_toolbar")
         self.addToolBar(Qt.ToolBarArea.TopToolBarArea, tb)
         tb.addAction(self.act_open_img)
         tb.addAction(self.act_sample)
@@ -595,7 +604,7 @@ class MainWindow(QMainWindow):
 
     def _on_layer_removed(self, layer_id: str) -> None:
         self._layer_seq.pop(layer_id, None)
-        self._project_records.pop(layer_id, None)
+        rec = self._project_records.pop(layer_id, None)
         self._project_rois.pop(layer_id, None)
         if layer_id in self._project_layer_order:
             self._project_layer_order.remove(layer_id)
@@ -609,6 +618,8 @@ class MainWindow(QMainWindow):
         if layer is not None:
             # 源变化即失效该源的全部缓存，避免删除后仍显示旧块
             self._cache.invalidate_source(str(layer.file_path))
+        elif rec is not None:
+            self._cache.invalidate_source(rec.source)
         if self.canvas.current_layer and self.canvas.current_layer.layer_id == layer_id:
             self.canvas.clear()
         if self.canvas_b.current_layer and self.canvas_b.current_layer.layer_id == layer_id:
@@ -1272,6 +1283,7 @@ class MainWindow(QMainWindow):
         for client in self._clients.values():
             if client.is_alive:
                 client.stop(timeout=1.0)
+        self._cache.clear()
         super().closeEvent(event)
 
 

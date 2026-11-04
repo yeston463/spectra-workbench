@@ -350,7 +350,8 @@
         "src/spectra_workbench/ui/panels/layer_panel.py：实现 LayerPanel 图层管理面板，支持图层显隐勾选、移除、选中及元数据卡片展示。",
         "GUI 零原生地理库导入绝对隔离：tests/unit/test_ui_components.py::test_ui_modules_strictly_no_geospatial_imports 严格验证 src/spectra_workbench/ui 下无任何 osgeo/rasterio/fiona/geopandas 导入。",
         "scripts/run-gui.ps1：启动脚本（UTF-8 带 BOM），支持交互运行、--sample 样例加载、--screenshot 截图导出与 --headless 无头模式。",
-        "分离程序运行时根与用户项目目录，新项目显式标记 path_anchor='project_dir'；旧 1.0 格式无标记相对路径进入待确认流程（不自动派发同名文件，未确认禁止保存，确认后迁移持久化，无论目标是否存在均保留用户选择且保存重开保持目标一致防同名劫持，自定义空路径显式校验，取消确认原文件不变；旧绝对引用直接按确定语义解析）；整体复制搬移项目包保持可用；缺失图层状态指示与显式移除；保存事务边界加固（tests/integration/test_p3_persistence_regression.py 19 项专项测试全绿）。"
+        "分离程序运行时根与用户项目目录，新项目显式标记 path_anchor='project_dir'；旧 1.0 格式无标记相对路径进入待确认流程（不自动派发同名文件，未确认禁止保存，确认后迁移持久化，无论目标是否存在均保留用户选择且保存重开保持目标一致防同名劫持，自定义空路径显式校验，取消确认原文件不变；旧绝对引用直接按确定语义解析）；整体复制搬移项目包保持可用；缺失图层状态指示与显式移除；保存事务边界加固（tests/integration/test_p3_persistence_regression.py 19 项专项测试全绿）。",
+        "Dock 浮动（isFloating）、显隐（isVisible）与停靠区域重排跨会话持久化与重开恢复通过（tests/integration/test_p3_dock_layout_persistence.py）"
       ],
       "blocking_reason": null
     },
@@ -393,7 +394,8 @@
         "Worker 进程扩展 read_window 协议请求：利用 GDAL/Rasterio 底层局部窗口读取与 Decimation 抽样（buf_xsize/buf_ysize），严禁一次性全量读入大影像内存。",
         "src/spectra_workbench/ui/canvas/image_canvas.py：ImageCanvas 在视口改变时按需请求分块窗口（最大 1024x1024），内存开销恒定受限。",
         "支持鼠标滚轮平移与无级缩放、适应全图、放大/缩小工具。",
-        "tests/integration/test_ui_app.py 验证通过。"
+        "tests/integration/test_ui_app.py 验证通过。",
+        "真实 GUI 模式下 6144x6144 大影像实测 LRU 逐出（9 次）与预算受限（docs/progress/runs/p3_gui_memory.json，tests/integration/test_p3_real_gui_memory.py）"
       ],
       "blocking_reason": null
     },
@@ -433,7 +435,8 @@
         "src/spectra_workbench/domain/roi.py 实现 PointROI / RectROI / PolygonROI 及点在多边形射线法。",
         "Worker 扩展 query_pixel / map_to_pixel / transform_bounds / read_view_window，支持中心 (center) 与角点 (corner) 两种坐标约定。",
         "tests/integration/test_p3_query_stats.py（19 项）验证旋转 Affine、无 GT 栅格与坐标换算。",
-        "tests/integration/test_p3_viewing_flow.py（17 项）验证跨 CRS 视图重投影、项目保存重开与句柄释放。"
+        "tests/integration/test_p3_viewing_flow.py（17 项）验证跨 CRS 视图重投影、项目保存重开与句柄释放。",
+        "真实鼠标事件多边形 ROI 绘制/闭合/选中/手柄拖拽/删除/保存重开全流程，多图层切换隔离与旋转 Affine/视图 CRS 坐标空间保全（tests/integration/test_p3_interactive_polygon_roi.py）"
       ],
       "blocking_reason": null
     },
@@ -1019,5 +1022,6 @@
       "evidence": [],
       "blocking_reason": null
     }
-  ]
+  ],
+  "updated_at": "2026-11-04"
 }

@@ -14,6 +14,7 @@ from __future__ import annotations
 import contextlib
 import json
 import math
+import time
 from typing import TYPE_CHECKING, Any
 
 import pyqtgraph as pg
@@ -596,7 +597,10 @@ class ImageCanvas(QWidget):
             c0, r0, c1, r1 = self._rect_bounds(item)
             points = [(c0, r0), (c1, r1)]
         else:
-            points = [(float(p.x()), float(p.y())) for p in item.getState()["points"]]
+            points = [
+                (float(pt.x()), float(pt.y()))
+                for pt in (item.mapToParent(p) for p in item.getState()["points"])
+            ]
         return base.model_copy(update={"points": points})
 
     def _add_roi(self, roi: ROI) -> None:
@@ -688,13 +692,40 @@ class ImageCanvas(QWidget):
         if not vb.sceneBoundingRect().contains(event.scenePos()):
             return
         pos = vb.mapSceneToView(event.scenePos())
-        if event.doubleClicked() or (self._poly_last_ts is not None and event.modifiers() & Qt.KeyboardModifier.ShiftModifier):
+
+        is_double = False
+        if hasattr(event, "double") and callable(event.double):
+            is_double = bool(event.double())
+        elif hasattr(event, "isDoubleClick") and callable(event.isDoubleClick):
+            is_double = bool(event.isDoubleClick())
+        elif hasattr(event, "doubleClicked") and callable(event.doubleClicked):
+            is_double = bool(event.doubleClicked())
+
+        btn = event.button() if hasattr(event, "button") and callable(event.button) else None
+        is_right = (btn == Qt.MouseButton.RightButton)
+
+        # 当点数 >= 3 时，若点击在首个顶点附近或右键/双击/短时快速连击，则完成闭合
+        near_first = False
+        if len(self._poly_pts) >= 3:
+            first_x, first_y = self._poly_pts[0]
+            p0 = vb.mapViewToScene(pg.Point(first_x, first_y))
+            if (p0 - event.scenePos()).manhattanLength() < 15:
+                near_first = True
+
+        now = time.monotonic()
+        is_fast_double = False
+        if self._poly_last_ts is not None and (now - self._poly_last_ts < 0.45) and len(self._poly_pts) >= 3:
+            is_fast_double = True
+        self._poly_last_ts = now
+
+        if is_double or is_right or near_first or is_fast_double:
             self.finish_polygon()
             return
+
         self._poly_pts.append((float(pos.x()), float(pos.y())))
         self._redraw_rubber()
         if len(self._poly_pts) == 1:
-            self._status("多边形 ROI：继续单击加点，双击结束")
+            self._status("多边形 ROI：继续单击加点，双击、右键或点击起点闭合")
 
     def _on_scene_mouse_moved(self, pos: Any) -> None:
         # 悬停坐标查询复用同一个场景信号
@@ -751,6 +782,7 @@ class ImageCanvas(QWidget):
     def finish_polygon(self) -> str | None:
         pts = list(self._poly_pts)
         self._poly_pts = []
+        self._poly_last_ts = None
         self._draw_shape = None
         self.btn_poly.setChecked(False)
         self._drop_rubber()

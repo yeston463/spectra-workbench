@@ -33,7 +33,7 @@ def _descendant_tree(root_pid: int) -> list[int]:
     while frontier:
         pid = frontier.pop()
         pids.append(pid)
-        probe = "(Get-CimInstance Win32_Process -Filter \"ParentProcessId=%d\").ProcessId" % pid
+        probe = f'(Get-CimInstance Win32_Process -Filter "ParentProcessId={pid}").ProcessId'
         try:
             out = subprocess.run(
                 ["powershell", "-NoProfile", "-Command", probe],
@@ -85,7 +85,7 @@ def run(cmd: list[str], timeout: float, log_path: Path) -> int:
     started = time.monotonic()
     with log_path.open("ab") as log:
         log.write(f"\n=== run_with_timeout start {datetime.now().isoformat()} "
-                  f"timeout={timeout}s cmd={' '.join(cmd)} ===\n".encode("utf-8"))
+                  f"timeout={timeout}s cmd={' '.join(cmd)} ===\n".encode())
         log.flush()
         child = subprocess.Popen(  # noqa: S603
             cmd,

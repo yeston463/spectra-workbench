@@ -1,0 +1,128 @@
+{
+  "schema": "spectra.p3_gui_memory.v1",
+  "measured_at": "2026-11-04T14:38:48.185189+00:00",
+  "command": "python scripts/measure_p3_gui_memory.py --raster C:\\Users\\赵航\\Desktop\\studio\\spectra-workbench\\work\\p3_perf\\p3_big_6144.tif --budget-mib 10",
+  "measurement_mode": "real_interactive_gui (QMainWindow + PySide6 + QGraphicsView + WorkerProcess)",
+  "configuration": {
+    "budget_mib": 10,
+    "budget_bytes": 10485760,
+    "raster_path": "C:\\Users\\赵航\\Desktop\\studio\\spectra-workbench\\work\\p3_perf\\p3_big_6144.tif",
+    "raster_size_bytes": 303177878,
+    "second_layer_path": "C:\\Users\\赵航\\Desktop\\studio\\spectra-workbench\\work\\p3_samples\\p3_north.tif"
+  },
+  "summary": {
+    "gui_rss_start_mib": 100.34,
+    "gui_rss_peak_mib": 194.91,
+    "gui_rss_final_mib": 187.8,
+    "worker_rss_peak_mib": 77.89,
+    "worker_rss_final_mib": 0.03,
+    "cache_peak_bytes": 10106361,
+    "cache_final_bytes": 0,
+    "cache_total_hits": 17,
+    "cache_total_misses": 42,
+    "cache_total_evictions": 7,
+    "lru_eviction_triggered": true,
+    "cache_strictly_bounded": true
+  },
+  "stages": [
+    {
+      "stage": "01_startup",
+      "timestamp": "2026-11-04T14:38:38.230950+00:00",
+      "gui_rss_mib": 100.34,
+      "worker_rss_mib": null,
+      "cache_bytes": 0,
+      "cache_entries": 0,
+      "cache_hits": 0,
+      "cache_misses": 0,
+      "cache_evictions": 0
+    },
+    {
+      "stage": "02_gui_initialized",
+      "timestamp": "2026-11-04T14:38:38.481619+00:00",
+      "gui_rss_mib": 129.34,
+      "worker_rss_mib": null,
+      "cache_bytes": 0,
+      "cache_entries": 0,
+      "cache_hits": 0,
+      "cache_misses": 0,
+      "cache_evictions": 0
+    },
+    {
+      "stage": "03_initial_raster_loaded",
+      "timestamp": "2026-11-04T14:38:40.278792+00:00",
+      "gui_rss_mib": 143.04,
+      "worker_rss_mib": 74.67,
+      "cache_bytes": 2229171,
+      "cache_entries": 1,
+      "cache_hits": 2,
+      "cache_misses": 2,
+      "cache_evictions": 0
+    },
+    {
+      "stage": "04_continuous_zoom",
+      "timestamp": "2026-11-04T14:38:42.512776+00:00",
+      "gui_rss_mib": 159.48,
+      "worker_rss_mib": 77.89,
+      "cache_bytes": 7581617,
+      "cache_entries": 5,
+      "cache_hits": 17,
+      "cache_misses": 11,
+      "cache_evictions": 0
+    },
+    {
+      "stage": "05_continuous_pan",
+      "timestamp": "2026-11-04T14:38:44.632750+00:00",
+      "gui_rss_mib": 184.51,
+      "worker_rss_mib": 74.73,
+      "cache_bytes": 9364498,
+      "cache_entries": 8,
+      "cache_hits": 17,
+      "cache_misses": 27,
+      "cache_evictions": 4
+    },
+    {
+      "stage": "06_band_switching",
+      "timestamp": "2026-11-04T14:38:45.787707+00:00",
+      "gui_rss_mib": 192.5,
+      "worker_rss_mib": 74.74,
+      "cache_bytes": 10106361,
+      "cache_entries": 8,
+      "cache_hits": 17,
+      "cache_misses": 34,
+      "cache_evictions": 7
+    },
+    {
+      "stage": "07_layer_switching",
+      "timestamp": "2026-11-04T14:38:47.077970+00:00",
+      "gui_rss_mib": 194.91,
+      "worker_rss_mib": 76.77,
+      "cache_bytes": 10106361,
+      "cache_entries": 8,
+      "cache_hits": 17,
+      "cache_misses": 41,
+      "cache_evictions": 7
+    },
+    {
+      "stage": "08_layers_removed",
+      "timestamp": "2026-11-04T14:38:47.590570+00:00",
+      "gui_rss_mib": 187.84,
+      "worker_rss_mib": 76.62,
+      "cache_bytes": 0,
+      "cache_entries": 0,
+      "cache_hits": 17,
+      "cache_misses": 42,
+      "cache_evictions": 7
+    },
+    {
+      "stage": "09_window_closed",
+      "timestamp": "2026-11-04T14:38:48.185189+00:00",
+      "gui_rss_mib": 187.8,
+      "worker_rss_mib": 0.03,
+      "cache_bytes": 0,
+      "cache_entries": 0,
+      "cache_hits": 17,
+      "cache_misses": 42,
+      "cache_evictions": 7
+    }
+  ]
+}
