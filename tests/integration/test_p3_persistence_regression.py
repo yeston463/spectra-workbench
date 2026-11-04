@@ -22,7 +22,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QMessageBox
 
 from spectra_workbench.domain.roi import ROI, ROIShape
 from spectra_workbench.project.model import (
@@ -682,4 +682,251 @@ def test_legacy_project_with_absolute_paths_resolves_directly_without_blocking(
     assert win.is_pending_confirmation is False
     assert requested == [str(abs_target.resolve())]
     win.close()
+    qapp.processEvents()
+
+
+def test_confirmed_missing_target_preserved_on_save_and_reopen_no_same_name_hijack(
+    qapp: QApplication, tmp_path: Path
+) -> None:
+    """用户确认缺失目标后保存重开：保留用户选中的目标，禁止误读项目目录下的同名文件。"""
+    app_root = tmp_path / "runtime_app"
+    app_root.mkdir(parents=True)
+    chosen_missing = app_root / "scene.tif"  # 该文件不存在！
+
+    user_proj = tmp_path / "user_proj"
+    user_proj.mkdir()
+    different_same_name = user_proj / "scene.tif"
+    different_same_name.write_bytes(b"different same-named file in project dir")
+
+    raw_json = {
+        "schema_version": "1.0",
+        "project_id": "legacy_missing_preserve",
+        "layers": [
+            {
+                "layer_id": "L_miss",
+                "name": "MissingPreserve",
+                "source": "scene.tif",
+                "source_is_relative": True,
+                "order": 0,
+            }
+        ],
+    }
+    proj_file = user_proj / "case.spectra.json"
+    proj_file.write_text(json.dumps(raw_json, indent=2), encoding="utf-8")
+
+    win = MainWindow(project_root=app_root)
+    requested: list[str] = []
+    win.open_dataset = lambda p, **kwargs: requested.append(str(Path(p).resolve()))
+
+    assert win.open_project(proj_file) == "pending_confirmation"
+    # 用户明确确认指向当前缺失的 app_root / scene.tif
+    assert win.confirm_legacy_migration({"L_miss": chosen_missing}) is True
+    assert len(win.missing_sources) == 1
+    assert win.missing_sources[0].tried == chosen_missing.resolve()
+    assert requested == []
+
+    # 保存项目
+    assert win.save_project_action() is True
+    win.close()
+    qapp.processEvents()
+
+    # 重新加载项目，断言：落盘引用和重新解析出的目标依然是用户确认的 chosen_missing
+    reopened = MainWindow(project_root=app_root)
+    reopened_requested: list[str] = []
+    reopened.open_dataset = lambda p, **kwargs: reopened_requested.append(str(Path(p).resolve()))
+
+    assert reopened.open_project(proj_file) is True
+    assert len(reopened.missing_sources) == 1
+    assert reopened.missing_sources[0].tried == chosen_missing.resolve()
+    # 严格断言：绝不请求 project_dir 下的同名不同文件！
+    assert reopened_requested == []
+    reopened.close()
+    qapp.processEvents()
+
+
+def test_confirmed_missing_target_preserved_on_save_as(
+    qapp: QApplication, tmp_path: Path
+) -> None:
+    """用户确认缺失目标后 Save As 另存为：另存到新目录后目标解析路径保持一致。"""
+    app_root = tmp_path / "runtime_app"
+    app_root.mkdir(parents=True)
+    chosen_missing = app_root / "remote_missing.tif"
+
+    orig_proj = tmp_path / "orig_proj"
+    orig_proj.mkdir()
+    proj_file = orig_proj / "orig.spectra.json"
+    raw_json = {
+        "schema_version": "1.0",
+        "project_id": "legacy_save_as",
+        "layers": [
+            {
+                "layer_id": "L1",
+                "name": "L1",
+                "source": "remote_missing.tif",
+                "source_is_relative": True,
+                "order": 0,
+            }
+        ],
+    }
+    proj_file.write_text(json.dumps(raw_json, indent=2), encoding="utf-8")
+
+    win = MainWindow(project_root=app_root)
+    assert win.open_project(proj_file) == "pending_confirmation"
+    assert win.confirm_legacy_migration({"L1": chosen_missing}) is True
+
+    # Save As 到第三目录
+    save_as_dir = tmp_path / "save_as_dir"
+    save_as_dir.mkdir()
+    save_as_file = save_as_dir / "copied.spectra.json"
+
+    with patch("spectra_workbench.ui.main_window.QFileDialog.getSaveFileName", return_value=(str(save_as_file), "")):
+        assert win.save_project_action(save_as=True) is True
+    win.close()
+    qapp.processEvents()
+
+    # 重开另存后的项目
+    reopened = MainWindow(project_root=app_root)
+    assert reopened.open_project(save_as_file) is True
+    assert len(reopened.missing_sources) == 1
+    assert reopened.missing_sources[0].tried == chosen_missing.resolve()
+    reopened.close()
+    qapp.processEvents()
+
+
+def test_reverse_selection_preserves_target_no_hijack(
+    qapp: QApplication, tmp_path: Path
+) -> None:
+    """反向选择：程序根存在同名文件，用户明确选择项目目录下缺失的文件，重开不误读程序根文件。"""
+    app_root = tmp_path / "runtime_app"
+    app_root.mkdir(parents=True)
+    runtime_file = app_root / "reverse.tif"
+    runtime_file.write_bytes(b"data in runtime")
+
+    user_proj = tmp_path / "user_proj"
+    user_proj.mkdir()
+    user_missing = user_proj / "reverse.tif"  # 缺失！
+
+    raw_json = {
+        "schema_version": "1.0",
+        "project_id": "legacy_reverse",
+        "layers": [
+            {
+                "layer_id": "L_rev",
+                "name": "RevLayer",
+                "source": "reverse.tif",
+                "source_is_relative": True,
+                "order": 0,
+            }
+        ],
+    }
+    proj_file = user_proj / "reverse.spectra.json"
+    proj_file.write_text(json.dumps(raw_json, indent=2), encoding="utf-8")
+
+    win = MainWindow(project_root=app_root)
+    requested: list[str] = []
+    win.open_dataset = lambda p, **kwargs: requested.append(str(Path(p).resolve()))
+
+    assert win.open_project(proj_file) == "pending_confirmation"
+    # 用户明确确认选择 user_missing（虽然它不存在，但用户选的是它）
+    assert win.confirm_legacy_migration({"L_rev": user_missing}) is True
+    assert requested == []
+    assert len(win.missing_sources) == 1
+    assert win.missing_sources[0].tried == user_missing.resolve()
+
+    assert win.save_project_action() is True
+    win.close()
+    qapp.processEvents()
+
+    # 重开
+    reopened = MainWindow(project_root=app_root)
+    reopened_requested: list[str] = []
+    reopened.open_dataset = lambda p, **kwargs: reopened_requested.append(str(Path(p).resolve()))
+
+    assert reopened.open_project(proj_file) is True
+    assert len(reopened.missing_sources) == 1
+    assert reopened.missing_sources[0].tried == user_missing.resolve()
+    assert reopened_requested == []
+    reopened.close()
+    qapp.processEvents()
+
+
+def test_both_sides_missing_and_custom_missing_path_preserved(
+    qapp: QApplication, tmp_path: Path
+) -> None:
+    """两处都缺失，用户指定自定义缺失路径：保存重开后目标路径依然一致。"""
+    app_root = tmp_path / "runtime_app"
+    app_root.mkdir(parents=True)
+    user_proj = tmp_path / "user_proj"
+    user_proj.mkdir()
+
+    custom_missing = tmp_path / "somewhere_else" / "custom_absent.tif"
+
+    raw_json = {
+        "schema_version": "1.0",
+        "project_id": "legacy_custom_miss",
+        "layers": [
+            {
+                "layer_id": "L_cust",
+                "name": "CustLayer",
+                "source": "absent.tif",
+                "source_is_relative": True,
+                "order": 0,
+            }
+        ],
+    }
+    proj_file = user_proj / "custom.spectra.json"
+    proj_file.write_text(json.dumps(raw_json, indent=2), encoding="utf-8")
+
+    win = MainWindow(project_root=app_root)
+    assert win.open_project(proj_file) == "pending_confirmation"
+    assert win.confirm_legacy_migration({"L_cust": custom_missing}) is True
+    assert len(win.missing_sources) == 1
+    assert win.missing_sources[0].tried == custom_missing.resolve()
+
+    assert win.save_project_action() is True
+    win.close()
+    qapp.processEvents()
+
+    reopened = MainWindow(project_root=app_root)
+    assert reopened.open_project(proj_file) is True
+    assert len(reopened.missing_sources) == 1
+    assert reopened.missing_sources[0].tried == custom_missing.resolve()
+    reopened.close()
+    qapp.processEvents()
+
+
+def test_dialog_empty_custom_choice_shows_validation_warning(
+    qapp: QApplication, tmp_path: Path
+) -> None:
+    """确认对话框选择自定义但路径留空时给出明确校验，不允许静默退回。"""
+    from spectra_workbench.ui.main_window import _LegacyConfirmDialog
+
+    app_root = tmp_path / "runtime_app"
+    user_proj = tmp_path / "user_proj"
+    layer = LayerRecord(
+        layer_id="L_empty",
+        name="EmptyTest",
+        source="empty.tif",
+        source_is_relative=True,
+        order=0,
+    )
+
+    dlg = _LegacyConfirmDialog([layer], user_proj, app_root)
+    # 在 setCurrentIndex(2) 之前，替换 QFileDialog.getOpenFileName，返回 ("", "") 模拟用户取消
+    with patch("spectra_workbench.ui.main_window.QFileDialog.getOpenFileName", return_value=("", "")):
+        cmb = dlg._combos["L_empty"]
+        cmb.setCurrentIndex(2)
+    assert cmb.currentData() is None
+    # 路径留空
+    dlg._edits["L_empty"].setText("")
+
+    # 点击确认
+    with patch.object(QMessageBox, "warning") as mock_warn:
+        dlg._on_accept()
+        mock_warn.assert_called_once()
+        assert "请指定数据源路径" in mock_warn.call_args[0][1]
+
+    # 验证未 accept，mapping 依然为空
+    assert "L_empty" not in dlg.mapping
+    dlg.close()
     qapp.processEvents()

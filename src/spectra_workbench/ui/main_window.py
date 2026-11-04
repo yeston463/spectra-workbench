@@ -206,8 +206,14 @@ class _LegacyConfirmDialog(QDialog):
             val = cmb.currentData()
             if val is None:
                 txt = self._edits[lid].text().strip()
-                if txt:
-                    self.mapping[lid] = Path(txt).resolve()
+                if not txt:
+                    QMessageBox.warning(
+                        self,
+                        "请指定数据源路径",
+                        f"图层 [{lid}] 选择了自定义文件，但未输入或选择有效路径。请先选择具体路径或改选已有候选。",
+                    )
+                    return
+                self.mapping[lid] = Path(txt).resolve()
             else:
                 self.mapping[lid] = Path(val).resolve()
         self.accept()
@@ -1105,10 +1111,10 @@ class MainWindow(QMainWindow):
                     p = Path(mapping[rec.layer_id]).resolve()
                 else:
                     p = resolve_source(target_dir, rec.source, is_relative=True)
+                stored, is_rel = store_source(target_dir, p)
+                updated_rec = rec.model_copy(update={"source": stored, "source_is_relative": is_rel})
+                self._project_records[rec.layer_id] = updated_rec
                 if p.exists():
-                    stored, is_rel = store_source(target_dir, p)
-                    updated_rec = rec.model_copy(update={"source": stored, "source_is_relative": is_rel})
-                    self._project_records[rec.layer_id] = updated_rec
                     self.open_dataset(
                         p,
                         record=updated_rec,
@@ -1117,7 +1123,7 @@ class MainWindow(QMainWindow):
                     )
                     loaded.append(rec.layer_id)
                 else:
-                    missing.append(MissingSource(rec.layer_id, rec.name, rec.source, p))
+                    missing.append(MissingSource(rec.layer_id, rec.name, stored, p))
             else:
                 p = resolve_source(target_dir, rec.source, is_relative=False)
                 if not p.exists() and not any(m.layer_id == rec.layer_id for m in missing):
