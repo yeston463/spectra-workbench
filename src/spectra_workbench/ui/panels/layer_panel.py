@@ -4,6 +4,7 @@
 1. 影像图层树/列表管理与可见性控制。
 2. 选中图层元数据详情展示（驱动、尺寸、波段数、数据类型、CRS、地理范围）。
 3. 灰度模式与 RGB 伪彩/真彩合成波段配置及实时切换。
+4. 缺失数据源图层状态指示、重新关联与明确移除。
 """
 
 from __future__ import annotations
@@ -27,6 +28,7 @@ from PySide6.QtWidgets import (
 )
 
 if TYPE_CHECKING:
+    from spectra_workbench.project.model import MissingSource
     from spectra_workbench.ui.models.layer import LayerItem
 
 
@@ -36,6 +38,8 @@ class LayerPanel(QWidget):
     sig_layer_selected = Signal(object)  # LayerItem | None
     sig_layer_visibility_changed = Signal(object, bool)  # LayerItem, visible
     sig_layer_removed = Signal(str)  # layer_id
+    sig_missing_removed = Signal(str)  # layer_id
+    sig_missing_relink_requested = Signal(str)  # layer_id
     sig_display_mode_changed = Signal(object)  # LayerItem
     sig_open_file_requested = Signal()
 
@@ -70,6 +74,29 @@ class LayerPanel(QWidget):
         self.list_widget.itemSelectionChanged.connect(self._on_selection_changed)
         self.list_widget.itemChanged.connect(self._on_item_changed)
         layout.addWidget(self.list_widget, stretch=1)
+
+        # 2.5 缺失图层管理箱
+        self.grp_missing = QGroupBox("⚠️ 缺失数据源图层 (Missing)")
+        missing_layout = QVBoxLayout(self.grp_missing)
+        missing_layout.setContentsMargins(6, 6, 6, 6)
+        missing_layout.setSpacing(4)
+        self.list_missing = QListWidget()
+        self.list_missing.setSelectionMode(QListWidget.SelectionMode.SingleSelection)
+        self.list_missing.itemSelectionChanged.connect(self._on_missing_selection_changed)
+        missing_layout.addWidget(self.list_missing)
+
+        missing_btns = QHBoxLayout()
+        self.btn_relink_missing = QPushButton("🔗 重新关联…")
+        self.btn_relink_missing.setEnabled(False)
+        self.btn_relink_missing.clicked.connect(self._on_relink_missing_clicked)
+        self.btn_remove_missing = QPushButton("🗑️ 移除记录")
+        self.btn_remove_missing.setEnabled(False)
+        self.btn_remove_missing.clicked.connect(self._on_remove_missing_clicked)
+        missing_btns.addWidget(self.btn_relink_missing)
+        missing_btns.addWidget(self.btn_remove_missing)
+        missing_layout.addLayout(missing_btns)
+        self.grp_missing.setVisible(False)
+        layout.addWidget(self.grp_missing)
 
         # 3. 显示模式设置箱
         self.grp_display = QGroupBox("显示与波段合成 (Display)")
@@ -181,6 +208,40 @@ class LayerPanel(QWidget):
             self._selected_layer = None
             self._update_details()
             self.sig_layer_selected.emit(None)
+
+    def set_missing_layers(self, missing: list[MissingSource]) -> None:
+        """更新缺失数据源列表与可见性。"""
+        self.list_missing.clear()
+        if not missing:
+            self.grp_missing.setVisible(False)
+            self.btn_relink_missing.setEnabled(False)
+            self.btn_remove_missing.setEnabled(False)
+            return
+        for item in missing:
+            lw_item = QListWidgetItem(f"⚠️ [缺失] {item.name}")
+            lw_item.setData(Qt.ItemDataRole.UserRole, item.layer_id)
+            lw_item.setToolTip(f"原始记录：{item.stored}\n尝试路径：{item.tried}")
+            self.list_missing.addItem(lw_item)
+        self.grp_missing.setVisible(True)
+        self.btn_relink_missing.setEnabled(False)
+        self.btn_remove_missing.setEnabled(False)
+
+    def _on_missing_selection_changed(self) -> None:
+        has_sel = len(self.list_missing.selectedItems()) > 0
+        self.btn_relink_missing.setEnabled(has_sel)
+        self.btn_remove_missing.setEnabled(has_sel)
+
+    def _on_relink_missing_clicked(self) -> None:
+        items = self.list_missing.selectedItems()
+        if items:
+            lid = items[0].data(Qt.ItemDataRole.UserRole)
+            self.sig_missing_relink_requested.emit(str(lid))
+
+    def _on_remove_missing_clicked(self) -> None:
+        items = self.list_missing.selectedItems()
+        if items:
+            lid = items[0].data(Qt.ItemDataRole.UserRole)
+            self.sig_missing_removed.emit(str(lid))
 
     def _on_selection_changed(self) -> None:
         items = self.list_widget.selectedItems()

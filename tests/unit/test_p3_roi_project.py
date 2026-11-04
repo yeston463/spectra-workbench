@@ -309,3 +309,67 @@ def test_geojson_export_uses_pixel_to_map(tmp_path: Path):
 
 def test_project_version_constant_is_declared(tmp_path: Path):
     assert PROJECT_SCHEMA_VERSION == "1.0"
+
+
+
+def test_rebase_project_relocates_relative_sources_correctly(tmp_path: Path):
+    from spectra_workbench.project.model import rebase_project
+
+    old_root = tmp_path / "old_proj"
+    new_root = tmp_path / "new_proj"
+    (old_root / "data").mkdir(parents=True)
+    (new_root / "data").mkdir(parents=True)
+    img = old_root / "data" / "a.tif"
+    img.write_bytes(b"data")
+    spec = ProjectSpec(
+        layers=[LayerRecord(layer_id="L1", name="A", source="data/a.tif", source_is_relative=True, order=0)]
+    )
+    # 另存到 new_root（原文件在 old_root，不在 new_root 之下）-> 转为绝对路径保留对原数据的指向
+    rebased = rebase_project(spec, old_root, new_root)
+    assert rebased.layers[0].source_is_relative is False
+    assert (
+        resolve_source(new_root, rebased.layers[0].source, is_relative=rebased.layers[0].source_is_relative)
+        == img.resolve()
+    )
+
+    # 若目标位于 new_root 之下 -> 自动转换为相对路径
+    img_new = new_root / "data" / "b.tif"
+    img_new.write_bytes(b"data")
+    spec2 = ProjectSpec(
+        layers=[
+            LayerRecord(
+                layer_id="L2",
+                name="B",
+                source=img_new.resolve().as_posix(),
+                source_is_relative=False,
+                order=0,
+            )
+        ]
+    )
+    rebased2 = rebase_project(spec2, old_root, new_root)
+    assert rebased2.layers[0].source_is_relative is True
+    assert rebased2.layers[0].source == "data/b.tif"
+
+
+def test_find_missing_strictly_checks_project_dir_no_basename_hijack(tmp_path: Path):
+    proj_dir = tmp_path / "proj"
+    other_dir = tmp_path / "other"
+    proj_dir.mkdir()
+    other_dir.mkdir()
+    # 异目录存在同名文件，不应被静默匹配
+    (other_dir / "target.tif").write_bytes(b"wrong data")
+    spec = ProjectSpec(
+        layers=[
+            LayerRecord(
+                layer_id="L1",
+                name="Target",
+                source="data/target.tif",
+                source_is_relative=True,
+                order=0,
+            )
+        ]
+    )
+    missing = find_missing(proj_dir, spec)
+    assert len(missing) == 1
+    assert missing[0].tried == (proj_dir / "data" / "target.tif").resolve()
+    assert not missing[0].tried.exists()

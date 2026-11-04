@@ -349,7 +349,8 @@
         "src/spectra_workbench/ui/main_window.py：实现 MainWindow 桌面主窗口，集成菜单栏、工具栏、中心画布及左右底三向 Dock 停靠窗口布局。",
         "src/spectra_workbench/ui/panels/layer_panel.py：实现 LayerPanel 图层管理面板，支持图层显隐勾选、移除、选中及元数据卡片展示。",
         "GUI 零原生地理库导入绝对隔离：tests/unit/test_ui_components.py::test_ui_modules_strictly_no_geospatial_imports 严格验证 src/spectra_workbench/ui 下无任何 osgeo/rasterio/fiona/geopandas 导入。",
-        "scripts/run-gui.ps1：启动脚本（UTF-8 带 BOM），支持交互运行、--sample 样例加载、--screenshot 截图导出与 --headless 无头模式。"
+        "scripts/run-gui.ps1：启动脚本（UTF-8 带 BOM），支持交互运行、--sample 样例加载、--screenshot 截图导出与 --headless 无头模式。",
+        "分离程序运行时根与用户项目目录，实现默认相对引用与 Save As 重算引用；整体复制搬移项目包保持可用；缺失数据源图层状态指示、重定位与明确移除；保存/另存为/部分重新关联均完整保留缺失图层记录、样式与 ROI（tests/integration/test_p3_persistence_regression.py 验证通过）。"
       ],
       "blocking_reason": null
     },
@@ -369,7 +370,8 @@
       "evidence": [
         "Worker 进程扩展 probe_dataset 协议请求：GDALProviderAdapter 与 RasterioProviderAdapter 提取驱动、尺寸、波段数、数据类型、CRS、GeoTransform、地理范围与 NoData。",
         "src/spectra_workbench/ui/models/layer.py：LayerItem 纯 Python 领域模型接收并呈现元数据。",
-        "tests/integration/test_ui_app.py::test_main_window_open_dataset_and_chunked_preview 验证通过。"
+        "tests/integration/test_ui_app.py::test_main_window_open_dataset_and_chunked_preview 验证通过。",
+        "注：P3-02 原始范围内的矢量图层（OGR）与科学子数据集（HDF/NetCDF subdatasets）基础元数据探测本期尚未实现/验证。"
       ],
       "blocking_reason": null
     },

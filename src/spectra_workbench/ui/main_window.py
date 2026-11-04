@@ -45,7 +45,6 @@ from spectra_workbench.project.model import (
     ViewRecord,
     find_missing,
     load_project,
-    relink,
     resolve_source,
     save_project,
     store_source,
@@ -105,7 +104,8 @@ class _RelinkDialog(QDialog):
         layout.addLayout(buttons)
 
     def _pick(self, edit: QLineEdit, layer_id: str) -> None:
-        path, _ = QFileDialog.getOpenFileName(self, "选择数据源", str(Path.home()))
+        base = getattr(self.parent(), "project_dir", Path.home())
+        path, _ = QFileDialog.getOpenFileName(self, "选择数据源", str(base))
         if path:
             edit.setText(path)
 
@@ -117,9 +117,19 @@ class _RelinkDialog(QDialog):
 class MainWindow(QMainWindow):
     """Spectra Workbench 桌面主窗口。"""
 
+    @property
+    def project_dir(self) -> Path:
+        if self.project_path is not None:
+            return self.project_path.parent.resolve()
+        return self.app_root
+
     def __init__(self, project_root: Path | str | None = None, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.project_root = Path(project_root or Path.cwd()).resolve()
+        self.app_root = Path(project_root or Path.cwd()).resolve()
+        self.project_root = self.app_root
+        self._project_records: dict[str, LayerRecord] = {}
+        self._project_layer_order: list[str] = []
+        self._project_rois: dict[str, list[ROI]] = {}
         self._clients: dict[str, QtWorkerClient] = {}
         self._active_task_client: QtWorkerClient | None = None
         self._task_subscriptions: dict[str, Callable[[], None]] = {}
@@ -335,6 +345,8 @@ class MainWindow(QMainWindow):
         self.layer_panel.sig_layer_selected.connect(self._on_layer_selected)
         self.layer_panel.sig_layer_visibility_changed.connect(self._on_layer_visibility_changed)
         self.layer_panel.sig_layer_removed.connect(self._on_layer_removed)
+        self.layer_panel.sig_missing_removed.connect(self._on_missing_layer_removed)
+        self.layer_panel.sig_missing_relink_requested.connect(self._on_missing_relink_requested)
         self.layer_panel.sig_display_mode_changed.connect(self._on_display_mode_changed)
         self.layer_panel.sig_open_file_requested.connect(self.open_file_dialog)
 
@@ -366,7 +378,7 @@ class MainWindow(QMainWindow):
         path, _ = QFileDialog.getOpenFileName(
             self,
             "打开遥感栅格影像",
-            str(self.project_root),
+            str(self.project_dir),
             "遥感栅格影像 (*.tif *.tiff *.dat *.img *.hdr *.vrt *.png *.jpg);;所有文件 (*.*)",
         )
         if path:
@@ -396,6 +408,8 @@ class MainWindow(QMainWindow):
                 layer.display = record.display.model_copy(deep=True)
                 layer.provider_hint = record.provider_hint
                 layer.rois = list(rois or [])
+            if layer.layer_id not in self._project_layer_order:
+                self._project_layer_order.append(layer.layer_id)
             client = self._client_for(layer)
             self._layer_seq[layer.layer_id] = seq
             # 顺序按“发起打开的先后”确定：探测响应谁先回来不影响图层顺序
@@ -472,6 +486,12 @@ class MainWindow(QMainWindow):
 
     def _on_layer_removed(self, layer_id: str) -> None:
         self._layer_seq.pop(layer_id, None)
+        self._project_records.pop(layer_id, None)
+        self._project_rois.pop(layer_id, None)
+        if layer_id in self._project_layer_order:
+            self._project_layer_order.remove(layer_id)
+        self.missing_sources = [m for m in self.missing_sources if m.layer_id != layer_id]
+        self.layer_panel.set_missing_layers(self.missing_sources)
         layer = None
         for cand in self.layer_panel.layers:
             if cand.layer_id == layer_id:
@@ -485,6 +505,47 @@ class MainWindow(QMainWindow):
         if self.canvas_b.current_layer and self.canvas_b.current_layer.layer_id == layer_id:
             self.canvas_b.clear()
         self._mark_dirty()
+
+    def _on_missing_layer_removed(self, layer_id: str) -> None:
+        self._project_records.pop(layer_id, None)
+        self._project_rois.pop(layer_id, None)
+        if layer_id in self._project_layer_order:
+            self._project_layer_order.remove(layer_id)
+        self.missing_sources = [m for m in self.missing_sources if m.layer_id != layer_id]
+        self.layer_panel.set_missing_layers(self.missing_sources)
+        self._mark_dirty()
+        self.status_bar.showMessage(f"已从项目中移除缺失图层记录: {layer_id}")
+
+    def _on_missing_relink_requested(self, layer_id: str) -> None:
+        target_missing = next((m for m in self.missing_sources if m.layer_id == layer_id), None)
+        if target_missing is None:
+            return
+        chosen, _ = QFileDialog.getOpenFileName(
+            self,
+            f"重新关联数据源 - {target_missing.name}",
+            str(self.project_dir),
+            "遥感栅格影像 (*.tif *.tiff *.dat *.img *.hdr *.vrt *.png *.jpg);;所有文件 (*.*)",
+        )
+        if not chosen:
+            return
+        self.relink_layer(layer_id, Path(chosen))
+
+    def relink_layer(self, layer_id: str, new_path: Path | str) -> bool:
+        p = Path(new_path).resolve()
+        if not p.exists():
+            self._notify(QMessageBox.Icon.Critical, "文件不存在", f"指定数据源不存在：{p}")
+            return False
+        rec = self._project_records.get(layer_id)
+        stored, is_rel = store_source(self.project_dir, p)
+        if rec is not None:
+            rec = rec.model_copy(update={"source": stored, "source_is_relative": is_rel})
+            self._project_records[layer_id] = rec
+        self.missing_sources = [m for m in self.missing_sources if m.layer_id != layer_id]
+        self.layer_panel.set_missing_layers(self.missing_sources)
+        self.open_dataset(p, record=rec, rois=self._project_rois.get(layer_id, []))
+        self._mark_dirty()
+        self.status_bar.showMessage(f"图层已重新关联至：{p.name}")
+        return True
 
     def _on_display_mode_changed(self, layer: LayerItem) -> None:
         self.canvas.set_display(layer.display)
@@ -652,6 +713,11 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------ 项目
     def new_project(self) -> None:
         self.project_path = None
+        self._project_records.clear()
+        self._project_layer_order.clear()
+        self._project_rois.clear()
+        self.missing_sources = []
+        self.layer_panel.set_missing_layers([])
         for layer in list(self.layer_panel.layers):
             self.layer_panel.remove_layer(layer.layer_id)
         self.canvas.clear()
@@ -662,22 +728,38 @@ class MainWindow(QMainWindow):
         self._pending_active_layer = None
         self._pending_view_v1 = self._pending_view_v2 = None
         self._layer_seq.clear()
-        self.missing_sources = []
         self._dirty = False
         self.status_bar.showMessage("已新建空项目")
 
-    def build_project_spec(self) -> ProjectSpec:
-        layers = []
-        for order, layer in enumerate(self.layer_panel.layers):
-            stored, is_rel = store_source(self.project_root, layer.file_path)
-            layers.append(
-                LayerRecord(
+    def build_project_spec(self, target_dir: Path | None = None) -> ProjectSpec:
+        base_dir = (target_dir or self.project_dir).resolve()
+        loaded_map = {layer.layer_id: layer for layer in self.layer_panel.layers}
+
+        all_order: list[str] = []
+        seen = set()
+        for lid in self._project_layer_order:
+            if lid not in seen:
+                all_order.append(lid)
+                seen.add(lid)
+        for layer in self.layer_panel.layers:
+            if layer.layer_id not in seen:
+                all_order.append(layer.layer_id)
+                seen.add(layer.layer_id)
+
+        layers: list[LayerRecord] = []
+        all_rois: list[ROI] = []
+
+        for order_idx, lid in enumerate(all_order):
+            if lid in loaded_map:
+                layer = loaded_map[lid]
+                stored, is_rel = store_source(base_dir, layer.file_path)
+                rec = LayerRecord(
                     layer_id=layer.layer_id,
                     name=layer.name,
                     source=stored,
                     source_is_relative=is_rel,
                     visible=layer.visible,
-                    order=order,
+                    order=order_idx,
                     display=layer.display.model_copy(deep=True),
                     provider_hint=layer.provider_hint,
                     metadata_snapshot={
@@ -688,17 +770,29 @@ class MainWindow(QMainWindow):
                         "spatial_model": layer.metadata.get("spatial_model"),
                     },
                 )
-            )
-        rois: list[ROI] = []
-        for layer in self.layer_panel.layers:
-            rois.extend(layer.rois)
+                layers.append(rec)
+                all_rois.extend(layer.rois)
+            elif lid in self._project_records:
+                old_rec = self._project_records[lid]
+                orig_abs = resolve_source(self.project_dir, old_rec.source, is_relative=old_rec.source_is_relative)
+                stored, is_rel = store_source(base_dir, orig_abs)
+                rec = old_rec.model_copy(
+                    update={
+                        "source": stored,
+                        "source_is_relative": is_rel,
+                        "order": order_idx,
+                    }
+                )
+                layers.append(rec)
+                all_rois.extend(self._project_rois.get(lid, []))
+
         views = [self._view_record(self.canvas), self._view_record(self.canvas_b)]
         state = self.saveState()
         layout_b64 = base64.b64encode(state.data()).decode("ascii") if state is not None else None
         active = self.canvas.current_layer
         return ProjectSpec(
             layers=layers,
-            rois=rois,
+            rois=all_rois,
             views=views,
             active_layer_id=active.layer_id if active else None,
             active_view_id="V1",
@@ -720,26 +814,36 @@ class MainWindow(QMainWindow):
     def save_project_action(self, save_as: bool = False) -> bool:
         target = self.project_path
         if save_as or target is None:
-            suggested = (target or (self.project_root / "未命名.spectra.json"))
+            suggested = (target or (self.project_dir / "未命名.spectra.json"))
             chosen, _ = QFileDialog.getSaveFileName(
                 self, "保存项目", str(suggested), "Spectra 项目 (*.spectra.json);;JSON (*.json)"
             )
             if not chosen:
                 return False
-            target = Path(chosen)
+            target = Path(chosen).resolve()
+        target_dir = target.parent.resolve()
         try:
-            save_project(target, self.build_project_spec())
+            spec = self.build_project_spec(target_dir=target_dir)
+            save_project(target, spec)
         except Exception as exc:
             self._notify(QMessageBox.Icon.Critical, "保存失败", f"项目无法保存：{exc}")
             return False
         self.project_path = target
+        self._project_layer_order = [r.layer_id for r in spec.ordered_layers()]
+        self._project_records = {r.layer_id: r for r in spec.layers}
+        rois_by_layer: dict[str, list[ROI]] = {}
+        for roi in spec.rois:
+            rois_by_layer.setdefault(str(roi.attributes.get("layer_id", "")), []).append(roi)
+        self._project_rois = rois_by_layer
+        self.missing_sources = find_missing(target_dir, spec)
+        self.layer_panel.set_missing_layers(self.missing_sources)
         self._dirty = False
         self.status_bar.showMessage(f"项目已保存：{target}")
         return True
 
     def open_project_dialog(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
-            self, "打开项目", str(self.project_root), "Spectra 项目 (*.spectra.json *.json)"
+            self, "打开项目", str(self.project_dir), "Spectra 项目 (*.spectra.json *.json)"
         )
         if not path:
             return
@@ -751,7 +855,7 @@ class MainWindow(QMainWindow):
 
     def open_project(self, path: Path | str) -> bool:
         """程序化打开项目：不弹任何模态窗，缺失源记录在 missing_sources。"""
-        target = Path(path)
+        target = Path(path).resolve()
         try:
             spec = load_project(target)
         except Exception as exc:
@@ -766,23 +870,27 @@ class MainWindow(QMainWindow):
         self._pending_active_layer = spec.active_layer_id
         self._pending_view_v1 = self._pending_view_v2 = None
 
-        missing = find_missing(self.project_root, spec)
-        self.missing_sources = missing
-
-        rois_by_layer: dict[str, list[ROI]] = {}
+        self._project_records = {rec.layer_id: rec for rec in spec.layers}
+        self._project_layer_order = [rec.layer_id for rec in spec.ordered_layers()]
+        self._project_rois = {}
         for roi in spec.rois:
-            rois_by_layer.setdefault(str(roi.attributes.get("layer_id", "")), []).append(roi)
+            self._project_rois.setdefault(str(roi.attributes.get("layer_id", "")), []).append(roi)
+
+        project_dir = target.parent.resolve()
+        missing = find_missing(project_dir, spec)
+        self.missing_sources = missing
+        self.layer_panel.set_missing_layers(missing)
 
         loaded: list[str] = []
         base_seq = self._open_seq + 1
         for i, rec in enumerate(spec.ordered_layers()):
-            path = resolve_source(self.project_root, rec.source, is_relative=rec.source_is_relative)
-            if not path.exists():
+            p = resolve_source(project_dir, rec.source, is_relative=rec.source_is_relative)
+            if not p.exists():
                 continue
             self.open_dataset(
-                path,
+                p,
                 record=rec,
-                rois=rois_by_layer.get(rec.layer_id, []),
+                rois=self._project_rois.get(rec.layer_id, []),
                 order=base_seq + i,
             )
             loaded.append(rec.layer_id)
@@ -808,17 +916,21 @@ class MainWindow(QMainWindow):
 
     def prompt_relink_missing(self) -> bool:
         """交互式重新关联：模态对话框只由用户入口调用，程序化打开不会触发。"""
-        if self.project_path is None or not self.missing_sources:
+        if not self.missing_sources:
             return False
         dlg = _RelinkDialog(self.missing_sources, self)
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return False
-        resolved = {lid: p for lid, p in dlg.mapping.items() if str(p)}
+        resolved = {lid: Path(p) for lid, p in dlg.mapping.items() if str(p).strip()}
         if not resolved:
             return False
-        spec = relink(self.project_root, load_project(self.project_path), resolved)
-        save_project(self.project_path, spec)
-        return self.open_project(self.project_path)
+        for lid, new_p in resolved.items():
+            if new_p.exists():
+                self.relink_layer(lid, new_p)
+        if self.project_path is not None:
+            save_project(self.project_path, self.build_project_spec())
+            self._dirty = False
+        return True
 
     def _mark_dirty(self) -> None:
         self._dirty = True

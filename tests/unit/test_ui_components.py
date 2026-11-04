@@ -125,8 +125,9 @@ def test_param_form_connected_vs_unsupported(qapp: QApplication) -> None:
     assert form.lbl_unsupported_banner.isHidden()
 
     # 模拟设置输入输出
-    in_file = Path("tests/fixtures/data/a01_ramp_16x16.dat").resolve()
-    out_file = Path("tests/fixtures/data/warp_test_out.tif").resolve()
+    fixture_dir = Path(__file__).resolve().parents[1] / "fixtures" / "data"
+    in_file = (fixture_dir / "a01_ramp_16x16.dat").resolve()
+    out_file = (fixture_dir / "warp_test_out.tif").resolve()
     form.txt_input.setText(str(in_file))
     form.txt_output.setText(str(out_file))
 

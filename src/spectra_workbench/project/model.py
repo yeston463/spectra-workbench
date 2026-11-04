@@ -125,7 +125,25 @@ def resolve_source(project_root: Path, stored: str, *, is_relative: bool = True)
         return cand.resolve()
     if is_relative:
         return (project_root / cand).resolve()
-    return cand.resolve()
+    return (project_root / cand).resolve()
+
+
+def rebase_project(spec: ProjectSpec, old_root: Path, new_root: Path) -> ProjectSpec:
+    """按新项目目录重算图层引用：
+
+    原来相对 old_root 的路径先解析为原物理路径；
+    若位于 new_root 之下则转为相对 new_root；否则转为绝对路径保留对原数据的指向。
+    """
+    old_root = Path(old_root).resolve()
+    new_root = Path(new_root).resolve()
+    if old_root == new_root:
+        return spec
+    new_layers = []
+    for layer in spec.layers:
+        abs_target = resolve_source(old_root, layer.source, is_relative=layer.source_is_relative)
+        stored, is_rel = store_source(new_root, abs_target)
+        new_layers.append(layer.model_copy(update={"source": stored, "source_is_relative": is_rel}))
+    return spec.model_copy(update={"layers": new_layers})
 
 
 @dataclass
