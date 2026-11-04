@@ -60,8 +60,8 @@ def resolve_worker_command(
     base_env = os.environ.copy()
     base_env["PYTHONIOENCODING"] = "utf-8"
 
-    # 确保 worker 可导入 spectra_workbench
-    src_dir = str(root / "src")
+    # worker 必须导入 GUI 进程正在使用的同一份代码：从已加载模块定位，而不是猜 project_root
+    src_dir = str(Path(__file__).resolve().parents[2])
     existing_pp = base_env.get("PYTHONPATH", "")
     base_env["PYTHONPATH"] = f"{src_dir};{existing_pp}" if existing_pp else src_dir
 
@@ -458,6 +458,8 @@ class WorkerProcess:
         out_h: int = 512,
         bands: list[int] | None = None,
         timeout: float = 15.0,
+        raw: bool = False,
+        overview: str = "auto",
     ) -> dict[str, Any]:
         """向 Worker 发送分块读取窗口请求并返回 base64 数据。"""
         args: dict[str, Any] = {
@@ -471,6 +473,9 @@ class WorkerProcess:
         }
         if bands is not None:
             args["bands"] = bands
+        if raw:
+            args["raw"] = True
+            args["overview"] = overview
         env = self.send_request("read_window", args, timeout=timeout)
         if env.kind is Kind.error:
             raise RuntimeError(f"分块读取窗口失败: {env.payload.get('message')}")
@@ -479,9 +484,139 @@ class WorkerProcess:
             raise ValueError(f"无效分块读取响应: {env.payload}")
         return data
 
+    def _simple_call(
+        self, action: str, args: dict[str, Any], timeout: float = 15.0
+    ) -> dict[str, Any]:
+        """只读查询类请求的统一收发。"""
+        env = self.send_request(action, args, timeout=timeout)
+        if env.kind is Kind.error:
+            raise RuntimeError(f"{action} 失败: {env.payload.get('message')}")
+        data = env.payload.get("data")
+        if not isinstance(data, dict):
+            raise ValueError(f"无效 {action} 响应: {env.payload}")
+        return data
+
+    def query_pixel(
+        self,
+        path: Path | str,
+        row: int,
+        col: int,
+        bands: list[int] | None = None,
+        view_crs_wkt: str | None = None,
+        timeout: float = 15.0,
+    ) -> dict[str, Any]:
+        """像元行列 -> 原值/物理值/有效性 + 地图坐标（在 worker 内计算）。"""
+        args: dict[str, Any] = {"path": str(path), "row": int(row), "col": int(col)}
+        if bands is not None:
+            args["bands"] = bands
+        if view_crs_wkt:
+            args["view_crs_wkt"] = view_crs_wkt
+        return self._simple_call("query_pixel", args, timeout=timeout)
+
+    def map_to_pixel(
+        self,
+        path: Path | str,
+        x: float,
+        y: float,
+        view_crs_wkt: str | None = None,
+        convention: str = "center",
+        timeout: float = 15.0,
+    ) -> dict[str, Any]:
+        """地图坐标 -> 行列号（同时给出中心/角点两种约定）。"""
+        args: dict[str, Any] = {"path": str(path), "x": float(x), "y": float(y), "convention": convention}
+        if view_crs_wkt:
+            args["view_crs_wkt"] = view_crs_wkt
+        return self._simple_call("map_to_pixel", args, timeout=timeout)
+
+    def compute_stats(
+        self,
+        path: Path | str,
+        mode: str = "sampled",
+        bands: list[int] | None = None,
+        max_samples: int = 1_000_000,
+        full_limit: int | None = None,
+        timeout: float = 30.0,
+    ) -> dict[str, Any]:
+        """统计（sampled 明确标注抽样；full 超上限会被拒绝，不偷偷降级）。"""
+        args: dict[str, Any] = {"path": str(path), "mode": mode, "max_samples": int(max_samples)}
+        if full_limit is not None:
+            args["full_limit"] = int(full_limit)
+        if bands is not None:
+            args["bands"] = bands
+        return self._simple_call("compute_stats", args, timeout=timeout)
+
+    def dataset_overviews(self, path: Path | str, timeout: float = 15.0) -> dict[str, Any]:
+        return self._simple_call("dataset_overviews", {"path": str(path)}, timeout=timeout)
+
+    def crs_wkt(self, epsg: int, timeout: float = 10.0) -> dict[str, Any]:
+        """向 worker 索取 EPSG 对应的 WKT（GUI 侧不导入 osr）。"""
+        return self._simple_call("crs_wkt", {"epsg": int(epsg)}, timeout=timeout)
+
+    def transform_point(
+        self, x: float, y: float, src_wkt: str, dst_wkt: str, timeout: float = 10.0
+    ) -> dict[str, Any]:
+        return self._simple_call(
+            "transform_point",
+            {"x": float(x), "y": float(y), "src_wkt": src_wkt, "dst_wkt": dst_wkt},
+            timeout=timeout,
+        )
+
+    def transform_bounds(self, path: Path | str, view_crs_wkt: str, timeout: float = 15.0) -> dict[str, Any]:
+        """数据集范围换算到视图 CRS。"""
+        return self._simple_call(
+            "transform_bounds", {"path": str(path), "view_crs_wkt": view_crs_wkt}, timeout=timeout
+        )
+
+    def read_view_window(
+        self,
+        path: Path | str,
+        view_crs_wkt: str,
+        x_min: float,
+        y_min: float,
+        x_max: float,
+        y_max: float,
+        out_w: int = 512,
+        out_h: int = 512,
+        bands: list[int] | None = None,
+        resampling: str = "near",
+        timeout: float = 30.0,
+    ) -> dict[str, Any]:
+        """请求把数据集重投影到统一视图网格后读取（跨 CRS 叠加用，不在 GUI 端拼像素）。"""
+        args: dict[str, Any] = {
+            "path": str(path),
+            "view_crs_wkt": view_crs_wkt,
+            "x_min": float(x_min),
+            "y_min": float(y_min),
+            "x_max": float(x_max),
+            "y_max": float(y_max),
+            "out_w": int(out_w),
+            "out_h": int(out_h),
+            "resampling": resampling,
+        }
+        if bands is not None:
+            args["bands"] = bands
+        return self._simple_call("read_view_window", args, timeout=timeout)
+
+    def _join_readers(self, timeout: float = 2.0) -> None:
+        """等读者线程结束：子进程已退出时管道会 EOF，线程随即返回。
+
+        不 join 就让守护线程活到解释器退出，Windows 上会在关闭阶段随机崩
+        （STATUS_STACK_BUFFER_OVERRUN），表现为测试与关窗时的异常退出码。
+        """
+        if self._proc is not None:
+            for stream in (self._proc.stdout, self._proc.stderr, self._proc.stdin):
+                if stream is not None:
+                    with contextlib.suppress(OSError, ValueError):
+                        stream.close()
+        for t in (self._stdout_thread, self._stderr_thread):
+            if t is not None and t.is_alive():
+                t.join(timeout=timeout)
+
     def stop(self, timeout: float = 5.0) -> int:
         """向 Worker 发送 shutdown 命令并等待进程退出。"""
         if not self.is_alive or self._proc is None:
+            self._stop_event.set()
+            self._join_readers()
             return 0
 
         try:
@@ -497,6 +632,7 @@ class WorkerProcess:
             self.kill()
 
         self._stop_event.set()
+        self._join_readers()
         return self._proc.returncode if self._proc else 0
 
     def kill(self) -> None:
@@ -508,3 +644,4 @@ class WorkerProcess:
                 self._proc.wait(timeout=2.0)
             except Exception:
                 pass
+        self._join_readers()

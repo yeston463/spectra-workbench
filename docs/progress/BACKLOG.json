@@ -425,9 +425,14 @@
         "P3-04",
         "P3-02"
       ],
-      "status": "todo",
+      "status": "implemented",
       "release_requirement": "core",
-      "evidence": [],
+      "evidence": [
+        "src/spectra_workbench/domain/roi.py 实现 PointROI / RectROI / PolygonROI 及点在多边形射线法。",
+        "Worker 扩展 query_pixel / map_to_pixel / transform_bounds / read_view_window，支持中心 (center) 与角点 (corner) 两种坐标约定。",
+        "tests/integration/test_p3_query_stats.py（19 项）验证旋转 Affine、无 GT 栅格与坐标换算。",
+        "tests/integration/test_p3_viewing_flow.py（17 项）验证跨 CRS 视图重投影、项目保存重开与句柄释放。"
+      ],
       "blocking_reason": null
     },
     {

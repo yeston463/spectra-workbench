@@ -6,19 +6,23 @@ Windows x64 本地遥感与 GIS 桌面工作台。界面为 Python + PySide6；G
 
 ## 运行入口
 
-```powershell
-# 1) 解析并创建 ui / gdal / rasterio / science 四个独立环境
-powershell -ExecutionPolicy Bypass -File scripts\bootstrap.ps1
+当前路线（依据 `docs/adr/0001-environment-strategy.md`）：三个 pip venv（`.venvs/sw-ui`、`sw-rasterio`、`sw-science`）+ 本机只读 GDAL 运行时（QGIS 3.44.15 / GDAL 3.13.3）。conda 路线（`scripts/bootstrap.ps1` + micromamba）保留但未被采用。
 
-# 2) 探测环境、引擎、CLI、数据目录与驱动
+```powershell
+# 1) 创建 ui / rasterio / science 三套 venv，并登记本机 GDAL 运行时
+powershell -ExecutionPolicy Bypass -File scripts\bootstrap_pip.ps1
+
+# 2) 探测环境、引擎、CLI、数据目录与驱动（GUI 启动许可）
 powershell -ExecutionPolicy Bypass -File scripts\doctor.ps1
 
-# 3) 启动开发版界面 / 运行检查
-powershell -ExecutionPolicy Bypass -File scripts\run-dev.ps1
+# 3) 启动桌面界面（可选 -Sample 载入合成样例、-Open <文件>、-Screenshot <png>、-Headless）
+powershell -ExecutionPolicy Bypass -File scripts\run-gui.ps1
+
+# 4) 运行检查（-All 含集成测试）
 powershell -ExecutionPolicy Bypass -File scripts\test.ps1
 ```
 
-以上脚本与环境的实际可用性以 `docs/progress/STATUS.md` 记录的执行结果为准；未跑通的入口不会在此列出。
+`bootstrap_pip.ps1 -VerifyOnly` 只做校验与出报告，不写环境；`run-gui.ps1` 在找不到 `.venvs/sw-ui` 时回退到 `.venv`（开发用解释器）。以上入口的实际可用性以 `docs/progress/STATUS.md` 记录的执行结果为准；未跑通的入口不会在此列出。
 
 ## 仓库结构
 
@@ -30,7 +34,7 @@ capabilities/            baselines/ overlays/ recipes/
 contracts/               能力、任务、消息协议 schema 与样例
 tests/                   unit integration gui fixtures benchmarks
 docs/                    plan（输入基线） adr progress user
-scripts/                 bootstrap doctor run-dev test build audit-capabilities
+scripts/                 bootstrap bootstrap_pip doctor run-gui test audit-capabilities
 packaging/               spectra.spec runtime-manifest.json installer/
 ```
 

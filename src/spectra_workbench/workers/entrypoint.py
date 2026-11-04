@@ -13,7 +13,9 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import os
 import queue
+import shutil
 import sys
 import tempfile
 import threading
@@ -158,6 +160,8 @@ def _create_dummy_adapter() -> ProviderAdapter:
             out_w: int = 512,
             out_h: int = 512,
             bands: list[int] | None = None,
+            raw: bool = False,
+            overview: str = "auto",
         ) -> dict[str, Any]:
             import base64
             buf = bytearray(out_w * out_h)
@@ -201,13 +205,57 @@ class WorkerRuntime:
         self._active_task_id: str | None = None
         self._stop_event = threading.Event()
 
-        # 配置大控制消息落盘溢出目录（artifact 机制）
+        # 大控制消息落盘溢出目录：每个 worker 进程独占一个子目录。
+        # 客户端消费时会删除条目；进程退出时再清扫本进程残留，
+        # 因此成功/失败/取消/崩溃退出都不会留下 spill 垃圾。
+        self.spill_dir: Path | None = None
         try:
             spill_root = Path(tempfile.gettempdir()) / "spectra_workbench_spill"
             spill_root.mkdir(parents=True, exist_ok=True)
-            self.spill_dir: Path | None = spill_root
+            self._spill_root = spill_root
+            mine = spill_root / f"worker-{os.getpid()}-{int(time.time())}"
+            mine.mkdir(parents=True, exist_ok=True)
+            self.spill_dir = mine
+            self._sweep_stale_spill(spill_root)
         except Exception:
             self.spill_dir = None
+
+    @staticmethod
+    def _sweep_stale_spill(spill_root: Path, max_age_seconds: float = 900.0) -> int:
+        """删除明显陈旧的 worker spill 目录（崩溃遗留），不动其它进程正在用的目录。"""
+        removed = 0
+        try:
+            now = time.time()
+            for child in spill_root.iterdir():
+                if not child.name.startswith("worker-"):
+                    continue
+                try:
+                    if now - child.stat().st_mtime > max_age_seconds:
+                        shutil.rmtree(child, ignore_errors=True)
+                        removed += 1
+                except OSError:
+                    continue
+        except OSError:
+            return removed
+        return removed
+
+    def _cleanup_own_spill(self) -> int:
+        """退出时清掉本进程产生的 spill 文件（覆盖失败/取消/未消费的情况）。"""
+        target = getattr(self, "spill_dir", None)
+        if target is None:
+            return 0
+        removed = 0
+        try:
+            for f in target.glob("*.json"):
+                try:
+                    f.unlink()
+                    removed += 1
+                except OSError:
+                    pass
+            shutil.rmtree(target, ignore_errors=True)
+        except OSError:
+            pass
+        return removed
 
     def send_envelope(self, env: Envelope) -> None:
         """线程安全地向标准输出写入一行编码后的 JSONL 消息。"""
@@ -307,6 +355,7 @@ class WorkerRuntime:
                     self._dispatch_envelope(env)
         finally:
             self._stop_event.set()
+            self._cleanup_own_spill()
             if self._active_context:
                 self._active_context.cancel()
             self._task_queue.put(None)
@@ -386,6 +435,8 @@ class WorkerRuntime:
                     self._handle_probe_dataset(env)
                 elif action == "read_window":
                     self._handle_read_window(env)
+                elif action in self._SIMPLE_CALLS:
+                    self._handle_simple_call(env, action)
                 else:
                     self.send_error(
                         code="unknown_action",
@@ -404,6 +455,72 @@ class WorkerRuntime:
                         request_id=env.request_id,
                         task_id=env.task_id,
                     )
+
+    # action -> (adapter 方法名, 允许透传的参数名, 是否需要 path)
+    _SIMPLE_CALLS: dict[str, tuple[str, tuple[str, ...], bool]] = {
+        "query_pixel": ("query_pixel", ("row", "col", "bands", "view_crs_wkt"), True),
+        "map_to_pixel": ("map_to_pixel", ("x", "y", "view_crs_wkt", "convention"), True),
+        "compute_stats": ("compute_stats", ("mode", "bands", "max_samples", "full_limit"), True),
+        "dataset_overviews": ("dataset_overviews", (), True),
+        "transform_bounds": ("transform_bounds", ("view_crs_wkt",), True),
+        "read_view_window": (
+            "read_view_window",
+            ("view_crs_wkt", "x_min", "y_min", "x_max", "y_max", "out_w", "out_h", "bands", "resampling"),
+            True,
+        ),
+        "crs_wkt": ("crs_wkt", ("epsg",), False),
+        "transform_point": ("transform_point", ("x", "y", "src_wkt", "dst_wkt", "z"), False),
+    }
+
+    def _handle_simple_call(self, env: Envelope, action: str) -> None:
+        """把只读查询类请求直接透传给 adapter，并按统一 Schema 回结果或错误。"""
+        method_name, allowed, needs_path = self._SIMPLE_CALLS[action]
+        args = env.payload.get("arguments", {}) or {}
+        path_arg = args.get("path")
+        path_str: str | None = path_arg if isinstance(path_arg, str) else None
+        if needs_path and path_str is None:
+            self.send_error(
+                code="invalid_arguments",
+                message=f"Missing 'path' argument in {action}",
+                retryable=False,
+                request_id=env.request_id,
+                task_id=env.task_id,
+            )
+            return
+        method = getattr(self.adapter, method_name, None)
+        if method is None:
+            self.send_error(
+                code="capability_not_implemented",
+                message=f"provider '{getattr(self.adapter, 'provider_id', '?')}' 未实现 {action}",
+                retryable=False,
+                request_id=env.request_id,
+                task_id=env.task_id,
+            )
+            return
+        kwargs: dict[str, Any] = {}
+        for key in allowed:
+            if key in args:
+                kwargs[key] = args[key]
+        try:
+            if needs_path and path_str is not None:
+                resolved = resolve_dataset_path(path_str, getattr(self, "project_root", Path.cwd()))
+                data = method(resolved, **kwargs)
+            else:
+                data = method(**kwargs)
+            self.send_kind(
+                Kind.result,
+                {"status": "succeeded", "artifact_ids": [], "action": action, "data": data},
+                request_id=env.request_id,
+                task_id=env.task_id,
+            )
+        except Exception as exc:
+            self.send_error(
+                code=f"{action}_failed",
+                message=str(exc),
+                retryable=False,
+                request_id=env.request_id,
+                task_id=env.task_id,
+            )
 
     def _handle_probe_dataset(self, env: Envelope) -> None:
         args = env.payload.get("arguments", {})
@@ -477,6 +594,8 @@ class WorkerRuntime:
                 out_w=out_w,
                 out_h=out_h,
                 bands=bands,
+                raw=bool(args.get("raw", False)),
+                overview=str(args.get("overview", "auto")),
             )
             self.send_kind(
                 Kind.result,

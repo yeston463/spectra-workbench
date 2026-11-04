@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import math
 import time
 from pathlib import Path
 from typing import Any
@@ -440,7 +441,7 @@ class GDALProviderAdapter(ProviderAdapter):
             count = int(ds.RasterCount)
             driver_name = ds.GetDriver().ShortName if ds.GetDriver() else "Unknown"
             driver_long = ds.GetDriver().LongName if ds.GetDriver() else ""
-            gt = ds.GetGeoTransform()
+            gt = ds.GetGeoTransform(can_return_null=True)
             geotransform = [float(x) for x in gt] if gt else None
             bounds = None
             if geotransform:
@@ -460,18 +461,53 @@ class GDALProviderAdapter(ProviderAdapter):
                 crs_wkt = srs.ExportToWkt()
 
             bands_info: list[dict[str, Any]] = []
+            overview_levels: list[int] = []
             for b_idx in range(1, count + 1):
                 b = ds.GetRasterBand(b_idx)
                 dt_name = gdal.GetDataTypeName(b.DataType)
                 nd = b.GetNoDataValue()
                 ci = gdal.GetColorInterpretationName(b.GetColorInterpretation())
+                flags = int(b.GetMaskFlags())
+                scale = b.GetScale()
+                offset = b.GetOffset()
+                unit = b.GetUnitType() or None
+                desc = b.GetDescription() or None
+                ov_list = []
+                for i in range(int(b.GetOverviewCount())):
+                    ov = b.GetOverview(i)
+                    if ov is not None and ov.XSize:
+                        ov_list.append({"level": i, "width": int(ov.XSize), "height": int(ov.YSize)})
+                if b_idx == 1:
+                    # 层级 = 相对全幅的抽取倍数（2/4/8…），不是概览的像素宽度
+                    overview_levels = [int(round(w / x["width"])) for x in ov_list if x["width"]]
                 bands_info.append({
                     "band": b_idx,
                     "dtype": dt_name,
                     "nodata": float(nd) if nd is not None else None,
                     "color_interp": ci,
                     "overviews": int(b.GetOverviewCount()),
+                    "overview_sizes": ov_list,
+                    "mask_flags": flags,
+                    "has_alpha": bool(flags & gdal.GMF_ALPHA),
+                    "all_valid": bool(flags & gdal.GMF_ALL_VALID),
+                    "has_nodata_flag": bool(flags & gdal.GMF_NODATA),
+                    "scale": float(scale) if scale is not None else None,
+                    "offset": float(offset) if offset is not None else None,
+                    "unit": unit,
+                    "description": desc,
                 })
+
+            # 空间模型：区分 affine / GCP / 无地理参考，避免把默认值当成地理参考
+            gcp_count = int(ds.GetGCPCount())
+            gcp_crs = None
+            if gcp_count:
+                gsp = ds.GetGCPSpatialRef()
+                gcp_crs = gsp.ExportToWkt() if gsp is not None else None
+            spatial_model = "none"
+            if geotransform:
+                spatial_model = "affine"
+            elif gcp_count:
+                spatial_model = "gcp"
 
             return {
                 "path": str(in_path),
@@ -485,7 +521,14 @@ class GDALProviderAdapter(ProviderAdapter):
                 "crs_epsg": crs_epsg,
                 "crs_wkt": crs_wkt,
                 "geotransform": geotransform,
+                "has_geotransform": bool(geotransform),
+                "spatial_model": spatial_model,
+                "gcp_count": gcp_count,
+                "gcp_crs_wkt": gcp_crs,
                 "bounds": bounds,
+                "overview_levels": overview_levels,
+                "units": [b["unit"] for b in bands_info],
+                "band_names": [b["description"] for b in bands_info],
                 "bands": bands_info,
             }
         finally:
@@ -501,8 +544,18 @@ class GDALProviderAdapter(ProviderAdapter):
         out_w: int = 512,
         out_h: int = 512,
         bands: list[int] | None = None,
+        raw: bool = False,
+        overview: str = "auto",
     ) -> dict[str, Any]:
-        """后台分块读取局部窗口并抽样（禁止整幅读入）。"""
+        """后台分块读取局部窗口并抽样（禁止整幅读入）。
+
+        raw=False（默认）：旧行为，返回已 min-max 拉伸的 uint8 显示字节。
+        raw=True：返回原始 dtype 数组 + 有效性位图 + 每波段 NoData/scale/offset，
+                  拉伸与伪彩由 GUI 侧完成（原值/物理值/显示值分离）。
+        """
+        if raw:
+            return self._read_window_raw(path, x_off, y_off, win_w, win_h, out_w, out_h, bands, overview)
+
         import base64
 
         import numpy as np
@@ -591,5 +644,647 @@ class GDALProviderAdapter(ProviderAdapter):
                 "b64_data": b64_str,
                 "stats": stats,
             }
+        finally:
+            del ds
+
+    # ------------------------------------------------------------------
+    # P3-05 坐标查询 / 统计（全部在 worker 内完成，GUI 不碰原生库）
+    # ------------------------------------------------------------------
+
+    def _read_window_raw(
+        self,
+        path: Path | str,
+        x_off: int,
+        y_off: int,
+        win_w: int,
+        win_h: int,
+        out_w: int,
+        out_h: int,
+        bands: list[int] | None,
+        overview: str = "auto",
+    ) -> dict[str, Any]:
+        """读取原始像元值 + 有效性位图，并按需选择概览层。
+
+        概览选择是显式的：只有当需要的降采样比 >= 概览比、且概览仍不比目标输出更粗时才使用它，
+        并在响应里报告实际使用的概览层，便于核对「用了概览而不是偷偷全量读」。
+        """
+        import base64
+
+        import numpy as np
+
+        if not GDAL_AVAILABLE or gdal is None:
+            raise RuntimeError("GDAL 运行时不可用")
+        in_path = _resolve_raster_input(Path(path))
+        if not in_path.exists():
+            raise FileNotFoundError(f"数据集文件不存在: {in_path}")
+        ds = gdal.Open(str(in_path), gdal.GA_ReadOnly)
+        if ds is None:
+            raise RuntimeError(f"无法打开数据集: {in_path}")
+        try:
+            total_w = int(ds.RasterXSize)
+            total_h = int(ds.RasterYSize)
+            total_bands = int(ds.RasterCount)
+
+            x_off = max(0, min(int(x_off), total_w - 1))
+            y_off = max(0, min(int(y_off), total_h - 1))
+            win_w = max(1, min(int(win_w), total_w - x_off))
+            win_h = max(1, min(int(win_h), total_h - y_off))
+            out_w = max(1, min(int(out_w), 2048))
+            out_h = max(1, min(int(out_h), 2048))
+
+            target_bands = bands if bands else list(range(1, min(3, total_bands) + 1))
+            target_bands = [b for b in target_bands if 1 <= b <= total_bands]
+            if not target_bands:
+                raise ValueError(f"请求波段 {bands} 全部越界（数据集有 {total_bands} 个波段）")
+
+            # 1) 概览层选择
+            needed = max(win_w / out_w, win_h / out_h)
+            ov_level = -1
+            ov_ratio = 1.0
+            base_band = ds.GetRasterBand(1)
+            if needed > 1.01 and overview == "auto":
+                best: tuple[int, float] | None = None
+                for i in range(int(base_band.GetOverviewCount())):
+                    ov = base_band.GetOverview(i)
+                    if ov is None or not ov.XSize:
+                        continue
+                    ratio = float(total_w) / float(ov.XSize)
+                    if ratio <= needed + 1e-9 and (best is None or ratio > best[1]):
+                        best = (i, ratio)
+                if best is not None and best[1] > 1.01:
+                    ov_level, ov_ratio = best
+
+            inv = 1.0 / ov_ratio
+            if ov_level >= 0:
+                _ov = base_band.GetOverview(ov_level)
+                level_w, level_h = int(_ov.XSize), int(_ov.YSize)
+            else:
+                level_w, level_h = total_w, total_h
+            lx = max(0, min(int(math.floor(x_off * inv)), level_w - 1))
+            ly = max(0, min(int(math.floor(y_off * inv)), level_h - 1))
+            lw = max(1, min(int(math.ceil(win_w * inv)), level_w - lx))
+            lh = max(1, min(int(math.ceil(win_h * inv)), level_h - ly))
+
+            arrays: list[np.ndarray] = []
+            valids: list[np.ndarray] = []
+            metas: list[dict[str, Any]] = []
+            for b_idx in target_bands:
+                band = ds.GetRasterBand(b_idx)
+                src = band.GetOverview(ov_level) if ov_level >= 0 else band
+                if src is None:
+                    src = band
+                arr = src.ReadAsArray(lx, ly, lw, lh, buf_xsize=out_w, buf_ysize=out_h)
+                if arr is None:
+                    raise RuntimeError(f"波段 {b_idx} 窗口读取失败")
+                arr = np.asarray(arr)
+
+                nd = band.GetNoDataValue()
+                flags = int(band.GetMaskFlags())
+                valid = np.ones(arr.shape, dtype=bool)
+                if nd is not None:
+                    valid &= arr != float(nd)
+                if np.issubdtype(arr.dtype, np.floating):
+                    valid &= np.isfinite(arr)
+                try:
+                    mb = band.GetMaskBand()
+                    msrc = mb.GetOverview(ov_level) if ov_level >= 0 and mb.GetOverviewCount() > ov_level else mb
+                    m = msrc.ReadAsArray(lx, ly, lw, lh, buf_xsize=out_w, buf_ysize=out_h)
+                    if m is not None:
+                        valid &= np.asarray(m) > 0
+                except Exception:
+                    pass
+
+                scale = band.GetScale()
+                offset = band.GetOffset()
+                vals = arr[valid]
+                arrays.append(arr)
+                valids.append(valid.astype(np.uint8))
+                metas.append({
+                    "band": b_idx,
+                    "dtype": gdal.GetDataTypeName(band.DataType),
+                    "numpy_dtype": str(arr.dtype),
+                    "nodata": float(nd) if nd is not None else None,
+                    "scale": float(scale) if scale is not None else None,
+                    "offset": float(offset) if offset is not None else None,
+                    "mask_flags": flags,
+                    "has_alpha": bool(flags & gdal.GMF_ALPHA),
+                    "all_valid_mask": bool(flags & gdal.GMF_ALL_VALID),
+                    "min": float(vals.min()) if vals.size else None,
+                    "max": float(vals.max()) if vals.size else None,
+                    "valid_count": int(vals.size),
+                    "total_count": int(arr.size),
+                })
+
+            stacked = np.stack(arrays, axis=0)
+            valid_stack = np.stack(valids, axis=0)
+            packed_valid = np.packbits(valid_stack.reshape(-1), axis=None)
+
+            return {
+                "raw": True,
+                "x_off": x_off,
+                "y_off": y_off,
+                "win_w": win_w,
+                "win_h": win_h,
+                "out_w": out_w,
+                "out_h": out_h,
+                "bands": target_bands,
+                "shape": [int(stacked.shape[0]), int(stacked.shape[1]), int(stacked.shape[2])],
+                "numpy_dtype": str(stacked.dtype),
+                "data_b64": base64.b64encode(np.ascontiguousarray(stacked).tobytes()).decode("ascii"),
+                "valid_bits_b64": base64.b64encode(packed_valid.tobytes()).decode("ascii"),
+                "valid_bits_count": int(valid_stack.size),
+                "band_meta": metas,
+                "overview_used": ov_level,
+                "overview_ratio": ov_ratio,
+                "needed_decimation": needed,
+                "is_rgb": len(target_bands) >= 3,
+            }
+        finally:
+            del ds
+
+    @staticmethod
+    def _affine_xy(gt: list[float] | tuple[float, ...], x: float, y: float) -> tuple[float, float]:
+        return (gt[0] + gt[1] * x + gt[2] * y, gt[3] + gt[4] * x + gt[5] * y)
+
+    @staticmethod
+    def _affine_inv(gt: list[float] | tuple[float, ...], mx: float, my: float) -> tuple[float, float]:
+        det = gt[1] * gt[5] - gt[2] * gt[4]
+        if det == 0:
+            raise ValueError("GeoTransform 退化（行列式为 0），无法反算行列号")
+        dx, dy = mx - gt[0], my - gt[3]
+        return ((gt[5] * dx - gt[2] * dy) / det, (-gt[4] * dx + gt[1] * dy) / det)
+
+    @staticmethod
+    def _transform_xy(x: float, y: float, src_wkt: str, dst_wkt: str) -> tuple[float, float]:
+        src = osr.SpatialReference()
+        src.ImportFromWkt(src_wkt)
+        dst = osr.SpatialReference()
+        dst.ImportFromWkt(dst_wkt)
+        src.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
+        dst.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
+        ct = osr.CoordinateTransformation(src, dst)
+        nx, ny, *_ = ct.TransformPoint(float(x), float(y))
+        return float(nx), float(ny)
+
+    def query_pixel(
+        self,
+        path: Path | str,
+        row: int,
+        col: int,
+        bands: list[int] | None = None,
+        view_crs_wkt: str | None = None,
+    ) -> dict[str, Any]:
+        """查询单个像元的原值、物理值与有效性；返回像元中心/角点地图坐标。"""
+        if not GDAL_AVAILABLE or gdal is None:
+            raise RuntimeError("GDAL 运行时不可用")
+        in_path = _resolve_raster_input(Path(path))
+        ds = gdal.Open(str(in_path), gdal.GA_ReadOnly)
+        if ds is None:
+            raise RuntimeError(f"无法打开数据集: {in_path}")
+        try:
+            w, h, count = int(ds.RasterXSize), int(ds.RasterYSize), int(ds.RasterCount)
+            row, col = int(row), int(col)
+            inside = 0 <= row < h and 0 <= col < w
+            gt = ds.GetGeoTransform(can_return_null=True)
+            srs = ds.GetSpatialRef()
+            crs_wkt = srs.ExportToWkt() if srs is not None else None
+            crs_epsg = None
+            if srs is not None:
+                code = srs.GetAuthorityCode(None)
+                crs_epsg = int(code) if code and str(code).isdigit() else None
+
+            center = corner = None
+            if gt:
+                corner = self._affine_xy(gt, col, row)
+                center = self._affine_xy(gt, col + 0.5, row + 0.5)
+            if center and view_crs_wkt and crs_wkt and view_crs_wkt != crs_wkt:
+                center = self._transform_xy(center[0], center[1], crs_wkt, view_crs_wkt)
+
+            target = bands or list(range(1, count + 1))
+            band_values: list[dict[str, Any]] = []
+            alpha_idx = None
+            for b_idx in range(1, count + 1):
+                band = ds.GetRasterBand(b_idx)
+                flags = int(band.GetMaskFlags())
+                if flags & gdal.GMF_ALPHA:
+                    alpha_idx = b_idx
+            for b_idx in target:
+                if b_idx < 1 or b_idx > count:
+                    continue
+                band = ds.GetRasterBand(b_idx)
+                val = None
+                if inside:
+                    try:
+                        arr = band.ReadAsArray(col, row, 1, 1)
+                        if arr is not None and arr.size:
+                            val = float(arr[0, 0])
+                    except Exception:
+                        val = None
+                nd = band.GetNoDataValue()
+                scale = band.GetScale()
+                offset = band.GetOffset()
+                physical = None
+                if val is not None:
+                    physical = val * float(scale) + float(offset) if (scale is not None or offset is not None) else val
+                mask_val = None
+                if inside:
+                    try:
+                        mask_band = band.GetMaskBand()
+                        m = mask_band.ReadAsArray(col, row, 1, 1)
+                        mask_val = int(m[0, 0]) if m is not None and m.size else None
+                    except Exception:
+                        mask_val = None
+                flags_now = int(band.GetMaskFlags())
+                status = "valid"
+                if not inside:
+                    status = "outside"
+                elif nd is not None and val is not None and float(nd) == float(val):
+                    status = "nodata"
+                elif mask_val == 0:
+                    # GDAL 把 alpha 波段也当作 mask 带返回，靠标志位区分来源
+                    status = "alpha_zero" if (flags_now & gdal.GMF_ALPHA) else "masked"
+                elif alpha_idx is not None and b_idx != alpha_idx:
+                    try:
+                        a = ds.GetRasterBand(alpha_idx).ReadAsArray(col, row, 1, 1)
+                        if a is not None and a.size and int(a[0, 0]) == 0:
+                            status = "alpha_zero"
+                    except Exception:
+                        pass
+                band_values.append({
+                    "band": b_idx,
+                    "raw": val,
+                    "physical": physical,
+                    "nodata": float(nd) if nd is not None else None,
+                    "scale": float(scale) if scale is not None else None,
+                    "offset": float(offset) if offset is not None else None,
+                    "mask": mask_val,
+                    "mask_flags": flags_now,
+                    "status": status,
+                    "is_zero": bool(val == 0.0) if val is not None else False,
+                })
+            return {
+                "path": str(in_path),
+                "row": row,
+                "col": col,
+                "inside": inside,
+                "width": w,
+                "height": h,
+                "band_count": count,
+                "pixel_convention": "corner",
+                "has_geotransform": bool(gt),
+                "map_corner": list(corner) if corner else None,
+                "map_center": list(center) if center else None,
+                "crs_wkt": crs_wkt,
+                "crs_epsg": crs_epsg,
+                "geotransform": [float(x) for x in gt] if gt else None,
+                "bands": band_values,
+            }
+        finally:
+            del ds
+
+    def map_to_pixel(
+        self,
+        path: Path | str,
+        x: float,
+        y: float,
+        view_crs_wkt: str | None = None,
+        convention: str = "center",
+    ) -> dict[str, Any]:
+        """地图坐标 -> 行列号。同时给出中心/角点两种约定与是否在图幅内。"""
+        if not GDAL_AVAILABLE or gdal is None:
+            raise RuntimeError("GDAL 运行时不可用")
+        in_path = _resolve_raster_input(Path(path))
+        ds = gdal.Open(str(in_path), gdal.GA_ReadOnly)
+        if ds is None:
+            raise RuntimeError(f"无法打开数据集: {in_path}")
+        try:
+            w, h = int(ds.RasterXSize), int(ds.RasterYSize)
+            gt = ds.GetGeoTransform(can_return_null=True)
+            if not gt:
+                raise ValueError("数据集没有存储的 GeoTransform（GDAL 默认值不构成地理参考），只能使用像元坐标")
+            srs = ds.GetSpatialRef()
+            crs_wkt = srs.ExportToWkt() if srs is not None else None
+            wx, wy = float(x), float(y)
+            if view_crs_wkt and crs_wkt and view_crs_wkt != crs_wkt:
+                wx, wy = self._transform_xy(wx, wy, view_crs_wkt, crs_wkt)
+            u, v = self._affine_inv(gt, wx, wy)
+            # corner 约定（GDAL 默认）：像元 c 覆盖 [c, c+1)，索引 = floor(U)
+            # center 约定（CF/netCDF 风格）：像元 c 覆盖 [c-0.5, c+0.5)，索引 = floor(U+0.5)
+            col_corner, row_corner = int(math.floor(u)), int(math.floor(v))
+            col_center, row_center = int(math.floor(u + 0.5)), int(math.floor(v + 0.5))
+            chosen_col = col_center if convention == "center" else col_corner
+            chosen_row = row_center if convention == "center" else row_corner
+            return {
+                "path": str(in_path),
+                "view_crs_wkt": view_crs_wkt,
+                "dataset_crs_wkt": crs_wkt,
+                "map_x": float(x),
+                "map_y": float(y),
+                "dataset_x": wx,
+                "dataset_y": wy,
+                "col_float_corner": u,
+                "row_float_corner": v,
+                "col_corner": col_corner,
+                "row_corner": row_corner,
+                "col_center": col_center,
+                "row_center": row_center,
+                "col": chosen_col,
+                "row": chosen_row,
+                "requested_convention": convention,
+                "dataset_pixel_convention": "corner",
+                "has_geotransform": True,
+                "inside": 0 <= chosen_col < w and 0 <= chosen_row < h,
+                "inside_corner": 0 <= col_corner < w and 0 <= row_corner < h,
+            }
+        finally:
+            del ds
+
+    def compute_stats(
+        self,
+        path: Path | str,
+        mode: str = "sampled",
+        bands: list[int] | None = None,
+        max_samples: int = 1_000_000,
+        full_limit: int = 50_000_000,
+    ) -> dict[str, Any]:
+        """统计。sampled 用步长抽样并明确标注；full 超过像素上限时拒绝而不是偷偷降级。"""
+        import numpy as np
+
+        if not GDAL_AVAILABLE or gdal is None:
+            raise RuntimeError("GDAL 运行时不可用")
+        in_path = _resolve_raster_input(Path(path))
+        ds = gdal.Open(str(in_path), gdal.GA_ReadOnly)
+        if ds is None:
+            raise RuntimeError(f"无法打开数据集: {in_path}")
+        try:
+            w, h, count = int(ds.RasterXSize), int(ds.RasterYSize), int(ds.RasterCount)
+            total = w * h
+            if mode == "full" and total > full_limit:
+                raise ValueError(
+                    f"全量统计被拒绝：{total} 像素超过上限 {full_limit}；请改用 sampled 或分块统计"
+                )
+            stride = 1
+            if mode == "sampled":
+                stride = max(1, int(math.ceil(math.sqrt(total / max(1, max_samples)))))
+            target = bands or list(range(1, count + 1))
+            out_bands = []
+            for b_idx in target:
+                if b_idx < 1 or b_idx > count:
+                    continue
+                band = ds.GetRasterBand(b_idx)
+                read_w = max(1, (w + stride - 1) // stride)
+                read_h = max(1, (h + stride - 1) // stride)
+                arr = band.ReadAsArray(0, 0, w, h, buf_xsize=read_w, buf_ysize=read_h)
+                if arr is None:
+                    continue
+                arr = arr.astype(np.float64)
+                nd = band.GetNoDataValue()
+                valid = np.isfinite(arr)
+                if nd is not None:
+                    valid &= arr != float(nd)
+                vals = arr[valid]
+                entry = {
+                    "band": b_idx,
+                    "valid_count": int(vals.size),
+                    "total_count": int(arr.size),
+                    "min": float(vals.min()) if vals.size else None,
+                    "max": float(vals.max()) if vals.size else None,
+                    "mean": float(vals.mean()) if vals.size else None,
+                    "std": float(vals.std()) if vals.size else None,
+                    "p2": float(np.percentile(vals, 2)) if vals.size else None,
+                    "p98": float(np.percentile(vals, 98)) if vals.size else None,
+                }
+                out_bands.append(entry)
+            return {
+                "path": str(in_path),
+                "mode": mode,
+                "stride": stride,
+                "source": "full_raster" if (mode == "full" and stride == 1) else "sampled_grid",
+                "width": w,
+                "height": h,
+                "bands": out_bands,
+            }
+        finally:
+            del ds
+
+    def transform_point(
+        self, x: float, y: float, src_wkt: str, dst_wkt: str, z: float = 0.0
+    ) -> dict[str, Any]:
+        """点在两个 CRS 之间换算。GUI 需要显示视图坐标时向 worker 索取。"""
+        if not GDAL_AVAILABLE or osr is None:
+            raise RuntimeError("GDAL 运行时不可用")
+        src = osr.SpatialReference()
+        if src.ImportFromWkt(src_wkt) != 0 or not src.GetAttrValue("AUTHORITY", 1):
+            raise ValueError("源 CRS WKT 无法解析")
+        dst = osr.SpatialReference()
+        if dst.ImportFromWkt(dst_wkt) != 0 or not dst.GetAttrValue("AUTHORITY", 1):
+            raise ValueError("目标 CRS WKT 无法解析")
+        src.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
+        dst.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
+        ct = osr.CoordinateTransformation(src, dst)
+        tx, ty, tz = ct.TransformPoint(float(x), float(y), float(z))
+        return {
+            "src": [float(x), float(y)],
+            "dst": [float(tx), float(ty)],
+            "src_wkt": src_wkt,
+            "dst_wkt": dst_wkt,
+        }
+
+    def crs_wkt(self, epsg: int) -> dict[str, Any]:
+        """EPSG 代码 -> WKT。GUI 需要视图 CRS 时向 worker 索取，不在界面导入 osr。"""
+        if not GDAL_AVAILABLE or osr is None:
+            raise RuntimeError("GDAL 运行时不可用")
+        srs = osr.SpatialReference()
+        code = srs.ImportFromEPSG(int(epsg))
+        if code != 0:
+            raise ValueError(f"无法从 EPSG:{epsg} 构建空间参考")
+        srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
+        return {"epsg": int(epsg), "wkt": srs.ExportToWkt(), "name": srs.GetName() or ""}
+
+    def transform_bounds(self, path: Path | str, view_crs_wkt: str) -> dict[str, Any]:
+        """把数据集地理范围换算到视图 CRS，用于确定显示网格。"""
+        if not GDAL_AVAILABLE or gdal is None:
+            raise RuntimeError("GDAL 运行时不可用")
+        in_path = _resolve_raster_input(Path(path))
+        ds = gdal.Open(str(in_path), gdal.GA_ReadOnly)
+        if ds is None:
+            raise RuntimeError(f"无法打开数据集: {in_path}")
+        try:
+            gt = ds.GetGeoTransform(can_return_null=True)
+            if not gt:
+                raise ValueError("数据集没有地理参考，无法换算到视图 CRS")
+            srs = ds.GetSpatialRef()
+            if srs is None:
+                raise ValueError("数据集缺少 CRS，无法换算到视图 CRS")
+            w, h = int(ds.RasterXSize), int(ds.RasterYSize)
+            dst = osr.SpatialReference()
+            dst.ImportFromWkt(view_crs_wkt)
+            src = osr.SpatialReference(srs.ExportToWkt())
+            src.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
+            dst.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
+            ct = osr.CoordinateTransformation(src, dst)
+            corners = []
+            for (x, y) in [
+                (0, 0), (w, 0), (w, h), (0, h), (w / 2, 0), (w / 2, h), (0, h / 2), (w, h / 2)
+            ]:
+                mx, my = self._affine_xy(gt, x, y)
+                tx, ty, _ = ct.TransformPoint(mx, my)
+                corners.append((float(tx), float(ty)))
+            xs = [c[0] for c in corners]
+            ys = [c[1] for c in corners]
+            return {
+                "view_crs_wkt": view_crs_wkt,
+                "bounds": [min(xs), min(ys), max(xs), max(ys)],
+                "corners": corners,
+                "dataset_crs_wkt": srs.ExportToWkt(),
+            }
+        finally:
+            del ds
+
+    def read_view_window(
+        self,
+        path: Path | str,
+        view_crs_wkt: str,
+        x_min: float,
+        y_min: float,
+        x_max: float,
+        y_max: float,
+        out_w: int,
+        out_h: int,
+        bands: list[int] | None = None,
+        resampling: str = "near",
+    ) -> dict[str, Any]:
+        """把数据集重投影到统一的视图网格后返回原值。
+
+        跨 CRS 图层叠加必须走这里：只按像素位置摆放不同 CRS 的图层是错的。
+        """
+        import base64
+
+        import numpy as np
+
+        if not GDAL_AVAILABLE or gdal is None:
+            raise RuntimeError("GDAL 运行时不可用")
+        if x_max <= x_min or y_max <= y_min:
+            raise ValueError(f"视图范围非法：({x_min},{y_min})-({x_max},{y_max})")
+        out_w = max(1, min(int(out_w), 2048))
+        out_h = max(1, min(int(out_h), 2048))
+        in_path = _resolve_raster_input(Path(path))
+        src = gdal.Open(str(in_path), gdal.GA_ReadOnly)
+        if src is None:
+            raise RuntimeError(f"无法打开数据集: {in_path}")
+        try:
+            total_bands = int(src.RasterCount)
+            target_bands = [b for b in (bands or list(range(1, min(3, total_bands) + 1))) if 1 <= b <= total_bands]
+            if not target_bands:
+                raise ValueError(f"请求波段 {bands} 全部越界（数据集有 {total_bands} 个波段）")
+            # 该 GDAL 构建的 WarpOptions 未暴露选波段参数，因此重投影全部波段后
+            # 按源波段序号取带（顺序一致，不重排）。
+            mem_name = (
+                f"/vsimem/spectra_view/{in_path.stem}_{int(time.time_ns())}_{out_w}x{out_h}"
+            )
+            warped = gdal.Warp(
+                mem_name,
+                src,
+                dstSRS=view_crs_wkt,
+                outputBounds=[float(x_min), float(y_min), float(x_max), float(y_max)],
+                width=out_w,
+                height=out_h,
+                resampleAlg=resampling,
+                format="MEM",
+            )
+            if warped is None:
+                raise RuntimeError("重投影到视图网格失败")
+            try:
+                arrays = []
+                metas = []
+                for b_idx in target_bands:
+                    band = warped.GetRasterBand(int(b_idx))
+                    arr = band.ReadAsArray(0, 0, out_w, out_h)
+                    if arr is None:
+                        raise RuntimeError(f"重投影后波段 {b_idx} 读取失败")
+                    arr = np.asarray(arr)
+                    nd = band.GetNoDataValue()
+                    src_band = src.GetRasterBand(b_idx)
+                    valid = np.isfinite(arr.astype(np.float64))
+                    if nd is not None:
+                        valid &= arr != float(nd)
+                    arrays.append(arr)
+                    metas.append({
+                        "band": int(b_idx),
+                        "dtype": gdal.GetDataTypeName(band.DataType),
+                        "numpy_dtype": str(arr.dtype),
+                        "nodata": float(nd) if nd is not None else None,
+                        "scale": (src_band.GetScale() if src_band.GetScale() is not None else None),
+                        "offset": (src_band.GetOffset() if src_band.GetOffset() is not None else None),
+                        "mask_flags": int(src_band.GetMaskFlags()),
+                        "min": float(arr[valid].min()) if valid.any() else None,
+                        "max": float(arr[valid].max()) if valid.any() else None,
+                        "valid_count": int(valid.sum()),
+                        "total_count": int(arr.size),
+                    })
+                stacked = np.stack(arrays, axis=0)
+                valid_stack = np.stack([np.isfinite(a.astype(np.float64)) for a in arrays], axis=0)
+                for i, meta in enumerate(metas):
+                    if meta["nodata"] is not None:
+                        valid_stack[i] &= stacked[i] != float(meta["nodata"])
+                vgt = warped.GetGeoTransform(can_return_null=True)
+                packed = np.packbits(valid_stack.reshape(-1), axis=None)
+                return {
+                    "raw": True,
+                    "reprojected": True,
+                    "view_crs_wkt": view_crs_wkt,
+                    "x_off": float(x_min),
+                    "y_off": float(y_min),
+                    "win_w": float(x_max) - float(x_min),
+                    "win_h": float(y_max) - float(y_min),
+                    "out_w": int(out_w),
+                    "out_h": int(out_h),
+                    "grid": {
+                        "x_min": float(x_min),
+                        "y_min": float(y_min),
+                        "x_max": float(x_max),
+                        "y_max": float(y_max),
+                        "affine": [float(v) for v in vgt] if vgt else None,
+                        "out_w": out_w,
+                        "out_h": out_h,
+                    },
+                    "bands": target_bands,
+                    "shape": [int(stacked.shape[0]), out_h, out_w],
+                    "numpy_dtype": str(stacked.dtype),
+                    "data_b64": base64.b64encode(np.ascontiguousarray(stacked).tobytes()).decode("ascii"),
+                    "valid_bits_b64": base64.b64encode(packed.tobytes()).decode("ascii"),
+                    "valid_bits_count": int(valid_stack.size),
+                    "band_meta": metas,
+                    "overview_used": -1,
+                    "resampling": resampling,
+                    "is_rgb": len(target_bands) >= 3,
+                }
+            finally:
+                del warped
+        finally:
+            del src
+
+    def dataset_overviews(self, path: Path | str) -> dict[str, Any]:
+        if not GDAL_AVAILABLE or gdal is None:
+            raise RuntimeError("GDAL 运行时不可用")
+        in_path = _resolve_raster_input(Path(path))
+        ds = gdal.Open(str(in_path), gdal.GA_ReadOnly)
+        if ds is None:
+            raise RuntimeError(f"无法打开数据集: {in_path}")
+        try:
+            w = int(ds.RasterXSize)
+            levels: list[dict[str, Any]] = []
+            band = ds.GetRasterBand(1)
+            for i in range(int(band.GetOverviewCount())):
+                ov = band.GetOverview(i)
+                if ov is None:
+                    continue
+                levels.append({
+                    "level": i,
+                    "width": int(ov.XSize),
+                    "height": int(ov.YSize),
+                    "ratio": float(w) / float(ov.XSize) if ov.XSize else 0.0,
+                })
+            return {"path": str(in_path), "width": w, "height": int(ds.RasterYSize), "overviews": levels}
         finally:
             del ds

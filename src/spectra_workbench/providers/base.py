@@ -323,6 +323,11 @@ class ProviderAdapter(ABC):
         out_w: int = 512,
         out_h: int = 512,
         bands: list[int] | None = None,
+        raw: bool = False,
+        overview: str = "auto",
     ) -> dict[str, Any]:
-        """后台分块读取局部窗口并抽样（禁止整幅读入）。"""
+        """后台分块读取局部窗口并抽样（禁止整幅读入）。
+
+        raw=True 时返回原值窗口（base64 + 有效性位图），overview 控制概览选择。
+        """
         raise NotImplementedError(f"{self.provider_id} 适配器未实现 read_window")

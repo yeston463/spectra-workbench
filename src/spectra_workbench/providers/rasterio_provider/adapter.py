@@ -315,8 +315,14 @@ class RasterioProviderAdapter(ProviderAdapter):
         out_w: int = 512,
         out_h: int = 512,
         bands: list[int] | None = None,
+        raw: bool = False,
+        overview: str = "auto",
     ) -> dict[str, Any]:
-        """通过 Rasterio 分块窗口读取。"""
+        """通过 Rasterio 分块窗口读取（仅显示路径；原值窗口由 GDAL provider 提供）。"""
+        if raw:
+            raise RuntimeError(
+                "rasterio provider 目前只返回显示拉伸结果，raw=True 原值窗口请用 gdal provider"
+            )
         import base64
         from pathlib import Path
 

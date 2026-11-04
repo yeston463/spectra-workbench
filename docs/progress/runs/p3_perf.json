@@ -1,0 +1,992 @@
+{
+  "schema": "spectra.p3_perf.v1",
+  "measured_at": "2026-11-04T17:33:47+0800",
+  "command": "python.exe scripts/measure_p3_window.py --size 6144 --bands 3 --requests 36",
+  "host": {
+    "available_mem_mib_before": 2935.3,
+    "pid_gui": 50532
+  },
+  "raster": {
+    "path": "C:\\Users\\赵航\\Desktop\\studio\\spectra-workbench\\work\\p3_perf\\p3_big_6144.tif",
+    "size_bytes": 303177878,
+    "width": 6144,
+    "height": 6144,
+    "bands": 3,
+    "driver": "GTiff",
+    "crs_epsg": 32650,
+    "overview_levels": [
+      2,
+      4,
+      8,
+      16,
+      32,
+      64
+    ],
+    "built": {
+      "reused": true,
+      "sha256": "c4031b5683bf16d634227cdd84b0a8d7a0769d386c17fb3d6f0e651d128a53ed"
+    }
+  },
+  "probe": {
+    "ms": 35.3,
+    "count": 3,
+    "overview_levels": [
+      2,
+      4,
+      8,
+      16,
+      32,
+      64
+    ]
+  },
+  "cache_budget": {
+    "budget_bytes": 335618457,
+    "budget_source": "default_budget_bytes() (10% 可用内存, 上限 512MiB, 可用 SPECTRA_TILE_CACHE_MIB 覆盖)",
+    "bytes_after": 229537044,
+    "hits": 5,
+    "misses": 31,
+    "evictions": 0,
+    "entries": 31
+  },
+  "window_requests": {
+    "count": 36,
+    "wire_bytes_total": 180486144,
+    "wire_bytes_max": 6684672,
+    "cache_json_bytes_total": 240682899,
+    "decoded_window_bytes_max": 6291456,
+    "ms_min": 47.2,
+    "ms_median": 130.6,
+    "ms_p95": 150.5,
+    "ms_max": 155.6,
+    "overview_used_counts": {
+      "-1": 18,
+      "0": 6,
+      "2": 12
+    },
+    "per_request": [
+      {
+        "x_off": 0,
+        "y_off": 0,
+        "win_w": 1024,
+        "win_h": 1024,
+        "out_w": 1024,
+        "out_h": 1024,
+        "bands": [
+          1,
+          2,
+          3
+        ],
+        "ms": 129.4,
+        "wire_bytes": 6684672,
+        "cache_json_bytes": 8913849,
+        "decoded_window_bytes": 6291456,
+        "overview_used": -1,
+        "from_cache": false,
+        "shape": [
+          3,
+          1024,
+          1024
+        ],
+        "numpy_dtype": "uint16"
+      },
+      {
+        "x_off": 768,
+        "y_off": 2304,
+        "win_w": 1024,
+        "win_h": 1024,
+        "out_w": 1024,
+        "out_h": 1024,
+        "bands": [
+          1,
+          2,
+          3
+        ],
+        "ms": 128.6,
+        "wire_bytes": 6684672,
+        "cache_json_bytes": 8913867,
+        "decoded_window_bytes": 6291456,
+        "overview_used": -1,
+        "from_cache": false,
+        "shape": [
+          3,
+          1024,
+          1024
+        ],
+        "numpy_dtype": "uint16"
+      },
+      {
+        "x_off": 1536,
+        "y_off": 4608,
+        "win_w": 1024,
+        "win_h": 1024,
+        "out_w": 1024,
+        "out_h": 1024,
+        "bands": [
+          1,
+          2,
+          3
+        ],
+        "ms": 123.9,
+        "wire_bytes": 6684672,
+        "cache_json_bytes": 8913869,
+        "decoded_window_bytes": 6291456,
+        "overview_used": -1,
+        "from_cache": false,
+        "shape": [
+          3,
+          1024,
+          1024
+        ],
+        "numpy_dtype": "uint16"
+      },
+      {
+        "x_off": 2304,
+        "y_off": 2815,
+        "win_w": 2048,
+        "win_h": 2048,
+        "out_w": 1024,
+        "out_h": 1024,
+        "bands": [
+          1,
+          2,
+          3
+        ],
+        "ms": 139.3,
+        "wire_bytes": 6684672,
+        "cache_json_bytes": 8913868,
+        "decoded_window_bytes": 6291456,
+        "overview_used": 0,
+        "from_cache": false,
+        "shape": [
+          3,
+          1024,
+          1024
+        ],
+        "numpy_dtype": "uint16"
+      },
+      {
+        "x_off": 1023,
+        "y_off": 1020,
+        "win_w": 4096,
+        "win_h": 4096,
+        "out_w": 512,
+        "out_h": 512,
+        "bands": [
+          1,
+          2,
+          3
+        ],
+        "ms": 47.2,
+        "wire_bytes": 1671168,
+        "cache_json_bytes": 2229180,
+        "decoded_window_bytes": 1572864,
+        "overview_used": 2,
+        "from_cache": false,
+        "shape": [
+          3,
+          512,
+          512
+        ],
+        "numpy_dtype": "uint16"
+      },
+      {
+        "x_off": 0,
+        "y_off": 0,
+        "win_w": 6144,
+        "win_h": 6144,
+        "out_w": 512,
+        "out_h": 512,
+        "bands": [
+          1,
+          2,
+          3
+        ],
+        "ms": 53.8,
+        "wire_bytes": 1671168,
+        "cache_json_bytes": 2229171,
+        "decoded_window_bytes": 1572864,
+        "overview_used": 2,
+        "from_cache": false,
+        "shape": [
+          3,
+          512,
+          512
+        ],
+        "numpy_dtype": "uint16"
+      },
+      {
+        "x_off": 4608,
+        "y_off": 3582,
+        "win_w": 1024,
+        "win_h": 1024,
+        "out_w": 1024,
+        "out_h": 1024,
+        "bands": [
+          1,
+          2,
+          3
+        ],
+        "ms": 130.2,
+        "wire_bytes": 6684672,
+        "cache_json_bytes": 8913869,
+        "decoded_window_bytes": 6291456,
+        "overview_used": -1,
+        "from_cache": false,
+        "shape": [
+          3,
+          1024,
+          1024
+        ],
+        "numpy_dtype": "uint16"
+      },
+      {
+        "x_off": 255,
+        "y_off": 765,
+        "win_w": 1024,
+        "win_h": 1024,
+        "out_w": 1024,
+        "out_h": 1024,
+        "bands": [
+          1,
+          2,
+          3
+        ],
+        "ms": 125.6,
+        "wire_bytes": 6684672,
+        "cache_json_bytes": 8913863,
+        "decoded_window_bytes": 6291456,
+        "overview_used": -1,
+        "from_cache": false,
+        "shape": [
+          3,
+          1024,
+          1024
+        ],
+        "numpy_dtype": "uint16"
+      },
+      {
+        "x_off": 1023,
+        "y_off": 3069,
+        "win_w": 1024,
+        "win_h": 1024,
+        "out_w": 1024,
+        "out_h": 1024,
+        "bands": [
+          1,
+          2,
+          3
+        ],
+        "ms": 130.8,
+        "wire_bytes": 6684672,
+        "cache_json_bytes": 8913869,
+        "decoded_window_bytes": 6291456,
+        "overview_used": -1,
+        "from_cache": false,
+        "shape": [
+          3,
+          1024,
+          1024
+        ],
+        "numpy_dtype": "uint16"
+      },
+      {
+        "x_off": 2815,
+        "y_off": 251,
+        "win_w": 2048,
+        "win_h": 2048,
+        "out_w": 1024,
+        "out_h": 1024,
+        "bands": [
+          1,
+          2,
+          3
+        ],
+        "ms": 130.4,
+        "wire_bytes": 6684672,
+        "cache_json_bytes": 8913865,
+        "decoded_window_bytes": 6291456,
+        "overview_used": 0,
+        "from_cache": false,
+        "shape": [
+          3,
+          1024,
+          1024
+        ],
+        "numpy_dtype": "uint16"
+      },
+      {
+        "x_off": 1533,
+        "y_off": 501,
+        "win_w": 4096,
+        "win_h": 4096,
+        "out_w": 512,
+        "out_h": 512,
+        "bands": [
+          1,
+          2,
+          3
+        ],
+        "ms": 55.0,
+        "wire_bytes": 1671168,
+        "cache_json_bytes": 2229181,
+        "decoded_window_bytes": 1572864,
+        "overview_used": 2,
+        "from_cache": false,
+        "shape": [
+          3,
+          512,
+          512
+        ],
+        "numpy_dtype": "uint16"
+      },
+      {
+        "x_off": 0,
+        "y_off": 0,
+        "win_w": 6144,
+        "win_h": 6144,
+        "out_w": 512,
+        "out_h": 512,
+        "bands": [
+          1,
+          2,
+          3
+        ],
+        "ms": 62.3,
+        "wire_bytes": 1671168,
+        "cache_json_bytes": 2229171,
+        "decoded_window_bytes": 1572864,
+        "overview_used": 2,
+        "from_cache": true,
+        "shape": [
+          3,
+          512,
+          512
+        ],
+        "numpy_dtype": "uint16"
+      },
+      {
+        "x_off": 4095,
+        "y_off": 2043,
+        "win_w": 1024,
+        "win_h": 1024,
+        "out_w": 1024,
+        "out_h": 1024,
+        "bands": [
+          1,
+          2,
+          3
+        ],
+        "ms": 135.0,
+        "wire_bytes": 6684672,
+        "cache_json_bytes": 8913869,
+        "decoded_window_bytes": 6291456,
+        "overview_used": -1,
+        "from_cache": false,
+        "shape": [
+          3,
+          1024,
+          1024
+        ],
+        "numpy_dtype": "uint16"
+      },
+      {
+        "x_off": 4863,
+        "y_off": 4347,
+        "win_w": 1024,
+        "win_h": 1024,
+        "out_w": 1024,
+        "out_h": 1024,
+        "bands": [
+          1,
+          2,
+          3
+        ],
+        "ms": 141.7,
+        "wire_bytes": 6684672,
+        "cache_json_bytes": 8913865,
+        "decoded_window_bytes": 6291456,
+        "overview_used": -1,
+        "from_cache": false,
+        "shape": [
+          3,
+          1024,
+          1024
+        ],
+        "numpy_dtype": "uint16"
+      },
+      {
+        "x_off": 510,
+        "y_off": 1530,
+        "win_w": 1024,
+        "win_h": 1024,
+        "out_w": 1024,
+        "out_h": 1024,
+        "bands": [
+          1,
+          2,
+          3
+        ],
+        "ms": 143.9,
+        "wire_bytes": 6684672,
+        "cache_json_bytes": 8913866,
+        "decoded_window_bytes": 6291456,
+        "overview_used": -1,
+        "from_cache": false,
+        "shape": [
+          3,
+          1024,
+          1024
+        ],
+        "numpy_dtype": "uint16"
+      },
+      {
+        "x_off": 3326,
+        "y_off": 1784,
+        "win_w": 2048,
+        "win_h": 2048,
+        "out_w": 1024,
+        "out_h": 1024,
+        "bands": [
+          1,
+          2,
+          3
+        ],
+        "ms": 146.9,
+        "wire_bytes": 6684672,
+        "cache_json_bytes": 8913867,
+        "decoded_window_bytes": 6291456,
+        "overview_used": 0,
+        "from_cache": false,
+        "shape": [
+          3,
+          1024,
+          1024
+        ],
+        "numpy_dtype": "uint16"
+      },
+      {
+        "x_off": 2043,
+        "y_off": 2031,
+        "win_w": 4096,
+        "win_h": 4096,
+        "out_w": 512,
+        "out_h": 512,
+        "bands": [
+          1,
+          2,
+          3
+        ],
+        "ms": 50.6,
+        "wire_bytes": 1671168,
+        "cache_json_bytes": 2229181,
+        "decoded_window_bytes": 1572864,
+        "overview_used": 2,
+        "from_cache": false,
+        "shape": [
+          3,
+          512,
+          512
+        ],
+        "numpy_dtype": "uint16"
+      },
+      {
+        "x_off": 0,
+        "y_off": 0,
+        "win_w": 6144,
+        "win_h": 6144,
+        "out_w": 512,
+        "out_h": 512,
+        "bands": [
+          1,
+          2,
+          3
+        ],
+        "ms": 59.9,
+        "wire_bytes": 1671168,
+        "cache_json_bytes": 2229171,
+        "decoded_window_bytes": 1572864,
+        "overview_used": 2,
+        "from_cache": true,
+        "shape": [
+          3,
+          512,
+          512
+        ],
+        "numpy_dtype": "uint16"
+      },
+      {
+        "x_off": 3582,
+        "y_off": 504,
+        "win_w": 1024,
+        "win_h": 1024,
+        "out_w": 1024,
+        "out_h": 1024,
+        "bands": [
+          1,
+          2,
+          3
+        ],
+        "ms": 150.5,
+        "wire_bytes": 6684672,
+        "cache_json_bytes": 8913866,
+        "decoded_window_bytes": 6291456,
+        "overview_used": -1,
+        "from_cache": false,
+        "shape": [
+          3,
+          1024,
+          1024
+        ],
+        "numpy_dtype": "uint16"
+      },
+      {
+        "x_off": 4350,
+        "y_off": 2808,
+        "win_w": 1024,
+        "win_h": 1024,
+        "out_w": 1024,
+        "out_h": 1024,
+        "bands": [
+          1,
+          2,
+          3
+        ],
+        "ms": 149.0,
+        "wire_bytes": 6684672,
+        "cache_json_bytes": 8913869,
+        "decoded_window_bytes": 6291456,
+        "overview_used": -1,
+        "from_cache": false,
+        "shape": [
+          3,
+          1024,
+          1024
+        ],
+        "numpy_dtype": "uint16"
+      },
+      {
+        "x_off": 5118,
+        "y_off": 5112,
+        "win_w": 1024,
+        "win_h": 1024,
+        "out_w": 1024,
+        "out_h": 1024,
+        "bands": [
+          1,
+          2,
+          3
+        ],
+        "ms": 149.2,
+        "wire_bytes": 6684672,
+        "cache_json_bytes": 8913868,
+        "decoded_window_bytes": 6291456,
+        "overview_used": -1,
+        "from_cache": false,
+        "shape": [
+          3,
+          1024,
+          1024
+        ],
+        "numpy_dtype": "uint16"
+      },
+      {
+        "x_off": 3837,
+        "y_off": 3317,
+        "win_w": 2048,
+        "win_h": 2048,
+        "out_w": 1024,
+        "out_h": 1024,
+        "bands": [
+          1,
+          2,
+          3
+        ],
+        "ms": 155.6,
+        "wire_bytes": 6684672,
+        "cache_json_bytes": 8913864,
+        "decoded_window_bytes": 6291456,
+        "overview_used": 0,
+        "from_cache": false,
+        "shape": [
+          3,
+          1024,
+          1024
+        ],
+        "numpy_dtype": "uint16"
+      },
+      {
+        "x_off": 504,
+        "y_off": 1512,
+        "win_w": 4096,
+        "win_h": 4096,
+        "out_w": 512,
+        "out_h": 512,
+        "bands": [
+          1,
+          2,
+          3
+        ],
+        "ms": 53.8,
+        "wire_bytes": 1671168,
+        "cache_json_bytes": 2229180,
+        "decoded_window_bytes": 1572864,
+        "overview_used": 2,
+        "from_cache": false,
+        "shape": [
+          3,
+          512,
+          512
+        ],
+        "numpy_dtype": "uint16"
+      },
+      {
+        "x_off": 0,
+        "y_off": 0,
+        "win_w": 6144,
+        "win_h": 6144,
+        "out_w": 512,
+        "out_h": 512,
+        "bands": [
+          1,
+          2,
+          3
+        ],
+        "ms": 58.7,
+        "wire_bytes": 1671168,
+        "cache_json_bytes": 2229171,
+        "decoded_window_bytes": 1572864,
+        "overview_used": 2,
+        "from_cache": true,
+        "shape": [
+          3,
+          512,
+          512
+        ],
+        "numpy_dtype": "uint16"
+      },
+      {
+        "x_off": 3069,
+        "y_off": 4086,
+        "win_w": 1024,
+        "win_h": 1024,
+        "out_w": 1024,
+        "out_h": 1024,
+        "bands": [
+          1,
+          2,
+          3
+        ],
+        "ms": 147.1,
+        "wire_bytes": 6684672,
+        "cache_json_bytes": 8913869,
+        "decoded_window_bytes": 6291456,
+        "overview_used": -1,
+        "from_cache": false,
+        "shape": [
+          3,
+          1024,
+          1024
+        ],
+        "numpy_dtype": "uint16"
+      },
+      {
+        "x_off": 3837,
+        "y_off": 1269,
+        "win_w": 1024,
+        "win_h": 1024,
+        "out_w": 1024,
+        "out_h": 1024,
+        "bands": [
+          1,
+          2,
+          3
+        ],
+        "ms": 142.0,
+        "wire_bytes": 6684672,
+        "cache_json_bytes": 8913868,
+        "decoded_window_bytes": 6291456,
+        "overview_used": -1,
+        "from_cache": false,
+        "shape": [
+          3,
+          1024,
+          1024
+        ],
+        "numpy_dtype": "uint16"
+      },
+      {
+        "x_off": 4605,
+        "y_off": 3573,
+        "win_w": 1024,
+        "win_h": 1024,
+        "out_w": 1024,
+        "out_h": 1024,
+        "bands": [
+          1,
+          2,
+          3
+        ],
+        "ms": 152.9,
+        "wire_bytes": 6684672,
+        "cache_json_bytes": 8913869,
+        "decoded_window_bytes": 6291456,
+        "overview_used": -1,
+        "from_cache": false,
+        "shape": [
+          3,
+          1024,
+          1024
+        ],
+        "numpy_dtype": "uint16"
+      },
+      {
+        "x_off": 251,
+        "y_off": 753,
+        "win_w": 2048,
+        "win_h": 2048,
+        "out_w": 1024,
+        "out_h": 1024,
+        "bands": [
+          1,
+          2,
+          3
+        ],
+        "ms": 144.9,
+        "wire_bytes": 6684672,
+        "cache_json_bytes": 8913863,
+        "decoded_window_bytes": 6291456,
+        "overview_used": 0,
+        "from_cache": false,
+        "shape": [
+          3,
+          1024,
+          1024
+        ],
+        "numpy_dtype": "uint16"
+      },
+      {
+        "x_off": 1014,
+        "y_off": 993,
+        "win_w": 4096,
+        "win_h": 4096,
+        "out_w": 512,
+        "out_h": 512,
+        "bands": [
+          1,
+          2,
+          3
+        ],
+        "ms": 49.9,
+        "wire_bytes": 1671168,
+        "cache_json_bytes": 2229179,
+        "decoded_window_bytes": 1572864,
+        "overview_used": 2,
+        "from_cache": false,
+        "shape": [
+          3,
+          512,
+          512
+        ],
+        "numpy_dtype": "uint16"
+      },
+      {
+        "x_off": 0,
+        "y_off": 0,
+        "win_w": 6144,
+        "win_h": 6144,
+        "out_w": 512,
+        "out_h": 512,
+        "bands": [
+          1,
+          2,
+          3
+        ],
+        "ms": 58.4,
+        "wire_bytes": 1671168,
+        "cache_json_bytes": 2229171,
+        "decoded_window_bytes": 1572864,
+        "overview_used": 2,
+        "from_cache": true,
+        "shape": [
+          3,
+          512,
+          512
+        ],
+        "numpy_dtype": "uint16"
+      },
+      {
+        "x_off": 2556,
+        "y_off": 2547,
+        "win_w": 1024,
+        "win_h": 1024,
+        "out_w": 1024,
+        "out_h": 1024,
+        "bands": [
+          1,
+          2,
+          3
+        ],
+        "ms": 133.3,
+        "wire_bytes": 6684672,
+        "cache_json_bytes": 8913869,
+        "decoded_window_bytes": 6291456,
+        "overview_used": -1,
+        "from_cache": false,
+        "shape": [
+          3,
+          1024,
+          1024
+        ],
+        "numpy_dtype": "uint16"
+      },
+      {
+        "x_off": 3324,
+        "y_off": 4851,
+        "win_w": 1024,
+        "win_h": 1024,
+        "out_w": 1024,
+        "out_h": 1024,
+        "bands": [
+          1,
+          2,
+          3
+        ],
+        "ms": 144.8,
+        "wire_bytes": 6684672,
+        "cache_json_bytes": 8913865,
+        "decoded_window_bytes": 6291456,
+        "overview_used": -1,
+        "from_cache": false,
+        "shape": [
+          3,
+          1024,
+          1024
+        ],
+        "numpy_dtype": "uint16"
+      },
+      {
+        "x_off": 4092,
+        "y_off": 2034,
+        "win_w": 1024,
+        "win_h": 1024,
+        "out_w": 1024,
+        "out_h": 1024,
+        "bands": [
+          1,
+          2,
+          3
+        ],
+        "ms": 139.5,
+        "wire_bytes": 6684672,
+        "cache_json_bytes": 8913869,
+        "decoded_window_bytes": 6291456,
+        "overview_used": -1,
+        "from_cache": false,
+        "shape": [
+          3,
+          1024,
+          1024
+        ],
+        "numpy_dtype": "uint16"
+      },
+      {
+        "x_off": 762,
+        "y_off": 2286,
+        "win_w": 2048,
+        "win_h": 2048,
+        "out_w": 1024,
+        "out_h": 1024,
+        "bands": [
+          1,
+          2,
+          3
+        ],
+        "ms": 140.9,
+        "wire_bytes": 6684672,
+        "cache_json_bytes": 8913866,
+        "decoded_window_bytes": 6291456,
+        "overview_used": 0,
+        "from_cache": false,
+        "shape": [
+          3,
+          1024,
+          1024
+        ],
+        "numpy_dtype": "uint16"
+      },
+      {
+        "x_off": 1524,
+        "y_off": 474,
+        "win_w": 4096,
+        "win_h": 4096,
+        "out_w": 512,
+        "out_h": 512,
+        "bands": [
+          1,
+          2,
+          3
+        ],
+        "ms": 52.9,
+        "wire_bytes": 1671168,
+        "cache_json_bytes": 2229181,
+        "decoded_window_bytes": 1572864,
+        "overview_used": 2,
+        "from_cache": false,
+        "shape": [
+          3,
+          512,
+          512
+        ],
+        "numpy_dtype": "uint16"
+      },
+      {
+        "x_off": 0,
+        "y_off": 0,
+        "win_w": 6144,
+        "win_h": 6144,
+        "out_w": 512,
+        "out_h": 512,
+        "bands": [
+          1,
+          2,
+          3
+        ],
+        "ms": 61.9,
+        "wire_bytes": 1671168,
+        "cache_json_bytes": 2229171,
+        "decoded_window_bytes": 1572864,
+        "overview_used": 2,
+        "from_cache": true,
+        "shape": [
+          3,
+          512,
+          512
+        ],
+        "numpy_dtype": "uint16"
+      }
+    ]
+  },
+  "stats": {
+    "sampled_ms": 24.3,
+    "sampled_source": "sampled_grid",
+    "sampled_stride": 14,
+    "full_ms": 3275.3,
+    "full_source": "full_raster",
+    "full_mode": "full",
+    "full_pixels_per_band": 37748736,
+    "full_refused_as": "compute_stats 失败: 全量统计被拒绝：37748736 像素超过上限 3774873；请改用 sampled 或分块统计"
+  },
+  "memory_mib": {
+    "note": "gui_* 是本测量脚本进程（界面读取路径的无界面替身：不含 Qt 绘制与显示数组）；worker_* 是 GDAL 子进程",
+    "gui_before": 36.0,
+    "gui_after": 485.7,
+    "worker_before": 64.8,
+    "worker_after_full_stats": 76.4,
+    "worker_after": 76.4
+  },
+  "spill_files": {
+    "before": 0,
+    "after_requests": 0,
+    "after_worker_stop": 0
+  }
+}

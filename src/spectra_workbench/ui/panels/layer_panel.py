@@ -147,14 +147,15 @@ class LayerPanel(QWidget):
     def layers(self) -> list[LayerItem]:
         return list(self._layers)
 
-    def add_layer(self, layer: LayerItem, select: bool = True) -> None:
-        """添加新图层至列表并可选选中。"""
-        self._layers.append(layer)
+    def add_layer(self, layer: LayerItem, select: bool = True, index: int | None = None) -> None:
+        """添加新图层至列表并可选选中；index 允许按发起顺序插入而非响应顺序。"""
+        pos = len(self._layers) if index is None else max(0, min(index, len(self._layers)))
+        self._layers.insert(pos, layer)
         item = QListWidgetItem(f"[{layer.driver}] {layer.name}")
         item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
         item.setCheckState(Qt.CheckState.Checked if layer.visible else Qt.CheckState.Unchecked)
         item.setData(Qt.ItemDataRole.UserRole, layer.layer_id)
-        self.list_widget.addItem(item)
+        self.list_widget.insertItem(pos, item)
 
         if select:
             self.list_widget.setCurrentItem(item)
