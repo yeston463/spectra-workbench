@@ -79,6 +79,7 @@ class ImageCanvas(QWidget):
         self._draw_shape: ROIShape | None = None
         self._poly_pts: list[tuple[float, float]] = []
         self._poly_last_ts: float | None = None
+        self._poly_last_scene_pos: Any = None
         self._rubber: Any = None
 
         self._throttle = QTimer(self)
@@ -278,36 +279,155 @@ class ImageCanvas(QWidget):
         self.refresh()
 
     def set_view_crs(self, wkt: str | None, on_ready: Any = None) -> None:
-        """切换显示 CRS。范围换算交给 worker，GUI 不做投影数学。"""
+        """切换显示 CRS。范围与 ROI 坐标换算交给 worker，带代际保护。"""
         layer = self._layer
         self.view_crs_wkt = wkt
         self._view_bounds = None
         self._gen.bump(layer.layer_id if layer else None)
         self._bounds_gen = -1
+        current_gen = self._gen.generation
+        current_layer_id = layer.layer_id if layer else None
+
         if not wkt or layer is None or self._client is None:
+            self._sync_rois_to_view(current_gen, current_layer_id, "pixel", None)
             self.fit_extent()
             self.refresh()
             if on_ready:
                 on_ready()
             return
 
-        def _ok(data: dict[str, Any]) -> None:
+        target_view_crs = wkt
+        bounds_data: list[float] | None = None
+        roi_results: dict[str, list[tuple[float, float]]] = {}
+        pending_roi_ids = set(self._roi_states.keys())
+        bounds_ready = False
+
+        def _try_finish() -> None:
+            if not bounds_ready or len(roi_results) < len(pending_roi_ids):
+                return
+            if self._gen.generation != current_gen:
+                return
+            if self._layer is None or self._layer.layer_id != current_layer_id:
+                return
+            if bounds_data and len(bounds_data) == 4:
+                self._view_bounds = (
+                    float(bounds_data[0]),
+                    float(bounds_data[1]),
+                    float(bounds_data[2]),
+                    float(bounds_data[3]),
+                )
+            for rid, pts in roi_results.items():
+                st = self._roi_states.get(rid)
+                if st is None:
+                    continue
+                old_item = st["item"]
+                with contextlib.suppress(Exception):
+                    self.plot_item.removeItem(old_item)
+                new_item = self._create_roi_item(st["roi"], pts, selected=(rid == self._selected_roi_id))
+                st["item"] = new_item
+                st["display_points"] = pts
+                st["gen"] = current_gen
+                self.plot_item.addItem(new_item)
+                new_item.sigRegionChanged.connect(lambda *a, s=st: self._on_roi_moved(s))
+                new_item.sigClicked.connect(lambda *a, r_id=rid: self.select_roi(r_id))
+
+            self.fit_extent()
+            self.refresh()
+            if on_ready:
+                on_ready()
+
+        def _on_bounds_ok(data: dict[str, Any]) -> None:
+            nonlocal bounds_ready, bounds_data
+            if self._gen.generation != current_gen:
+                return
             b = data.get("bounds")
             if b and len(b) == 4:
-                self._view_bounds = (float(b[0]), float(b[1]), float(b[2]), float(b[3]))
-            self.fit_extent()
-            self.refresh()
-            if on_ready:
-                on_ready()
+                bounds_data = [float(b[0]), float(b[1]), float(b[2]), float(b[3])]
+            bounds_ready = True
+            _try_finish()
 
-        def _err(msg: str) -> None:
+        def _on_bounds_err(msg: str) -> None:
+            nonlocal bounds_ready
+            if self._gen.generation != current_gen:
+                return
             self._status(f"视图 CRS 范围换算失败：{msg}")
-            self.fit_extent()
-            self.refresh()
-            if on_ready:
-                on_ready()
+            bounds_ready = True
+            _try_finish()
 
-        self._client.transform_bounds_async(layer.file_path, wkt, on_success=_ok, on_error=_err)
+        self._client.transform_bounds_async(layer.file_path, target_view_crs, on_success=_on_bounds_ok, on_error=_on_bounds_err)
+
+        if not pending_roi_ids:
+            return
+
+        for rid in list(pending_roi_ids):
+            state = self._roi_states[rid]
+            roi: ROI = state["roi"]
+            if roi.coordinate_space == "map" and roi.crs_wkt == target_view_crs:
+                roi_results[rid] = [(float(c), float(r)) for (c, r) in roi.points]
+                _try_finish()
+            else:
+                def _make_ok(r_id: str):
+                    def _ok_roi(res: dict[str, Any]) -> None:
+                        pts = [(float(p[0]), float(p[1])) for p in res.get("points", [])]
+                        roi_results[r_id] = pts
+                        _try_finish()
+                    return _ok_roi
+
+                def _make_err(r_id: str, default_pts: list[tuple[float, float]]):
+                    def _err_roi(msg: str) -> None:
+                        self._status(f"ROI [{r_id}] 转换到视图 CRS 失败：{msg}")
+                        roi_results[r_id] = default_pts
+                        _try_finish()
+                    return _err_roi
+
+                self._client.transform_coordinates_async(
+                    path=layer.file_path,
+                    points=roi.points,
+                    from_space=roi.coordinate_space,
+                    to_space="map",
+                    src_crs_wkt=roi.crs_wkt,
+                    dst_crs_wkt=target_view_crs,
+                    convention=roi.pixel_convention,
+                    on_success=_make_ok(rid),
+                    on_error=_make_err(rid, roi.points),
+                )
+
+    def _sync_rois_to_view(
+        self, current_gen: int, current_layer_id: str | None, target_space: str, target_crs: str | None
+    ) -> None:
+        layer = self._layer
+        for rid, state in list(self._roi_states.items()):
+            roi: ROI = state["roi"]
+            if roi.coordinate_space == target_space and (target_space == "pixel" or roi.crs_wkt == target_crs):
+                pts = [(float(c), float(r)) for (c, r) in roi.points]
+            elif self._client is not None and layer is not None:
+                try:
+                    res = self._client.transform_coordinates(
+                        path=layer.file_path,
+                        points=roi.points,
+                        from_space=roi.coordinate_space,
+                        to_space=target_space,
+                        src_crs_wkt=roi.crs_wkt,
+                        dst_crs_wkt=target_crs,
+                        convention=roi.pixel_convention,
+                    )
+                    pts = [(float(p[0]), float(p[1])) for p in res.get("points", [])]
+                except Exception as exc:
+                    self._status(f"ROI 转换失败：{exc}")
+                    pts = [(float(c), float(r)) for (c, r) in roi.points]
+            else:
+                pts = [(float(c), float(r)) for (c, r) in roi.points]
+
+            old_item = state["item"]
+            with contextlib.suppress(Exception):
+                self.plot_item.removeItem(old_item)
+            new_item = self._create_roi_item(roi, pts, selected=(rid == self._selected_roi_id))
+            state["item"] = new_item
+            state["display_points"] = pts
+            state["gen"] = current_gen
+            self.plot_item.addItem(new_item)
+            new_item.sigRegionChanged.connect(lambda *a, s=state: self._on_roi_moved(s))
+            new_item.sigClicked.connect(lambda *a, r_id=rid: self.select_roi(r_id))
 
     def set_display(self, settings: DisplaySettings) -> None:
         """显示参数变化：递增代际丢弃旧结果，但不清缓存（缓存的是原值，不需重读盘）。"""
@@ -553,6 +673,8 @@ class ImageCanvas(QWidget):
         if not activate:
             self._draw_shape = None
             self._poly_pts = []
+            self._poly_last_ts = None
+            self._poly_last_scene_pos = None
             self._drop_rubber()
             return
         if shape is ROIShape.rectangle:
@@ -595,18 +717,43 @@ class ImageCanvas(QWidget):
         base: ROI = state["roi"]
         if isinstance(item, pg.RectROI):
             c0, r0, c1, r1 = self._rect_bounds(item)
-            points = [(c0, r0), (c1, r1)]
+            view_points = [(c0, r0), (c1, r1)]
         else:
-            points = [
+            view_points = [
                 (float(pt.x()), float(pt.y()))
                 for pt in (item.mapToParent(p) for p in item.getState()["points"])
             ]
-        return base.model_copy(update={"points": points})
+        view_space = "map" if self.view_crs_wkt else "pixel"
+        view_crs = self.view_crs_wkt
 
-    def _add_roi(self, roi: ROI) -> None:
-        pen = pg.mkPen((0, 200, 255), width=3)
+        if base.coordinate_space == view_space and (view_space == "pixel" or base.crs_wkt == view_crs):
+            return base.model_copy(update={"points": view_points})
+
+        if self._client is not None and self._layer is not None:
+            try:
+                res = self._client.transform_coordinates(
+                    path=self._layer.file_path,
+                    points=view_points,
+                    from_space=view_space,
+                    to_space=base.coordinate_space,
+                    src_crs_wkt=view_crs,
+                    dst_crs_wkt=base.crs_wkt,
+                    convention=base.pixel_convention,
+                )
+                auth_pts = [(float(p[0]), float(p[1])) for p in res.get("points", [])]
+                if auth_pts and len(auth_pts) == len(view_points):
+                    return base.model_copy(update={"points": auth_pts})
+            except Exception as exc:
+                self._status(f"ROI 反算权威坐标失败：{exc}")
+                return base
+        return base
+
+    def _create_roi_item(
+        self, roi: ROI, display_points: list[tuple[float, float]], selected: bool = False
+    ) -> pg.GraphicsObject:
+        pen = pg.mkPen((255, 220, 0) if selected else (0, 200, 255), width=3)
         if roi.shape is ROIShape.rectangle:
-            (c0, r0), (c1, r1) = roi.points
+            (c0, r0), (c1, r1) = display_points
             item = pg.RectROI(
                 pos=(min(c0, c1), min(r0, r1)),
                 size=(max(abs(c1 - c0), 1e-6), max(abs(r1 - r0), 1e-6)),
@@ -615,21 +762,54 @@ class ImageCanvas(QWidget):
                 movable=True,
             )
             item.addScaleHandle([1, 1], [0, 0])
+            item.addScaleHandle([0, 1], [1, 0])
         else:
             item = pg.PolyLineROI(
-                [(float(c), float(r)) for (c, r) in roi.points], closed=True, pen=pen, movable=True
+                [(float(c), float(r)) for (c, r) in display_points], closed=True, pen=pen, movable=True
             )
+        item.setZValue(self.roi_z)
+        return item
+
+    def _add_roi(self, roi: ROI, display_points: list[tuple[float, float]] | None = None) -> None:
+        view_space = "map" if self.view_crs_wkt else "pixel"
+        view_crs = self.view_crs_wkt
+
+        if display_points is None:
+            if roi.coordinate_space == view_space and (view_space == "pixel" or roi.crs_wkt == view_crs):
+                display_points = [(float(c), float(r)) for (c, r) in roi.points]
+            elif self._client is not None and self._layer is not None:
+                try:
+                    res = self._client.transform_coordinates(
+                        path=self._layer.file_path,
+                        points=roi.points,
+                        from_space=roi.coordinate_space,
+                        to_space=view_space,
+                        src_crs_wkt=roi.crs_wkt,
+                        dst_crs_wkt=view_crs,
+                        convention=roi.pixel_convention,
+                    )
+                    display_points = [(float(p[0]), float(p[1])) for p in res.get("points", [])]
+                except Exception as exc:
+                    self._status(f"ROI 坐标换算失败：{exc}")
+                    display_points = [(float(c), float(r)) for (c, r) in roi.points]
+            else:
+                display_points = [(float(c), float(r)) for (c, r) in roi.points]
         if self._layer is not None:
             # ROI 必须记住所属图层，否则项目重开后无法归回正确图层
             attrs = dict(roi.attributes or {})
             if attrs.get("layer_id") != self._layer.layer_id:
                 attrs["layer_id"] = self._layer.layer_id
                 roi = roi.model_copy(update={"attributes": attrs})
-        state = {"roi": roi, "item": item}
+        item = self._create_roi_item(roi, display_points, selected=(roi.roi_id == self._selected_roi_id))
+        state = {
+            "roi": roi,
+            "item": item,
+            "display_points": display_points,
+            "gen": self._gen.generation,
+        }
         self._roi_states[roi.roi_id] = state
         if self._layer is not None and not any(r.roi_id == roi.roi_id for r in self._layer.rois):
             self._layer.rois.append(roi)
-        item.setZValue(self.roi_z)
         self.plot_item.addItem(item)
         item.sigRegionChanged.connect(lambda *a, s=state: self._on_roi_moved(s))
         item.sigClicked.connect(lambda *a, rid=roi.roi_id: self.select_roi(rid))
@@ -647,6 +827,8 @@ class ImageCanvas(QWidget):
         self._roi_states.clear()
         self._selected_roi_id = None
         self._poly_pts = []
+        self._poly_last_ts = None
+        self._poly_last_scene_pos = None
         self._drop_rubber()
 
     def _redraw_rubber(self) -> None:
@@ -693,6 +875,11 @@ class ImageCanvas(QWidget):
             return
         pos = vb.mapSceneToView(event.scenePos())
 
+        now = time.monotonic()
+        btn = event.button() if hasattr(event, "button") and callable(event.button) else None
+        is_right = (btn == Qt.MouseButton.RightButton)
+
+        # Qt / pyqtgraph 传递的显式双击标记
         is_double = False
         if hasattr(event, "double") and callable(event.double):
             is_double = bool(event.double())
@@ -701,10 +888,7 @@ class ImageCanvas(QWidget):
         elif hasattr(event, "doubleClicked") and callable(event.doubleClicked):
             is_double = bool(event.doubleClicked())
 
-        btn = event.button() if hasattr(event, "button") and callable(event.button) else None
-        is_right = (btn == Qt.MouseButton.RightButton)
-
-        # 当点数 >= 3 时，若点击在首个顶点附近或右键/双击/短时快速连击，则完成闭合
+        # 当点数 >= 3 时，点击在首个顶点附近（< 15px）完成闭合
         near_first = False
         if len(self._poly_pts) >= 3:
             first_x, first_y = self._poly_pts[0]
@@ -712,17 +896,31 @@ class ImageCanvas(QWidget):
             if (p0 - event.scenePos()).manhattanLength() < 15:
                 near_first = True
 
-        now = time.monotonic()
-        is_fast_double = False
-        if self._poly_last_ts is not None and (now - self._poly_last_ts < 0.45) and len(self._poly_pts) >= 3:
-            is_fast_double = True
-        self._poly_last_ts = now
+        # 同位置连击（双击补偿）：只有在同一个屏幕位置附近（< 8px 像素抖动内）且时间间隔 < 0.40s 且点数 >= 3 时，
+        # 且仅当为主键（左键）连击时，才作为双击闭合判定。
+        # 两个位置不同的点击（>= 8px）无论点击多快（例如 < 50ms），都是独立的有效顶点，绝不能误判为双击！
+        is_same_pos_double = False
+        if (
+            self._poly_last_scene_pos is not None
+            and (event.scenePos() - self._poly_last_scene_pos).manhattanLength() < 8
+            and self._poly_last_ts is not None
+            and (now - self._poly_last_ts < 0.40)
+            and len(self._poly_pts) >= 3
+            and (btn == Qt.MouseButton.LeftButton or btn is None)
+        ):
+            is_same_pos_double = True
 
-        if is_double or is_right or near_first or is_fast_double:
+        if is_double or is_right or near_first or is_same_pos_double:
             self.finish_polygon()
             return
 
+        # 仅响应左键（或未指定按钮的模拟点击）添加顶点，忽略其它杂项键
+        if btn is not None and btn != Qt.MouseButton.LeftButton:
+            return
+
         self._poly_pts.append((float(pos.x()), float(pos.y())))
+        self._poly_last_scene_pos = event.scenePos()
+        self._poly_last_ts = now
         self._redraw_rubber()
         if len(self._poly_pts) == 1:
             self._status("多边形 ROI：继续单击加点，双击、右键或点击起点闭合")
@@ -769,6 +967,8 @@ class ImageCanvas(QWidget):
     def begin_polygon_roi(self) -> None:
         self._draw_shape = ROIShape.polygon
         self._poly_pts = []
+        self._poly_last_ts = None
+        self._poly_last_scene_pos = None
         self._status("多边形 ROI：在画布上逐点单击，双击结束")
 
     def add_polygon_vertex(self, col: float, row: float) -> None:
@@ -776,6 +976,8 @@ class ImageCanvas(QWidget):
         if self._draw_shape is not ROIShape.polygon:
             self._draw_shape = ROIShape.polygon
             self._poly_pts = []
+            self._poly_last_ts = None
+            self._poly_last_scene_pos = None
         self._poly_pts.append((float(col), float(row)))
         self._redraw_rubber()
 
@@ -783,6 +985,7 @@ class ImageCanvas(QWidget):
         pts = list(self._poly_pts)
         self._poly_pts = []
         self._poly_last_ts = None
+        self._poly_last_scene_pos = None
         self._draw_shape = None
         self.btn_poly.setChecked(False)
         self._drop_rubber()

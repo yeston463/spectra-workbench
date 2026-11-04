@@ -444,6 +444,54 @@ class QtWorkerClient(QObject):
             self.start()
         return self._worker.transform_bounds(path, view_crs_wkt)
 
+    def transform_coordinates(
+        self,
+        path: Path | str,
+        points: list[tuple[float, float]] | list[list[float]],
+        from_space: str,
+        to_space: str,
+        src_crs_wkt: str | None = None,
+        dst_crs_wkt: str | None = None,
+        convention: str = "corner",
+    ) -> dict[str, Any]:
+        if not self.is_alive:
+            self.start()
+        return self._worker.transform_coordinates(
+            path=path,
+            points=points,
+            from_space=from_space,
+            to_space=to_space,
+            src_crs_wkt=src_crs_wkt,
+            dst_crs_wkt=dst_crs_wkt,
+            convention=convention,
+        )
+
+    def transform_coordinates_async(
+        self,
+        path: Path | str,
+        points: list[tuple[float, float]] | list[list[float]],
+        from_space: str,
+        to_space: str,
+        src_crs_wkt: str | None = None,
+        dst_crs_wkt: str | None = None,
+        convention: str = "corner",
+        on_success: Callable[[dict[str, Any]], None] | None = None,
+        on_error: Callable[[str], None] | None = None,
+    ) -> str:
+        return self.call_async(
+            lambda: self._worker.transform_coordinates(
+                path=path,
+                points=points,
+                from_space=from_space,
+                to_space=to_space,
+                src_crs_wkt=src_crs_wkt,
+                dst_crs_wkt=dst_crs_wkt,
+                convention=convention,
+            ),
+            on_success=on_success,
+            on_error=on_error,
+        )
+
     def read_view_window(self, path: Path | str, **kw) -> dict[str, Any]:
         """同步请求重投影窗口（测试与脚本用）。"""
         if not self.is_alive:

@@ -1141,6 +1141,136 @@ class GDALProviderAdapter(ProviderAdapter):
         finally:
             del ds
 
+    def transform_coordinates(
+        self,
+        path: Path | str,
+        points: list[list[float]] | list[tuple[float, float]],
+        from_space: str,
+        to_space: str,
+        src_crs_wkt: str | None = None,
+        dst_crs_wkt: str | None = None,
+        convention: str = "corner",
+    ) -> dict[str, Any]:
+        """ROI 坐标在像元与地图坐标系之间转换。
+
+        from_space/to_space 为 "pixel" 或 "map"。
+        - pixel -> map: 基于数据集 GeoTransform 计算原生坐标，若需要再重投影到目标 CRS。
+        - map -> pixel: 若有必要先从源 CRS 重投影到原生 CRS，再基于逆 GeoTransform 计算像元。
+        - map -> map: 纯坐标系重投影。
+        - pixel -> pixel: 原样返回。
+        """
+        if not points:
+            return {"points": [], "from_space": from_space, "to_space": to_space}
+        if from_space not in ("pixel", "map") or to_space not in ("pixel", "map"):
+            raise ValueError(f"未知坐标空间转换：{from_space} -> {to_space}")
+
+        if from_space == "pixel" and to_space == "pixel":
+            return {
+                "points": [[float(p[0]), float(p[1])] for p in points],
+                "from_space": "pixel",
+                "to_space": "pixel",
+            }
+
+        if not GDAL_AVAILABLE or gdal is None or osr is None:
+            raise RuntimeError("GDAL 运行时不可用")
+
+        in_path = _resolve_raster_input(Path(path))
+        ds = gdal.Open(str(in_path), gdal.GA_ReadOnly)
+        if ds is None:
+            raise RuntimeError(f"无法打开数据集: {in_path}")
+        try:
+            gt = ds.GetGeoTransform(can_return_null=True)
+            srs = ds.GetSpatialRef()
+            ds_crs_wkt = srs.ExportToWkt() if srs is not None else None
+
+            if from_space == "pixel" and to_space == "map":
+                if not gt:
+                    raise ValueError("数据集没有地理参考（GeoTransform），无法由像元坐标换算到地图坐标")
+                if not ds_crs_wkt:
+                    raise ValueError("数据集缺少 CRS，无法换算到地图坐标")
+                target_crs_wkt = dst_crs_wkt or ds_crs_wkt
+                ct = None
+                if target_crs_wkt != ds_crs_wkt:
+                    src_srs = osr.SpatialReference(ds_crs_wkt)
+                    src_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
+                    dst_srs = osr.SpatialReference(target_crs_wkt)
+                    dst_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
+                    ct = osr.CoordinateTransformation(src_srs, dst_srs)
+                out_pts: list[list[float]] = []
+                for p in points:
+                    col, row = float(p[0]), float(p[1])
+                    u, v = (col + 0.5, row + 0.5) if convention == "center" else (col, row)
+                    mx, my = self._affine_xy(gt, u, v)
+                    if ct is not None:
+                        tx, ty, _ = ct.TransformPoint(mx, my)
+                        out_pts.append([float(tx), float(ty)])
+                    else:
+                        out_pts.append([float(mx), float(my)])
+                return {
+                    "points": out_pts,
+                    "from_space": "pixel",
+                    "to_space": "map",
+                    "crs_wkt": target_crs_wkt,
+                }
+
+            elif from_space == "map" and to_space == "pixel":
+                if not gt:
+                    raise ValueError("数据集没有地理参考（GeoTransform），无法由地图坐标换算到像元坐标")
+                if not ds_crs_wkt:
+                    raise ValueError("数据集缺少 CRS，无法由地图坐标换算到像元坐标")
+                source_crs_wkt = src_crs_wkt or ds_crs_wkt
+                ct = None
+                if source_crs_wkt != ds_crs_wkt:
+                    src_srs = osr.SpatialReference(source_crs_wkt)
+                    src_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
+                    dst_srs = osr.SpatialReference(ds_crs_wkt)
+                    dst_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
+                    ct = osr.CoordinateTransformation(src_srs, dst_srs)
+                out_pts = []
+                for p in points:
+                    mx, my = float(p[0]), float(p[1])
+                    if ct is not None:
+                        tx, ty, _ = ct.TransformPoint(mx, my)
+                    else:
+                        tx, ty = mx, my
+                    u, v = self._affine_inv(gt, tx, ty)
+                    col, row = (u - 0.5, v - 0.5) if convention == "center" else (u, v)
+                    out_pts.append([float(col), float(row)])
+                return {
+                    "points": out_pts,
+                    "from_space": "map",
+                    "to_space": "pixel",
+                }
+
+            elif from_space == "map" and to_space == "map":
+                source_crs_wkt = src_crs_wkt or ds_crs_wkt
+                target_crs_wkt = dst_crs_wkt or ds_crs_wkt
+                if not source_crs_wkt or not target_crs_wkt or source_crs_wkt == target_crs_wkt:
+                    return {
+                        "points": [[float(p[0]), float(p[1])] for p in points],
+                        "from_space": "map",
+                        "to_space": "map",
+                        "crs_wkt": target_crs_wkt or source_crs_wkt,
+                    }
+                src_srs = osr.SpatialReference(source_crs_wkt)
+                src_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
+                dst_srs = osr.SpatialReference(target_crs_wkt)
+                dst_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
+                ct = osr.CoordinateTransformation(src_srs, dst_srs)
+                out_pts = []
+                for p in points:
+                    tx, ty, _ = ct.TransformPoint(float(p[0]), float(p[1]))
+                    out_pts.append([float(tx), float(ty)])
+                return {
+                    "points": out_pts,
+                    "from_space": "map",
+                    "to_space": "map",
+                    "crs_wkt": target_crs_wkt,
+                }
+            raise ValueError(f"不受支持的坐标空间变换：{from_space} -> {to_space}")
+        finally:
+            del ds
+
     def read_view_window(
         self,
         path: Path | str,

@@ -182,6 +182,18 @@ def _create_dummy_adapter() -> ProviderAdapter:
                 "stats": [{"band": 1, "min": 0.0, "max": 255.0}],
             }
 
+        def transform_coordinates(
+            self,
+            path: Path | str,
+            points: list[list[float]] | list[tuple[float, float]],
+            from_space: str,
+            to_space: str,
+            src_crs_wkt: str | None = None,
+            dst_crs_wkt: str | None = None,
+            convention: str = "corner",
+        ) -> dict[str, Any]:
+            return {"points": [list(p) for p in points], "from_space": from_space, "to_space": to_space}
+
     return DummyAdapter()
 
 
@@ -470,6 +482,11 @@ class WorkerRuntime:
         ),
         "crs_wkt": ("crs_wkt", ("epsg",), False),
         "transform_point": ("transform_point", ("x", "y", "src_wkt", "dst_wkt", "z"), False),
+        "transform_coordinates": (
+            "transform_coordinates",
+            ("points", "from_space", "to_space", "src_crs_wkt", "dst_crs_wkt", "convention"),
+            True,
+        ),
     }
 
     def _handle_simple_call(self, env: Envelope, action: str) -> None:

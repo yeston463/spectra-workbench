@@ -179,6 +179,7 @@ def rasterio_info() -> dict:
     try:
         import os
         import tempfile
+
         import numpy as np
         from rasterio.transform import from_origin
 

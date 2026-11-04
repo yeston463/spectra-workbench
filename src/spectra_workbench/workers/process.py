@@ -567,6 +567,32 @@ class WorkerProcess:
             "transform_bounds", {"path": str(path), "view_crs_wkt": view_crs_wkt}, timeout=timeout
         )
 
+    def transform_coordinates(
+        self,
+        path: Path | str,
+        points: list[tuple[float, float]] | list[list[float]],
+        from_space: str,
+        to_space: str,
+        src_crs_wkt: str | None = None,
+        dst_crs_wkt: str | None = None,
+        convention: str = "corner",
+        timeout: float = 10.0,
+    ) -> dict[str, Any]:
+        """ROI 坐标空间换算（像元 vs 地图 CRS 双向转换）。"""
+        return self._simple_call(
+            "transform_coordinates",
+            {
+                "path": str(path),
+                "points": [list(p) for p in points],
+                "from_space": from_space,
+                "to_space": to_space,
+                "src_crs_wkt": src_crs_wkt,
+                "dst_crs_wkt": dst_crs_wkt,
+                "convention": convention,
+            },
+            timeout=timeout,
+        )
+
     def read_view_window(
         self,
         path: Path | str,
