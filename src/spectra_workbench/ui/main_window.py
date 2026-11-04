@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import base64
 import contextlib
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -22,12 +22,14 @@ from PySide6.QtWidgets import (
     QDialog,
     QDockWidget,
     QFileDialog,
+    QGroupBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QMainWindow,
     QMessageBox,
     QPushButton,
+    QScrollArea,
     QSplitter,
     QStatusBar,
     QTabWidget,
@@ -39,11 +41,13 @@ from PySide6.QtWidgets import (
 from spectra_workbench.domain.models import TaskResult, TaskSpec
 from spectra_workbench.domain.roi import ROI
 from spectra_workbench.project.model import (
+    PATH_ANCHOR_PROJECT_DIR,
     LayerRecord,
     MissingSource,
     ProjectSpec,
     ViewRecord,
     find_missing,
+    has_ambiguous_legacy_relative_sources,
     load_project,
     resolve_source,
     save_project,
@@ -114,6 +118,101 @@ class _RelinkDialog(QDialog):
         super().accept()
 
 
+class _LegacyConfirmDialog(QDialog):
+    """旧版 1.0 项目路径基准确认对话框。"""
+
+    def __init__(
+        self,
+        layers: list[LayerRecord],
+        project_dir: Path,
+        app_root: Path,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("确认旧项目路径基准")
+        self.resize(680, 380)
+        self.mapping: dict[str, Path] = {}
+
+        layout = QVBoxLayout(self)
+        banner = QLabel(
+            "⚠️ 检测到该项目为旧版格式（缺少路径基准标记），包含以下相对引用。\n"
+            "为防止误读同名文件，请为每个图层明确数据源指向："
+        )
+        banner.setWordWrap(True)
+        layout.addWidget(banner)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        container = QWidget()
+        box_layout = QVBoxLayout(container)
+
+        self._combos: dict[str, QComboBox] = {}
+        self._edits: dict[str, QLineEdit] = {}
+
+        for ly in layers:
+            grp = QGroupBox(f"图层: {ly.name} ({ly.source})")
+            gly = QVBoxLayout(grp)
+
+            p_cand = (project_dir / ly.source).resolve()
+            a_cand = (app_root / ly.source).resolve()
+
+            cmb = QComboBox()
+            cmb.addItem(f"项目目录: {p_cand}" + (" [存在]" if p_cand.exists() else " [不存在]"), p_cand)
+            cmb.addItem(f"程序根目录: {a_cand}" + (" [存在]" if a_cand.exists() else " [不存在]"), a_cand)
+            cmb.addItem("自定义选择文件…", None)
+
+            if p_cand.exists() and not a_cand.exists():
+                cmb.setCurrentIndex(0)
+            elif a_cand.exists() and not p_cand.exists():
+                cmb.setCurrentIndex(1)
+            else:
+                cmb.setCurrentIndex(0)
+
+            edit_custom = QLineEdit()
+            edit_custom.setPlaceholderText("选择自定义文件路径")
+            edit_custom.setVisible(False)
+
+            def _on_idx(idx: int, c=cmb, e=edit_custom, p_dir=project_dir):
+                if c.itemData(idx) is None:
+                    e.setVisible(True)
+                    fpath, _ = QFileDialog.getOpenFileName(self, "选择数据源", str(p_dir))
+                    if fpath:
+                        e.setText(fpath)
+                else:
+                    e.setVisible(False)
+
+            cmb.currentIndexChanged.connect(_on_idx)
+            gly.addWidget(cmb)
+            gly.addWidget(edit_custom)
+            box_layout.addWidget(grp)
+            self._combos[ly.layer_id] = cmb
+            self._edits[ly.layer_id] = edit_custom
+
+        scroll.setWidget(container)
+        layout.addWidget(scroll, stretch=1)
+
+        btns = QHBoxLayout()
+        btn_ok = QPushButton("确认迁移并打开")
+        btn_cancel = QPushButton("取消")
+        btn_ok.clicked.connect(self._on_accept)
+        btn_cancel.clicked.connect(self.reject)
+        btns.addStretch()
+        btns.addWidget(btn_cancel)
+        btns.addWidget(btn_ok)
+        layout.addLayout(btns)
+
+    def _on_accept(self) -> None:
+        for lid, cmb in self._combos.items():
+            val = cmb.currentData()
+            if val is None:
+                txt = self._edits[lid].text().strip()
+                if txt:
+                    self.mapping[lid] = Path(txt).resolve()
+            else:
+                self.mapping[lid] = Path(val).resolve()
+        self.accept()
+
+
 class MainWindow(QMainWindow):
     """Spectra Workbench 桌面主窗口。"""
 
@@ -130,6 +229,10 @@ class MainWindow(QMainWindow):
         self._project_records: dict[str, LayerRecord] = {}
         self._project_layer_order: list[str] = []
         self._project_rois: dict[str, list[ROI]] = {}
+        self.is_pending_confirmation: bool = False
+        self.legacy_status: str | None = None
+        self._pending_legacy_spec: ProjectSpec | None = None
+        self._pending_legacy_layers: list[LayerRecord] = []
         self._clients: dict[str, QtWorkerClient] = {}
         self._active_task_client: QtWorkerClient | None = None
         self._task_subscriptions: dict[str, Callable[[], None]] = {}
@@ -716,6 +819,10 @@ class MainWindow(QMainWindow):
         self._project_records.clear()
         self._project_layer_order.clear()
         self._project_rois.clear()
+        self.is_pending_confirmation = False
+        self.legacy_status = None
+        self._pending_legacy_spec = None
+        self._pending_legacy_layers.clear()
         self.missing_sources = []
         self.layer_panel.set_missing_layers([])
         for layer in list(self.layer_panel.layers):
@@ -791,6 +898,7 @@ class MainWindow(QMainWindow):
         layout_b64 = base64.b64encode(state.data()).decode("ascii") if state is not None else None
         active = self.canvas.current_layer
         return ProjectSpec(
+            path_anchor=PATH_ANCHOR_PROJECT_DIR,
             layers=layers,
             rois=all_rois,
             views=views,
@@ -812,6 +920,13 @@ class MainWindow(QMainWindow):
         )
 
     def save_project_action(self, save_as: bool = False) -> bool:
+        if self.is_pending_confirmation:
+            self._notify(
+                QMessageBox.Icon.Warning,
+                "禁止保存",
+                "当前项目包含待确认的旧版相对路径基准，请先完成迁移确认后再保存。",
+            )
+            return False
         target = self.project_path
         if save_as or target is None:
             suggested = (target or (self.project_dir / "未命名.spectra.json"))
@@ -847,14 +962,22 @@ class MainWindow(QMainWindow):
         )
         if not path:
             return
-        if not self.open_project(path):
+        res = self.open_project(path)
+        if not res:
             QMessageBox.critical(self, "打开失败", "项目文件无法读取，详见状态栏。")
+            return
+        if (res == "pending_confirmation" or self.is_pending_confirmation) and not self.prompt_confirm_legacy_paths():
             return
         if self.missing_sources:
             self.prompt_relink_missing()
 
-    def open_project(self, path: Path | str) -> bool:
-        """程序化打开项目：不弹任何模态窗，缺失源记录在 missing_sources。"""
+    def open_project(self, path: Path | str) -> bool | str:
+        """程序化打开项目：不弹任何模态窗。
+
+        若是旧版 1.0 且缺少路径基准标记的相对引用，返回 "pending_confirmation"；
+        旧绝对引用直接按确定语义解析；
+        正常打开返回 True；失败返回 False。
+        """
         target = Path(path).resolve()
         try:
             spec = load_project(target)
@@ -877,6 +1000,41 @@ class MainWindow(QMainWindow):
             self._project_rois.setdefault(str(roi.attributes.get("layer_id", "")), []).append(roi)
 
         project_dir = target.parent.resolve()
+
+        if has_ambiguous_legacy_relative_sources(spec):
+            self.is_pending_confirmation = True
+            self.legacy_status = "pending_confirmation"
+            self._pending_legacy_spec = spec
+            self._pending_legacy_layers = [ly for ly in spec.layers if ly.source_is_relative]
+
+            # 旧绝对引用按确定语义处理，不无故阻断已明确的绝对路径
+            abs_loaded: list[str] = []
+            base_seq = self._open_seq + 1
+            for i, rec in enumerate(spec.ordered_layers()):
+                if not rec.source_is_relative:
+                    p = resolve_source(project_dir, rec.source, is_relative=False)
+                    if p.exists():
+                        self.open_dataset(
+                            p,
+                            record=rec,
+                            rois=self._project_rois.get(rec.layer_id, []),
+                            order=base_seq + i,
+                        )
+                        abs_loaded.append(rec.layer_id)
+            self._open_seq = base_seq + len(spec.layers)
+            self.missing_sources = []
+            self.layer_panel.set_missing_layers([])
+            self._dirty = False
+            self.status_bar.showMessage(
+                f"项目待确认：{target.name} 缺少路径基准标记，包含 {len(self._pending_legacy_layers)} 个相对路径图层待确认"
+            )
+            return "pending_confirmation"
+
+        self.is_pending_confirmation = False
+        self.legacy_status = "ok"
+        self._pending_legacy_spec = None
+        self._pending_legacy_layers.clear()
+
         missing = find_missing(project_dir, spec)
         self.missing_sources = missing
         self.layer_panel.set_missing_layers(missing)
@@ -913,6 +1071,76 @@ class MainWindow(QMainWindow):
             f"待重新关联 {len(self.missing_sources)}）"
         )
         return True
+
+    def prompt_confirm_legacy_paths(self) -> bool:
+        """弹出模态对话框让用户确认旧项目相对路径基准。"""
+        if not self.is_pending_confirmation or not self._pending_legacy_layers:
+            return False
+        dlg = _LegacyConfirmDialog(
+            self._pending_legacy_layers,
+            self.project_dir,
+            self.app_root,
+            self,
+        )
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            self.cancel_legacy_confirmation()
+            return False
+        return self.confirm_legacy_migration(dlg.mapping)
+
+    def confirm_legacy_migration(self, mapping: Mapping[str, Path | str] | None = None) -> bool:
+        """确认旧项目的路径关联与迁移，开始请求数据并允许后续保存。"""
+        if not self.is_pending_confirmation or self._pending_legacy_spec is None:
+            return False
+        spec = self._pending_legacy_spec
+        target_dir = self.project_dir
+        mapping = mapping or {}
+
+        base_seq = self._open_seq + 1
+        loaded: list[str] = []
+        missing: list[MissingSource] = []
+
+        for i, rec in enumerate(spec.ordered_layers()):
+            if rec.source_is_relative:
+                if rec.layer_id in mapping:
+                    p = Path(mapping[rec.layer_id]).resolve()
+                else:
+                    p = resolve_source(target_dir, rec.source, is_relative=True)
+                if p.exists():
+                    stored, is_rel = store_source(target_dir, p)
+                    updated_rec = rec.model_copy(update={"source": stored, "source_is_relative": is_rel})
+                    self._project_records[rec.layer_id] = updated_rec
+                    self.open_dataset(
+                        p,
+                        record=updated_rec,
+                        rois=self._project_rois.get(rec.layer_id, []),
+                        order=base_seq + i,
+                    )
+                    loaded.append(rec.layer_id)
+                else:
+                    missing.append(MissingSource(rec.layer_id, rec.name, rec.source, p))
+            else:
+                p = resolve_source(target_dir, rec.source, is_relative=False)
+                if not p.exists() and not any(m.layer_id == rec.layer_id for m in missing):
+                    missing.append(MissingSource(rec.layer_id, rec.name, rec.source, p))
+
+        self._open_seq = base_seq + len(spec.layers)
+        self.missing_sources = missing
+        self.layer_panel.set_missing_layers(missing)
+        self.is_pending_confirmation = False
+        self.legacy_status = "confirmed"
+        self._pending_legacy_spec = None
+        self._pending_legacy_layers.clear()
+        self._mark_dirty()
+        self.status_bar.showMessage(
+            f"已确认旧项目路径迁移：成功加载 {len(loaded)} 个图层，缺失 {len(missing)} 个图层"
+        )
+        return True
+
+    def cancel_legacy_confirmation(self) -> None:
+        """取消旧项目确认：清空当前打开的工作区状态，原项目文件不做任何写入或更改。"""
+        self.new_project()
+        self.legacy_status = "cancelled"
+        self.status_bar.showMessage("已取消旧项目兼容迁移，原项目文件未作修改。")
 
     def prompt_relink_missing(self) -> bool:
         """交互式重新关联：模态对话框只由用户入口调用，程序化打开不会触发。"""

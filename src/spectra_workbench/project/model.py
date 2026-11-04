@@ -21,6 +21,7 @@ from spectra_workbench.domain.roi import ROI
 from spectra_workbench.rendering.display import DisplaySettings
 
 PROJECT_SCHEMA_VERSION = "1.0"
+PATH_ANCHOR_PROJECT_DIR = "project_dir"
 PROJECT_EXTENSION = ".spectra.json"
 
 
@@ -66,6 +67,7 @@ class ProjectSpec(BaseModel):
 
     schema_version: str = PROJECT_SCHEMA_VERSION
     project_id: str = Field(default_factory=lambda: uuid.uuid4().hex)
+    path_anchor: str | None = PATH_ANCHOR_PROJECT_DIR
     layers: list[LayerRecord] = Field(default_factory=list)
     rois: list[ROI] = Field(default_factory=list)
     views: list[ViewRecord] = Field(default_factory=list)
@@ -137,13 +139,20 @@ def rebase_project(spec: ProjectSpec, old_root: Path, new_root: Path) -> Project
     old_root = Path(old_root).resolve()
     new_root = Path(new_root).resolve()
     if old_root == new_root:
-        return spec
+        return spec.model_copy(update={"path_anchor": PATH_ANCHOR_PROJECT_DIR})
     new_layers = []
     for layer in spec.layers:
         abs_target = resolve_source(old_root, layer.source, is_relative=layer.source_is_relative)
         stored, is_rel = store_source(new_root, abs_target)
         new_layers.append(layer.model_copy(update={"source": stored, "source_is_relative": is_rel}))
-    return spec.model_copy(update={"layers": new_layers})
+    return spec.model_copy(update={"layers": new_layers, "path_anchor": PATH_ANCHOR_PROJECT_DIR})
+
+
+def has_ambiguous_legacy_relative_sources(spec: ProjectSpec) -> bool:
+    """若缺少 path_anchor 标记且存在相对路径图层，则存在路径基准歧义。"""
+    if spec.path_anchor is not None:
+        return False
+    return any(layer.source_is_relative for layer in spec.layers)
 
 
 @dataclass
@@ -189,6 +198,8 @@ def save_project(path: Path | str, spec: ProjectSpec) -> Path:
     if target.suffix != ".json" and not target.name.endswith(PROJECT_EXTENSION):
         raise ProjectError(f"项目文件应使用 {PROJECT_EXTENSION}（或 .json）扩展名，收到 {target.name}")
     target.parent.mkdir(parents=True, exist_ok=True)
+    if spec.path_anchor is None:
+        spec = spec.model_copy(update={"path_anchor": PATH_ANCHOR_PROJECT_DIR})
     payload = spec.model_dump(mode="json")
     fd, tmp = tempfile.mkstemp(prefix=target.name + ".", suffix=".tmp", dir=str(target.parent))
     try:
@@ -220,8 +231,12 @@ def load_project(path: Path | str) -> ProjectSpec:
         raise ProjectError("项目文件缺少 schema_version")
     if version != PROJECT_SCHEMA_VERSION:
         raise ProjectError(f"暂不支持从 {version} 迁移到 {PROJECT_SCHEMA_VERSION}，请先实现迁移器")
+    has_anchor = "path_anchor" in raw
     try:
-        return ProjectSpec.model_validate(raw)
+        spec = ProjectSpec.model_validate(raw)
+        if not has_anchor:
+            spec = spec.model_copy(update={"path_anchor": None})
+        return spec
     except (ValidationError, ProjectError) as exc:
         raise ProjectError(f"项目文件校验失败：{exc}") from exc
 

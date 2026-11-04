@@ -415,13 +415,17 @@ def test_no_silent_hijacking_of_same_basename_in_other_dirs(
 def test_old_project_missing_path_anchor_prompts_relink_no_silent_guess(
     qapp: QApplication, tmp_path: Path
 ) -> None:
-    """旧项目路径基准歧义：明确在界面和状态栏提示待重新关联，禁止静默猜测。"""
+    """旧项目路径基准歧义：两处同名不同内容时禁止静默派发，返回待确认状态并允许按用户确认派发。"""
     app_root = tmp_path / "runtime_app"
     app_root.mkdir(parents=True)
-    (app_root / "legacy.tif").write_bytes(b"wrong data in app root")
+    orig_file = app_root / "legacy.tif"
+    orig_file.write_bytes(b"original data in app root")
 
     proj_dir = tmp_path / "old_proj"
     proj_dir.mkdir()
+    diff_file = proj_dir / "legacy.tif"
+    diff_file.write_bytes(b"different same-named data in project dir")
+
     raw_json = {
         "schema_version": "1.0",
         "project_id": "legacy_01",
@@ -440,11 +444,242 @@ def test_old_project_missing_path_anchor_prompts_relink_no_silent_guess(
     proj_file.write_text(json.dumps(raw_json, indent=2), encoding="utf-8")
 
     win = MainWindow(project_root=app_root)
-    assert win.open_project(proj_file) is True
+    requested: list[str] = []
+    win.open_dataset = lambda p, **kwargs: requested.append(str(Path(p).resolve()))
+
+    # 程序化打开返回可检查的待确认状态
+    res = win.open_project(proj_file)
+    assert res == "pending_confirmation"
+    assert win.is_pending_confirmation is True
+    # 严格断言：绝对不能静默派发任何文件
+    assert requested == []
+    # 未确认前禁止保存
+    assert win.save_project_action() is False
+
+    # 用户明确确认指向 app_root 中的原文件
+    assert win.confirm_legacy_migration({"L_old": orig_file}) is True
+    assert win.is_pending_confirmation is False
+    # 断言实际解析派发的物理路径是 app_root 下的原目标，而非项目目录下的同名文件
+    assert requested == [str(orig_file.resolve())]
+    assert len(win.missing_sources) == 0
+
+    # 确认后允许持久化迁移结果
+    assert win.save_project_action() is True
+    win.close()
+    qapp.processEvents()
+
+    # 验证新文件已写入 path_anchor="project_dir"
+    migrated_spec = load_project(proj_file)
+    assert migrated_spec.path_anchor == "project_dir"
+
+
+def test_legacy_project_only_one_exists_still_requires_confirmation(
+    qapp: QApplication, tmp_path: Path
+) -> None:
+    """旧项目仅单侧存在文件：仍不自动猜测，返回待确认状态。"""
+    app_root = tmp_path / "runtime_app"
+    app_root.mkdir(parents=True)
+    only_runtime = app_root / "solo.tif"
+    only_runtime.write_bytes(b"runtime solo data")
+
+    proj_dir = tmp_path / "user_proj"
+    proj_dir.mkdir()
+
+    raw_json = {
+        "schema_version": "1.0",
+        "project_id": "legacy_solo",
+        "layers": [
+            {
+                "layer_id": "L_solo",
+                "name": "SoloLayer",
+                "source": "solo.tif",
+                "source_is_relative": True,
+                "order": 0,
+            }
+        ],
+    }
+    proj_file = proj_dir / "solo.spectra.json"
+    proj_file.write_text(json.dumps(raw_json, indent=2), encoding="utf-8")
+
+    win = MainWindow(project_root=app_root)
+    requested: list[str] = []
+    win.open_dataset = lambda p, **kwargs: requested.append(str(Path(p).resolve()))
+
+    res = win.open_project(proj_file)
+    assert res == "pending_confirmation"
+    assert win.is_pending_confirmation is True
+    assert requested == []
+
+    # 用户确认选择 runtime 侧的目标
+    assert win.confirm_legacy_migration({"L_solo": only_runtime}) is True
+    assert requested == [str(only_runtime.resolve())]
+    win.close()
+    qapp.processEvents()
+
+
+def test_legacy_project_neither_exists_requires_confirmation_and_reports_missing(
+    qapp: QApplication, tmp_path: Path
+) -> None:
+    """旧项目两处均不存在文件：确认后如实记录为 missing，不静默挂起。"""
+    app_root = tmp_path / "runtime_app"
+    app_root.mkdir(parents=True)
+    proj_dir = tmp_path / "user_proj"
+    proj_dir.mkdir()
+
+    raw_json = {
+        "schema_version": "1.0",
+        "project_id": "legacy_none",
+        "layers": [
+            {
+                "layer_id": "L_none",
+                "name": "NoneLayer",
+                "source": "ghost.tif",
+                "source_is_relative": True,
+                "order": 0,
+            }
+        ],
+    }
+    proj_file = proj_dir / "ghost.spectra.json"
+    proj_file.write_text(json.dumps(raw_json, indent=2), encoding="utf-8")
+
+    win = MainWindow(project_root=app_root)
+    requested: list[str] = []
+    win.open_dataset = lambda p, **kwargs: requested.append(str(Path(p).resolve()))
+
+    res = win.open_project(proj_file)
+    assert res == "pending_confirmation"
+    assert win.is_pending_confirmation is True
+    assert requested == []
+
+    # 默认确认（未找到 ghost.tif）
+    assert win.confirm_legacy_migration() is True
+    assert requested == []
     assert len(win.missing_sources) == 1
-    assert win.missing_sources[0].layer_id == "L_old"
-    assert win.missing_sources[0].tried == (proj_dir / "legacy.tif").resolve()
+    assert win.missing_sources[0].tried == (proj_dir / "ghost.tif").resolve()
+    win.close()
+    qapp.processEvents()
+
+
+def test_new_format_with_path_anchor_resolves_directly_without_confirmation(
+    qapp: QApplication, tmp_path: Path
+) -> None:
+    """新格式项目具有显式 path_anchor='project_dir'：直接解析项目目录下的相对路径，无需确认。"""
+    app_root = tmp_path / "runtime_app"
+    app_root.mkdir(parents=True)
+    (app_root / "data.tif").write_bytes(b"app root data")
+
+    proj_dir = tmp_path / "user_proj"
+    proj_dir.mkdir()
+    correct_proj_data = proj_dir / "data.tif"
+    correct_proj_data.write_bytes(b"project dir data")
+
+    spec = ProjectSpec(
+        schema_version="1.0",
+        path_anchor="project_dir",
+        layers=[
+            LayerRecord(
+                layer_id="L_new",
+                name="NewLayer",
+                source="data.tif",
+                source_is_relative=True,
+                order=0,
+            )
+        ],
+    )
+    proj_file = proj_dir / "new_project.spectra.json"
+    save_project(proj_file, spec)
+
+    win = MainWindow(project_root=app_root)
+    requested: list[str] = []
+    win.open_dataset = lambda p, **kwargs: requested.append(str(Path(p).resolve()))
+
+    res = win.open_project(proj_file)
+    assert res is True
+    assert win.is_pending_confirmation is False
+    # 明确验证派发的是 project_dir 下的目标
+    assert requested == [str(correct_proj_data.resolve())]
+    win.close()
+    qapp.processEvents()
+
+
+def test_legacy_project_cancel_confirmation_leaves_original_file_untouched(
+    qapp: QApplication, tmp_path: Path
+) -> None:
+    """取消确认旧项目：原文件不被重写或修改，工作区清理。"""
+    app_root = tmp_path / "runtime_app"
+    app_root.mkdir(parents=True)
+    proj_dir = tmp_path / "user_proj"
+    proj_dir.mkdir()
+
+    raw_text = json.dumps(
+        {
+            "schema_version": "1.0",
+            "project_id": "legacy_cancel",
+            "layers": [
+                {
+                    "layer_id": "L_c",
+                    "name": "CancelLayer",
+                    "source": "c.tif",
+                    "source_is_relative": True,
+                    "order": 0,
+                }
+            ],
+        },
+        indent=2,
+    )
+    proj_file = proj_dir / "cancel.spectra.json"
+    proj_file.write_text(raw_text, encoding="utf-8")
+
+    win = MainWindow(project_root=app_root)
+    res = win.open_project(proj_file)
+    assert res == "pending_confirmation"
+
+    win.cancel_legacy_confirmation()
+    assert win.legacy_status == "cancelled"
+    assert win.is_pending_confirmation is False
     assert len(win.layer_panel.layers) == 0
-    assert "待重新关联 1" in win.status_bar.currentMessage()
+
+    # 原文件内容毫厘不差
+    assert proj_file.read_text(encoding="utf-8") == raw_text
+    win.close()
+    qapp.processEvents()
+
+
+def test_legacy_project_with_absolute_paths_resolves_directly_without_blocking(
+    qapp: QApplication, tmp_path: Path
+) -> None:
+    """旧 1.0 项目但使用绝对路径：无基准歧义，直接按绝对路径解析派发。"""
+    app_root = tmp_path / "runtime_app"
+    app_root.mkdir(parents=True)
+    proj_dir = tmp_path / "user_proj"
+    proj_dir.mkdir()
+
+    abs_target = tmp_path / "explicit_external.tif"
+    abs_target.write_bytes(b"explicit external data")
+
+    raw_json = {
+        "schema_version": "1.0",
+        "project_id": "legacy_abs",
+        "layers": [
+            {
+                "layer_id": "L_abs",
+                "name": "AbsLayer",
+                "source": str(abs_target.resolve()),
+                "source_is_relative": False,
+                "order": 0,
+            }
+        ],
+    }
+    proj_file = proj_dir / "abs.spectra.json"
+    proj_file.write_text(json.dumps(raw_json, indent=2), encoding="utf-8")
+
+    win = MainWindow(project_root=app_root)
+    requested: list[str] = []
+    win.open_dataset = lambda p, **kwargs: requested.append(str(Path(p).resolve()))
+
+    res = win.open_project(proj_file)
+    assert res is True
+    assert win.is_pending_confirmation is False
+    assert requested == [str(abs_target.resolve())]
     win.close()
     qapp.processEvents()

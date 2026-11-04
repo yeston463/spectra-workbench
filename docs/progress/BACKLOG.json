@@ -350,7 +350,7 @@
         "src/spectra_workbench/ui/panels/layer_panel.py：实现 LayerPanel 图层管理面板，支持图层显隐勾选、移除、选中及元数据卡片展示。",
         "GUI 零原生地理库导入绝对隔离：tests/unit/test_ui_components.py::test_ui_modules_strictly_no_geospatial_imports 严格验证 src/spectra_workbench/ui 下无任何 osgeo/rasterio/fiona/geopandas 导入。",
         "scripts/run-gui.ps1：启动脚本（UTF-8 带 BOM），支持交互运行、--sample 样例加载、--screenshot 截图导出与 --headless 无头模式。",
-        "分离程序运行时根与用户项目目录，实现默认相对引用与 Save As 重算引用；整体复制搬移项目包保持可用；缺失数据源图层状态指示、重定位与明确移除；保存/另存为/部分重新关联均完整保留缺失图层记录、样式与 ROI（tests/integration/test_p3_persistence_regression.py 验证通过）。"
+        "分离程序运行时根与用户项目目录，新项目显式标记 path_anchor='project_dir'；旧 1.0 格式无标记相对路径进入待确认流程（不自动派发同名文件，未确认禁止保存，确认后迁移持久化，取消确认原文件不变；旧绝对引用直接按确定语义解析）；整体复制搬移项目包保持可用；缺失图层状态指示与显式移除；保存事务边界加固（tests/integration/test_p3_persistence_regression.py 14 项专项测试全绿）。"
       ],
       "blocking_reason": null
     },
