@@ -157,6 +157,47 @@ CRT 检测到栈状态异常后立即终止进程，这正是 `STATUS_STACK_BUFF
 该缺陷与退出异常同属「worker 生命周期管理」范畴，但不是同一个根因：
 它发生在运行期（请求丢失），退出异常发生在解释器收尾阶段。
 
+### 第 24 轮：同一容器内子数据集切换的请求上下文隔离
+
+按第二十三轮复核的独立复现结果修正（未重做已通过的 force=0、四角 bounds、
+矢量路由与跨图层保护，未扩展 P4）。
+
+**问题**：`MainWindow._on_subdataset_selected` 的上下文只有
+（项目代际, 图层 ID, 源文件），而**同一容器内的子数据集 A/B 共用这三项**，
+因此完全无法区分；成功回调里的 `info['uri'] == uri` 只是比较「响应」与
+「原请求」，并未验证它是否仍是**当前选择**；错误回调连 URI 检查都没有。
+
+**修正**：
+1. `MetadataPanel.current_subdataset_uri()`：返回 UI 上当前选中的子数据集 URI，
+   作为「用户当前选择」的权威来源。
+2. `MainWindow._on_subdataset_selected` 捕获当次请求的 URI 与
+   **单调递增的请求代际**（`_subdataset_request_gen`）。回调逐项校验：
+   项目代际、图层 ID、数据源、**当前选中 URI**、**最新请求代际**；
+   任一不符即丢弃。原先把 `info['uri'] == uri` 当作唯一 URI 检查的做法已移除。
+   成功与错误回调走**同一个** `_still_current()` 判定，错误路径同样受保护。
+3. `MainWindow._invalidate_subdataset_requests()`：在**切换/清空数据源、
+   图层移除、打开项目、关窗**四处递增代际并清空当前请求 URI，使在途请求失效。
+4. 被丢弃的响应只 `return`，**不得清空当前正确内容**。
+
+**为什么必须用请求代际**：A→B→A 场景中，第一轮 A 与最后一轮 A 的 URI 完全相同，
+当前选中 URI 也相同，只有请求代际能区分「上一轮 A」与「最后一轮 A」。
+
+**复核复现脚本对照（同一基线 4073c13）**
+
+| 复核项 | 修正前 | 修正后 |
+|---|---|---|
+| late_A_success_overwrites_B | true | **false** |
+| late_A_error_overwrites_B | true | **false** |
+
+**回归固化**：`tests/integration/test_p3_subdataset_context.py`（8 项），
+用**确定性反向投递**覆盖：A→B 的迟到成功与迟到错误、A→B→A（第一轮 A 不得覆盖
+最后一轮 A）、同 URI 重试、清空后迟到、移除图层后迟到、关窗后迟到；
+成功与错误路径分别覆盖，不用 sleep 代替断言。
+
+**对照实验（确认测试能捕获该缺陷）**：把 `_still_current()` 临时还原为修复前的
+「三元上下文 + `info['uri'] == uri`」判定后，上述 8 项中 **7 项失败**
+（仅「面板报告当前 URI」这项基础能力通过）；修复后 8 项全通过。
+
 ### 第 23 轮：P3-02 元数据实现的四项边界修正
 
 按第二十二轮复核的独立复现结果修正（未重写已通过的 ROI 与持久化，未扩展矢量渲染或 P4）。
@@ -251,10 +292,28 @@ Thread 0x0000d064 (most recent call first):
 | 13:06:55 | 308 passed | 有（count=156 > 阈值 50） | 3221226505 |
 | 13:11:41（独立 basetemp） | 308 passed | 无 | **0** |
 
-**运行方式的要求（实测踩到的坑）**：`--basetemp` 指定的目录**每次必须用全新路径**。
-pytest 在会话开始时会清空 basetemp；若该目录残留文件数超过删除守卫阈值（50），
-清理会被拦截并中断整轮运行（表现为日志停在某个百分比、无 timeout 记录、无残留进程）。
-本轮 13:29 那轮即因此中断（basetemp 残留 63 个文件）；换全新路径后正常完成。
+**全量运行的时限要求（第 24 轮实测定位）**：全量测试需 **110–122 秒**。
+**后台任务有约 2 分钟的执行上限**，全量跑常卡在边界上：第 23 轮 13:29 与第 24 轮 14:49
+两次均在启动后约 2m1s 被终止，表现为「日志停在某个百分比、无 timeout 记录、无残留进程」——
+那不是测试失败，而是执行时限。改为**前台运行并显式设置更长超时**后连续两轮均通过
+（`326 passed / rc=0`，耗时 120.79s）。
+
+**删除守卫与 basetemp 的关系（此前归因不成立，已订正）**：
+守卫拦截的目标是**全局** `%TEMP%/pytest-of-<user>/garbage-<uuid>`（历史累积 156 个文件，
+与本轮 `--basetemp` 目录无关），且该标记出现在日志**开头**——是先前轮次追加写入的残留，
+不是本轮的清理失败。因此「basetemp 残留超阈值导致中断」的归因不成立。
+但仍建议每轮 `--basetemp` 使用**全新路径**：pytest 会话开始会清空该目录，
+复用旧目录会让清理动作撞上守卫阈值。
+
+**反斜杠被吞的准确归因（第 24 轮复核订正）**：此前记为「PowerShell 自动吞反斜杠」不准确。
+实测分层定位：PowerShell 内部拼接 `$bt = "work\pytest_tmp_x"` 与
+`$env:PYTEST_ADDOPTS = "--basetemp=$bt"` 都**完整保留**反斜杠；
+真正吞掉它的是 **pytest 解析 `PYTEST_ADDOPTS` 时的 shlex 层**——
+`shlex.split(value)` 默认 POSIX 模式把 `\` 当转义符，
+`--basetemp=work\pytest_tmp_x` 被解析为 `--basetemp=workpytest_tmp_x`
+（`shlex.split(v, posix=False)` 才保留反斜杠）。
+规避方式：用正斜杠路径，或把 `--basetemp` 作为**参数数组**直接传给 pytest
+（不经环境变量），并用 `Join-Path` 拼路径。
 
 **两类失败模式必须区分**（这是本轮的重要澄清）：
 
@@ -283,7 +342,7 @@ pytest 在会话开始时会清空 basetemp；若该目录残留文件数超过�
 | P0-01 仓库与文档结构 | done | git init（2.50.1）；docs/plan/ 输入基线、contracts/、src/、tests/；AGENTS.md、README.md、pyproject.toml；docs/progress/WORKPACKAGES.md |
 | P0-02 四环境 | implemented | scripts/bootstrap_pip.ps1 -VerifyOnly → RESULT ALL OK；docs/progress/runs/env_report.json；environments/locks/*.lock.txt |
 | P0-03 自检与小型 Fixture | implemented | src/spectra_workbench/app/doctor.py + scripts/doctor.ps1 → docs/progress/runs/doctor_report.json。GTiff 往返成功、坐标转换成功、205 驱动、5 CLI 就绪；单测全绿 |
-| P0-04 自动化检查流水线 | done | scripts/test.ps1，串联 Ruff、Mypy 与 Pytest。Mypy 57 个源文件 0 错误；全量自动化测试通过：**318 passed in 110.47s**，全量回归子进程 rc=0（2026-11-05 第 23 轮，P3-02 元数据边界修正）；第 22 轮为 308 passed in 116.50s、rc=0；第 21 轮为 297 passed in 105.12s、rc=0；如实记录 07:48:47 历史退出异常轮次（286 passed，0xC0000409）与后续 07:54:31、07:56:16（286 passed，rc=0）及本轮（297 passed，rc=0），全面加固 Qt 对象生命周期有序销毁 |
+| P0-04 自动化检查流水线 | done | scripts/test.ps1，串联 Ruff、Mypy 与 Pytest。Mypy 57 个源文件 0 错误；全量自动化测试通过：**326 passed in 120.79s**，全量回归子进程 rc=0（2026-11-05 第 24 轮，同容器子数据集上下文隔离）；第 23 轮为 318 passed in 110.47s、rc=0；第 22 轮为 308 passed in 116.50s、rc=0；第 21 轮为 297 passed in 105.12s、rc=0；如实记录 07:48:47 历史退出异常轮次（286 passed，0xC0000409）与后续 07:54:31、07:56:16（286 passed，rc=0）及本轮（297 passed，rc=0），全面加固 Qt 对象生命周期有序销毁 |
 | P0-05 打包重定位可行性验证 | implemented | docs/adr/0002-relocation-and-packaging.md；tests/integration/test_relocation.py 验证 UI 与 Rasterio、GDAL 引擎在独立临时路径正常初始化并导入 |
 | P1-01 领域模型与契约对账 | done | src/spectra_workbench/domain/models.py；tests/unit/test_domain_models.py；tests/unit/test_contracts_schema.py（50 项全绿） |
 | P1-02 JSONL 客户端与 Worker 启动 | done | src/spectra_workbench/protocol/messages.py；src/spectra_workbench/workers/process.py；src/spectra_workbench/workers/entrypoint.py；tests/integration/test_worker_process.py（8 项真实跨进程测试全绿） |
@@ -302,7 +361,8 @@ pytest 在会话开始时会清空 basetemp；若该目录残留文件数超过�
 | P3-05 view CRS、重投影、查询与 ROI | implemented | 旋转 Affine 与无 GT 栅格支持；地图坐标 ↔ 像元中心/角点约定；ROI 模型与点包含判定；跨 CRS 视图重投影网格读取；真实鼠标事件多边形 ROI 绘制/闭合/选中/手柄拖拽/删除/保存重开全流程；矩形展开 4 角点经 Worker 转换并精确保持 425 平方单位面积与 4 个角点；坐标转换失败异常隔离隐藏并保全权威模型；五类故障注入矩阵覆盖（向地图/回像元/项目重开/拖动反算/旧响应迟到），跨坐标空间数据混用缺陷已修复（tests/integration/test_p3_interactive_polygon_roi.py 9 项全绿） |
 
 实测命令与结果：
-- powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test.ps1 -All → **Ruff 干净、Mypy 干净（57 个源文件 0 错误）、318 passed in 110.47s，exit 0**
+- powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test.ps1 -All → **Ruff 干净、Mypy 干净（57 个源文件 0 错误）、326 passed in 120.79s，exit 0**
+  - 第 24 轮（同一容器内子数据集切换的请求上下文隔离）：新增 8 项子数据集上下文回归；**全量跑须前台运行**（需 110–122 秒，后台任务约 2 分钟上限会中途终止，见下方说明）；第 23 轮为 318 passed in 110.47s、rc=0
   - 第 23 轮（P3-02 元数据实现边界修正）：新增 10 项元数据边界回归（要素数 force=0、图层类型路由、请求上下文、仿射四角范围）；本轮 pytest 临时根目录使用全新路径（见上方「运行方式的要求」）；第 22 轮为 308 passed in 116.50s、rc=0
   - 第 22 轮（P3-02 矢量与子数据集元数据）：新增 11 项（矢量与子数据集集成 10 项 + stop() 回调死锁回归 1 项）；本轮使用位于本轮工作目录内的独立临时根目录（pytest 的 basetemp 选项），避开环境删除守卫对全局旧临时目录的批量删除拦截；第 21 轮为 297 passed in 105.12s、rc=0
   - 如实记录全量回归历程：

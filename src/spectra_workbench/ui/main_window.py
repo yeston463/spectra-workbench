@@ -258,6 +258,11 @@ class MainWindow(QMainWindow):
         self._hover_layer_id: str | None = None
         self._notifications: list[QMessageBox] = []
         self._open_seq = 0
+        # 子数据集请求代际：同一容器内先后选中 A/B 时，
+        # (项目代际, 图层 ID, 源文件) 三项完全相同，无法区分；
+        # 只有单调递增的请求代际才能区分「上一轮 A」与「最后一轮 A」。
+        self._subdataset_request_gen = 0
+        self._subdataset_request_uri: str | None = None
         self._layer_seq: dict[str, int] = {}
 
         app = QApplication.instance()
@@ -683,6 +688,15 @@ class MainWindow(QMainWindow):
         source = str(layer.file_path) if layer is not None else ""
         return project_gen, layer_id, source
 
+    def _invalidate_subdataset_requests(self) -> None:
+        """使所有在途的子数据集探测失效。
+
+        在切换/清空数据源、图层移除、打开项目与关窗时调用：
+        递增请求代际并清空当前请求 URI，此后到达的旧响应一律丢弃。
+        """
+        self._subdataset_request_gen += 1
+        self._subdataset_request_uri = None
+
     def _metadata_context_valid(self, ctx: tuple[str, str, str]) -> bool:
         """判断某个请求上下文是否仍然有效。"""
         project_gen, layer_id, source = ctx
@@ -703,6 +717,8 @@ class MainWindow(QMainWindow):
         回调带请求上下文校验：旧图层的迟到响应直接丢弃。
         """
         client = self._client_for(layer)
+        # 切换数据源：此前在途的子数据集探测全部失效
+        self._invalidate_subdataset_requests()
         self.metadata_panel.clear_all()
         path = str(layer.file_path)
         ctx = self._metadata_context(layer)
@@ -747,15 +763,34 @@ class MainWindow(QMainWindow):
         client = self._client_for(layer)
         ctx = self._metadata_context(layer)
 
-        def _on_ok(info: dict) -> None:
+        # 捕获当次请求的 URI 与单调递增的请求代际。
+        # 同一容器内先后选中 A 与 B 时，前三项上下文完全相同，
+        # 只有代际能区分「上一轮 A」与「最后一轮 A」。
+        self._subdataset_request_gen += 1
+        request_gen = self._subdataset_request_gen
+        self._subdataset_request_uri = uri
+
+        def _still_current() -> bool:
+            """该响应是否仍对应「当前选择」且是最新一轮请求。
+
+            逐项校验：项目代际、图层 ID、数据源、当前选中 URI、最新请求代际。
+            任一不符即丢弃——**被丢弃只 return，不得清空当前正确内容**。
+            """
             if not self._metadata_context_valid(ctx):
-                return
-            if str(info.get("uri", "")) != uri:
+                return False
+            if request_gen != self._subdataset_request_gen:
+                return False
+            if self._subdataset_request_uri != uri:
+                return False
+            return self.metadata_panel.current_subdataset_uri() == uri
+
+        def _on_ok(info: dict) -> None:
+            if not _still_current():
                 return
             self.metadata_panel.show_subdataset_detail(info)
 
         def _on_err(msg: str) -> None:
-            if not self._metadata_context_valid(ctx):
+            if not _still_current():
                 return
             self.metadata_panel.show_error(msg)
 
@@ -784,6 +819,8 @@ class MainWindow(QMainWindow):
         self._mark_dirty()
 
     def _on_layer_removed(self, layer_id: str) -> None:
+        # 图层移除：其子数据集探测结果不再有意义
+        self._invalidate_subdataset_requests()
         self._layer_seq.pop(layer_id, None)
         rec = self._project_records.pop(layer_id, None)
         self._project_rois.pop(layer_id, None)
@@ -1225,6 +1262,7 @@ class MainWindow(QMainWindow):
             self._open_seq = base_seq + len(spec.layers)
             # 打开项目后，此前发起的元数据探测全部失效（上下文代际已变）
             self._open_seq += 1
+            self._invalidate_subdataset_requests()
             self.missing_sources = []
             self.layer_panel.set_missing_layers([])
             self._dirty = False
@@ -1459,6 +1497,8 @@ class MainWindow(QMainWindow):
         )
 
     def closeEvent(self, event: Any) -> None:
+        # 关窗：在途的子数据集探测一律失效，迟到响应不得再改写界面
+        self._invalidate_subdataset_requests()
         for canvas in (self.canvas, self.canvas_b):
             canvas.clear()
             canvas.close()

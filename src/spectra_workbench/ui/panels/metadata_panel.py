@@ -179,9 +179,24 @@ class MetadataPanel(QWidget):
 
     def clear_subdatasets(self, message: str = "未加载子数据集") -> None:
         self._subdatasets = []
+        self.cmb_subdataset.blockSignals(True)
         self.cmb_subdataset.clear()
+        self.cmb_subdataset.blockSignals(False)
         self.lbl_subdataset_summary.setText(message)
         self.lbl_subdataset_detail.setText("—")
+
+    def current_subdataset_uri(self) -> str | None:
+        """返回当前在 UI 上选中的子数据集 URI（没有选中时返回 None）。
+
+        这是「用户当前选择」的权威来源：回调必须与它比对，
+        而不是只与「发起请求时的 URI」比对——后者无法区分
+        同一容器内先后选中的 A 与 B。
+        """
+        index = self.cmb_subdataset.currentIndex()
+        if index < 0:
+            return None
+        data = self.cmb_subdataset.currentData()
+        return str(data) if data else None
 
     def _on_subdataset_combo_changed(self, index: int) -> None:
         if index >= 0 and index < len(self._subdatasets):
