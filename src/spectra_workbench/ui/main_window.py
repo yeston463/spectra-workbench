@@ -63,6 +63,7 @@ from spectra_workbench.ui.models.layer import LayerItem
 from spectra_workbench.ui.panels.display_panel import DisplayPanel
 from spectra_workbench.ui.panels.info_panel import InfoPanel
 from spectra_workbench.ui.panels.layer_panel import LayerPanel
+from spectra_workbench.ui.panels.metadata_panel import MetadataPanel
 from spectra_workbench.ui.panels.task_panel import TaskPanel
 from spectra_workbench.ui.panels.toolbox_panel import ToolboxPanel
 
@@ -344,8 +345,10 @@ class MainWindow(QMainWindow):
         self.form_widget.set_project_root(self.project_root)
         self.info_panel = InfoPanel()
         self.display_panel = DisplayPanel()
+        self.metadata_panel = MetadataPanel()
         self.tab_right.addTab(self.info_panel, "坐标与 ROI")
         self.tab_right.addTab(self.display_panel, "显示")
+        self.tab_right.addTab(self.metadata_panel, "数据源元数据")
         self.tab_right.addTab(self.form_widget, "算法参数")
         self.dock_right.setWidget(self.tab_right)
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.dock_right)
@@ -486,6 +489,7 @@ class MainWindow(QMainWindow):
         self.info_panel.sig_roi_delete_requested.connect(self._on_roi_delete)
         self.info_panel.sig_roi_clear_requested.connect(self._on_roi_clear)
         self.canvas.sig_roi_changed.connect(self._on_roi_changed)
+        self.metadata_panel.sig_subdataset_selected.connect(self._on_subdataset_selected)
 
         # 双视图联动
         self.canvas.sig_view_changed.connect(self._on_peer_view_changed)
@@ -543,9 +547,83 @@ class MainWindow(QMainWindow):
                 self.display_panel.set_layer(layer.band_count, layer.display)
 
         def _on_probe_err(err: str) -> None:
-            self._notify(QMessageBox.Icon.Critical, "影像打开失败", f"worker 探测元数据失败:\n{err}")
+            if client._closed:
+                # 客户端已关闭（正在销毁窗口）：不再发起任何新探测
+                return
+            # 栅格探测失败：可能是矢量数据集，回退到矢量探测（P3-02）
+            def _on_vector_ok(vec: dict[str, Any]) -> None:
+                self._add_vector_layer(p, vec, record=record, rois=rois, order=seq)
+
+            def _on_vector_err(vec_err: str) -> None:
+                if client._closed:
+                    return
+                self._notify(
+                    QMessageBox.Icon.Critical,
+                    "数据打开失败",
+                    f"worker 探测元数据失败（栅格与矢量均未成功）:\n{err}\n矢量探测：{vec_err}",
+                )
+
+            client.probe_vector_async(p, on_success=_on_vector_ok, on_error=_on_vector_err)
 
         client.probe_dataset_async(p, on_success=_on_probed, on_error=_on_probe_err)
+
+    def _add_vector_layer(
+        self,
+        path: Path,
+        vector_info: dict[str, Any],
+        record: object | None = None,
+        rois: list[ROI] | None = None,
+        order: int | None = None,
+    ) -> None:
+        """把矢量数据集登记为图层（P3-02）。
+
+        矢量**不做画布渲染**（渲染能力尚未实现），但图层本身可管理、可保存重开；
+        元数据在「数据源元数据」面板中展示。
+        """
+        layer = LayerItem(
+            name=(record.name if record else path.stem),  # type: ignore[attr-defined]
+            file_path=path,
+            metadata={
+                "kind": "vector",
+                "driver": vector_info.get("driver"),
+                "layer_count": vector_info.get("layer_count", 0),
+                "layers": [
+                    {
+                        "name": lyr.get("name"),
+                        "geometry_type": lyr.get("geometry_type"),
+                        "crs_epsg": lyr.get("crs_epsg"),
+                        "feature_count": lyr.get("feature_count"),
+                        "field_count": lyr.get("field_count"),
+                    }
+                    for lyr in (vector_info.get("layers") or [])
+                ],
+                "spatial_model": "vector",
+                "renderable": False,
+            },
+        )
+        if record is not None:
+            layer.layer_id = record.layer_id  # type: ignore[attr-defined]
+            layer.visible = record.visible  # type: ignore[attr-defined]
+            layer.display = record.display.model_copy(deep=True)  # type: ignore[attr-defined]
+            layer.provider_hint = record.provider_hint  # type: ignore[attr-defined]
+            layer.rois = list(rois or [])
+        if layer.layer_id not in self._project_layer_order:
+            self._project_layer_order.append(layer.layer_id)
+        self._client_for(layer)
+        if order is not None:
+            self._layer_seq[layer.layer_id] = order
+        index = sum(1 for ly in self.layer_panel.layers if self._layer_seq.get(ly.layer_id, 0) < (order or 0))
+        self.layer_panel.add_layer(layer, select=True, index=index)
+        self._mark_dirty()
+        # 矢量图层不进入影像画布：渲染能力未实现，明确说明而不提供假入口
+        self.canvas.set_layer(None)
+        self.canvas_b.set_layer(None)
+        self.display_panel.clear()
+        self.metadata_panel.show_vector(vector_info)
+        self.status_bar.showMessage(
+            f"矢量图层 {layer.name} | {layer.metadata.get('layer_count', 0)} 个子图层 | "
+            "暂不支持矢量渲染（仅元数据读取）"
+        )
 
     def load_default_sample(self) -> None:
         for name in ("a01_multiband_4b_8x8.hdr", "a01_ramp_16x16.hdr"):
@@ -579,6 +657,53 @@ class MainWindow(QMainWindow):
             f"图层 {layer.name} | {layer.width}x{layer.height} | {layer.band_count} 波段 | "
             f"{layer.crs_display} | 空间模型={layer.metadata.get('spatial_model', 'affine')}"
         )
+        self._probe_source_metadata(layer)
+
+    def _probe_source_metadata(self, layer: LayerItem) -> None:
+        """探测并展示数据源元数据（P3-02）。
+
+        矢量数据集走 probe_vector；其他容器数据集走 list_subdatasets。
+        两条路径都通过 worker 完成，GUI 进程不导入任何原生地理库。
+        """
+        client = self._client_for(layer)
+        self.metadata_panel.clear_all()
+        path = str(layer.file_path)
+
+        def _on_vector(info: dict) -> None:
+            self.metadata_panel.show_vector(info)
+
+        def _on_vector_err(msg: str) -> None:
+            self.metadata_panel.clear_vector(f"矢量元数据探测失败：{msg}")
+
+        def _on_subs(info: dict) -> None:
+            self.metadata_panel.show_subdatasets(info)
+
+        def _on_subs_err(msg: str) -> None:
+            self.metadata_panel.clear_subdatasets(f"子数据集枚举失败：{msg}")
+
+        # 矢量：先按栅格探测会失败，用矢量探测单独走一条
+        client.probe_vector_async(path, on_success=_on_vector, on_error=_on_vector_err)
+        client.list_subdatasets_async(path, on_success=_on_subs, on_error=_on_subs_err)
+
+    def _on_subdataset_selected(self, uri: str) -> None:
+        """探测选中的子数据集。
+
+        ``uri`` 是引擎返回的数据源引用（可能是 ``NETCDF:"file.nc":Band1``），
+        原样交给 worker，**不做路径解析**。
+        """
+        layer = self.canvas.current_layer
+        if layer is None:
+            self.metadata_panel.show_error("未选中图层")
+            return
+        client = self._client_for(layer)
+
+        def _on_ok(info: dict) -> None:
+            self.metadata_panel.show_subdataset_detail(info)
+
+        def _on_err(msg: str) -> None:
+            self.metadata_panel.show_error(msg)
+
+        client.probe_subdataset_async(uri, on_success=_on_ok, on_error=_on_err)
 
     def _apply_pending_view(self, canvas: ImageCanvas, view: ViewRecord | None) -> None:
         """图层是异步探测回来的，保存的视图必须等它真正被选中后才能套用。"""

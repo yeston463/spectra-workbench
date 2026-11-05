@@ -567,6 +567,22 @@ class WorkerProcess:
             "transform_bounds", {"path": str(path), "view_crs_wkt": view_crs_wkt}, timeout=timeout
         )
 
+    def probe_vector(self, path: Path | str, timeout: float = 15.0) -> dict[str, Any]:
+        """探测矢量数据集的基础元数据（P3-02）。"""
+        return self._simple_call("probe_vector", {"path": str(path)}, timeout=timeout)
+
+    def list_subdatasets(self, path: Path | str, timeout: float = 15.0) -> dict[str, Any]:
+        """列出容器数据集的子数据集（P3-02）。"""
+        return self._simple_call("list_subdatasets", {"path": str(path)}, timeout=timeout)
+
+    def probe_subdataset(self, uri: str, timeout: float = 15.0) -> dict[str, Any]:
+        """探测单个子数据集（P3-02）。
+
+        ``uri`` 是 GDAL 返回的数据源引用（可能是 ``NETCDF:"file.nc":Band1``），
+        原样透传，绝不做路径解析。
+        """
+        return self._simple_call("probe_subdataset", {"uri": str(uri)}, timeout=timeout)
+
     def transform_coordinates(
         self,
         path: Path | str,

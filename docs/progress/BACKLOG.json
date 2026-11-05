@@ -93,7 +93,8 @@
         "类型健全性：补充 pyproject.toml mypy 配置与 PEP 561 py.typed 标记，mypy 检查 49 个源文件 0 错误（Success: no issues found in 49 source files）。",
         "测试分组：tests/unit 与 tests/integration 覆盖领域模型、调度、生命周期、UI 组件与跨进程集成。",
         "实测流水线：powershell -ExecutionPolicy Bypass -File scripts/test.ps1 -All => Ruff 干净、Mypy 干净、Pytest 169 passed，exit 0。",
-        "退出异常 0xC0000409 诊断（第 21 轮）：保留失败轮与成功轮全部证据（docs/progress/runs/exit_anomaly/test_all_history.log 共 11 轮，其中 11-04 20:00:24 与 11-05 07:48:47 两轮 rc=3221226505）；Windows 事件日志定位崩溃模块为 ucrtbase.dll（偏移 0xa527e，反汇编确认为 int 0x15 的 __fastfail 指令）与 Qt6Core.dll；07:48:47 失败轮与 07:56:16 成功轮为同一工作树快照，确认为退出阶段随机异常而非某次改动引入；实测 win.deleteLater()+processEvents() 并未真正销毁窗口（work/probe_deferred_delete.py），Qt 对象析构顺序在解释器退出阶段不确定；已实施 tests/conftest.py 的 pytest_sessionfinish 有序销毁、QtWorkerClient._closed 信号派发保护、closeEvent 无条件回收请求线程，并以 tests/unit/test_p3_exit_lifecycle.py 6 项回归固化；本机缺少符号工具，无法将 ucrtbase.dll+0xa527e 映射到具体函数，如实记录为根因未完全定位，不宣称根治。；同期修复 worker 并发启动竞态：start() 此前无锁保护，多个请求线程并发 start() 会互相覆盖子进程句柄导致请求丢失（界面表现为图层加载不出来），已用 _start_lock 串行化并在锁内二次检查存活状态，回归断言见 tests/unit/test_p3_exit_lifecycle.py（8 项，含并发启动与锁序列化）。"
+        "退出异常 0xC0000409 诊断（第 21 轮）：保留失败轮与成功轮全部证据（docs/progress/runs/exit_anomaly/test_all_history.log 共 11 轮，其中 11-04 20:00:24 与 11-05 07:48:47 两轮 rc=3221226505）；Windows 事件日志定位崩溃模块为 ucrtbase.dll（偏移 0xa527e，字节 cd 29 即 x64 的 int 0x29 / __fastfail 指令）与 Qt6Core.dll，该指令序列只能表明此处触发快速失败、不能单独证明具体根因；07:48:47 失败轮与 07:56:16 成功轮都发生在 ce4e60d 提交（07:58:51）之前，但当时无源码哈希或快照留存，**两轮工作树是否字节完全一致未能完整确认**，故只确证为间歇性崩溃；实测 win.deleteLater()+processEvents() 并未真正销毁窗口（docs/progress/runs/exit_anomaly/probes/probe_deferred_delete.py），Qt 对象析构顺序在解释器退出阶段不确定；已实施 tests/conftest.py 的会话结束有序销毁、QtWorkerClient._closed 信号派发保护、closeEvent 无条件回收请求线程，并以 tests/unit/test_p3_exit_lifecycle.py 8 项回归固化（含并发启动竞态与锁序列化）；对照实验（修复后 6 轮全绿、对照组 7 轮全绿）不足以证明根因已消除，本机缺少符号工具无法映射到具体函数，如实记录为根因未完全定位，不宣称根治；再现时应保存崩溃现场快照、完整日志与 Windows 事件日志。",
+        "第 22 轮发现并修复 stop() 回调-锁自我死锁：stop() 过去持有 _callbacks_lock 时调用各请求的错误回调，而主窗口的矢量回退逻辑会在该回调内再次发起请求（call_async 需同一把非重入锁），造成同线程自我死锁（全量跑 faulthandler 60s 超时并打印全部线程栈，栈顶直指该路径）；已改为锁内只摘出回调、锁外通知，并给主窗口回退回调加关闭态防护；对照实验：还原为修复前行为后回归用例硬超时 120s 被终止（死锁复现），修复后 1.8s 通过，回归固化于 tests/unit/test_p3_exit_lifecycle.py。"
       ],
       "blocking_reason": null
     },
@@ -370,10 +371,15 @@
       "status": "implemented",
       "release_requirement": "core",
       "evidence": [
-        "Worker 进程扩展 probe_dataset 协议请求：GDALProviderAdapter 与 RasterioProviderAdapter 提取驱动、尺寸、波段数、数据类型、CRS、GeoTransform、地理范围与 NoData。",
-        "src/spectra_workbench/ui/models/layer.py：LayerItem 纯 Python 领域模型接收并呈现元数据。",
-        "tests/integration/test_ui_app.py::test_main_window_open_dataset_and_chunked_preview 验证通过。",
-        "注：P3-02 原始范围内的矢量图层（OGR）与科学子数据集（HDF/NetCDF subdatasets）基础元数据探测本期尚未实现/验证。"
+        "Worker 进程 probe_dataset 协议请求；规范错误返回 Schema 与执行器顶层异常隔离；旋转 Affine 探测；tests/integration/test_ui_app.py 验证通过。",
+        "第 22 轮补齐原里程碑缺口：基础矢量与科学子数据集元数据。",
+        "Worker 新增 probe_vector：图层名称、几何类型、CRS、范围、字段名称/类型/可空性；要素数与范围不可得时以 feature_count_expensive / extent_available 如实标注，不编造数值；字段可空性用 GDAL 3.13 绑定的 FieldDefn.IsNullable()（该绑定无 GetNullable）。",
+        "Worker 新增 list_subdatasets 与 probe_subdataset：子数据集 URI 原样保留引擎返回值（形如 NETCDF:\"file.nc\":Band1），不按普通路径解析、不做本地存在性判断；选中后探测尺寸、dtype、NoData、波段、GeoTransform 与 CRS。",
+        "GUI 新增「数据源元数据」面板（src/spectra_workbench/ui/panels/metadata_panel.py）：展示矢量图层结构、字段表与可选子数据集；矢量渲染未实现时明确标注，不提供假入口。",
+        "open_dataset 在栅格探测失败时回退矢量探测，矢量文件可作为图层打开、选中并保存重开；矢量图层不进入影像画布（渲染能力未实现）。",
+        "合成容器：tests/fixtures/make_p3_samples.py 新增多图层 GPKG（观测点/区域面/空图层/无坐标系图层，含中文字段名与可空字段）、中文路径 GeoJSON，以及 netCDF 多变量容器（GDAL 暴露为 2 个子数据集）。",
+        "tests/integration/test_p3_vector_subdataset_metadata.py（10 项）验证：真实 worker 矢量元数据、中文/空格路径、缺失矢量与缺失子数据集的明确错误、GUI 面板展示、GUI 零原生地理库导入断言、坏文件后 worker 仍可继续处理正常请求、既有栅格 ROI 流程不受影响。",
+        "已知限制（如实记录）：netCDF 库在含中文/空格的路径下无法创建容器（报 non existing output directory），测试容器置于纯 ASCII 路径；矢量渲染与多维数据分析仍未实现。"
       ],
       "blocking_reason": null
     },

@@ -534,6 +534,266 @@ class GDALProviderAdapter(ProviderAdapter):
         finally:
             del ds
 
+    # ------------------------------------------------------- P3-02 矢量元数据
+    def probe_vector(self, path: Path | str) -> dict[str, Any]:
+        """探测矢量数据集的基础元数据（P3-02）。
+
+        只读取结构信息，不做全表扫描：
+        - 图层名称、几何类型、CRS、范围；
+        - 字段名称 / 类型 / 可空性。
+
+        要素数与范围若驱动不支持或需昂贵扫描，返回 None 并在
+        ``feature_count_expensive`` / ``extent_available`` 中如实标注，
+        绝不返回编造数值。
+        """
+        if not GDAL_AVAILABLE or gdal is None:
+            raise RuntimeError("GDAL 运行时不可用，无法探测矢量数据集")
+        try:
+            from osgeo import ogr
+        except ImportError as exc:  # pragma: no cover - 引擎环境缺失
+            raise RuntimeError(f"OGR 运行时不可用：{exc}") from exc
+
+        in_path = Path(path)
+        if not in_path.exists():
+            raise FileNotFoundError(f"矢量数据集不存在: {in_path}")
+
+        ds = ogr.Open(str(in_path))
+        if ds is None:
+            raise RuntimeError(f"无法打开矢量数据集: {in_path}")
+
+        layers: list[dict[str, Any]] = []
+        try:
+            layer_count = int(ds.GetLayerCount())
+            for idx in range(layer_count):
+                lyr = ds.GetLayer(idx)
+                if lyr is None:
+                    continue
+                layers.append(self._describe_vector_layer(lyr, idx))
+        finally:
+            ds = None
+
+        if not layers:
+            raise RuntimeError(f"矢量数据集不含任何图层: {in_path}")
+
+        driver_name = ""
+        driver_long = ""
+        try:
+            # ogr.Open 后无法直接取驱动名时，退回用 gdal 打开同名栅格探测（多数驱动同名）
+            gdal_ds = gdal.Open(str(in_path))
+            if gdal_ds is not None:
+                drv = gdal_ds.GetDriver()
+                if drv is not None:
+                    driver_name = drv.ShortName
+                    driver_long = drv.LongName
+                gdal_ds = None
+        except Exception:
+            driver_name = ""
+
+        return {
+            "path": str(in_path),
+            "kind": "vector",
+            "driver": driver_name,
+            "driver_long_name": driver_long,
+            "layer_count": len(layers),
+            "layers": layers,
+        }
+
+    @staticmethod
+    def _describe_vector_layer(lyr: Any, index: int) -> dict[str, Any]:
+        """描述单个矢量图层：名称、几何类型、CRS、范围、字段。"""
+        try:
+            from osgeo import ogr
+        except ImportError:  # pragma: no cover - 引擎环境缺失
+            ogr = None
+
+        name = lyr.GetName() or f"layer_{index}"
+
+        geom_type_name = ""
+        try:
+            if ogr is not None:
+                geom_type_name = ogr.GeometryTypeToName(lyr.GetGeomType()) or ""
+        except Exception:
+            geom_type_name = ""
+
+        crs_epsg: int | None = None
+        crs_wkt: str | None = None
+        try:
+            srs = lyr.GetSpatialRef()
+            if srs is not None:
+                code = srs.GetAuthorityCode(None)
+                if code and str(code).isdigit():
+                    crs_epsg = int(code)
+                crs_wkt = srs.ExportToWkt()
+        except Exception:
+            pass
+
+        # 范围：驱动不支持时返回 None，不伪造
+        extent: list[float] | None = None
+        try:
+            ext = lyr.GetExtent(force=0)  # 0 = 允许驱动使用已缓存/快速计算
+            if ext is not None:
+                vals = [float(v) for v in ext]
+                if len(vals) == 4 and all(v == v for v in vals):  # 排除 NaN
+                    extent = vals
+        except Exception:
+            extent = None
+
+        # 要素数：默认不强制全表扫描
+        feature_count: int | None = None
+        feature_count_expensive = False
+        try:
+            fc = lyr.GetFeatureCount()
+            if fc is not None and int(fc) >= 0:
+                feature_count = int(fc)
+            else:
+                feature_count_expensive = True
+        except Exception:
+            feature_count = None
+            feature_count_expensive = True
+
+        fields: list[dict[str, Any]] = []
+        try:
+            defn = lyr.GetLayerDefn()
+            for i in range(int(defn.GetFieldCount())):
+                fdef = defn.GetFieldDefn(i)
+                nullable: bool | None = None
+                # GDAL 3.13 的 Python 绑定没有 GetNullable()，只有 IsNullable()
+                if hasattr(fdef, "IsNullable"):
+                    try:
+                        nullable = bool(fdef.IsNullable())
+                    except Exception:
+                        nullable = None
+                fields.append(
+                    {
+                        "name": fdef.GetName(),
+                        "type": fdef.GetTypeName(),
+                        "type_code": int(fdef.GetType()),
+                        "nullable": nullable,
+                    }
+                )
+        except Exception:
+            fields = []
+
+        return {
+            "index": index,
+            "name": name,
+            "geometry_type": geom_type_name,
+            "crs_epsg": crs_epsg,
+            "crs_wkt": crs_wkt,
+            "extent": extent,
+            "extent_available": extent is not None,
+            "feature_count": feature_count,
+            "feature_count_expensive": feature_count_expensive,
+            "field_count": len(fields),
+            "fields": fields,
+        }
+
+    # ----------------------------------------------------- P3-02 子数据集发现
+    def list_subdatasets(self, path: Path | str) -> dict[str, Any]:
+        """列出容器数据集的子数据集（P3-02）。
+
+        子数据集 URI 由 GDAL 返回，形如 ``NETCDF:"file.nc":Band1``，
+        它**不是普通文件路径**：这里原样保留 ``uri``，绝不做 Path 解析或本地
+        存在性判断（那会把协议前缀与变量名当成路径的一部分而误判为不存在）。
+        """
+        if not GDAL_AVAILABLE or gdal is None:
+            raise RuntimeError("GDAL 运行时不可用，无法枚举子数据集")
+        in_path = Path(path)
+        if not in_path.exists():
+            raise FileNotFoundError(f"数据集不存在: {in_path}")
+
+        ds = gdal.Open(str(in_path))
+        if ds is None:
+            raise RuntimeError(f"无法打开数据集: {in_path}")
+        try:
+            raw = ds.GetSubDatasets()
+        finally:
+            ds = None
+
+        entries: list[dict[str, Any]] = []
+        for item in raw or []:
+            if not item:
+                continue
+            uri = str(item[0])
+            desc = str(item[1]) if len(item) > 1 else ""
+            entries.append({"uri": uri, "description": desc})
+
+        return {
+            "path": str(in_path),
+            "subdataset_count": len(entries),
+            "subdatasets": entries,
+        }
+
+    def probe_subdataset(self, uri: str) -> dict[str, Any]:
+        """探测单个子数据集（P3-02）。
+
+        ``uri`` 是 GDAL 返回的数据源引用（可能是 ``NETCDF:"file.nc":Band1`` 这类
+        协议 URI），必须原样交给 GDAL 打开，不能当普通路径处理。
+        """
+        if not GDAL_AVAILABLE or gdal is None:
+            raise RuntimeError("GDAL 运行时不可用，无法探测子数据集")
+        if not uri or not str(uri).strip():
+            raise ValueError("子数据集 URI 不得为空")
+
+        ds = gdal.Open(str(uri))
+        if ds is None:
+            raise RuntimeError(f"无法打开子数据集: {uri}")
+        try:
+            width = int(ds.RasterXSize)
+            height = int(ds.RasterYSize)
+            count = int(ds.RasterCount)
+            driver_name = ds.GetDriver().ShortName if ds.GetDriver() else "Unknown"
+
+            gt = ds.GetGeoTransform(can_return_null=True)
+            geotransform = [float(x) for x in gt] if gt else None
+            bounds = None
+            if geotransform:
+                minx = geotransform[0]
+                maxx = minx + geotransform[1] * width + geotransform[2] * height
+                maxy = geotransform[3]
+                miny = maxy + geotransform[4] * width + geotransform[5] * height
+                bounds = [min(minx, maxx), min(miny, maxy), max(maxx, minx), max(maxy, miny)]
+
+            crs_epsg: int | None = None
+            crs_wkt: str | None = None
+            srs = ds.GetSpatialRef()
+            if srs is not None:
+                code = srs.GetAuthorityCode(None)
+                if code and str(code).isdigit():
+                    crs_epsg = int(code)
+                crs_wkt = srs.ExportToWkt()
+
+            bands: list[dict[str, Any]] = []
+            for b in range(1, count + 1):
+                band = ds.GetRasterBand(b)
+                nd = band.GetNoDataValue()
+                bands.append(
+                    {
+                        "band": b,
+                        "dtype": gdal.GetDataTypeName(band.DataType),
+                        "nodata": float(nd) if nd is not None else None,
+                        "description": band.GetDescription() or None,
+                    }
+                )
+
+            return {
+                "uri": str(uri),
+                "kind": "subdataset",
+                "driver": driver_name,
+                "width": width,
+                "height": height,
+                "count": count,
+                "dtypes": [b["dtype"] for b in bands],
+                "nodata": bands[0]["nodata"] if bands else None,
+                "crs_epsg": crs_epsg,
+                "crs_wkt": crs_wkt,
+                "geotransform": geotransform,
+                "bounds": bounds,
+                "bands": bands,
+            }
+        finally:
+            ds = None
+
     def read_window(
         self,
         path: Path | str,

@@ -154,3 +154,45 @@ def test_start_is_serialized_by_lock(client: QtWorkerClient) -> None:
     t.join(timeout=5)
     c.join(timeout=5)
     assert not c.is_alive(), "锁释放后并发线程应能进入"
+
+
+def test_stop_does_not_deadlock_when_error_callback_issues_new_request(
+    client: QtWorkerClient,
+) -> None:
+    """stop() 触发的错误回调若再次发起请求，不得自我死锁。
+
+    ``stop()`` 过去在持有 ``_callbacks_lock`` 时调用各请求的错误回调。
+    若该回调内部再次发起请求（``call_async`` 需要同一把非重入锁），
+    就会造成同线程自我死锁——进程会在 faulthandler 超时时打印全部线程栈。
+    本项回归锁定「回调必须在锁外通知」这一约束。
+    """
+    issued: list[str] = []
+
+    def _on_err(msg: str) -> None:
+        # 模拟主窗口的探测失败回退：回调内部再次发起请求
+        issued.append(msg)
+        with client._callbacks_lock:
+            client._call_callbacks["late"] = (None, None)
+
+    client._call_callbacks["pending"] = (None, _on_err)
+
+    done = threading.Event()
+    error: list[BaseException] = []
+
+    def _stopper() -> None:
+        try:
+            client.stop(timeout=1.0)
+        except BaseException as exc:  # pragma: no cover - 由断言呈现
+            error.append(exc)
+        finally:
+            done.set()
+
+    t = threading.Thread(target=_stopper, name="stop-race")
+    t.start()
+    # 若发生自我死锁，stop() 永远不会返回
+    finished = done.wait(timeout=10.0)
+    t.join(timeout=5.0)
+
+    assert finished, "stop() 出现自我死锁：错误回调在锁内被调用，回调又请求同一把锁"
+    assert not error, f"stop() 抛出异常：{error!r}"
+    assert issued == ["Worker client stopped"], f"错误回调应被恰好通知一次：{issued}"

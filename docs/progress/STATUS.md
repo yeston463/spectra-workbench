@@ -1,6 +1,6 @@
 # 执行状态
 
-更新：2026-11-05（第 21 轮 · P3 ROI 坐标边界收口与退出异常诊断：矩形权威几何与显示轮廓分离的独立数值断言、坐标转换失败五类故障注入矩阵与跨坐标空间混用缺陷修复、退出码 0xC0000409 的 Windows 事件日志定位与 Qt 有序销毁对策）
+更新：2026-11-05（第 22 轮 · P3-02 基础矢量与子数据集元数据：Worker 侧 probe_vector / list_subdatasets / probe_subdataset、GUI「数据源元数据」面板、矢量文件可作为图层打开与保存重开；同期修复 stop() 回调-锁自我死锁；并按复核意见修正退出异常表述与测试数）
 
 ## 当前里程碑
 
@@ -15,6 +15,7 @@
 - **P3 主窗口、数据与影像查看**（全部保持 implemented）：
   - **P3-01 主窗口、Dock、项目树、图层模型**：implemented。实现主窗口与 Dock 布局、图层顺序保序；显式设置 Dock 与工具栏 objectName，实测验证浮动（isFloating）、显隐（isVisible）与停靠区域重排跨会话无损保存与重开恢复；分离运行时根与用户项目目录，新项目显式记录 `path_anchor='project_dir'`；保存事务边界加固；旧版 1.0 格式且缺少路径基准标记的项目进入明确的待确认流程，程序化打开返回 checkable 状态，用户确认前不自动派发同名文件、未确认前禁止保存，用户确认后按真实路径派发并迁移持久化，取消确认原文件保持不变；无论确认的物理目标是否存在均保留用户确认选择（存在性仅决定是否请求加载，不影响路径更新），重开后严格保持目标一致，杜绝劫持同名文件；自定义空路径提供校验阻断；旧绝对引用直接按确定语义解析；缺失源状态指示与显式移除；移除图层与关窗彻底释放文件句柄与缓存。
   - **P3-02 栅格元数据读取**：implemented。通过 Worker 提取尺寸、波段数、驱动、数据类型、CRS、GeoTransform（含旋转 Affine 系数）、地理范围与 NoData；统一异常隔离与 `retryable` 标准错误 Schema，坏文件探测不中断执行线程。
+  - **P3-02 基础矢量与子数据集元数据**（第 22 轮补齐原缺口）：implemented。Worker 新增 `probe_vector`（图层名称、几何类型、CRS、范围、字段名称/类型/可空性；要素数与范围不可得时以 `feature_count_expensive` / `extent_available` 如实标注，不返回编造数值）、`list_subdatasets`（原样保留引擎返回的数据源引用）与 `probe_subdataset`（尺寸、dtype、NoData、波段、GeoTransform、CRS）。GUI 新增「数据源元数据」面板展示矢量结构与可选子数据集；栅格探测失败时回退矢量探测，使矢量文件可作为图层打开、可保存重开；**矢量渲染与多维分析尚未实现，明确标注而不提供假入口**。
   - **P3-03 瓦片请求、概览、缓存、过期请求处理**：implemented。仅按可见窗口向 Worker 索取数据；实现 `TileCache`（LRU 淘汰与字节预算限制）；请求代际（`_active_request_id`）与图层 ID 校验彻底丢弃过期旧图响应；支持四种概览采样策略（auto/nearest/average/gauss）；在真实交互式 GUI 下以 6144x6144 多级概览大影像完成缩放、平移、切波段与切层全流程实测，验证 LRU 淘汰真实触发（9 次逐出），缓存严格受限在预算内，图层移除后缓存彻底清零。
   - **P3-04 灰度/RGB/伪彩、拉伸、透明度与分屏**：implemented。支持灰度、RGB 与 6 种伪彩色（terrain/viridis/plasma/inferno/magma/jet）；min-max 与 2%~98% 分位数拉伸；原始像元值与显示拉伸值严格物理分离；实现双视图联动同步模式（`test_dual_canvas_link_mode`）。
   - **P3-05 view CRS、重投影、查询与 ROI**：implemented。支持旋转 Affine 栅格与无 GT 栅格加载；地图坐标 ↔ 像元行列支持中心 (center) 与角点 (corner) 两种坐标约定（`test_map_to_pixel_center_vs_corner`）；实现 PointROI / RectROI / PolygonROI 模型与点在多边形判定；跨 CRS 视图重投影网格索取；通过真实 Qt 鼠标事件（QTest）完成多边形 ROI 逐点绘制、右键/起点闭合、选中、顶点手柄真实拖拽形变、删除与保存重开恢复；多图层切换下 ROI 所属图层严格隔离与保全；旋转 Affine 栅格与视图 CRS 切换（像元 vs EPSG:4326）下坐标空间与点位无损保持；矩形 ROI 权威几何与显示轮廓物理分离，在旋转 Affine 栅格下展开 4 角点经 Worker 转换并渲染实际轮廓，实测断言 4 个真实地图角点与 425.0 平方地图单位覆盖面积（彻底杜绝错误轴对齐面积 375.0），变换视图下手柄隐藏禁用，防止扭曲矩形；坐标转换失败时绝不伪装恒等变换，严格隐藏图形项（`item.isVisible() is False`）并清空 `display_points`（为 None），保全权威模型，切回有效视图自动恢复；拖动反算 Worker 报错时安全回退，不崩溃不污染。本轮补齐五类故障注入矩阵（向地图失败 / 回像元失败 / 项目重开失败 / 拖动反算失败 / 旧响应迟到），每类均验证图形状态、权威几何与保存结果；修复跨坐标空间数据混用缺陷（state 显式记录显示点所属空间与 CRS），拖动反算失败时显示图形恢复原轮廓、权威几何保持不变。
@@ -46,11 +47,17 @@
 | 11-04 21:56:11 | 277 passed | 0 | 成功 |
 | 11-04 22:39:14 | 283 passed | 0 | 成功 |
 | 11-05 07:48:47 | 286 passed | **3221226505 (0xC0000409)** | **失败轮** |
-| 11-05 07:56:16 | 286 passed | 0 | 成功（**与 07:48:47 同一工作树快照**：ce4e60d 提交于 07:58:51，两轮均在其之前） |
+| 11-05 07:56:16 | 286 passed | 0 | 成功（ce4e60d 提交于 07:58:51，07:48:47 与本轮均在其之前；**两轮是否字节完全一致未能确认**，见下） |
 | 11-05 08:21:26 | 288 passed | 0 | 成功 |
 
-关键结论：**同一代码快照下随机出现**（07:48:47 失败与 07:56:16 成功为同一工作树），
-因此不是某次改动引入的确定性缺陷，而是退出阶段的间歇性崩溃。
+关键结论：该异常**间歇性出现**——11 轮全量中 2 轮 rc=3221226505，其余轮次通过，
+且其中一次「失败轮 07:48:47」与紧随其后的「成功轮 07:56:16」都发生在 ce4e60d
+提交（07:58:51）之前。
+
+**快照一致性说明（不夸大）**：两轮都在同一提交之前，只能说明「两轮之间没有新的
+已提交变更」，**不足以单独证明两轮工作树字节完全一致**——期间仍可能有未提交
+的本地改动，且当时未留存源码哈希或快照。因此「同一代码快照下随机出现」应降级为
+「**未能完整确认快照一致性**」；可以确证的是：该异常非稳定复现，属间歇性崩溃。
 
 ### 崩溃现场（Windows 应用程序事件日志）
 
@@ -62,8 +69,11 @@
 - **11-04 20:41:45**：`ucrtbase.dll`，同一偏移。
 
 对 `ucrtbase.dll` 反汇编核对：偏移 `0xa527e` 处的字节为 `cd 29`，即 x86-64 的
-`int 0x15`（`__fastfail`）指令 —— CRT 检测到栈状态异常后立即终止进程，
-这正是 `STATUS_STACK_BUFFER_OVERRUN` 的产生方式。
+`int 0x29`（`__fastfail`）指令 —— 该中断向量号对应 x64 上的快速失败机制，
+CRT 检测到栈状态异常后立即终止进程，这正是 `STATUS_STACK_BUFFER_OVERRUN`
+的产生方式。**注意**：该字节序列本身只表明「此处调用了 `__fastfail`」，
+不能单独证明崩溃的具体根因（更不能直接指向 Qt 析构）；具体失败码与调用点
+需符号与栈回溯才能确定。
 
 ### 定位到的实际原因
 
@@ -95,11 +105,13 @@
 
 - 崩溃发生在解释器退出阶段：pytest 已输出 `passed`，随后进程以
   0xC0000409 结束。
-- 故障模块已由 Windows 事件日志定位：`ucrtbase.dll`（偏移 `0xa527e`，反汇编确认为
-  `int 0x15` 的 `__fastfail` 指令）与 `Qt6Core.dll`；07:50:53 的事件与 07:48:47
-  失败轮（elapsed 131.2s）时间精确吻合。
-- 同一代码快照下随机出现：07:48:47 失败轮与 07:56:16 成功轮为同一工作树
-  （ce4e60d 提交于 07:58:51，两轮均在其之前）。
+- 故障模块已由 Windows 事件日志定位：`ucrtbase.dll`（偏移 `0xa527e`，字节为
+  `cd 29`，即 x64 的 `int 0x29` / `__fastfail` 指令）与 `Qt6Core.dll`；
+  07:50:53 的事件与 07:48:47 失败轮（elapsed 131.2s）时间精确吻合。
+  该指令序列只能说明「此处触发了快速失败」，不能单独证明具体根因。
+- 间歇性出现：11 轮全量中 2 轮 rc=3221226505。07:48:47 失败轮与 07:56:16 成功轮
+  都发生在 ce4e60d 提交（07:58:51）之前，但**两轮工作树是否字节完全一致未能确认**
+  （当时无源码哈希/快照留存），故「同一快照」仅为推断而非已确证事实。
 - `win.deleteLater()` + `qapp.processEvents()` 并未真正销毁窗口
   （`work/probe_deferred_delete.py` 实测）。
 
@@ -145,13 +157,61 @@
 该缺陷与退出异常同属「worker 生命周期管理」范畴，但不是同一个根因：
 它发生在运行期（请求丢失），退出异常发生在解释器收尾阶段。
 
+### 第 22 轮发现并修复的真实缺陷：stop() 回调-锁自我死锁
+
+在接入矢量元数据回退路径后，全量测试出现 faulthandler 60 秒超时并打印全部线程栈。
+线程栈直接指出了成因：
+
+```
+Thread 0x0000d064 (most recent call first):
+  File "src/spectra_workbench/scheduler/client.py", line 350 in call_async
+  File "src/spectra_workbench/scheduler/client.py", line 605 in probe_vector_async
+  File "src/spectra_workbench/ui/main_window.py", line 561 in _on_probe_err
+  File "src/spectra_workbench/scheduler/client.py", line 673 in stop
+  File "src/spectra_workbench/ui/main_window.py", line 1411 in closeEvent
+```
+
+成因：`QtWorkerClient.stop()` 在**持有 `_callbacks_lock` 时**逐个调用各请求的错误回调；
+而主窗口的探测失败回退逻辑（栅格探测失败 → 回退矢量探测）会在该回调里**再次发起请求**，
+`call_async` 需要同一把非重入锁 —— 同线程自我死锁。
+
+这是既存的结构性隐患（回调在锁内调用），此前没有回调会在锁内发起新请求，因此未暴露。
+
+修复：
+1. `client.py` 新增 `_drain_pending_callbacks()`：只在锁内摘出回调并清空注册表，
+   **通知动作一律在锁外进行**（`stop()` 与 `kill()` 均已改用）。
+2. `main_window.py` 的矢量回退回调增加关闭态防护：客户端已关闭时不再发起新探测。
+
+**对照实验**：把 `stop()` 临时还原成「锁内调用回调」后，回归用例
+`test_stop_does_not_deadlock_when_error_callback_issues_new_request` **硬超时 120 秒被强制终止**
+（死锁复现，证据 `work/test_runs/deadlock_before.log.timeout.json`）；
+修复后同一用例 1.8 秒通过。该回归用例已固化进 `tests/unit/test_p3_exit_lifecycle.py`。
+
 ### 另一类「passed 但 rc≠0」：环境删除守卫（非产品缺陷）
 
-11-14 全量轮出现 `295 passed` 但 rc=1，日志尾部为
-`[safe-delete][SAFE_DELETE_BULK_CONFIRM_REQUIRED] {"count":149,"threshold":50,...}`。
+第 22 轮全量跑出现 `308 passed` 但退出码异常，日志尾部同时出现
+`[safe-delete][SAFE_DELETE_BULK_CONFIRM_REQUIRED] {"count":156,"threshold":50,...}`。
 经核实这是 WorkBuddy 环境注入的删除保护（`CODEBUDDY_SAFE_DELETE_BULK_GUARD`
-与 `sitecustomize.py`），拦截 pytest 清理临时目录时的批量删除，
-与本项目代码无关。属环境因素，如实记录，不通过改动产品代码规避。
+与 `sitecustomize.py`），拦截 pytest 清理全局旧临时目录时的批量删除，
+与本项目代码无关。属环境因素，如实记录，不通过改动产品代码规避；
+改用本轮工作目录内的独立临时根目录（`--basetemp`）即可避开，两轮日志对照：
+
+| 轮次 | 用例 | safe-delete | 退出码 |
+|---|---|---|---|
+| 13:06:55 | 308 passed | 有（count=156 > 阈值 50） | 3221226505 |
+| 13:11:41（独立 basetemp） | 308 passed | 无 | **0** |
+
+**两类失败模式必须区分**（这是本轮的重要澄清）：
+
+- **环境删除守卫**：拦截 pytest 收尾时的批量删除 → 表现为「全通过但退出码非 0」，
+  属环境因素；
+- **退出异常 0xC0000409**：解释器退出阶段的随机崩溃，**与删除守卫无关** ——
+  归档的历史 11 轮中 2 轮 rc=3221226505，**全部没有 safe-delete 标记**
+  （`docs/progress/runs/exit_anomaly/test_all_history.log` 逐轮核对）。
+
+因此第 22 轮 13:06:55 那次的 rc=3221226505 与删除守卫**同时出现只是巧合**，
+不能据此把 0xC0000409 归因于删除守卫。退出异常的归因状态维持上一轮的结论：
+**根因未完全定位，不宣称根治**。
 
 ## 进程级硬超时守卫机制
 
@@ -168,7 +228,7 @@
 | P0-01 仓库与文档结构 | done | git init（2.50.1）；docs/plan/ 输入基线、contracts/、src/、tests/；AGENTS.md、README.md、pyproject.toml；docs/progress/WORKPACKAGES.md |
 | P0-02 四环境 | implemented | scripts/bootstrap_pip.ps1 -VerifyOnly → RESULT ALL OK；docs/progress/runs/env_report.json；environments/locks/*.lock.txt |
 | P0-03 自检与小型 Fixture | implemented | src/spectra_workbench/app/doctor.py + scripts/doctor.ps1 → docs/progress/runs/doctor_report.json。GTiff 往返成功、坐标转换成功、205 驱动、5 CLI 就绪；单测全绿 |
-| P0-04 自动化检查流水线 | done | scripts/test.ps1，串联 Ruff、Mypy 与 Pytest。Mypy 56 个源文件 0 错误；全量自动化测试通过：**288 passed in 103.91s**，全量回归子进程 rc=0；如实记录 07:48:47 历史退出异常轮次（286 passed，0xC0000409）与后续 07:54:31、07:56:16（286 passed，rc=0）及本轮（288 passed，rc=0），全面加固 Qt 对象生命周期有序销毁 |
+| P0-04 自动化检查流水线 | done | scripts/test.ps1，串联 Ruff、Mypy 与 Pytest。Mypy 57 个源文件 0 错误；全量自动化测试通过：**308 passed in 116.50s**，全量回归子进程 rc=0（2026-11-05 第 22 轮，P3-02 矢量与子数据集元数据）；第 21 轮为 297 passed in 105.12s、rc=0；如实记录 07:48:47 历史退出异常轮次（286 passed，0xC0000409）与后续 07:54:31、07:56:16（286 passed，rc=0）及本轮（297 passed，rc=0），全面加固 Qt 对象生命周期有序销毁 |
 | P0-05 打包重定位可行性验证 | implemented | docs/adr/0002-relocation-and-packaging.md；tests/integration/test_relocation.py 验证 UI 与 Rasterio、GDAL 引擎在独立临时路径正常初始化并导入 |
 | P1-01 领域模型与契约对账 | done | src/spectra_workbench/domain/models.py；tests/unit/test_domain_models.py；tests/unit/test_contracts_schema.py（50 项全绿） |
 | P1-02 JSONL 客户端与 Worker 启动 | done | src/spectra_workbench/protocol/messages.py；src/spectra_workbench/workers/process.py；src/spectra_workbench/workers/entrypoint.py；tests/integration/test_worker_process.py（8 项真实跨进程测试全绿） |
@@ -181,16 +241,19 @@
 | P2-04 可搜索工具箱与自动表单 | implemented | src/spectra_workbench/ui/forms/param_form.py；接通 GDAL 转换、Warp、Rasterio 转换；未接入能力严格禁用提交；tests/unit/test_ui_components.py 验证通过 |
 | P2-05 覆盖审计与版本差异 | implemented | src/spectra_workbench/ui/panels/toolbox_panel.py；443 项基准可搜索与分类展示；scripts/audit-capabilities.ps1 自动化审计脚本 |
 | P3-01 主窗口、Dock、项目树、图层模型 | implemented | src/spectra_workbench/ui/main_window.py；src/spectra_workbench/ui/panels/layer_panel.py；项目序列化保存重开、保存事务边界加固、显式 path_anchor 标记、旧项目路径歧义待确认流程与迁移持久化、确认缺失目标保留与一致性校验；句柄关闭释放文件实测通过；Dock 浮动/显隐/区域互换跨会话持久化与恢复通过（tests/integration/test_p3_dock_layout_persistence.py） |
-| P3-02 栅格元数据读取 | implemented | Worker 进程 probe_dataset 协议请求；规范错误返回 Schema 与执行器顶层异常隔离；旋转 Affine 探测；tests/integration/test_ui_app.py 验证通过 |
+| P3-02 栅格元数据读取 | implemented | Worker 进程 probe_dataset 协议请求；规范错误返回 Schema 与执行器顶层异常隔离；旋转 Affine 探测；tests/integration/test_ui_app.py 验证通过；第 22 轮补齐基础矢量与子数据集元数据：Worker 新增 probe_vector / list_subdatasets / probe_subdataset，GUI 新增「数据源元数据」面板，矢量文件可作为图层打开与保存重开；以真实 OGR 多图层 GPKG（4 图层、含中文字段名、空图层、无 CRS 图层）与 netCDF 多变量容器验证，子数据集 URI 原样保留不被当作路径解析；中文/空格路径、缺失矢量与缺失子数据集均有明确错误，坏文件后 worker 仍可继续处理正常请求（tests/integration/test_p3_vector_subdataset_metadata.py 10 项全绿）。**剩余缺口**：矢量渲染与多维数据分析仍未实现（本轮只做元数据，不提供假入口）；netCDF 库在含中文/空格的路径下无法创建容器（运行时限制，测试容器置于纯 ASCII 路径并如实记录） |
 | P3-03 瓦片/窗口请求与分块读取 | implemented | 1024 预览大阵列 Spill 传输；TileCache 预算限制与 LRU 淘汰；请求代际校验丢弃旧图响应；4 种概览策略；真实 GUI 模式下 6144x6144 大影像实测 LRU 逐出（9 次）与预算受限（docs/progress/runs/p3_gui_memory.json，tests/integration/test_p3_real_gui_memory.py） |
 | P3-04 灰度/RGB、拉伸与显示 | implemented | 支持灰度/RGB/伪彩/透明度；min-max 与分位数拉伸；像元原值与显示分离；双视图联动同步；tests/unit/test_p3_display_cache.py 验证通过 |
 | P3-05 view CRS、重投影、查询与 ROI | implemented | 旋转 Affine 与无 GT 栅格支持；地图坐标 ↔ 像元中心/角点约定；ROI 模型与点包含判定；跨 CRS 视图重投影网格读取；真实鼠标事件多边形 ROI 绘制/闭合/选中/手柄拖拽/删除/保存重开全流程；矩形展开 4 角点经 Worker 转换并精确保持 425 平方单位面积与 4 个角点；坐标转换失败异常隔离隐藏并保全权威模型；五类故障注入矩阵覆盖（向地图/回像元/项目重开/拖动反算/旧响应迟到），跨坐标空间数据混用缺陷已修复（tests/integration/test_p3_interactive_polygon_roi.py 9 项全绿） |
 
 实测命令与结果：
-- powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test.ps1 -All → **Ruff 干净、Mypy 干净（56 个源文件 0 错误）、288 passed in 103.91s，exit 0**
+- powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test.ps1 -All → **Ruff 干净、Mypy 干净（57 个源文件 0 错误）、308 passed in 116.50s，exit 0**
+  - 第 22 轮（P3-02 矢量与子数据集元数据）：新增 11 项（矢量与子数据集集成 10 项 + stop() 回调死锁回归 1 项）；本轮使用位于本轮工作目录内的独立临时根目录（pytest 的 basetemp 选项），避开环境删除守卫对全局旧临时目录的批量删除拦截；第 21 轮为 297 passed in 105.12s、rc=0
   - 如实记录全量回归历程：
-    - 历史轮次（2026-11-05 07:48:47）：286 passed in 123.74s，但在进程退出释放阶段出现 PySide6 C++ 析构时序问题（child rc=3221226505 / 0xC0000409）；
-    - 随后轮次（07:54:31、07:56:16 286 passed，rc=0）及本轮（全量 288 passed in 103.91s，rc=0；ROI 专项 8 passed in 18.42s，rc=0）均正常退出；
-    - 针对该现象在全部 GUI 集成测试 `finally:` 块中显式增加 `win.close(); win.deleteLater(); qapp.processEvents()` 强化 C++ 对象生命周期提前清理；按原验收标准如实记录全部证据，不宣称无条件的永久根治。
+    - 历史轮次（2026-11-05 07:48:47）：286 passed in 123.74s，但在进程退出释放阶段出现异常退出（child rc=3221226505 / 0xC0000409）；
+    - 随后轮次（07:54:31、07:56:16 286 passed，rc=0）及第 21 轮（全量 297 passed in 105.12s，rc=0；ROI 集成 9 项 + 生命周期单测 8 项专项全绿）均正常退出；
+    - 针对该现象在全部 GUI 集成测试 `finally:` 块中显式增加 `win.close(); win.deleteLater(); qapp.processEvents()`，并新增 `tests/conftest.py` 在解释器退出前有序销毁 Qt 对象；
+    - 复核方独立复跑记录（2026-11-05 第 21 轮复核）：ROI 与生命周期专项共 17 项——第一次 17 个用例均执行通过，但会话结束清理全局旧临时目录时访问旧目录链接被拒绝，最终 rc=1（**既非 0xC0000409，也不能据此证明是删除保护插件**）；第二次改用位于本轮工作目录内的独立临时根目录，**17 passed in 27.27s，child rc=0**，未修改 ACL、未删除旧目录、未屏蔽失败；
+    - 按原验收标准如实记录全部证据，**不宣称无条件的永久根治**。
 - powershell -NoProfile -ExecutionPolicy Bypass -File scripts/doctor.ps1 → **总体判定: 【通过 ALL OK】，GUI 启动许可：允许 (UI环境与核心依赖就绪)，exit 0**
 - powershell -NoProfile -ExecutionPolicy Bypass -File scripts/audit-capabilities.ps1 → **总基准: 443 | 已发现: 438 (98.9%) | 可调用: 229 (51.7%) | 平台可执行: 3 | 已验证: 5 (1.1%) | 缺失: 9 (2.0%) | 完整度: partial，exit 0**

@@ -445,6 +445,8 @@ class WorkerRuntime:
                     self._handle_execute_task(env)
                 elif action == "probe_dataset":
                     self._handle_probe_dataset(env)
+                elif action == "probe_subdataset":
+                    self._handle_probe_subdataset(env)
                 elif action == "read_window":
                     self._handle_read_window(env)
                 elif action in self._SIMPLE_CALLS:
@@ -480,6 +482,8 @@ class WorkerRuntime:
             ("view_crs_wkt", "x_min", "y_min", "x_max", "y_max", "out_w", "out_h", "bands", "resampling"),
             True,
         ),
+        "probe_vector": ("probe_vector", (), True),
+        "list_subdatasets": ("list_subdatasets", (), True),
         "crs_wkt": ("crs_wkt", ("epsg",), False),
         "transform_point": ("transform_point", ("x", "y", "src_wkt", "dst_wkt", "z"), False),
         "transform_coordinates": (
@@ -488,6 +492,50 @@ class WorkerRuntime:
             True,
         ),
     }
+
+    def _handle_probe_subdataset(self, env: Envelope) -> None:
+        """探测单个子数据集。
+
+        ``uri`` 是 GDAL 返回的数据源引用（可能是 ``NETCDF:"file.nc":Band1`` 这类
+        协议 URI），必须原样交给 adapter 打开，**不能**按普通文件路径解析。
+        """
+        args = env.payload.get("arguments", {}) or {}
+        uri = args.get("uri")
+        if not isinstance(uri, str) or not uri.strip():
+            self.send_error(
+                code="invalid_arguments",
+                message="Missing 'uri' argument in probe_subdataset",
+                retryable=False,
+                request_id=env.request_id,
+                task_id=env.task_id,
+            )
+            return
+        method = getattr(self.adapter, "probe_subdataset", None)
+        if method is None:
+            self.send_error(
+                code="capability_not_implemented",
+                message=f"provider '{getattr(self.adapter, 'provider_id', '?')}' 未实现 probe_subdataset",
+                retryable=False,
+                request_id=env.request_id,
+                task_id=env.task_id,
+            )
+            return
+        try:
+            data = method(uri)
+            self.send_kind(
+                Kind.result,
+                {"status": "succeeded", "artifact_ids": [], "action": "probe_subdataset", "data": data},
+                request_id=env.request_id,
+                task_id=env.task_id,
+            )
+        except Exception as exc:
+            self.send_error(
+                code="probe_failed",
+                message=str(exc),
+                retryable=False,
+                request_id=env.request_id,
+                task_id=env.task_id,
+            )
 
     def _handle_simple_call(self, env: Envelope, action: str) -> None:
         """把只读查询类请求直接透传给 adapter，并按统一 Schema 回结果或错误。"""

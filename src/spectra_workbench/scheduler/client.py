@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import threading
 import time
 import uuid
@@ -585,28 +586,115 @@ class QtWorkerClient(QObject):
             on_error=on_error,
         )
 
+    def probe_vector(
+        self,
+        path: Path | str,
+        timeout: float = 15.0,
+    ) -> dict[str, Any]:
+        """探测矢量数据集的基础元数据（P3-02，同步）。"""
+        if not self.is_alive:
+            self.start()
+        return self._worker.probe_vector(path, timeout=timeout)
+
+    def probe_vector_async(
+        self,
+        path: Path | str,
+        on_success: Callable[[dict[str, Any]], None] | None = None,
+        on_error: Callable[[str], None] | None = None,
+    ) -> str:
+        """探测矢量数据集的基础元数据（P3-02，异步）。"""
+        return self.call_async(
+            lambda: self._worker.probe_vector(path),
+            on_success=on_success,
+            on_error=on_error,
+        )
+
+    def list_subdatasets(
+        self,
+        path: Path | str,
+        timeout: float = 15.0,
+    ) -> dict[str, Any]:
+        """列出容器数据集的子数据集（P3-02，同步）。"""
+        if not self.is_alive:
+            self.start()
+        return self._worker.list_subdatasets(path, timeout=timeout)
+
+    def list_subdatasets_async(
+        self,
+        path: Path | str,
+        on_success: Callable[[dict[str, Any]], None] | None = None,
+        on_error: Callable[[str], None] | None = None,
+    ) -> str:
+        """列出容器数据集的子数据集（P3-02，异步）。"""
+        return self.call_async(
+            lambda: self._worker.list_subdatasets(path),
+            on_success=on_success,
+            on_error=on_error,
+        )
+
+    def probe_subdataset(
+        self,
+        uri: str,
+        timeout: float = 15.0,
+    ) -> dict[str, Any]:
+        """探测单个子数据集（P3-02，同步）。
+
+        ``uri`` 是引擎返回的数据源引用（可能是 ``NETCDF:"file.nc":Band1``），
+        原样透传给 worker，**不做路径解析**。
+        """
+        if not self.is_alive:
+            self.start()
+        return self._worker.probe_subdataset(uri, timeout=timeout)
+
+    def probe_subdataset_async(
+        self,
+        uri: str,
+        on_success: Callable[[dict[str, Any]], None] | None = None,
+        on_error: Callable[[str], None] | None = None,
+    ) -> str:
+        """探测单个子数据集（P3-02，异步）。"""
+        return self.call_async(
+            lambda: self._worker.probe_subdataset(uri),
+            on_success=on_success,
+            on_error=on_error,
+        )
+
     def cancel_task(self, task_id: str | None = None) -> None:
         """取消当前或指定任务。"""
         tid = task_id or self._active_task_id
         self._worker.cancel_task(tid)
 
+    def _drain_pending_callbacks(self) -> list[Callable[[str], None]]:
+        """摘出全部待处理回调并清空注册表（调用方须在锁外通知它们）。
+
+        回调若在持有 ``_callbacks_lock`` 时被调用，而回调内部又发起新请求
+        （``call_async`` 需要同一把锁），就会造成同线程自我死锁。
+        因此这里只负责「摘出」，通知动作一律放到锁外。
+        """
+        pending: list[Callable[[str], None]] = []
+        with self._callbacks_lock:
+            for _, on_err in self._probe_callbacks.values():
+                if on_err:
+                    pending.append(on_err)
+            self._probe_callbacks.clear()
+            for _, on_err in self._read_callbacks.values():
+                if on_err:
+                    pending.append(on_err)
+            self._read_callbacks.clear()
+            for _, on_err in list(self._call_callbacks.values()):
+                if on_err:
+                    pending.append(on_err)
+            self._call_callbacks.clear()
+        return pending
+
     def stop(self, timeout: float = 5.0) -> int:
         """停止 Worker 进程并释放资源。"""
         # 先关闭信号派发：此后任何在途请求线程都不会再向本 Qt 对象发信号
         self._closed = True
-        with self._callbacks_lock:
-            for _, on_err in self._probe_callbacks.values():
-                if on_err:
-                    on_err("Worker client stopped")
-            self._probe_callbacks.clear()
-            for _, on_err in self._read_callbacks.values():
-                if on_err:
-                    on_err("Worker client stopped")
-            self._read_callbacks.clear()
-            for _, on_err in list(self._call_callbacks.values()):
-                if on_err:
-                    on_err("Worker client stopped")
-            self._call_callbacks.clear()
+        # 回调必须在锁外通知：回调内部可能再次发起请求并获取同一把锁
+        for on_err in self._drain_pending_callbacks():
+            with contextlib.suppress(Exception):
+                on_err("Worker client stopped")
         self._join_request_threads(timeout=timeout)
         code = self._worker.stop(timeout=timeout)
         self.sig_worker_stopped.emit(code)
@@ -615,10 +703,7 @@ class QtWorkerClient(QObject):
     def kill(self) -> None:
         """强制杀死子进程。"""
         self._closed = True
+        self._drain_pending_callbacks()
         self._join_request_threads(timeout=1.0)
-        with self._callbacks_lock:
-            self._probe_callbacks.clear()
-            self._read_callbacks.clear()
-            self._call_callbacks.clear()
         self._worker.kill()
         self.sig_worker_stopped.emit(-9)

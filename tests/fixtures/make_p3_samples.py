@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -131,6 +132,153 @@ def spike(b: int, w: int, h: int) -> np.ndarray:
     return arr
 
 
+
+def write_vector_samples(out: Path) -> dict:
+    """生成矢量样例：多图层 GPKG（含中文字段、空图层、无 CRS 图层）与 GeoJSON。"""
+    from osgeo import ogr, osr
+
+    result: dict = {}
+
+    # --- 多图层 GPKG ---
+    gpkg_path = out / "p3_vector.gpkg"
+    if gpkg_path.exists():
+        gpkg_path.unlink()
+    drv = ogr.GetDriverByName("GPKG")
+    ds = drv.CreateDataSource(str(gpkg_path))
+    srs = osr.SpatialReference()
+    srs.ImportFromEPSG(4326)
+
+    # 图层 1：点图层，含中文字段名与一个可空字段
+    lyr = ds.CreateLayer("观测点", srs, ogr.wkbPoint)
+    fld_name = ogr.FieldDefn("站点名称", ogr.OFTString)
+    fld_name.SetWidth(64)
+    lyr.CreateField(fld_name)
+    fld_value = ogr.FieldDefn("数值", ogr.OFTInteger)
+    lyr.CreateField(fld_value)
+    fld_note = ogr.FieldDefn("备注", ogr.OFTString)
+    fld_note.SetWidth(128)
+    fld_note.SetNullable(True)
+    lyr.CreateField(fld_note)
+
+    feat = ogr.Feature(lyr.GetLayerDefn())
+    feat.SetField("站点名称", "甲站")
+    feat.SetField("数值", 42)
+    feat.SetField("备注", "正常")
+    feat.SetGeometry(ogr.CreateGeometryFromWkt("POINT (100.5 29.5)"))
+    lyr.CreateFeature(feat)
+
+    feat2 = ogr.Feature(lyr.GetLayerDefn())
+    feat2.SetField("站点名称", "乙站")
+    feat2.SetField("数值", 7)
+    feat2.SetFieldNull("备注")
+    feat2.SetGeometry(ogr.CreateGeometryFromWkt("POINT (101.25 29.75)"))
+    lyr.CreateFeature(feat2)
+    lyr = None
+
+    # 图层 2：面图层
+    poly = ds.CreateLayer("区域面", srs, ogr.wkbPolygon)
+    poly.CreateField(ogr.FieldDefn("区域编号", ogr.OFTInteger))
+    pf = ogr.Feature(poly.GetLayerDefn())
+    pf.SetField("区域编号", 1)
+    pf.SetGeometry(ogr.CreateGeometryFromWkt("POLYGON ((100 29, 101 29, 101 30, 100 30, 100 29))"))
+    poly.CreateFeature(pf)
+    poly = None
+
+    # 图层 3：空图层（零要素）
+    empty = ds.CreateLayer("空图层", srs, ogr.wkbLineString)
+    empty.CreateField(ogr.FieldDefn("名称", ogr.OFTString))
+    empty = None
+
+    # 图层 4：无 CRS 图层
+    nocrs = ds.CreateLayer("无坐标系图层", None, ogr.wkbPoint)
+    nocrs.CreateField(ogr.FieldDefn("标记", ogr.OFTString))
+    nf = ogr.Feature(nocrs.GetLayerDefn())
+    nf.SetField("标记", "x")
+    nf.SetGeometry(ogr.CreateGeometryFromWkt("POINT (1 2)"))
+    nocrs.CreateFeature(nf)
+    nocrs = None
+    ds = None
+
+    result["vector_gpkg"] = {
+        "path": str(gpkg_path),
+        "layer_names": ["观测点", "区域面", "空图层", "无坐标系图层"],
+        "empty_layer": "空图层",
+        "no_crs_layer": "无坐标系图层",
+        "point_layer": "观测点",
+        "field_names": ["站点名称", "数值", "备注"],
+        "feature_count": 2,
+    }
+
+    # --- 中文路径的 GeoJSON ---
+    zh_dir = out / "中文 目录"
+    zh_dir.mkdir(exist_ok=True)
+    gj_path = zh_dir / "要素 数据.json"
+    if gj_path.exists():
+        gj_path.unlink()
+    gjdrv = ogr.GetDriverByName("GeoJSON")
+    gjds = gjdrv.CreateDataSource(str(gj_path))
+    gjlayer = gjds.CreateLayer("线要素", srs, ogr.wkbLineString)
+    gjlayer.CreateField(ogr.FieldDefn("编号", ogr.OFTInteger))
+    gjf = ogr.Feature(gjlayer.GetLayerDefn())
+    gjf.SetField("编号", 9)
+    gjf.SetGeometry(ogr.CreateGeometryFromWkt("LINESTRING (100 29, 101 30)"))
+    gjlayer.CreateFeature(gjf)
+    gjds = None
+    result["vector_geojson"] = {
+        "path": str(gj_path),
+        "layer_names": ["线要素"],
+        "field_names": ["编号"],
+    }
+
+    return result
+
+
+def write_subdataset_samples(out: Path) -> dict:
+    """生成含多变量的 netCDF 容器（GDAL 会把每个变量暴露为子数据集）。"""
+    from osgeo import gdal, osr
+
+    result: dict = {}
+    # netCDF 库对含中文/空格的路径无法创建，容器必须放在纯 ASCII 路径下
+    ascii_dir = out / "ascii_sub"
+    ascii_dir.mkdir(exist_ok=True)
+    nc_path = ascii_dir / "p3_multi.nc"
+    if nc_path.exists():
+        nc_path.unlink()
+
+    srs = osr.SpatialReference()
+    srs.ImportFromEPSG(4326)
+    mem = gdal.GetDriverByName("MEM").Create("", 8, 8, 2, gdal.GDT_Float32)
+    mem.SetGeoTransform([100.0, 0.25, 0.0, 30.0, 0.0, -0.25])
+    mem.SetProjection(srs.ExportToWkt())
+    for i in range(1, 3):
+        band = mem.GetRasterBand(i)
+        band.Fill(float(i))
+        band.SetNoDataValue(-9999.0)
+        band.SetDescription(f"Band{i}")
+    # netCDF 库在本运行时无法用绝对路径创建（报 "non existing output directory"），
+    # 只能在目标目录内以相对路径创建：这是运行时的真实限制，不是绕过。
+    cwd = os.getcwd()
+    try:
+        os.chdir(ascii_dir)
+        gdal.GetDriverByName("netCDF").CreateCopy(nc_path.name, mem)
+    finally:
+        os.chdir(cwd)
+    mem = None
+
+    ds = gdal.Open(str(nc_path))
+    subs = ds.GetSubDatasets()
+    ds = None
+
+    result["subdataset_container"] = {
+        "path": str(nc_path),
+        "subdataset_count": len(subs),
+        "uri_prefix": "NETCDF:",
+        # netCDF 库无法在含中文/空格的路径下创建容器，如实记录该限制
+        "chinese_path_unsupported": True,
+    }
+    return result
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True)
@@ -202,6 +350,14 @@ def main() -> int:
     man["samples"]["chinese_path"] = write_raster(
         zh / "影像 1.tif", 64, 64, 1, ramp, gt=NORTH_GT, epsg=32650, nodata=65535,
     )
+
+    # ------------------------------------------------------- P3-02 矢量数据集
+    vector_info = write_vector_samples(out)
+    man["samples"].update(vector_info)
+
+    # ------------------------------------------------------ P3-02 子数据集容器
+    subdataset_info = write_subdataset_samples(out)
+    man["samples"].update(subdataset_info)
 
     (out / "manifest.json").write_text(json.dumps(man, ensure_ascii=False, indent=1), encoding="utf-8")
     print(json.dumps(man, ensure_ascii=False))
