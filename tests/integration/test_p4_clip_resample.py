@@ -382,13 +382,29 @@ def test_nodata_propagates_to_output(qapp, gdal_rt, source_raster, tmp_path) -> 
         gdal_rt,
         out,
         "b = ds.GetRasterBand(1)\n"
+        "mask = b.GetMaskBand().ReadAsArray()\n"
         "print(json.dumps({'nodata': b.GetNoDataValue(),\n"
-        "                  'mask_flags': int(b.GetMaskFlags())}))",
+        "                  'mask_flags': int(b.GetMaskFlags()),\n"
+        "                  'mask_valid_count': int(mask.sum()),\n"
+        "                  'mask_total': int(mask.size),\n"
+        "                  'GMF_NODATA': int(gdal.GMF_NODATA),\n"
+        "                  'GMF_ALPHA': int(gdal.GMF_ALPHA)}))",
     )
+    # GDAL 3.13.3 实测常量：GMF_NODATA=8、GMF_ALPHA=4
+    assert info["GMF_NODATA"] == 8, f"GMF_NODATA 常量应为 8，实际 {info['GMF_NODATA']}"
+    assert info["GMF_ALPHA"] == 4, f"GMF_ALPHA 常量应为 4，实际 {info['GMF_ALPHA']}"
+
+    # NoData **元数据**与实际 **mask** 分别核对，不能只看其中之一。
     assert info["nodata"] == pytest.approx(-32768), f"输出 NoData 应为 -32768，实际 {info['nodata']}"
-    # 注意：GDAL 并不保证设置 NoData 后就置 GMF_NODATA 标志（本例实测为 GMF_ALPHA=8），
-    # 因此「NoData 已生效」以 GetNoDataValue() 为准，不以标志位为准。
-    assert info["mask_flags"] >= 0
+    assert info["mask_flags"] & info["GMF_NODATA"], (
+        f"掩膜标志应含 GMF_NODATA({info['GMF_NODATA']})，实际 {info['mask_flags']}"
+    )
+    # 源影像本就没有 NoData 像元，故所有像元都应有效
+    # （mask 是 uint8：有效=255、无效=0，故有效计数 = sum / 255）
+    valid_count = info["mask_valid_count"] // 255
+    assert valid_count == info["mask_total"], (
+        f"有效像元数 {valid_count} 应等于总数 {info['mask_total']}"
+    )
 
 
 def test_source_nodata_is_preserved_without_override(

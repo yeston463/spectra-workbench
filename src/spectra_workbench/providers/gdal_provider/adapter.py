@@ -34,6 +34,10 @@ from spectra_workbench.domain.models import (
     TaskSpec,
     TaskStatus,
 )
+from spectra_workbench.processing.raster_params import (
+    ParameterError,
+    normalize_raster_params,
+)
 from spectra_workbench.providers.base import (
     ExecutionContext,
     OutputConflictError,
@@ -86,72 +90,32 @@ def _affine_bounds(
     return [min(xs), min(ys), max(xs), max(ys)]
 
 
-_GDAL_OUTPUT_TYPES = {
-    "byte": "Byte",
-    "uint8": "Byte",
-    "ubyte": "Byte",
-    "int8": "Int8",
-    "uint16": "UInt16",
-    "int16": "Int16",
-    "uint32": "UInt32",
-    "int32": "Int32",
-    "float32": "Float32",
-    "float64": "Float64",
-    "cfloat32": "CFloat32",
-    "cfloat64": "CFloat64",
-}
+def _resample_gdal_constants() -> dict[str, Any]:
+    """canonical 重采样算法名 -> GDAL 的 GRA_* 常量（**惰性构造**）。
 
+    刻意不在模块级构造：adapter 必须能在**没有 osgeo 的 GUI 进程**中被 import
+    （顶层 `from osgeo import gdal` 是 try/except 保护的，失败时 gdal 为 None）。
+    模块级访问 `gdal.GRA_*` 会在 GUI 进程抛 AttributeError，
+    使 GUI 侧单元测试在收集阶段就失败。这里改为按需构造——
+    只有真正执行任务（worker 进程）时才会访问 GDAL 常量。
 
-def _first_param(spec_params: dict[str, Any], *names: str) -> Any:
-    """按给定顺序取第一个存在的参数值（兼容 GDAL CLI 风格与 snake_case）。"""
-    for name in names:
-        if name in spec_params and spec_params[name] is not None:
-            return spec_params[name]
-    return None
-
-
-def _as_float_list(value: Any, name: str, expected: int) -> list[float]:
-    """把参数解析为定长浮点列表；非法输入给出明确错误。"""
-    if not isinstance(value, (list, tuple)):
-        raise ValueError(f"参数 {name} 必须是长度 {expected} 的数值列表，实际为 {type(value).__name__}")
-    if len(value) != expected:
-        raise ValueError(f"参数 {name} 必须有 {expected} 个元素，实际 {len(value)} 个")
-    try:
-        return [float(v) for v in value]
-    except (TypeError, ValueError) as exc:
-        raise ValueError(f"参数 {name} 含非数值元素：{value!r}") from exc
-
-
-def _as_int_list(value: Any, name: str, expected: int) -> list[int]:
-    """把参数解析为定长整型列表；非法输入给出明确错误。"""
-    if not isinstance(value, (list, tuple)):
-        raise ValueError(f"参数 {name} 必须是长度 {expected} 的整数列表，实际为 {type(value).__name__}")
-    if len(value) != expected:
-        raise ValueError(f"参数 {name} 必须有 {expected} 个元素，实际 {len(value)} 个")
-    try:
-        return [int(v) for v in value]
-    except (TypeError, ValueError) as exc:
-        raise ValueError(f"参数 {name} 含非整型元素：{value!r}") from exc
-
-
-def _resolve_output_type(value: Any) -> Any:
-    """把输出数据类型名解析为 GDAL 数据类型常量。
-
-    未知类型名必须报错（不得静默回退到源类型），否则「dtype 按明确参数验收」无从谈起。
+    名字集合由 processing.raster_params 统一维护（契约的唯一来源），
+    这里只负责把名字翻译成 GDAL 常量。
     """
-    if value is None:
-        return None
-    key = str(value).strip().lower()
-    if key in _GDAL_OUTPUT_TYPES:
-        return getattr(gdal, f"GDT_{_GDAL_OUTPUT_TYPES[key]}")
-    # 允许直接传 GDAL 常量名（如 "GDT_Float32"）
-    if key.startswith("gdt_"):
-        const = getattr(gdal, key.upper(), None)
-        if const is not None:
-            return const
-    raise ValueError(
-        f"未知的输出数据类型 {value!r}；可用：{sorted(_GDAL_OUTPUT_TYPES)}"
-    )
+    return {
+        "nearest": gdal.GRA_NearestNeighbour,
+        "bilinear": gdal.GRA_Bilinear,
+        "cubic": gdal.GRA_Cubic,
+        "cubic_spline": gdal.GRA_CubicSpline,
+        "lanczos": gdal.GRA_Lanczos,
+        "average": gdal.GRA_Average,
+        "mode": gdal.GRA_Mode,
+        "max": gdal.GRA_Max,
+        "min": gdal.GRA_Min,
+        "median": gdal.GRA_Med,
+        "q1": gdal.GRA_Q1,
+        "q3": gdal.GRA_Q3,
+    }
 
 
 class GDALProviderAdapter(ProviderAdapter):
@@ -319,71 +283,11 @@ class GDALProviderAdapter(ProviderAdapter):
             context.progress(ratio, "processing", phase_msg)
             return 1
 
-        resample_str = spec.parameters.get("resample_alg", "nearest")
-        resample_map = {
-            "nearest": gdal.GRA_NearestNeighbour,
-            "bilinear": gdal.GRA_Bilinear,
-            "cubic": gdal.GRA_Cubic,
-            "average": gdal.GRA_Average,
-        }
-        resample_alg = resample_map.get(resample_str, gdal.GRA_NearestNeighbour)
-
-        creation_options: list[str] = []
-        if isinstance(out_plan.creation_options, dict):
-            for k, v in out_plan.creation_options.items():
-                creation_options.append(f"{k}={v}")
-
-        # 4. 执行算法（按 capability_id 明确分派 Translate 或 Warp）
-        is_warp = spec.capability_id in ("gdal:warp", "gdalwarp")
-        dst_srs = (
-            spec.parameters.get("dstSRS")
-            or spec.parameters.get("dst_srs")
-            or spec.parameters.get("dst_crs")
-        )
-        src_srs = spec.parameters.get("srcSRS") or spec.parameters.get("src_srs")
-        dst_nodata = spec.parameters.get("dstNodata") or spec.parameters.get("dst_nodata")
-
-        # P4-01：裁剪 / 重采样 / 输出网格参数装配
-        # 参数非法时必须显式报错（不得静默忽略），否则「按明确参数验收」无从谈起。
-        params = spec.parameters
+        # 参数统一由契约模块归一化与校验（GUI 与 Worker 共用同一套规则）：
+        # 未知算法不���退、别名冲突不择一、整数参数不截断小数、零值按 None 判断。
         try:
-            src_win = _first_param(params, "srcWin", "src_win", "window")
-            proj_win = _first_param(params, "projWin", "proj_win")
-            out_bounds = _first_param(params, "outputBounds", "output_bounds")
-            x_res = _first_param(params, "xRes", "x_res", "x_resolution")
-            y_res = _first_param(params, "yRes", "y_res", "y_resolution")
-            out_type = _first_param(params, "outputType", "output_type", "dtype")
-            out_width = _first_param(params, "width", "out_width")
-            out_height = _first_param(params, "height", "out_height")
-            translate_nodata = _first_param(params, "noData", "no_data", "nodata")
-            target_aligned = _first_param(params, "targetAlignedPixels", "target_aligned_pixels")
-
-            src_win_list = (
-                _as_int_list(src_win, "srcWin", 4) if src_win is not None else None
-            )
-            proj_win_list = (
-                _as_float_list(proj_win, "projWin", 4) if proj_win is not None else None
-            )
-            out_bounds_list = (
-                _as_float_list(out_bounds, "outputBounds", 4) if out_bounds is not None else None
-            )
-            output_type = _resolve_output_type(out_type)
-            x_res_f = float(x_res) if x_res is not None else None
-            y_res_f = float(y_res) if y_res is not None else None
-            if x_res_f is not None and x_res_f <= 0:
-                raise ValueError(f"参数 xRes 必须为正数，实际 {x_res_f}")
-            if y_res_f is not None and y_res_f <= 0:
-                raise ValueError(f"参数 yRes 必须为正数，实际 {y_res_f}")
-            out_w_i = int(out_width) if out_width is not None else None
-            out_h_i = int(out_height) if out_height is not None else None
-            if out_w_i is not None and out_w_i <= 0:
-                raise ValueError(f"参数 width 必须为正数，实际 {out_w_i}")
-            if out_h_i is not None and out_h_i <= 0:
-                raise ValueError(f"参数 height 必须为正数，实际 {out_h_i}")
-            translate_nodata_f = (
-                float(translate_nodata) if translate_nodata is not None else None
-            )
-        except (TypeError, ValueError) as exc:
+            norm = normalize_raster_params(spec.parameters)
+        except ParameterError as exc:
             context.log("ERROR", f"Invalid processing parameters: {exc}")
             return TaskResult(
                 task_id=spec.task_id,
@@ -393,17 +297,83 @@ class GDALProviderAdapter(ProviderAdapter):
                 duration_seconds=round(time.monotonic() - start_time, 4),
             )
 
+        creation_options: list[str] = []
+        if isinstance(out_plan.creation_options, dict):
+            for k, v in out_plan.creation_options.items():
+                creation_options.append(f"{k}={v}")
+
+        # 4. 执行算法（按 capability_id 明确分派 Translate 或 Warp）
+        is_warp = spec.capability_id in ("gdal:warp", "gdalwarp")
+
+        # 重采样算法：契约已保证是受支持的 canonical 名，这里只做名字 -> GDAL 常量映射
+        resample_alg = _resample_gdal_constants()[norm.get("resampleAlg", "nearest")]
+
+        dst_srs = norm.get("dstSRS")
+        src_srs = norm.get("srcSRS")
+        # 零值合法：dstNodata=0 是有效请求，不能被 or 丢弃
+        dst_nodata = norm.get("dstNodata")
+
+        src_win_list = norm.get("srcWin")
+        proj_win_list = norm.get("projWin")
+        out_bounds_list = norm.get("outputBounds")
+        x_res_f = norm.get("xRes")
+        y_res_f = norm.get("yRes")
+        output_type_name = norm.get("outputType")
+        output_type = getattr(gdal, f"GDT_{output_type_name}") if output_type_name else None
+        out_w_i = norm.get("width")
+        out_h_i = norm.get("height")
+        translate_nodata_f = norm.get("noData")
+        target_aligned = norm.get("targetAlignedPixels")
+
+        # Warp 下的源窗口裁剪：源像元窗口与目标 CRS 的 outputBounds 语义不同
+        # （前者按源像元索引，后者按目标 CRS 的轴对齐范围），不得混为一谈。
+        if is_warp and (src_win_list is not None or proj_win_list is not None):
+            if out_bounds_list is not None:
+                context.log(
+                    "ERROR",
+                    "参数冲突：Warp 下 srcWin/projWin（源窗口）与 outputBounds（目标范围）"
+                    "语义不同，不能同时指定",
+                )
+                return TaskResult(
+                    task_id=spec.task_id,
+                    attempt=spec.attempt,
+                    status=TaskStatus.failed,
+                    error={
+                        "code": "invalid_parameters",
+                        "message": (
+                            "Warp 下不能同时指定 srcWin/projWin 与 outputBounds："
+                            "前者是源像元/源地理窗口，后者是目标 CRS 的轴对齐范围"
+                        ),
+                    },
+                    duration_seconds=round(time.monotonic() - start_time, 4),
+                )
+            if src_win_list is not None and proj_win_list is not None:
+                context.log("ERROR", "参数冲突：srcWin 与 projWin 不能同时指定")
+                return TaskResult(
+                    task_id=spec.task_id,
+                    attempt=spec.attempt,
+                    status=TaskStatus.failed,
+                    error={
+                        "code": "invalid_parameters",
+                        "message": "srcWin 与 projWin 不能同时指定（两者都是源窗口语义）",
+                    },
+                    duration_seconds=round(time.monotonic() - start_time, 4),
+                )
+
         try:
             if is_warp:
                 warp_kwargs: dict[str, Any] = {
                     "format": out_format,
-                    "dstSRS": dst_srs,
-                    "srcSRS": src_srs,
-                    "dstNodata": dst_nodata,
                     "resampleAlg": resample_alg,
                     "creationOptions": creation_options,
                     "callback": _gdal_cb,
                 }
+                if dst_srs is not None:
+                    warp_kwargs["dstSRS"] = dst_srs
+                if src_srs is not None:
+                    warp_kwargs["srcSRS"] = src_srs
+                if dst_nodata is not None:
+                    warp_kwargs["dstNodata"] = dst_nodata
                 if out_bounds_list is not None:
                     warp_kwargs["outputBounds"] = out_bounds_list
                 if x_res_f is not None:
@@ -419,8 +389,26 @@ class GDALProviderAdapter(ProviderAdapter):
                 if target_aligned is not None:
                     # 仅 Warp 支持 targetAlignedPixels（实测 Translate 不接受该关键字）
                     warp_kwargs["targetAlignedPixels"] = bool(target_aligned)
-                warp_opts = gdal.WarpOptions(**warp_kwargs)
-                ds = gdal.Warp(str(staged_path), str(in_path), options=warp_opts)
+
+                if src_win_list is not None or proj_win_list is not None:
+                    # 两步语义：先按源窗口裁剪（源像元索引 / 源地理范围），
+                    # 再对裁剪结果做重投影。源窗口与目标 CRS 的 outputBounds 不可混用。
+                    crop_kwargs: dict[str, Any] = {"format": "MEM"}
+                    if src_win_list is not None:
+                        crop_kwargs["srcWin"] = src_win_list
+                    if proj_win_list is not None:
+                        crop_kwargs["projWin"] = proj_win_list
+                    cropped = gdal.Translate("", str(in_path), options=gdal.TranslateOptions(**crop_kwargs))
+                    if cropped is None:
+                        raise RuntimeError("源窗口裁剪失败")
+                    try:
+                        warp_opts = gdal.WarpOptions(**warp_kwargs)
+                        ds = gdal.Warp(str(staged_path), cropped, options=warp_opts)
+                    finally:
+                        cropped = None
+                else:
+                    warp_opts = gdal.WarpOptions(**warp_kwargs)
+                    ds = gdal.Warp(str(staged_path), str(in_path), options=warp_opts)
             else:
                 translate_kwargs: dict[str, Any] = {
                     "format": out_format,

@@ -72,30 +72,44 @@ def test_ensure_application_fonts_returns_usable_count(qapp: QApplication) -> No
     assert count > 0, "ensure_application_fonts 未取得任何字体族"
 
 
-def test_layout_survives_high_dpi_scaling(qapp: QApplication, tmp_path: Path) -> None:
-    """高 DPI 缩放下主窗口必须能构建并正常布局（无 0 尺寸或负尺寸）。
+def test_main_window_layout_geometry_is_valid(qapp: QApplication, tmp_path: Path) -> None:
+    """主窗口与关键子控件的布局几何必须有效（非 0、非负）。
 
-    用 Qt 的缩放取整策略接口模拟高 DPI 环境；不改动进程级环境变量，
-    避免影响其他用例。
+    **本项不构成高 DPI 验收**：它只在已创建的 QApplication 之后调整窗口尺寸，
+    并未设置或测量实际缩放因子，因此只能证明「基础布局几何非零」，
+    不能证明「高 DPI 缩放下的实际渲染与可读性」。后者保留待验。
     """
-    from PySide6.QtCore import Qt
-    from PySide6.QtGui import QGuiApplication
-
     win = MainWindow(project_root=tmp_path)
     win.show()
     try:
-        QGuiApplication.setHighDpiScaleFactorRoundingPolicy(
-            Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
-        )
         win.resize(1600, 1000)
         qapp.processEvents()
 
-        assert win.width() > 0 and win.height() > 0, "高 DPI 下窗口尺寸不得为 0"
+        assert win.width() > 0 and win.height() > 0, "窗口尺寸不得为 0"
         assert win.layer_panel.width() > 0, "图层面板宽度不得为 0"
         assert win.info_panel.height() > 0, "信息面板高度不得为 0"
         assert win.layer_panel.isVisible(), "图层面板应仍可见"
-        # 缩放后子控件几何不得出现负尺寸
         assert win.layer_panel.width() >= 0 and win.info_panel.height() >= 0
+    finally:
+        win.close()
+        win.deleteLater()
+        qapp.processEvents()
+
+
+def test_gui_exposes_actual_device_pixel_ratio(qapp: QApplication, tmp_path: Path) -> None:
+    """GUI 进程能读到**实际**的 devicePixelRatio（高 DPI 环境的前提）。
+
+    本项证明「缩放因子可被测量」，为后续在已知缩放环境下补做高 DPI 验收
+    提供可用的观测手段；**不**等同于高 DPI 可读性已验收。
+    """
+    win = MainWindow(project_root=tmp_path)
+    win.show()
+    try:
+        qapp.processEvents()
+        dpr = win.devicePixelRatioF()
+        assert dpr > 0, f"devicePixelRatioF 不得为非正数，实际 {dpr}"
+        # 缩放因子必须能读出具体数值（而非只有布尔可用性）
+        assert isinstance(dpr, float)
     finally:
         win.close()
         win.deleteLater()

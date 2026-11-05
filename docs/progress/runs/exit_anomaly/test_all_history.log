@@ -150,3 +150,65 @@
 356 passed in 138.68s (0:02:18)
 
 === child exited rc=3221226505 elapsed=144.2s ===
+
+=== run_with_timeout start 2026-11-05T15:20:51.633657 timeout=1200.0s cmd=C:\Users\赵航\Desktop\studio\spectra-workbench\.venv\Scripts\python.exe -m pytest -q -o faulthandler_timeout=60 ===
+........................................................................ [ 20%]
+........................................................................ [ 40%]
+........................................................................ [ 60%]
+........................................................................ [ 80%]
+....................................................................     [100%]
+356 passed in 138.40s (0:02:18)
+
+=== child exited rc=0 elapsed=139.5s ===
+
+=== run_with_timeout start 2026-11-05T15:51:32.765796 timeout=1200.0s cmd=C:\Users\赵航\Desktop\studio\spectra-workbench\.venv\Scripts\python.exe -m pytest -q -o faulthandler_timeout=60 ===
+
+=================================== ERRORS ====================================
+__________ ERROR collecting tests/unit/test_capabilities_baseline.py __________
+tests\unit\test_capabilities_baseline.py:35: in <module>
+    from spectra_workbench.providers.gdal_provider.adapter import GDALProviderAdapter
+src\spectra_workbench\providers\gdal_provider\__init__.py:3: in <module>
+    from spectra_workbench.providers.gdal_provider.adapter import GDALProviderAdapter
+src\spectra_workbench\providers\gdal_provider\adapter.py:97: in <module>
+    "nearest": gdal.GRA_NearestNeighbour,
+               ^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AttributeError: 'NoneType' object has no attribute 'GRA_NearestNeighbour'
+=========================== short test summary info ===========================
+ERROR tests/unit/test_capabilities_baseline.py - AttributeError: 'NoneType' o...
+!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+1 error in 1.86s
+
+=== child exited rc=2 elapsed=2.3s ===
+
+=== run_with_timeout start 2026-11-05T15:59:07.002863 timeout=1200.0s cmd=C:\Users\赵航\Desktop\studio\spectra-workbench\.venv\Scripts\python.exe -m pytest -q -o faulthandler_timeout=60 ===
+........................................................................ [ 18%]
+........................................................................ [ 37%]
+........................................................................ [ 56%]
+........................................................................ [ 75%]
+........................................................................ [ 94%]
+.....................                                                    [100%]
+381 passed in 138.58s (0:02:18)
+
+=== child exited rc=3221226505 elapsed=145.0s ===
+
+=== run_with_timeout start 2026-11-05T16:01:52.706667 timeout=1200.0s cmd=C:\Users\赵航\Desktop\studio\spectra-workbench\.venv\Scripts\python.exe -m pytest -q -o faulthandler_timeout=60 ===
+........................................................................ [ 18%]
+........................................................................ [ 37%]
+........................................................................ [ 56%]
+........................................................................ [ 75%]
+........................................................................ [ 94%]
+.....................                                                    [100%]
+381 passed in 136.24s (0:02:16)
+
+=== child exited rc=3221226505 elapsed=142.3s ===
+
+=== run_with_timeout start 2026-11-05T16:17:03.467316 timeout=1200.0s cmd=C:\Users\赵航\Desktop\studio\spectra-workbench\.venv\Scripts\python.exe -m pytest -q -o faulthandler_timeout=60 ===
+........................................................................ [ 18%]
+........................................................................ [ 37%]
+........................................................................ [ 56%]
+........................................................................ [ 75%]
+........................................................................ [ 94%]
+.....................                                                    [100%]
+381 passed in 134.27s (0:02:14)
+
+=== child exited rc=0 elapsed=135.2s ===

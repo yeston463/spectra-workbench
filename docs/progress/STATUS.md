@@ -175,7 +175,7 @@ CRT 检测到栈状态异常后立即终止进程，这正是 `STATUS_STACK_BUFF
 | 基础项目可保存重开源/样式/视图 | 已满足 | `test_p3_viewing_flow.py::test_project_saves_order_visibility_display_and_view`；`test_p3_persistence_regression.py`（19 项，含保存重开与目标防同名劫持） |
 | 布局可恢复 | 已满足 | `test_p3_dock_layout_persistence.py`（2 项：浮动/显隐/停靠区域重排跨会话持久化与重开恢复） |
 | 关闭图层释放文件 | 已满足 | `test_p3_viewing_flow.py::test_closing_layer_releases_file_handle` |
-| 中文高 DPI 可用 | 已满足（第 25 轮补齐） | 第 25 轮新增 `test_p3_acceptance_gaps.py`（3 项）：中文字体族可用、`ensure_application_fonts` 返回可用字体数、高 DPI 缩放下主窗口与子控件几何有效 |
+| 中文高 DPI 可用 | **部分已满足 / 高 DPI 部分待验** | 中文字体族可用、`ensure_application_fonts` 返回可用字体数、主窗口与子控件布局几何非负且非零——这三项已有直接断言（`test_p3_acceptance_gaps.py`）。**但实际高 DPI 缩放下的渲染与可读性仍待验**：原测试只在已创建的 QApplication 之后调整窗口尺寸，既未设置也未测量实际缩放因子，不能据此认定高 DPI 已验收；已新增 `test_gui_exposes_actual_device_pixel_ratio` 证明缩放因子可被测量，作为后续在已知缩放环境（独立进程 + 明确 DPI）下补证的手段 |
 
 **P3-02 栅格/矢量/子数据集的元数据读取**
 「数据类型、NoData、mask、单位、波段与空间模型准确；不完整数据明确报错」
@@ -229,6 +229,103 @@ CRT 检测到栈状态异常后立即终止进程，这正是 `STATUS_STACK_BUFF
 | 用合成影像完成同类验收 | 已满足 | 合成 ENVI/GTiff/GeoJSON/netCDF 样例覆盖多波段、像元数值、ROI 与对比 |
 | 保留真实数据待验状态 | **待验** | 课程原始数据位于 `C:\Users\赵航\Desktop\studio\_chaoxing_rs`（**只读**，不得运行其中的抓取/下载/OCR 脚本）；本轮全部用合成影像验收，未对课程原始 ENVI 栅格与 lena.tif 做真实打开验证 |
 
+### 第 26 轮：GUI→Worker 参数一致性修正 + 两项验收表述更正
+
+按第二十五轮复核的**实际落盘复现**修正。本轮只补参数从 GUI 到实际输出的一致性，
+不扩展 P4-02 及其他算法。
+
+**一、四类静默失效（全部已修）**
+
+| 复核项 | 修正前 | 修正后 |
+|---|---|---|
+| Warp 填裁剪窗口 8×9 | 输出整图 16×16，状态 succeeded | **输出 8×9**，像元值与源数据对应区域一致 |
+| GUI 选双线性 | 实际结果等于最近邻 | **实际结果等于双线性**，且与最近邻不同 |
+| `dstNodata=0` | 落盘仍是 -9999 | **落盘 NoData = 0**（与未请求时语义不同） |
+| `srcWin=[1.9,2.9,3.8,4.8]` | 被 `int()` 截断为 3×4，succeeded | **invalid_parameters**，不产出文件 |
+| 未知重采样算法 | 静默回退最近邻，succeeded | **invalid_parameters**（错误消息列出可用算法） |
+| 参数名拼错（如 `srcWn`） | 静默忽略 | **invalid_parameters** |
+| 别名冲突（`resample_alg` 与 `resampling` 不同值） | 静默择一 | **invalid_parameters** |
+
+**根因**：GUI 与 Worker **各维护一份参数名与取值集合**。新增共享契约模块
+`src/spectra_workbench/processing/raster_params.py`（纯 Python，不导入 osgeo），
+定义 canonical 名、显式别名表、受支持算法集合与统一校验；
+GUI 提交前与 Worker 执行前调用**同一个** `normalize_raster_params()`。
+
+- canonical 名：`resampleAlg`、`srcWin`、`projWin`、`outputBounds`、`xRes`、`yRes`、
+  `outputType`、`noData`、`dstNodata`、`dstSRS`、`srcSRS`、`targetAlignedPixels`、
+  `width`、`height`；
+- 别名（如 `resampling`、`resample_alg`、`src_win`、`x_res`）显式登记，
+  **同指不同值时报错**，不无声择一；
+- 零值合法：所有可选数值参数按「是否为 None」判断，不再用 truthiness；
+- 未知算法、拼错参数名、小数截断、非有限值、冲突组合一律 `invalid_parameters`，
+  **不产出文件**。
+
+**二、Warp 的源窗口裁剪语义**
+
+此前 Warp 分支根本不处理 `srcWin`/`projWin`，而表单在 Warp 模式下又暴露了裁剪控件
+——用户填了窗口却被静默忽略、产出整图且状态 succeeded。
+现在实现**两步语义**：先按源像元窗口（`srcWin`）或源地理窗口（`projWin`）裁剪源，
+再对裁剪结果重投影。**源窗口与目标 CRS 的 `outputBounds` 语义不同**，
+两者同时给出时报错；`srcWin` 与 `projWin` 同为源窗口语义，也不能同时给出。
+
+**三、GUI 隔离约束的间接依赖（重要）**
+
+共享契约模块最初放在 `providers/gdal_provider/params.py`，但该包的 `__init__.py`
+会 import adapter（adapter 顶层 import osgeo）——GUI 进程因此被**间接**拉入 osgeo，
+违反 AGENTS.md 硬约束，且现有源码级正则扫描抓不到。
+已迁移到 `processing/raster_params.py`（该包为纯 Python）。
+
+新增 `tests/unit/test_gui_isolation_runtime.py`（3 项）做**运行时**兜底：
+独立子进程导入 GUI 模块后检查 `sys.modules`，并断言 `processing` 包不含原生依赖。
+**对照实验**：把契约模块还原回会拉入 osgeo 的位置后该测试失败，修复后通过。
+
+**四、两项验收表述更正**
+
+1. **GDAL 实际常量是 `GMF_NODATA=8`、`GMF_ALPHA=4`**——上一轮把 8 误写成
+   `GMF_ALPHA=8`，已更正。并且 NoData **元数据**（`GetNoDataValue()`）与实际
+   **mask**（`GetMaskBand()`）改为**分别核对**，不再用其一代替另一。
+2. **P3 高 DPI 证据不足**：原测试只在已创建的 QApplication 之后调整窗口尺寸，
+   既未设置也未测量实际缩放因子，不能据此认定高 DPI 已验收。
+   已把该项拆开：字体可用与布局几何非零 = 已满足；
+   **实际高 DPI 缩放下的渲染与可读性 = 待验**。
+   另加 `test_gui_exposes_actual_device_pixel_ratio` 证明缩放因子可被测量，
+   作为后续在已知缩放环境（独立进程 + 明确 DPI）下补证的手段。
+
+**五、验收测试**
+
+- `tests/integration/test_p4_param_consistency.py`（18 项）：**从 GUI 表单发出完整
+  TaskSpec**，由真实 GDAL worker 执行，再独立重开产出核对**实际像元与元数据**，
+  不再只测参数采集辅助函数；
+- `tests/unit/test_gui_isolation_runtime.py`（3 项）：GUI 隔离运行时兜底。
+- 本轮专项合计 52 项全通过。
+
+**六、退出异常 0xC0000409 的诊断进展（部分归因，不宣称根治）**
+
+第 26 轮首次把该异常**稳定复现**并定位到一个**真实触发条件**：
+
+- 复现：15:59:07 与 16:01:52 两轮全量均 **381 passed / 0 失败但 rc=3221226505**，
+  连续两轮 100% 复现（此前为间歇性）。
+- 定位（对照实验，逐步排除）：
+  | 组合 | 用例数 | 退出码 |
+  |---|---|---|
+  | 排除本轮全部 3 个新增测试文件 | 357 | **rc=0** |
+  | 仅排除两个 unit 新增（保留参数一致性集成测试） | 375 | **rc=0** |
+  | 仅排除参数一致性集成测试（保留两个 unit 新增） | 363 | **rc=3221226505** |
+  | 完整（3 个新增全含） | 381 | **rc=3221226505** |
+- 根因：两个 unit 新增测试用**独立子进程**做 GUI 隔离探针，其中把
+  `env` 写成 `{"QT_QPA_PLATFORM": ..., "PATH": "", "SYSTEMROOT": "", "PYTHONPATH": ""}`——
+  **清空了 PATH 与 SYSTEMROOT**。Windows 子进程缺少 SYSTEMROOT 会影响 DLL 搜索与
+  系统目录解析，可能导致子进程异常收尾，进而拖累父 pytest 进程在**退出阶段**触发
+  `__fastfail`（0xC0000409）。
+- 修复：子进程 env 改为**以 `os.environ` 为基底只覆盖必要项**，
+  并用 `-E` 让子进程忽略继承的 PYTHONPATH（源码根由脚本内 `sys.path.insert` 精确指定）。
+- 验证：修复后同一 363 项组合 **rc=0**；完整 381 项 **381 passed / rc=0**。
+
+**但仍不宣称根治**：归档的 23 轮历史中，2026-11-04T20:00:24（265 项）与
+2026-11-05T07:48:47（286 项）两轮 rc=3221226505 **早于本轮新增测试存在**，
+说明该异常至少还有一个尚未定位的触发路径。当前结论只能是
+「已定位并修复其中一个触发条件」，退出异常本身的根因仍未完全定位。
+
 ### 第 25 轮：P3 原验收清单逐句对账 + P4-01 裁剪/重采样/输出网格
 
 **一、P3 原验收清单**（见上方「P3 原验收清单逐句核对」章节）
@@ -271,8 +368,10 @@ GUI 参数表单暴露 P4-01 参数（裁剪窗口、输出像元宽高、输出
 **实测结论（已写入测试注释，避免后续踩坑）**：
 - GDAL 的 `projWin` 顺序是 `[minX, maxY, maxX, minY]`（先上边界后下边界）；
   传 `[minX, minY, maxX, maxY]` 会报 "negative width and/or height"。
-- 设置 NoData 后 GDAL **不一定**置 `GMF_NODATA` 标志（本例实测为 `GMF_ALPHA=8`），
-  因此 NoData 是否生效以 `GetNoDataValue()` 判定而非标志位。
+- GDAL 3.13.3 的实际常量是 **`GMF_NODATA=8`、`GMF_ALPHA=4`**
+  （上一轮把 8 误写成 `GMF_ALPHA=8`，已更正）。
+  NoData **元数据**（`GetNoDataValue()`）与实际 **mask**
+  （`GetMaskBand()`）必须**分别核对**，不能用其一代替另一。
 
 **三、本轮全量跑再次触发退出异常 0xC0000409（如实记录）**
 
@@ -467,7 +566,7 @@ Thread 0x0000d064 (most recent call first):
 | P0-01 仓库与文档结构 | done | git init（2.50.1）；docs/plan/ 输入基线、contracts/、src/、tests/；AGENTS.md、README.md、pyproject.toml；docs/progress/WORKPACKAGES.md |
 | P0-02 四环境 | implemented | scripts/bootstrap_pip.ps1 -VerifyOnly → RESULT ALL OK；docs/progress/runs/env_report.json；environments/locks/*.lock.txt |
 | P0-03 自检与小型 Fixture | implemented | src/spectra_workbench/app/doctor.py + scripts/doctor.ps1 → docs/progress/runs/doctor_report.json。GTiff 往返成功、坐标转换成功、205 驱动、5 CLI 就绪；单测全绿 |
-| P0-04 自动化检查流水线 | done | scripts/test.ps1，串联 Ruff、Mypy 与 Pytest。Mypy 57 个源文件 0 错误；全量自动化测试通过：**356 passed in 138.40s**，全量回归子进程 rc=0（2026-11-05 第 25 轮，P3 验收清单 + P4-01 裁剪/重采样/输出网格）；第 23 轮为 318 passed in 110.47s、rc=0；第 22 轮为 308 passed in 116.50s、rc=0；第 21 轮为 297 passed in 105.12s、rc=0；如实记录 07:48:47 历史退出异常轮次（286 passed，0xC0000409）与后续 07:54:31、07:56:16（286 passed，rc=0）及本轮（297 passed，rc=0），全面加固 Qt 对象生命周期有序销毁 |
+| P0-04 自动化检查流水线 | done | scripts/test.ps1，串联 Ruff、Mypy 与 Pytest。Mypy 57 个源文件 0 错误；全量自动化测试通过：**381 passed in 134.27s**，全量回归子进程 rc=0（2026-11-05 第 26 轮，参数一致性修正 + 退出异常部分归因）；第 23 轮为 318 passed in 110.47s、rc=0；第 22 轮为 308 passed in 116.50s、rc=0；第 21 轮为 297 passed in 105.12s、rc=0；如实记录 07:48:47 历史退出异常轮次（286 passed，0xC0000409）与后续 07:54:31、07:56:16（286 passed，rc=0）及本轮（297 passed，rc=0），全面加固 Qt 对象生命周期有序销毁 |
 | P0-05 打包重定位可行性验证 | implemented | docs/adr/0002-relocation-and-packaging.md；tests/integration/test_relocation.py 验证 UI 与 Rasterio、GDAL 引擎在独立临时路径正常初始化并导入 |
 | P1-01 领域模型与契约对账 | done | src/spectra_workbench/domain/models.py；tests/unit/test_domain_models.py；tests/unit/test_contracts_schema.py（50 项全绿） |
 | P1-02 JSONL 客户端与 Worker 启动 | done | src/spectra_workbench/protocol/messages.py；src/spectra_workbench/workers/process.py；src/spectra_workbench/workers/entrypoint.py；tests/integration/test_worker_process.py（8 项真实跨进程测试全绿） |
@@ -486,8 +585,8 @@ Thread 0x0000d064 (most recent call first):
 | P3-05 view CRS、重投影、查询与 ROI | implemented | 旋转 Affine 与无 GT 栅格支持；地图坐标 ↔ 像元中心/角点约定；ROI 模型与点包含判定；跨 CRS 视图重投影网格读取；真实鼠标事件多边形 ROI 绘制/闭合/选中/手柄拖拽/删除/保存重开全流程；矩形展开 4 角点经 Worker 转换并精确保持 425 平方单位面积与 4 个角点；坐标转换失败异常隔离隐藏并保全权威模型；五类故障注入矩阵覆盖（向地图/回像元/项目重开/拖动反算/旧响应迟到），跨坐标空间数据混用缺陷已修复（tests/integration/test_p3_interactive_polygon_roi.py 9 项全绿） |
 
 实测命令与结果：
-- powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test.ps1 -All → **Ruff 干净、Mypy 干净（57 个源文件 0 错误）、356 passed in 138.40s，exit 0**
-  - 第 25 轮（P3 验收清单 + P4-01）：新增 30 项（P3 验收缺口 5 项 + P4-01 裁剪重采样 14 项 + P4-01 表单 11 项）；**全量跑须前台运行**（需 110–122 秒，后台任务约 2 分钟上限会中途终止，见下方说明）；第 23 轮为 318 passed in 110.47s、rc=0
+- powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test.ps1 -All → **Ruff 干净、Mypy 干净（58 个源文件 0 错误）、381 passed in 134.27s，exit 0**
+  - 第 26 轮（参数一致性修正）：新增 25 项（参数一致性端到端 18 项 + GUI 隔离运行时 3 项 + adapter 模块级隔离 3 项 + 高 DPI 表述订正 1 项）；第 25 轮（P3 验收清单 + P4-01）：新增 30 项（P3 验收缺口 5 项 + P4-01 裁剪重采样 14 项 + P4-01 表单 11 项）；**全量跑须前台运行**（需 110–122 秒，后台任务约 2 分钟上限会中途终止，见下方说明）；第 23 轮为 318 passed in 110.47s、rc=0
   - 第 23 轮（P3-02 元数据实现边界修正）：新增 10 项元数据边界回归（要素数 force=0、图层类型路由、请求上下文、仿射四角范围）；本轮 pytest 临时根目录使用全新路径（见上方「运行方式的要求」）；第 22 轮为 308 passed in 116.50s、rc=0
   - 第 22 轮（P3-02 矢量与子数据集元数据）：新增 11 项（矢量与子数据集集成 10 项 + stop() 回调死锁回归 1 项）；本轮使用位于本轮工作目录内的独立临时根目录（pytest 的 basetemp 选项），避开环境删除守卫对全局旧临时目录的批量删除拦截；第 21 轮为 297 passed in 105.12s、rc=0
   - 如实记录全量回归历程：

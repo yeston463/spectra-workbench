@@ -94,7 +94,8 @@
         "测试分组：tests/unit 与 tests/integration 覆盖领域模型、调度、生命周期、UI 组件与跨进程集成。",
         "实测流水线：powershell -ExecutionPolicy Bypass -File scripts/test.ps1 -All => Ruff 干净、Mypy 干净、Pytest 169 passed，exit 0。",
         "退出异常 0xC0000409 诊断（第 21 轮）：保留失败轮与成功轮全部证据（docs/progress/runs/exit_anomaly/test_all_history.log 共 11 轮，其中 11-04 20:00:24 与 11-05 07:48:47 两轮 rc=3221226505）；Windows 事件日志定位崩溃模块为 ucrtbase.dll（偏移 0xa527e，字节 cd 29 即 x64 的 int 0x29 / __fastfail 指令）与 Qt6Core.dll，该指令序列只能表明此处触发快速失败、不能单独证明具体根因；07:48:47 失败轮与 07:56:16 成功轮都发生在 ce4e60d 提交（07:58:51）之前，但当时无源码哈希或快照留存，**两轮工作树是否字节完全一致未能完整确认**，故只确证为间歇性崩溃；实测 win.deleteLater()+processEvents() 并未真正销毁窗口（docs/progress/runs/exit_anomaly/probes/probe_deferred_delete.py），Qt 对象析构顺序在解释器退出阶段不确定；已实施 tests/conftest.py 的会话结束有序销毁、QtWorkerClient._closed 信号派发保护、closeEvent 无条件回收请求线程，并以 tests/unit/test_p3_exit_lifecycle.py 8 项回归固化（含并发启动竞态与锁序列化）；对照实验（修复后 6 轮全绿、对照组 7 轮全绿）不足以证明根因已消除，本机缺少符号工具无法映射到具体函数，如实记录为根因未完全定位，不宣称根治；再现时应保存崩溃现场快照、完整日志与 Windows 事件日志。",
-        "第 22 轮发现并修复 stop() 回调-锁自我死锁：stop() 过去持有 _callbacks_lock 时调用各请求的错误回调，而主窗口的矢量回退逻辑会在该回调内再次发起请求（call_async 需同一把非重入锁），造成同线程自我死锁（全量跑 faulthandler 60s 超时并打印全部线程栈，栈顶直指该路径）；已改为锁内只摘出回调、锁外通知，并给主窗口回退回调加关闭态防护；对照实验：还原为修复前行为后回归用例硬超时 120s 被终止（死锁复现），修复后 1.8s 通过，回归固化于 tests/unit/test_p3_exit_lifecycle.py。"
+        "第 22 轮发现并修复 stop() 回调-锁自我死锁：stop() 过去持有 _callbacks_lock 时调用各请求的错误回调，而主窗口的矢量回退逻辑会在该回调内再次发起请求（call_async 需同一把非重入锁），造成同线程自我死锁（全量跑 faulthandler 60s 超时并打印全部线程栈，栈顶直指该路径）；已改为锁内只摘出回调、锁外通知，并给主窗口回退回调加关闭态防护；对照实验：还原为修复前行为后回归用例硬超时 120s 被终止（死锁复现），修复后 1.8s 通过，回归固化于 tests/unit/test_p3_exit_lifecycle.py。",
+        "第 26 轮首次把退出异常 0xC0000409 稳定复现并定位到一个真实触发条件：连续两轮 381 passed/0 失败但 rc=3221226505；对照实验逐步排除后确认触发条件是新增的两个 unit 测试用独立子进程做 GUI 隔离探针时把 env 写成清空 PATH 与 SYSTEMROOT，Windows 子进程缺少 SYSTEMROOT 影响 DLL 搜索与系统目录解析，可能导致子进程异常收尾并拖累父 pytest 进程在退出阶段触发 __fastfail。修复：子进程 env 改为以 os.environ 为基底只覆盖必要项，并用 -E 忽略继承的 PYTHONPATH。修复后同一 363 项组合 rc=0，完整 381 项 rc=0。**仍不宣称根治**：历史 23 轮中 2026-11-04T20:00:24（265 项）与 2026-11-05T07:48:47（286 项）两轮早于本轮新增测试存在，说明至少还有一个未定位的触发路径。"
       ],
       "blocking_reason": null
     },
@@ -476,7 +477,8 @@
         "tests/integration/test_p4_clip_resample.py（14 项）按原验收标准逐项验收：输出网格（srcWin/projWin/outputBounds/xRes/yRes/width/height/targetAlignedPixels）、dtype（outputType 落盘类型核对 + 非法类型拒绝）、mask（noData 传播与源 NoData 保留）、CRS（dstSRS 生效、EPSG 核对、量级变化核对）、像元值（裁剪后与源数据逐点一致、最近邻值必须来自源数据、双线性结果落在源值域内、裁剪+重采样组合）。",
         "tests/integration/test_p4_param_form.py（11 项）验证 GUI 参数下发：留空不产生参数、裁剪窗口/分辨率/尺寸正确下发、0 是「不指定」哨兵不下发、非法输入被拒绝、targetAlignedPixels 只对 Warp 生效。",
         "关键实测结论（已写入测试注释）：GDAL 的 projWin 顺序是 [minX, maxY, maxX, minY]（先上边界后下边界），传 [minX, minY, maxX, maxY] 会报 negative width and/or height；设置 NoData 后 GDAL 不一定置 GMF_NODATA 标志（本例为 GMF_ALPHA=8），因此 NoData 是否生效以 GetNoDataValue() 判定而非标志位。",
-        "本轮未覆盖（属其他条目）：网格拼接与 VRT 属 P4-02；波段堆叠与概览写入属 P4-02/P4-03；ENVI 头文件与格式高级选项属 P4-03；表达式与直方图属 P4-04。"
+        "本轮未覆盖（属其他条目）：网格拼接与 VRT 属 P4-02；波段堆叠与概览写入属 P4-02/P4-03；ENVI 头文件与格式高级选项属 P4-03；表达式与直方图属 P4-04。",
+        "第 26 轮修正 GUI→Worker 参数一致性（四类静默失效全部修复）：Warp 填 srcWin=8x9 却输出整图 16x16 且 succeeded；GUI 发 resampling 而 Worker 读 resample_alg 导致双线性被静默执行成最近邻；dstNodata=0 被 or 短路丢弃；小数 srcWin 被 int() 静默截断；未知重采样算法静默回退最近邻。根因是 GUI 与 Worker 各维护一份参数名与取值集合。新增共享契约模块 src/spectra_workbench/processing/raster_params.py（纯 Python，不导入 osgeo）：canonical 名 + 显式别名表 + 受支持算法集合 + 统一校验，GUI 提交前与 Worker 执行前调用同一个 normalize_raster_params()。零值按是否为 None 判断；未知算法/拼错参数名/小数截断/非有限值/别名冲突一律 invalid_parameters 且不产出文件。Warp 源窗口裁剪实现为两步语义（先按 srcWin/projWin 裁剪源再重投影）；源窗口与 outputBounds（目标 CRS 范围）语义不同，同时给出时报错。回归 tests/integration/test_p4_param_consistency.py（18 项）从 GUI 发出完整 TaskSpec 经真实 worker 执行并独立重开产出核对实际像元与元数据；tests/unit/test_gui_isolation_runtime.py（3 项）补运行时 GUI 隔离兜底（共享契约模块初放在 providers/gdal_provider 下会经包 __init__ 间接拉入 osgeo，已迁至 processing/；对照实验证明该测试能捕获此问题）。两项验收表述更正：GDAL 实际常量 GMF_NODATA=8、GMF_ALPHA=4（上一轮写反），NoData 元数据与实际 mask 改为分别核对；P3 高 DPI 证据不足，实际高 DPI 渲染与可读性标为待验，原测试改名为只证明布局几何有效。"
       ],
       "blocking_reason": null
     },

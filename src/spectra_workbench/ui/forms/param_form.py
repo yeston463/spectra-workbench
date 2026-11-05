@@ -37,6 +37,11 @@ from spectra_workbench.domain.models import (
     OutputPlan,
     TaskSpec,
 )
+from spectra_workbench.processing.raster_params import (
+    RESAMPLE_ALGORITHM_CHOICES,
+    ParameterError,
+    normalize_raster_params,
+)
 
 if TYPE_CHECKING:
     from spectra_workbench.domain.models import CapabilityDescriptor
@@ -195,7 +200,10 @@ class CapabilityFormWidget(QWidget):
 
         # --- 重采样方法 (Warp) ---
         self.cmb_resampling = QComboBox()
-        self.cmb_resampling.addItems(["bilinear (双线性插值)", "near (最邻近)", "cubic (三次卷积)", "lanczos", "average"])
+        # 只展示契约模块声明的**实际支持**的算法，且直接用 canonical 名做 itemData，
+        # 避免「显示文本」与「Worker 识别的名字」不一致导致静默回退。
+        for canonical, label in RESAMPLE_ALGORITHM_CHOICES:
+            self.cmb_resampling.addItem(label, canonical)
         self.lbl_resampling = QLabel("重采样方法:")
         self.params_form.addRow(self.lbl_resampling, self.cmb_resampling)
 
@@ -410,7 +418,9 @@ class CapabilityFormWidget(QWidget):
             dst_crs_val = self.cmb_dst_crs.currentText().strip()
             params["dst_crs"] = dst_crs_val
             params["dst_srs"] = dst_crs_val
-            params["resampling"] = self.cmb_resampling.currentText().split()[0]
+            # canonical 名（契约唯一来源）；此前发的是 resampling，Worker 不认，
+            # 导致用户选的双线性被静默执行成最近邻。
+            params["resampleAlg"] = self.cmb_resampling.currentData()
         elif "translate" in cid:
             params["format"] = out_fmt
             raw_type = self.cmb_out_type.currentText()
@@ -429,6 +439,15 @@ class CapabilityFormWidget(QWidget):
             QMessageBox.warning(self, "参数不全", grid_error)
             return
         params.update(grid_params)
+
+        # 提交前用**与 Worker 相同**的契约归一化并校验：
+        # 未知算法、别名冲突、小数截断、非法组合都在这里被拦下，
+        # 不会提交成功后才在 Worker 侧失效或被静默忽略。
+        try:
+            params.update(normalize_raster_params(params))
+        except ParameterError as exc:
+            QMessageBox.warning(self, "参数不合法", str(exc))
+            return
 
         provider_id = "rasterio" if "rasterio" in cid or "rio" in cid else "gdal"
         runtime_id = "rasterio-venv" if provider_id == "rasterio" else "gdal-qgis"
