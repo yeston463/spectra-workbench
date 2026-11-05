@@ -229,6 +229,68 @@ CRT 检测到栈状态异常后立即终止进程，这正是 `STATUS_STACK_BUFF
 | 用合成影像完成同类验收 | 已满足 | 合成 ENVI/GTiff/GeoJSON/netCDF 样例覆盖多波段、像元数值、ROI 与对比 |
 | 保留真实数据待验状态 | **待验** | 课程原始数据位于 `C:\Users\赵航\Desktop\studio\_chaoxing_rs`（**只读**，不得运行其中的抓取/下载/OCR 脚本）；本轮全部用合成影像验收，未对课程原始 ENVI 栅格与 lena.tif 做真实打开验证 |
 
+### 第 28 轮：Rasterio worker 真实入口的参数契约接入
+
+按第二十七轮复核的**直连复现**修正。GDAL 能力矩阵、GUI 状态隔离与 VRT 主修复已确认，
+不重写、不扩展 P4-02。本轮只闭环 Rasterio worker 真实入口的参数契约。
+
+**一、确定性缺陷**
+
+`RasterioProviderAdapter` 的 validate/execute **未调用** `normalize_raster_params`。
+GUI 入口虽已过滤网格参数，但**脚本直接调用实际 Rasterio worker 仍可绕过**：
+
+```
+provider_id=rasterio / runtime_id=rasterio-venv / capability_id=rasterio:convert
+parameters={format:GTiff, srcWin:[1,2,3,4], xRes:0.002, yRes:0.002}
+→ 修正前：succeeded，无 error，有输出；输出仍为源 16×16、像元 0.001，参数被忽略
+→ 修正后：failed，invalid_parameters，消息指出被拒参数 srcWin, xRes, yRes，无产出
+```
+
+**二、为什么上一轮的测试没抓到（重要的测试有效性缺陷）**
+
+`test_p4_capability_boundary.py` 的 `_run_task` **固定创建 GDAL 引擎/客户端**，
+`test_rasterio_convert_rejects_grid_params` 仅换 capability_id 为 `rasterio:convert`，
+**并未换成 Rasterio provider**——它拿到的是 GDAL 的 `unsupported_capability`。
+而我当时把断言放宽成「`invalid_parameters` 或 `unsupported_capability` 均可」，
+等于**没有验证 Rasterio 的参数拒绝路径**。
+（单元测试直接调用 `normalize_raster_params` 同样不能证明 adapter 已接入该函数。）
+
+**三、修正**
+
+1. **Rasterio adapter 接入共享契约**：
+   - `validate` 调用 `normalize_raster_params(spec.parameters, capability_id=spec.capability_id)`，
+     不支持的参数返回 `invalid_parameters`（并指出具体被拒参数）；
+   - `execute` 在**像元处理与成果发布之前**再校验一次（validate 之后参数仍可能被改动）；
+   - `execute` 保留 `validate` 给出的**具体错误码**——
+     「未知能力」是 `unsupported_capability`，「已支持能力携带非法参数」是
+     `invalid_parameters`，二者不可混为一谈，否则参数校验路径会被掩盖。
+   - 保留现有格式转换功能，**不要求** Rasterio 新实现裁剪/重采样。
+2. **对齐能力标识与契约别名**：
+   - 发现 registry（`RASTERIO_ALIASES`）的 canonical 是 `rio:cli:convert`，
+     而 adapter 的 `SUPPORTED_CAPABILITIES` **漏列**它 → 已补；
+   - 契约别名表登记 adapter 支持集的**全部**能力
+     （`rasterio:convert` / `rio:cli:convert` / `rasterio:cli:convert` /
+     `rasterio:copy` / `rasterio:api:copy`），
+     否则未登记的会落到「未知能力」分支而**跳过能力级校验**。
+3. **测试引擎路由修正**：新增 `tests/integration/test_p4_rasterio_contract.py`，
+   使用 `QtWorkerClient(provider_id="rasterio")` +
+   `TaskSpec.engine.provider_id="rasterio"` + `runtime_id="rasterio-venv"`，
+   **实际发送到 Rasterio worker**；断言必须为 `invalid_parameters`
+   且消息含**具体被拒参数**，**`unsupported_capability` 不算通过**。
+
+**四、覆盖范围**
+
+`test_p4_rasterio_contract.py`（14 项）：无网格参数时正常转换并核对产出尺寸与像元；
+srcWin/xRes/yRes/dstSRS 与拼错参数名被拒；**各支持别名**（从 adapter 读取支持集后参数化，
+不再硬编码，今后新增能力自动覆盖）均受同一规则；未知能力仍为 `unsupported_capability`；
+拒绝后无新成果且原目标不变；同一 worker 拒绝后仍能正常转换（拒绝不得毒化 worker 状态）。
+
+**五、对照实验**
+
+把 Rasterio adapter 的两处契约校验临时移除（还原为修复前行为）后，
+该文件 **10 项失败**（仅 4 项不涉及拒绝的用例通过）；修复后 14 项全通过。
+（只移除 validate 一处时测试仍通过——因为 execute 处还有第二道关卡，属预期的双保险。）
+
 ### 第 27 轮：能力边界、GUI 状态隔离与有界预裁剪
 
 按第二十六轮复核的**实际落盘复现**修正。上一轮四类静默失效已修复，不重写有效主路径；
@@ -661,7 +723,7 @@ Thread 0x0000d064 (most recent call first):
 | P0-01 仓库与文档结构 | done | git init（2.50.1）；docs/plan/ 输入基线、contracts/、src/、tests/；AGENTS.md、README.md、pyproject.toml；docs/progress/WORKPACKAGES.md |
 | P0-02 四环境 | implemented | scripts/bootstrap_pip.ps1 -VerifyOnly → RESULT ALL OK；docs/progress/runs/env_report.json；environments/locks/*.lock.txt |
 | P0-03 自检与小型 Fixture | implemented | src/spectra_workbench/app/doctor.py + scripts/doctor.ps1 → docs/progress/runs/doctor_report.json。GTiff 往返成功、坐标转换成功、205 驱动、5 CLI 就绪；单测全绿 |
-| P0-04 自动化检查流水线 | done | scripts/test.ps1，串联 Ruff、Mypy 与 Pytest。Mypy 57 个源文件 0 错误；全量自动化测试通过：**396 passed in 162.92s**，全量回归子进程 rc=0（2026-11-05 第 27 轮，能力边界 + 有界预裁剪）；第 23 轮为 318 passed in 110.47s、rc=0；第 22 轮为 308 passed in 116.50s、rc=0；第 21 轮为 297 passed in 105.12s、rc=0；如实记录 07:48:47 历史退出异常轮次（286 passed，0xC0000409）与后续 07:54:31、07:56:16（286 passed，rc=0）及本轮（297 passed，rc=0），全面加固 Qt 对象生命周期有序销毁 |
+| P0-04 自动化检查流水线 | done | scripts/test.ps1，串联 Ruff、Mypy 与 Pytest。Mypy 57 个源文件 0 错误；全量自动化测试通过：**410 passed in 176.15s**，全量回归子进程 rc=0（2026-11-05 第 28 轮，Rasterio worker 参数契约接入）；第 23 轮为 318 passed in 110.47s、rc=0；第 22 轮为 308 passed in 116.50s、rc=0；第 21 轮为 297 passed in 105.12s、rc=0；如实记录 07:48:47 历史退出异常轮次（286 passed，0xC0000409）与后续 07:54:31、07:56:16（286 passed，rc=0）及本轮（297 passed，rc=0），全面加固 Qt 对象生命周期有序销毁 |
 | P0-05 打包重定位可行性验证 | implemented | docs/adr/0002-relocation-and-packaging.md；tests/integration/test_relocation.py 验证 UI 与 Rasterio、GDAL 引擎在独立临时路径正常初始化并导入 |
 | P1-01 领域模型与契约对账 | done | src/spectra_workbench/domain/models.py；tests/unit/test_domain_models.py；tests/unit/test_contracts_schema.py（50 项全绿） |
 | P1-02 JSONL 客户端与 Worker 启动 | done | src/spectra_workbench/protocol/messages.py；src/spectra_workbench/workers/process.py；src/spectra_workbench/workers/entrypoint.py；tests/integration/test_worker_process.py（8 项真实跨进程测试全绿） |
@@ -680,8 +742,8 @@ Thread 0x0000d064 (most recent call first):
 | P3-05 view CRS、重投影、查询与 ROI | implemented | 旋转 Affine 与无 GT 栅格支持；地图坐标 ↔ 像元中心/角点约定；ROI 模型与点包含判定；跨 CRS 视图重投影网格读取；真实鼠标事件多边形 ROI 绘制/闭合/选中/手柄拖拽/删除/保存重开全流程；矩形展开 4 角点经 Worker 转换并精确保持 425 平方单位面积与 4 个角点；坐标转换失败异常隔离隐藏并保全权威模型；五类故障注入矩阵覆盖（向地图/回像元/项目重开/拖动反算/旧响应迟到），跨坐标空间数据混用缺陷已修复（tests/integration/test_p3_interactive_polygon_roi.py 9 项全绿） |
 
 实测命令与结果：
-- powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test.ps1 -All → **Ruff 干净、Mypy 干净（58 个源文件 0 错误）、396 passed in 162.92s，exit 0**
-  - 第 27 轮（能力边界 + 有界预裁剪）：新增 15 项（能力边界与有界裁剪）；第 26 轮（参数一致性修正）：新增 25 项（参数一致性端到端 18 项 + GUI 隔离运行时 3 项 + adapter 模块级隔离 3 项 + 高 DPI 表述订正 1 项）；第 25 轮（P3 验收清单 + P4-01）：新增 30 项（P3 验收缺口 5 项 + P4-01 裁剪重采样 14 项 + P4-01 表单 11 项）；**全量跑须前台运行**（需 110–122 秒，后台任务约 2 分钟上限会中途终止，见下方说明）；第 23 轮为 318 passed in 110.47s、rc=0
+- powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test.ps1 -All → **Ruff 干净、Mypy 干净（58 个源文件 0 错误）、410 passed in 176.15s，exit 0**
+  - 第 28 轮（Rasterio worker 参数契约）：新增 14 项；第 27 轮（能力边界 + 有界预裁剪）：新增 15 项（能力边界与有界裁剪）；第 26 轮（参数一致性修正）：新增 25 项（参数一致性端到端 18 项 + GUI 隔离运行时 3 项 + adapter 模块级隔离 3 项 + 高 DPI 表述订正 1 项）；第 25 轮（P3 验收清单 + P4-01）：新增 30 项（P3 验收缺口 5 项 + P4-01 裁剪重采样 14 项 + P4-01 表单 11 项）；**全量跑须前台运行**（需 110–122 秒，后台任务约 2 分钟上限会中途终止，见下方说明）；第 23 轮为 318 passed in 110.47s、rc=0
   - 第 23 轮（P3-02 元数据实现边界修正）：新增 10 项元数据边界回归（要素数 force=0、图层类型路由、请求上下文、仿射四角范围）；本轮 pytest 临时根目录使用全新路径（见上方「运行方式的要求」）；第 22 轮为 308 passed in 116.50s、rc=0
   - 第 22 轮（P3-02 矢量与子数据集元数据）：新增 11 项（矢量与子数据集集成 10 项 + stop() 回调死锁回归 1 项）；本轮使用位于本轮工作目录内的独立临时根目录（pytest 的 basetemp 选项），避开环境删除守卫对全局旧临时目录的批量删除拦截；第 21 轮为 297 passed in 105.12s、rc=0
   - 如实记录全量回归历程：

@@ -27,6 +27,10 @@ from spectra_workbench.domain.models import (
     TaskSpec,
     TaskStatus,
 )
+from spectra_workbench.processing.raster_params import (
+    ParameterError,
+    normalize_raster_params,
+)
 from spectra_workbench.providers.base import (
     ExecutionContext,
     InputOutputConflictError,
@@ -43,9 +47,16 @@ from spectra_workbench.registry.rasterio_index import (
 class RasterioProviderAdapter(ProviderAdapter):
     """Rasterio 适配器，服务于 sw-rasterio 独立进程。"""
 
+    # 已接入执行器的能力。
+    # 必须与 registry（RASTERIO_ALIASES）的正式条目对齐：
+    # `rio:cli:convert` 是 registry 里的 canonical 条目，此前漏列会导致
+    # 它被误拒为 unsupported_capability。
+    # 同时本集合的**每一个**能力都必须在共享契约的别名表中登记，
+    # 否则未登记的会落到「未知能力」分支而跳过能力级参数校验。
     SUPPORTED_CAPABILITIES = {
         "rasterio:convert",
         "rio:cli:convert",
+        "rasterio:cli:convert",
         "rasterio:copy",
         "rasterio:api:copy",
     }
@@ -100,7 +111,22 @@ class RasterioProviderAdapter(ProviderAdapter):
             return {
                 "valid": False,
                 "code": "unsupported_capability",
-                "errors": [f"Rasterio 引擎尚未接入该能力执行器: '{spec.capability_id}'（当前已支持: rasterio:convert）"],
+                "errors": [
+                    f"Rasterio 引擎尚未接入该能力执行器: '{spec.capability_id}'"
+                    f"（当前已支持: {', '.join(sorted(self.SUPPORTED_CAPABILITIES))}）"
+                ],
+                "warnings": warnings,
+            }
+
+        # 参数契约校验：已支持能力若携带**该能力不消费**的参数，必须明确拒绝，
+        # 不得接受后静默忽略（例如 srcWin/xRes/yRes/dstSRS 对 Rasterio convert）。
+        try:
+            normalize_raster_params(spec.parameters, capability_id=spec.capability_id)
+        except ParameterError as exc:
+            return {
+                "valid": False,
+                "code": "invalid_parameters",
+                "errors": [str(exc)],
                 "warnings": warnings,
             }
 
@@ -165,12 +191,30 @@ class RasterioProviderAdapter(ProviderAdapter):
 
         val = self.validate(spec)
         if not val["valid"]:
+            # 保留 validate 给出的具体错误码：
+            # 「未知能力」是 unsupported_capability，
+            # 「已支持能力携带非法参数」是 invalid_parameters——
+            # 二者不可混为一谈，否则参数校验路径会被掩盖。
             return TaskResult(
                 task_id=spec.task_id,
                 attempt=spec.attempt,
                 status=TaskStatus.failed,
-                error={"code": "unsupported_capability", "message": "; ".join(val["errors"])},
+                error={"code": val.get("code", "unsupported_capability"), "message": "; ".join(val["errors"])},
                 duration_seconds=0.0,
+            )
+
+        # 在像元处理与成果发布**之前**再校验一次参数契约
+        # （validate 之后 spec.parameters 仍可能被外部改动）。
+        try:
+            normalize_raster_params(spec.parameters, capability_id=spec.capability_id)
+        except ParameterError as exc:
+            context.log("ERROR", f"参数契约校验失败: {exc}")
+            return TaskResult(
+                task_id=spec.task_id,
+                attempt=spec.attempt,
+                status=TaskStatus.failed,
+                error={"code": "invalid_parameters", "message": str(exc)},
+                duration_seconds=round(time.monotonic() - start_time, 4),
             )
 
         context.progress(0.05, "init", "准备 Rasterio 处理环境与路径解析")

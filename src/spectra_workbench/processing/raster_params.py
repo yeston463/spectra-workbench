@@ -214,9 +214,17 @@ _CAPABILITY_ALIASES: dict[str, str] = {
     "gdaltranslate": "gdal:translate",
     "gdalwarp": "gdal:warp",
     "gdal_warp": "gdal:warp",
+    # Rasterio：必须登记 RasterioProviderAdapter.SUPPORTED_CAPABILITIES 里的
+    # **全部**能力，否则未登记的会落到「未知能力」分支而跳过能力级校验，
+    # 从而绕过「参数必须被消费或被拒绝」的规则。
+    "rasterio:convert": "rasterio:convert",
     "rasterio:cli:convert": "rasterio:convert",
     "rio_convert": "rasterio:convert",
     "rio:cli:convert": "rasterio:convert",
+    "rasterio:copy": "rasterio:convert",
+    "rasterio:api:copy": "rasterio:convert",
+    # 保留 rio_convert / rio:convert 等 CLI 风格别名
+    "rio:convert": "rasterio:convert",
 }
 
 
