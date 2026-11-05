@@ -502,7 +502,8 @@
         "实现（processing/mosaic_ops.py + GDAL adapter）：四能力独立分支，复用既有事务（staging → 重开校验 → commit → 登记）；多输入支持 inputs['inputs'] 列表并按能力校验数量；重叠优先级 first 由反转输入顺序实现（GDAL 为后加入者优先）。",
         "VRT 相对引用基准修正：VRT 的 relativeToVRT 路径相对 VRT 文件所在目录解析，而本项目先写 staging 再 commit 到目标目录，故构建后必须把源引用重写为相对于最终目标目录，否则 commit 后源引用失效。实测 staging 构建的 VRT 为 relativeToVRT=0 + 绝对路径，首版正则只匹配 relativeToVRT=1 导致完全未改到，已修正为覆盖全部 SourceFilename 形态。",
         "验收测试 tests/integration/test_p4_mosaic_stack.py（14 项）按原验收标准逐项验收：重叠优先级（last 取后加入者 / first 取先给定者）、缺口（空洞为 NoData 且不污染有效区）、NoData（源 NoData 不作为有效像元进入成果、dstNodata 落到成果）、源路径变化（VRT 用相对路径引用源、目录整体搬移后仍可打开且像元不变）、波段顺序（堆叠波段归属与输入顺序一致且互不含对方特征值、bandList 严格重排与子集）、能力边界（拼接拒绝 srcWin、输入数量不足被拒、参数非法时既有目标不被覆盖）。",
-        "对照实验：临时关闭 VRT 相对引用重写后 test_buildvrt_uses_relative_source_paths 失败，恢复后通过。"
+        "对照实验：临时关闭 VRT 相对引用重写后 test_buildvrt_uses_relative_source_paths 失败，恢复后通过。",
+        "第 30 轮修正成果完整性与拼接数据语义（依据第二十九轮落盘复现）：(1) 成果集合完整——ENVI 只提交 .dat、.hdr 留在 staging 且最终 .dat 打不开；现完整复用既有成果协议（GetFileList 收集伴生文件、提交前真实重开校验、按最终命名映射提交对、事务提交、提交后最终重开核验），输出元数据取自实际重开。实测细节：VRT 的 GetFileList 会返回被引用的源且路径按 VRT 当前位置解析，故按「文件必须真实存在于 staging」过滤；BuildVRT 实际驱动是 VRT，输出记录不得无条件登记为 GTiff。(2) NoData 语义——Translate(noData=X) 只改标签（缺口仍 -9999、mask 标有效），现 Translate 不设 noData、落盘后按 mask 重映射无效像元实际值并设标签，三者一致；公开策略：输出 NoData 值与有效区真实值冲突时明确拒绝。(3) 输入完整性——混合 CRS 时 GDAL 静默跳过第二源却仍 succeeded，现处理前核对 CRS 与波段结构，不兼容明确拒绝（incompatible_sources），不做隐式重投影；实测 separate=True 时多波段源的所有波段依次进入。(4) relativePaths 开关切实生效（绝对模式主动改为 relativeToVRT=0 + 绝对路径）。(5) 长计算阶段接入 GDAL callback（计算中即可取消）。回归 tests/integration/test_p4_mosaic_integrity.py（12 项）。**支持边界**：本轮为后端实现，GUI 的 CONNECTED_CAPABILITIES 与参数表单尚未接入 P4-02 四项能力，多输入表单与可执行审计亦未接入，不可表述为桌面已可操作；GUI 接入列为待办。"
       ],
       "blocking_reason": null
     },

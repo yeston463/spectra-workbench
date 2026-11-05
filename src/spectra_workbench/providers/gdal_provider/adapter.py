@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import math
 import time
 from pathlib import Path
@@ -46,9 +47,10 @@ from spectra_workbench.providers.base import (
 )
 from spectra_workbench.providers.gdal_provider.mosaic_ops import (
     build_vrt,
+    check_source_compatibility,
     manage_bands,
     merge_sources,
-    rewrite_vrt_relative_sources,
+    set_vrt_source_paths,
     stack_sources,
 )
 from spectra_workbench.registry.gdal_index import (
@@ -772,16 +774,13 @@ class GDALProviderAdapter(ProviderAdapter):
         """P4-02 能力（拼接/VRT/堆叠/波段管理）的执行分支。
 
         非 P4-02 能力返回 None，调用方继续走 Translate/Warp 分支。
+
+        成果提交**完整复用**既有协议：收集全部 sidecar → 提交前真实重开校验
+        → 按最终命名映射提交对 → 事务提交 → 提交后最终重开核验。
+        输出元数据取自**实际重开**的成果，不采信处理函数返回的 info。
         """
         cid = spec.capability_id
-        if cid not in {
-            "gdal:buildvrt",
-            "gdalbuildvrt",
-            "gdal:merge",
-            "gdal_merge",
-            "gdal:stack",
-            "gdal:bandmanage",
-        }:
+        if cid not in P402_CAPABILITIES:
             return None
 
         sources = _extract_raster_inputs(spec)
@@ -805,6 +804,25 @@ class GDALProviderAdapter(ProviderAdapter):
                 duration_seconds=round(time.monotonic() - start_time, 4),
             )
 
+        # 输入兼容性预检：GDAL 对不兼容输入会**静默跳过**（混合 CRS 丢源、
+        # 非 separate 截断多波段），必须先核对并明确拒绝。
+        if cid in ("gdal:merge", "gdal_merge"):
+            compat = check_source_compatibility(sources, require_same_bands=True)
+        elif cid == "gdal:stack":
+            # separate=True 时每个源的所有波段依次进入，波段数可以不同
+            compat = check_source_compatibility(sources, require_same_bands=False)
+        else:
+            compat = {"compatible": True, "reason": None, "details": {}}
+        if not compat["compatible"]:
+            context.log("ERROR", f"输入源不兼容: {compat['reason']}")
+            return TaskResult(
+                task_id=spec.task_id,
+                attempt=spec.attempt,
+                status=TaskStatus.failed,
+                error={"code": "incompatible_sources", "message": str(compat["reason"])},
+                duration_seconds=round(time.monotonic() - start_time, 4),
+            )
+
         out_plan = spec.outputs[0]
         overwrite = out_plan.overwrite
         context.log(
@@ -813,9 +831,15 @@ class GDALProviderAdapter(ProviderAdapter):
         )
         context.progress(0.10, "processing", "执行拼接 / VRT / 堆叠 / 波段管理")
 
+        # 取消/进度回调：长计算阶段必须可取消（此前只在计算结束后检查）
+        def _progress_cb(ratio: float, message: str, _data: Any = None) -> int:
+            with contextlib.suppress(Exception):  # 进度回调异常不应中断处理
+                context.progress(0.10 + 0.65 * float(ratio), "processing", message)
+            return 0 if context.is_cancelled.is_set() else 1
+
         try:
             if cid in ("gdal:buildvrt", "gdalbuildvrt"):
-                info = build_vrt(
+                build_vrt(
                     staged_path,
                     sources,
                     overlap_priority=norm.get("overlapPriority", "last"),
@@ -823,17 +847,22 @@ class GDALProviderAdapter(ProviderAdapter):
                     src_nodata=norm.get("srcNodata"),
                     vrt_nodata=norm.get("vrtNodata"),
                     separate=bool(norm.get("separate", False)),
-                    use_relative=bool(norm.get("relativePaths", True)),
+                    callback=_progress_cb,
                 )
-                # VRT 的 relativeToVRT 路径相对于 VRT 文件所在目录解析；
-                # staging 与最终目标目录不同，必须重写基准，否则 commit 后源引用失效。
-                rewritten = rewrite_vrt_relative_sources(staged_path, target_path.parent)
+                # VRT 源引用按开关统一处理：
+                # 相对模式 → 相对于**最终目标目录**（保证目录整体搬移后仍可打开）；
+                # 绝对模式 → 主动改为绝对引用（不能指望引擎一定输出绝对路径）。
+                use_relative = bool(norm.get("relativePaths", True))
+                handled = set_vrt_source_paths(
+                    staged_path, target_path.parent, use_relative=use_relative
+                )
                 context.log(
                     "INFO",
-                    f"VRT 源引用已按最终目录重写（{rewritten} 条），保证目录整体搬移后仍可打开",
+                    f"VRT 源引用已按最终目录重写（{handled} 条，"
+                    f"模式={'相对' if use_relative else '绝对'}）",
                 )
             elif cid in ("gdal:merge", "gdal_merge"):
-                info = merge_sources(
+                merge_sources(
                     staged_path,
                     sources,
                     overlap_priority=norm.get("overlapPriority", "last"),
@@ -846,9 +875,10 @@ class GDALProviderAdapter(ProviderAdapter):
                     output_bounds=norm.get("outputBounds"),
                     output_type=norm.get("outputType"),
                     out_format=out_format,
+                    callback=_progress_cb,
                 )
             elif cid == "gdal:stack":
-                info = stack_sources(
+                stack_sources(
                     staged_path,
                     sources,
                     src_nodata=norm.get("srcNodata"),
@@ -858,14 +888,16 @@ class GDALProviderAdapter(ProviderAdapter):
                     output_bounds=norm.get("outputBounds"),
                     output_type=norm.get("outputType"),
                     out_format=out_format,
+                    callback=_progress_cb,
                 )
             else:  # gdal:bandmanage
-                info = manage_bands(
+                manage_bands(
                     staged_path,
                     sources[0],
                     band_list=norm.get("bandList"),
                     output_type=norm.get("outputType"),
                     out_format=out_format,
+                    callback=_progress_cb,
                 )
         except Exception as exc:
             context.log("ERROR", f"P4-02 处理失败: {exc}")
@@ -877,10 +909,52 @@ class GDALProviderAdapter(ProviderAdapter):
                 duration_seconds=round(time.monotonic() - start_time, 4),
             )
 
-        context.check_cancelled()
+        if context.is_cancelled.is_set():
+            context.log("WARNING", "检测到取消请求，中止 P4-02 任务")
+            return TaskResult(
+                task_id=spec.task_id,
+                attempt=spec.attempt,
+                status=TaskStatus.cancelled,
+                error={"code": "task_cancelled", "message": "用户取消任务"},
+                duration_seconds=round(time.monotonic() - start_time, 4),
+            )
 
-        # staging 重开校验
-        context.progress(0.85, "verifying_staging", "校验 staging 成果")
+        # ---- 成果完整性：收集全部 sidecar（ENVI .hdr / .aux.xml 等）----
+        context.progress(0.80, "collecting", "收集成果与伴生文件")
+        try:
+            ds = gdal.Open(str(staged_path), gdal.GA_ReadOnly)
+            if ds is None:
+                raise RuntimeError(f"无法重开 staging 成果：{staged_path}")
+            raw_files = ds.GetFileList() or []
+            staged_files: list[Path] = [Path(f).resolve() for f in raw_files]
+            if staged_path.resolve() not in staged_files:
+                staged_files.insert(0, staged_path.resolve())
+            # **排除输入源**：VRT 的 GetFileList() 会把它引用的源文件一并返回，
+            # 且这些路径是按 **VRT 当前位置**（staging）解析的，
+            # 因此不能用「与输入源同路径」来排除。
+            # 稳健判据：**要提交的文件必须真实存在于 staging**——
+            # 伴生文件（.hdr/.aux.xml）确实在 staging，而被引用的源不在。
+            source_set = {sp.resolve() for sp in sources}
+            staged_files = [
+                sf
+                for sf in staged_files
+                if sf.exists() and sf not in source_set
+            ]
+            if staged_path.resolve() not in staged_files:
+                staged_files.insert(0, staged_path.resolve())
+            # 提交前真实重开校验：确认 staging 成果确实可读
+            # （尺寸/波段等元数据在提交后由**最终重开**给出，不采信此处快照）
+            del ds
+        except Exception as verify_err:
+            context.log("ERROR", f"staging 成果校验失败: {verify_err}")
+            return TaskResult(
+                task_id=spec.task_id,
+                attempt=spec.attempt,
+                status=TaskStatus.failed,
+                error={"code": "verification_failed", "message": str(verify_err)},
+                duration_seconds=round(time.monotonic() - start_time, 4),
+            )
+
         if not staged_path.exists() or staged_path.stat().st_size == 0:
             context.log("ERROR", "staging 成果缺失或为空")
             return TaskResult(
@@ -891,32 +965,83 @@ class GDALProviderAdapter(ProviderAdapter):
                 duration_seconds=round(time.monotonic() - start_time, 4),
             )
 
-        # 事务提交
-        context.progress(0.90, "committing", "提交 staging 成果至目标路径")
-        commit_pairs = [(staged_path, target_path)]
+        # ---- 构造完整提交对（主文件 + 全部 sidecar，按最终命名映射）----
+        commit_pairs: list[tuple[Path, Path]] = []
+        for sf in staged_files:
+            if sf == staged_path.resolve():
+                tf = target_path
+            elif sf.suffix.lower() == ".hdr":
+                tf = target_path.with_suffix(".hdr")
+            elif sf.name.endswith(".aux.xml"):
+                tf = target_path.parent / f"{target_path.name}.aux.xml"
+            elif sf.name.startswith(staged_path.name):
+                tail = sf.name[len(staged_path.name) :]
+                tf = target_path.parent / f"{target_path.name}{tail}"
+            else:
+                tf = target_path.parent / sf.name
+            commit_pairs.append((sf, tf))
+
+        # ---- 事务提交全部成果文件 ----
+        context.progress(0.92, "committing", "提交 staging 成果与伴生文件")
         try:
             context.commit_files(commit_pairs, overwrite=overwrite)
-        except Exception as exc:
-            context.log("ERROR", f"提交失败: {exc}")
+        except OutputConflictError as conflict_err:
+            context.log("ERROR", f"提交被拒（目标已存在）: {conflict_err}")
             return TaskResult(
                 task_id=spec.task_id,
                 attempt=spec.attempt,
                 status=TaskStatus.failed,
-                error={"code": "commit_failed", "message": str(exc)},
+                error={"code": "output_already_exists", "message": str(conflict_err)},
+                duration_seconds=round(time.monotonic() - start_time, 4),
+            )
+        except Exception as commit_err:
+            context.log("ERROR", f"事务提交失败: {commit_err}")
+            return TaskResult(
+                task_id=spec.task_id,
+                attempt=spec.attempt,
+                status=TaskStatus.failed,
+                error={"code": "commit_failed", "message": str(commit_err)},
                 duration_seconds=round(time.monotonic() - start_time, 4),
             )
 
+        # ---- 提交后最终核验：真实重开目标文件 ----
         context.progress(0.97, "verifying_final", "核验已安装目标")
+        try:
+            final_ds = gdal.Open(str(target_path), gdal.GA_ReadOnly)
+            if final_ds is None:
+                raise RuntimeError(f"提交后的成果无法重开：{target_path}")
+            final_w = final_ds.RasterXSize
+            final_h = final_ds.RasterYSize
+            final_bands = final_ds.RasterCount
+            final_driver = final_ds.GetDriver().ShortName
+            del final_ds
+        except Exception as final_err:
+            context.log("ERROR", f"最终成果重开核验失败: {final_err}")
+            return TaskResult(
+                task_id=spec.task_id,
+                attempt=spec.attempt,
+                status=TaskStatus.failed,
+                error={"code": "final_reopen_failed", "message": str(final_err)},
+                duration_seconds=round(time.monotonic() - start_time, 4),
+            )
+
+        duration = round(time.monotonic() - start_time, 4)
+        context.progress(1.0, "completed", "P4-02 处理任务全部完成")
+        context.log(
+            "INFO",
+            f"成果提交成功: {target_path} ({final_w}x{final_h}, {final_bands} 波段, "
+            f"驱动 {final_driver})",
+        )
+
+        # 输出记录来自**实际重开**的成果
         output_record: dict[str, Any] = {
             "key": out_plan.key,
             "uri": target_path.as_uri(),
-            "driver": out_format,
-            "width": int(info.get("width", 0)),
-            "height": int(info.get("height", 0)),
-            "bands": int(info.get("bands", 1)),
+            "driver": final_driver,
+            "width": final_w,
+            "height": final_h,
+            "bands": final_bands,
         }
-        duration = round(time.monotonic() - start_time, 4)
-        context.progress(1.0, "completed", "P4-02 处理任务全部完成")
         return TaskResult(
             task_id=spec.task_id,
             attempt=spec.attempt,

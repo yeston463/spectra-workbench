@@ -288,3 +288,829 @@ FAILED tests/unit/test_gui_isolation_runtime.py::test_shared_raster_params_packa
 424 passed in 186.75s (0:03:06)
 
 === child exited rc=0 elapsed=187.8s ===
+
+=== run_with_timeout start 2026-11-05T20:15:29.664771 timeout=1200.0s cmd=C:\Users\赵航\Desktop\studio\spectra-workbench\.venv\Scripts\python.exe -m pytest -q -o faulthandler_timeout=60 ===
+F....................................................................... [ 16%]
+...............................FFFF..................................... [ 33%]
+................................................FFFFF................... [ 49%]
+........................................................................ [ 66%]
+........................................................................ [ 82%]
+........................................................................ [ 99%]
+....                                                                     [100%]
+================================== FAILURES ===================================
+___________________ test_gdal_external_runtime_integration ____________________
+
+    def test_gdal_external_runtime_integration():
+        """验证 GDAL 引擎子进程能够成功执行 GTiff 往返与坐标变换。"""
+        root = find_project_root()
+        probe_script = root / "environments" / "probe.py"
+        qgis_python = Path(r"C:\Program Files\QGIS 3.44.15\apps\Python312\python.exe")
+        qgis_bin = Path(r"C:\Program Files\QGIS 3.44.15\bin")
+        qgis_gdal_data = Path(r"C:\Program Files\QGIS 3.44.15\apps\gdal\share\gdal")
+        qgis_proj_data = Path(r"C:\Program Files\QGIS 3.44.15\share\proj")
+    
+        if not qgis_python.exists():
+            pytest.skip("GDAL QGIS runtime not found on this machine")
+    
+        extra_env = {
+            "PATH": f"{qgis_bin}",
+            "GDAL_DATA": str(qgis_gdal_data),
+            "PROJ_DATA": str(qgis_proj_data),
+        }
+    
+        code, data, err = probe_role(qgis_python, probe_script, "gdal", extra_env=extra_env)
+>       assert code == 0, f"GDAL probe exited with code {code}: {err}"
+E       AssertionError: GDAL probe exited with code -1: Timeout after 30.0 seconds
+E       assert -1 == 0
+
+tests\integration\test_engine_probes.py:36: AssertionError
+____________________ test_view_crs_switch_uses_worker_wkt _____________________
+
+window = <spectra_workbench.ui.main_window.MainWindow(0x1ac3fa1f330) at 0x000001AC3B0C4780>
+qapp = <PySide6.QtWidgets.QApplication(0x1ac648a4730) at 0x000001AC09407700>
+samples = {'samples': {'rotated': {'path': 'C:\\Users\\赵航\\Desktop\\studio\\spectra-workbench\\work\\p3_samples\\p3_rotated.tif'...\\Desktop\\studio\\spectra-workbench\\work\\p3_samples\\p3_geo.tif', 'width': 64, 'height': 64, 'bands': 1, ...}, ...}}
+
+    def test_view_crs_switch_uses_worker_wkt(window: MainWindow, qapp: QApplication, samples: dict) -> None:
+        geo = samples["samples"]["geographic"]
+        window.open_dataset(geo["path"])
+>       wait_layers(window, qapp)
+
+tests\integration\test_p3_viewing_flow.py:668: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+win = <spectra_workbench.ui.main_window.MainWindow(0x1ac3fa1f330) at 0x000001AC3B0C4780>
+qapp = <PySide6.QtWidgets.QApplication(0x1ac648a4730) at 0x000001AC09407700>
+count = 1
+
+    def wait_layers(win: MainWindow, qapp: QApplication, count: int = 1) -> None:
+        pump(qapp, 12.0, until=lambda: len(win.layer_panel.layers) >= count)
+>       assert len(win.layer_panel.layers) >= count, (
+            f"worker 探测未在时限内完成；状态栏：{win.status_bar.currentMessage()}"
+        )
+E       AssertionError: worker 探测未在时限内完成；状态栏：正在探测元数据: p3_geo.tif…
+E       assert 0 >= 1
+E        +  where 0 = len([])
+E        +    where [] = <spectra_workbench.ui.panels.layer_panel.LayerPanel(0x1ac3f9ed1a0) at 0x000001AC3BA60A80>.layers
+E        +      where <spectra_workbench.ui.panels.layer_panel.LayerPanel(0x1ac3f9ed1a0) at 0x000001AC3BA60A80> = <spectra_workbench.ui.main_window.MainWindow(0x1ac3fa1f330) at 0x000001AC3B0C4780>.layer_panel
+
+tests\integration\test_p3_viewing_flow.py:77: AssertionError
+---------------------------- Captured stderr setup ----------------------------
+This plugin does not support propagateSizeHints()
+______________________ test_translate_rejects_dst_nodata ______________________
+
+qapp = <PySide6.QtWidgets.QApplication(0x1ac648a4730) at 0x000001AC09407700>
+gdal_rt = {'python': WindowsPath('C:/Program Files/QGIS 3.44.15/apps/Python312/python.exe'), 'bin': WindowsPath('C:/Program File...m Files/QGIS 3.44.15/apps/gdal/share/gdal'), 'proj_data': WindowsPath('C:/Program Files/QGIS 3.44.15/share/proj'), ...}
+source_raster = WindowsPath('C:/Users/赵航/Desktop/studio/spectra-workbench/work/pytest_tmp_r30_201528/p401_d_src0/source_16x16.tif')
+tmp_path = WindowsPath('C:/Users/赵航/Desktop/studio/spectra-workbench/work/pytest_tmp_r30_201528/test_translate_rejects_dst_nod0')
+
+    def test_translate_rejects_dst_nodata(qapp, gdal_rt, source_raster, tmp_path) -> None:
+        """Translate 必须拒绝 dstNodata（它不消费该参数），不得静默忽略。"""
+        out = tmp_path / "tr_nodata.tif"
+>       result = _run_task(
+            qapp, "gdal:translate", {"format": "GTiff", "dstNodata": 0}, source_raster, out
+        )
+
+tests\integration\test_p4_capability_boundary.py:199: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\integration\test_p4_capability_boundary.py:139: in _run_task
+    client.start(timeout=20.0)
+src\spectra_workbench\scheduler\client.py:103: in start
+    return self._worker.start(timeout=timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <spectra_workbench.workers.process.WorkerProcess object at 0x000001AC3B06C230>
+timeout = 20.0
+
+    def start(self, timeout: float = 15.0) -> Envelope:
+        """启动 Worker 进程并阻塞等待握手完成（hello -> ready）。"""
+        cmd = [
+            str(self._python_exe),
+            "-m",
+            "spectra_workbench.workers.entrypoint",
+            self.provider_id,
+            "--worker-id",
+            self.worker_id,
+            "--generation",
+            str(self.generation),
+        ]
+    
+        try:
+            self._proc = subprocess.Popen(
+                cmd,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                env=self._env,
+                bufsize=0,
+            )
+        except Exception as exc:
+            raise WorkerProcessError(f"启动 Worker 进程失败: {exc} (cmd={cmd})") from exc
+    
+        # 启动 stdout 与 stderr 读取线程
+        self._stop_event.clear()
+        self._stdout_thread = threading.Thread(
+            target=self._read_stdout_loop,
+            name=f"worker-{self.worker_id}-stdout",
+            daemon=True,
+        )
+        self._stderr_thread = threading.Thread(
+            target=self._read_stderr_loop,
+            name=f"worker-{self.worker_id}-stderr",
+            daemon=True,
+        )
+        self._stdout_thread.start()
+        self._stderr_thread.start()
+    
+        # 等待 ready 消息
+        start_t = time.monotonic()
+        while time.monotonic() - start_t < timeout:
+            if not self.is_alive:
+                stderr_preview = "".join(self.stderr_lines[-20:])
+                raise WorkerProcessError(
+                    f"Worker 进程在握手期间异常退出 (code={self._proc.poll()}):\n{stderr_preview}"
+                )
+            if self._ready_envelope is not None:
+                return self._ready_envelope
+            time.sleep(0.05)
+    
+        self.kill()
+>       raise WorkerTimeoutError(f"Worker 启动握手超时 ({timeout}s)")
+E       spectra_workbench.workers.process.WorkerTimeoutError: Worker 启动握手超时 (20.0s)
+
+src\spectra_workbench\workers\process.py:209: WorkerTimeoutError
+_______________________ test_translate_rejects_dst_srs ________________________
+
+qapp = <PySide6.QtWidgets.QApplication(0x1ac648a4730) at 0x000001AC09407700>
+gdal_rt = {'python': WindowsPath('C:/Program Files/QGIS 3.44.15/apps/Python312/python.exe'), 'bin': WindowsPath('C:/Program File...m Files/QGIS 3.44.15/apps/gdal/share/gdal'), 'proj_data': WindowsPath('C:/Program Files/QGIS 3.44.15/share/proj'), ...}
+source_raster = WindowsPath('C:/Users/赵航/Desktop/studio/spectra-workbench/work/pytest_tmp_r30_201528/p401_d_src0/source_16x16.tif')
+tmp_path = WindowsPath('C:/Users/赵航/Desktop/studio/spectra-workbench/work/pytest_tmp_r30_201528/test_translate_rejects_dst_srs0')
+
+    def test_translate_rejects_dst_srs(qapp, gdal_rt, source_raster, tmp_path) -> None:
+        """Translate 必须拒绝 dstSRS（它不消费该参数），不得静默忽略。"""
+        out = tmp_path / "tr_crs.tif"
+>       result = _run_task(
+            qapp,
+            "gdal:translate",
+            {"format": "GTiff", "dstSRS": "EPSG:3857"},
+            source_raster,
+            out,
+        )
+
+tests\integration\test_p4_capability_boundary.py:211: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\integration\test_p4_capability_boundary.py:139: in _run_task
+    client.start(timeout=20.0)
+src\spectra_workbench\scheduler\client.py:103: in start
+    return self._worker.start(timeout=timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <spectra_workbench.workers.process.WorkerProcess object at 0x000001AC3BA1DCD0>
+timeout = 20.0
+
+    def start(self, timeout: float = 15.0) -> Envelope:
+        """启动 Worker 进程并阻塞等待握手完成（hello -> ready）。"""
+        cmd = [
+            str(self._python_exe),
+            "-m",
+            "spectra_workbench.workers.entrypoint",
+            self.provider_id,
+            "--worker-id",
+            self.worker_id,
+            "--generation",
+            str(self.generation),
+        ]
+    
+        try:
+            self._proc = subprocess.Popen(
+                cmd,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                env=self._env,
+                bufsize=0,
+            )
+        except Exception as exc:
+            raise WorkerProcessError(f"启动 Worker 进程失败: {exc} (cmd={cmd})") from exc
+    
+        # 启动 stdout 与 stderr 读取线程
+        self._stop_event.clear()
+        self._stdout_thread = threading.Thread(
+            target=self._read_stdout_loop,
+            name=f"worker-{self.worker_id}-stdout",
+            daemon=True,
+        )
+        self._stderr_thread = threading.Thread(
+            target=self._read_stderr_loop,
+            name=f"worker-{self.worker_id}-stderr",
+            daemon=True,
+        )
+        self._stdout_thread.start()
+        self._stderr_thread.start()
+    
+        # 等待 ready 消息
+        start_t = time.monotonic()
+        while time.monotonic() - start_t < timeout:
+            if not self.is_alive:
+                stderr_preview = "".join(self.stderr_lines[-20:])
+                raise WorkerProcessError(
+                    f"Worker 进程在握手期间异常退出 (code={self._proc.poll()}):\n{stderr_preview}"
+                )
+            if self._ready_envelope is not None:
+                return self._ready_envelope
+            time.sleep(0.05)
+    
+        self.kill()
+>       raise WorkerTimeoutError(f"Worker 启动握手超时 ({timeout}s)")
+E       spectra_workbench.workers.process.WorkerTimeoutError: Worker 启动握手超时 (20.0s)
+
+src\spectra_workbench\workers\process.py:209: WorkerTimeoutError
+__________________ test_warp_accepts_dst_nodata_and_dst_srs ___________________
+
+qapp = <PySide6.QtWidgets.QApplication(0x1ac648a4730) at 0x000001AC09407700>
+gdal_rt = {'python': WindowsPath('C:/Program Files/QGIS 3.44.15/apps/Python312/python.exe'), 'bin': WindowsPath('C:/Program File...m Files/QGIS 3.44.15/apps/gdal/share/gdal'), 'proj_data': WindowsPath('C:/Program Files/QGIS 3.44.15/share/proj'), ...}
+source_raster = WindowsPath('C:/Users/赵航/Desktop/studio/spectra-workbench/work/pytest_tmp_r30_201528/p401_d_src0/source_16x16.tif')
+tmp_path = WindowsPath('C:/Users/赵航/Desktop/studio/spectra-workbench/work/pytest_tmp_r30_201528/test_warp_accepts_dst_nodata_a0')
+
+    def test_warp_accepts_dst_nodata_and_dst_srs(qapp, gdal_rt, source_raster, tmp_path) -> None:
+        """Warp 确实消费 dstNodata/dstSRS：必须生效（对照 Translate 的拒绝）。"""
+        out = tmp_path / "warp_ok.tif"
+>       result = _run_task(
+            qapp,
+            "gdal:warp",
+            {"format": "GTiff", "dst_crs": "EPSG:3857", "dstNodata": 0},
+            source_raster,
+            out,
+        )
+
+tests\integration\test_p4_capability_boundary.py:227: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\integration\test_p4_capability_boundary.py:139: in _run_task
+    client.start(timeout=20.0)
+src\spectra_workbench\scheduler\client.py:103: in start
+    return self._worker.start(timeout=timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <spectra_workbench.workers.process.WorkerProcess object at 0x000001AC092651F0>
+timeout = 20.0
+
+    def start(self, timeout: float = 15.0) -> Envelope:
+        """启动 Worker 进程并阻塞等待握手完成（hello -> ready）。"""
+        cmd = [
+            str(self._python_exe),
+            "-m",
+            "spectra_workbench.workers.entrypoint",
+            self.provider_id,
+            "--worker-id",
+            self.worker_id,
+            "--generation",
+            str(self.generation),
+        ]
+    
+        try:
+            self._proc = subprocess.Popen(
+                cmd,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                env=self._env,
+                bufsize=0,
+            )
+        except Exception as exc:
+            raise WorkerProcessError(f"启动 Worker 进程失败: {exc} (cmd={cmd})") from exc
+    
+        # 启动 stdout 与 stderr 读取线程
+        self._stop_event.clear()
+        self._stdout_thread = threading.Thread(
+            target=self._read_stdout_loop,
+            name=f"worker-{self.worker_id}-stdout",
+            daemon=True,
+        )
+        self._stderr_thread = threading.Thread(
+            target=self._read_stderr_loop,
+            name=f"worker-{self.worker_id}-stderr",
+            daemon=True,
+        )
+        self._stdout_thread.start()
+        self._stderr_thread.start()
+    
+        # 等待 ready 消息
+        start_t = time.monotonic()
+        while time.monotonic() - start_t < timeout:
+            if not self.is_alive:
+                stderr_preview = "".join(self.stderr_lines[-20:])
+                raise WorkerProcessError(
+                    f"Worker 进程在握手期间异常退出 (code={self._proc.poll()}):\n{stderr_preview}"
+                )
+            if self._ready_envelope is not None:
+                return self._ready_envelope
+            time.sleep(0.05)
+    
+        self.kill()
+>       raise WorkerTimeoutError(f"Worker 启动握手超时 ({timeout}s)")
+E       spectra_workbench.workers.process.WorkerTimeoutError: Worker 启动握手超时 (20.0s)
+
+src\spectra_workbench\workers\process.py:209: WorkerTimeoutError
+__ test_all_supported_rasterio_aliases_reject_grid_params[rasterio:api:copy] __
+
+qapp = <PySide6.QtWidgets.QApplication(0x1ac648a4730) at 0x000001AC09407700>
+gdal_rt = {'python': WindowsPath('C:/Program Files/QGIS 3.44.15/apps/Python312/python.exe'), 'bin': WindowsPath('C:/Program File...m Files/QGIS 3.44.15/apps/gdal/share/gdal'), 'proj_data': WindowsPath('C:/Program Files/QGIS 3.44.15/share/proj'), ...}
+source_raster = WindowsPath('C:/Users/赵航/Desktop/studio/spectra-workbench/work/pytest_tmp_r30_201528/p401_rio_src0/source_16x16.tif')
+tmp_path = WindowsPath('C:/Users/赵航/Desktop/studio/spectra-workbench/work/pytest_tmp_r30_201528/test_all_supported_rasterio_al0')
+capability_id = 'rasterio:api:copy'
+
+    @pytest.mark.parametrize("capability_id", _rasterio_supported_capabilities())
+    def test_all_supported_rasterio_aliases_reject_grid_params(
+        qapp, gdal_rt, source_raster, tmp_path, capability_id: str
+    ) -> None:
+        """SUPPORTED_CAPABILITIES 里的**全部**别名都必须受同一参数契约。
+    
+        不能因为契约别名表缺项就绕过检查（上一轮 `rasterio:copy` /
+        `rasterio:api:copy` 就会落到「未知能力」分支而跳过能力级校验）。
+        """
+        out = tmp_path / f"rio_alias_{capability_id.replace(':', '_')}.tif"
+>       result = _run_rasterio_task(
+            qapp,
+            capability_id,
+            {"format": "GTiff", "srcWin": [1, 2, 3, 4]},
+            source_raster,
+            out,
+        )
+
+tests\integration\test_p4_rasterio_contract.py:290: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\integration\test_p4_rasterio_contract.py:153: in _run_rasterio_task
+    client.start(timeout=20.0)
+src\spectra_workbench\scheduler\client.py:103: in start
+    return self._worker.start(timeout=timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <spectra_workbench.workers.process.WorkerProcess object at 0x000001AC3BA1FB00>
+timeout = 20.0
+
+    def start(self, timeout: float = 15.0) -> Envelope:
+        """启动 Worker 进程并阻塞等待握手完成（hello -> ready）。"""
+        cmd = [
+            str(self._python_exe),
+            "-m",
+            "spectra_workbench.workers.entrypoint",
+            self.provider_id,
+            "--worker-id",
+            self.worker_id,
+            "--generation",
+            str(self.generation),
+        ]
+    
+        try:
+            self._proc = subprocess.Popen(
+                cmd,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                env=self._env,
+                bufsize=0,
+            )
+        except Exception as exc:
+            raise WorkerProcessError(f"启动 Worker 进程失败: {exc} (cmd={cmd})") from exc
+    
+        # 启动 stdout 与 stderr 读取线程
+        self._stop_event.clear()
+        self._stdout_thread = threading.Thread(
+            target=self._read_stdout_loop,
+            name=f"worker-{self.worker_id}-stdout",
+            daemon=True,
+        )
+        self._stderr_thread = threading.Thread(
+            target=self._read_stderr_loop,
+            name=f"worker-{self.worker_id}-stderr",
+            daemon=True,
+        )
+        self._stdout_thread.start()
+        self._stderr_thread.start()
+    
+        # 等待 ready 消息
+        start_t = time.monotonic()
+        while time.monotonic() - start_t < timeout:
+            if not self.is_alive:
+                stderr_preview = "".join(self.stderr_lines[-20:])
+                raise WorkerProcessError(
+                    f"Worker 进程在握手期间异常退出 (code={self._proc.poll()}):\n{stderr_preview}"
+                )
+            if self._ready_envelope is not None:
+                return self._ready_envelope
+            time.sleep(0.05)
+    
+        self.kill()
+>       raise WorkerTimeoutError(f"Worker 启动握手超时 ({timeout}s)")
+E       spectra_workbench.workers.process.WorkerTimeoutError: Worker 启动握手超时 (20.0s)
+
+src\spectra_workbench\workers\process.py:209: WorkerTimeoutError
+_ test_all_supported_rasterio_aliases_reject_grid_params[rasterio:cli:convert] _
+
+qapp = <PySide6.QtWidgets.QApplication(0x1ac648a4730) at 0x000001AC09407700>
+gdal_rt = {'python': WindowsPath('C:/Program Files/QGIS 3.44.15/apps/Python312/python.exe'), 'bin': WindowsPath('C:/Program File...m Files/QGIS 3.44.15/apps/gdal/share/gdal'), 'proj_data': WindowsPath('C:/Program Files/QGIS 3.44.15/share/proj'), ...}
+source_raster = WindowsPath('C:/Users/赵航/Desktop/studio/spectra-workbench/work/pytest_tmp_r30_201528/p401_rio_src0/source_16x16.tif')
+tmp_path = WindowsPath('C:/Users/赵航/Desktop/studio/spectra-workbench/work/pytest_tmp_r30_201528/test_all_supported_rasterio_al1')
+capability_id = 'rasterio:cli:convert'
+
+    @pytest.mark.parametrize("capability_id", _rasterio_supported_capabilities())
+    def test_all_supported_rasterio_aliases_reject_grid_params(
+        qapp, gdal_rt, source_raster, tmp_path, capability_id: str
+    ) -> None:
+        """SUPPORTED_CAPABILITIES 里的**全部**别名都必须受同一参数契约。
+    
+        不能因为契约别名表缺项就绕过检查（上一轮 `rasterio:copy` /
+        `rasterio:api:copy` 就会落到「未知能力」分支而跳过能力级校验）。
+        """
+        out = tmp_path / f"rio_alias_{capability_id.replace(':', '_')}.tif"
+>       result = _run_rasterio_task(
+            qapp,
+            capability_id,
+            {"format": "GTiff", "srcWin": [1, 2, 3, 4]},
+            source_raster,
+            out,
+        )
+
+tests\integration\test_p4_rasterio_contract.py:290: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\integration\test_p4_rasterio_contract.py:153: in _run_rasterio_task
+    client.start(timeout=20.0)
+src\spectra_workbench\scheduler\client.py:103: in start
+    return self._worker.start(timeout=timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <spectra_workbench.workers.process.WorkerProcess object at 0x000001AC3DB44F80>
+timeout = 20.0
+
+    def start(self, timeout: float = 15.0) -> Envelope:
+        """启动 Worker 进程并阻塞等待握手完成（hello -> ready）。"""
+        cmd = [
+            str(self._python_exe),
+            "-m",
+            "spectra_workbench.workers.entrypoint",
+            self.provider_id,
+            "--worker-id",
+            self.worker_id,
+            "--generation",
+            str(self.generation),
+        ]
+    
+        try:
+            self._proc = subprocess.Popen(
+                cmd,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                env=self._env,
+                bufsize=0,
+            )
+        except Exception as exc:
+            raise WorkerProcessError(f"启动 Worker 进程失败: {exc} (cmd={cmd})") from exc
+    
+        # 启动 stdout 与 stderr 读取线程
+        self._stop_event.clear()
+        self._stdout_thread = threading.Thread(
+            target=self._read_stdout_loop,
+            name=f"worker-{self.worker_id}-stdout",
+            daemon=True,
+        )
+        self._stderr_thread = threading.Thread(
+            target=self._read_stderr_loop,
+            name=f"worker-{self.worker_id}-stderr",
+            daemon=True,
+        )
+        self._stdout_thread.start()
+        self._stderr_thread.start()
+    
+        # 等待 ready 消息
+        start_t = time.monotonic()
+        while time.monotonic() - start_t < timeout:
+            if not self.is_alive:
+                stderr_preview = "".join(self.stderr_lines[-20:])
+                raise WorkerProcessError(
+                    f"Worker 进程在握手期间异常退出 (code={self._proc.poll()}):\n{stderr_preview}"
+                )
+            if self._ready_envelope is not None:
+                return self._ready_envelope
+            time.sleep(0.05)
+    
+        self.kill()
+>       raise WorkerTimeoutError(f"Worker 启动握手超时 ({timeout}s)")
+E       spectra_workbench.workers.process.WorkerTimeoutError: Worker 启动握手超时 (20.0s)
+
+src\spectra_workbench\workers\process.py:209: WorkerTimeoutError
+__ test_all_supported_rasterio_aliases_reject_grid_params[rasterio:convert] ___
+
+qapp = <PySide6.QtWidgets.QApplication(0x1ac648a4730) at 0x000001AC09407700>
+gdal_rt = {'python': WindowsPath('C:/Program Files/QGIS 3.44.15/apps/Python312/python.exe'), 'bin': WindowsPath('C:/Program File...m Files/QGIS 3.44.15/apps/gdal/share/gdal'), 'proj_data': WindowsPath('C:/Program Files/QGIS 3.44.15/share/proj'), ...}
+source_raster = WindowsPath('C:/Users/赵航/Desktop/studio/spectra-workbench/work/pytest_tmp_r30_201528/p401_rio_src0/source_16x16.tif')
+tmp_path = WindowsPath('C:/Users/赵航/Desktop/studio/spectra-workbench/work/pytest_tmp_r30_201528/test_all_supported_rasterio_al2')
+capability_id = 'rasterio:convert'
+
+    @pytest.mark.parametrize("capability_id", _rasterio_supported_capabilities())
+    def test_all_supported_rasterio_aliases_reject_grid_params(
+        qapp, gdal_rt, source_raster, tmp_path, capability_id: str
+    ) -> None:
+        """SUPPORTED_CAPABILITIES 里的**全部**别名都必须受同一参数契约。
+    
+        不能因为契约别名表缺项就绕过检查（上一轮 `rasterio:copy` /
+        `rasterio:api:copy` 就会落到「未知能力」分支而跳过能力级校验）。
+        """
+        out = tmp_path / f"rio_alias_{capability_id.replace(':', '_')}.tif"
+>       result = _run_rasterio_task(
+            qapp,
+            capability_id,
+            {"format": "GTiff", "srcWin": [1, 2, 3, 4]},
+            source_raster,
+            out,
+        )
+
+tests\integration\test_p4_rasterio_contract.py:290: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\integration\test_p4_rasterio_contract.py:153: in _run_rasterio_task
+    client.start(timeout=20.0)
+src\spectra_workbench\scheduler\client.py:103: in start
+    return self._worker.start(timeout=timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <spectra_workbench.workers.process.WorkerProcess object at 0x000001AC3BA1CDA0>
+timeout = 20.0
+
+    def start(self, timeout: float = 15.0) -> Envelope:
+        """启动 Worker 进程并阻塞等待握手完成（hello -> ready）。"""
+        cmd = [
+            str(self._python_exe),
+            "-m",
+            "spectra_workbench.workers.entrypoint",
+            self.provider_id,
+            "--worker-id",
+            self.worker_id,
+            "--generation",
+            str(self.generation),
+        ]
+    
+        try:
+            self._proc = subprocess.Popen(
+                cmd,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                env=self._env,
+                bufsize=0,
+            )
+        except Exception as exc:
+            raise WorkerProcessError(f"启动 Worker 进程失败: {exc} (cmd={cmd})") from exc
+    
+        # 启动 stdout 与 stderr 读取线程
+        self._stop_event.clear()
+        self._stdout_thread = threading.Thread(
+            target=self._read_stdout_loop,
+            name=f"worker-{self.worker_id}-stdout",
+            daemon=True,
+        )
+        self._stderr_thread = threading.Thread(
+            target=self._read_stderr_loop,
+            name=f"worker-{self.worker_id}-stderr",
+            daemon=True,
+        )
+        self._stdout_thread.start()
+        self._stderr_thread.start()
+    
+        # 等待 ready 消息
+        start_t = time.monotonic()
+        while time.monotonic() - start_t < timeout:
+            if not self.is_alive:
+                stderr_preview = "".join(self.stderr_lines[-20:])
+                raise WorkerProcessError(
+                    f"Worker 进程在握手期间异常退出 (code={self._proc.poll()}):\n{stderr_preview}"
+                )
+            if self._ready_envelope is not None:
+                return self._ready_envelope
+            time.sleep(0.05)
+    
+        self.kill()
+>       raise WorkerTimeoutError(f"Worker 启动握手超时 ({timeout}s)")
+E       spectra_workbench.workers.process.WorkerTimeoutError: Worker 启动握手超时 (20.0s)
+
+src\spectra_workbench\workers\process.py:209: WorkerTimeoutError
+____ test_all_supported_rasterio_aliases_reject_grid_params[rasterio:copy] ____
+
+qapp = <PySide6.QtWidgets.QApplication(0x1ac648a4730) at 0x000001AC09407700>
+gdal_rt = {'python': WindowsPath('C:/Program Files/QGIS 3.44.15/apps/Python312/python.exe'), 'bin': WindowsPath('C:/Program File...m Files/QGIS 3.44.15/apps/gdal/share/gdal'), 'proj_data': WindowsPath('C:/Program Files/QGIS 3.44.15/share/proj'), ...}
+source_raster = WindowsPath('C:/Users/赵航/Desktop/studio/spectra-workbench/work/pytest_tmp_r30_201528/p401_rio_src0/source_16x16.tif')
+tmp_path = WindowsPath('C:/Users/赵航/Desktop/studio/spectra-workbench/work/pytest_tmp_r30_201528/test_all_supported_rasterio_al3')
+capability_id = 'rasterio:copy'
+
+    @pytest.mark.parametrize("capability_id", _rasterio_supported_capabilities())
+    def test_all_supported_rasterio_aliases_reject_grid_params(
+        qapp, gdal_rt, source_raster, tmp_path, capability_id: str
+    ) -> None:
+        """SUPPORTED_CAPABILITIES 里的**全部**别名都必须受同一参数契约。
+    
+        不能因为契约别名表缺项就绕过检查（上一轮 `rasterio:copy` /
+        `rasterio:api:copy` 就会落到「未知能力」分支而跳过能力级校验）。
+        """
+        out = tmp_path / f"rio_alias_{capability_id.replace(':', '_')}.tif"
+>       result = _run_rasterio_task(
+            qapp,
+            capability_id,
+            {"format": "GTiff", "srcWin": [1, 2, 3, 4]},
+            source_raster,
+            out,
+        )
+
+tests\integration\test_p4_rasterio_contract.py:290: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\integration\test_p4_rasterio_contract.py:153: in _run_rasterio_task
+    client.start(timeout=20.0)
+src\spectra_workbench\scheduler\client.py:103: in start
+    return self._worker.start(timeout=timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <spectra_workbench.workers.process.WorkerProcess object at 0x000001AC3B06EBD0>
+timeout = 20.0
+
+    def start(self, timeout: float = 15.0) -> Envelope:
+        """启动 Worker 进程并阻塞等待握手完成（hello -> ready）。"""
+        cmd = [
+            str(self._python_exe),
+            "-m",
+            "spectra_workbench.workers.entrypoint",
+            self.provider_id,
+            "--worker-id",
+            self.worker_id,
+            "--generation",
+            str(self.generation),
+        ]
+    
+        try:
+            self._proc = subprocess.Popen(
+                cmd,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                env=self._env,
+                bufsize=0,
+            )
+        except Exception as exc:
+            raise WorkerProcessError(f"启动 Worker 进程失败: {exc} (cmd={cmd})") from exc
+    
+        # 启动 stdout 与 stderr 读取线程
+        self._stop_event.clear()
+        self._stdout_thread = threading.Thread(
+            target=self._read_stdout_loop,
+            name=f"worker-{self.worker_id}-stdout",
+            daemon=True,
+        )
+        self._stderr_thread = threading.Thread(
+            target=self._read_stderr_loop,
+            name=f"worker-{self.worker_id}-stderr",
+            daemon=True,
+        )
+        self._stdout_thread.start()
+        self._stderr_thread.start()
+    
+        # 等待 ready 消息
+        start_t = time.monotonic()
+        while time.monotonic() - start_t < timeout:
+            if not self.is_alive:
+                stderr_preview = "".join(self.stderr_lines[-20:])
+                raise WorkerProcessError(
+                    f"Worker 进程在握手期间异常退出 (code={self._proc.poll()}):\n{stderr_preview}"
+                )
+            if self._ready_envelope is not None:
+                return self._ready_envelope
+            time.sleep(0.05)
+    
+        self.kill()
+>       raise WorkerTimeoutError(f"Worker 启动握手超时 ({timeout}s)")
+E       spectra_workbench.workers.process.WorkerTimeoutError: Worker 启动握手超时 (20.0s)
+
+src\spectra_workbench\workers\process.py:209: WorkerTimeoutError
+___ test_all_supported_rasterio_aliases_reject_grid_params[rio:cli:convert] ___
+
+qapp = <PySide6.QtWidgets.QApplication(0x1ac648a4730) at 0x000001AC09407700>
+gdal_rt = {'python': WindowsPath('C:/Program Files/QGIS 3.44.15/apps/Python312/python.exe'), 'bin': WindowsPath('C:/Program File...m Files/QGIS 3.44.15/apps/gdal/share/gdal'), 'proj_data': WindowsPath('C:/Program Files/QGIS 3.44.15/share/proj'), ...}
+source_raster = WindowsPath('C:/Users/赵航/Desktop/studio/spectra-workbench/work/pytest_tmp_r30_201528/p401_rio_src0/source_16x16.tif')
+tmp_path = WindowsPath('C:/Users/赵航/Desktop/studio/spectra-workbench/work/pytest_tmp_r30_201528/test_all_supported_rasterio_al4')
+capability_id = 'rio:cli:convert'
+
+    @pytest.mark.parametrize("capability_id", _rasterio_supported_capabilities())
+    def test_all_supported_rasterio_aliases_reject_grid_params(
+        qapp, gdal_rt, source_raster, tmp_path, capability_id: str
+    ) -> None:
+        """SUPPORTED_CAPABILITIES 里的**全部**别名都必须受同一参数契约。
+    
+        不能因为契约别名表缺项就绕过检查（上一轮 `rasterio:copy` /
+        `rasterio:api:copy` 就会落到「未知能力」分支而跳过能力级校验）。
+        """
+        out = tmp_path / f"rio_alias_{capability_id.replace(':', '_')}.tif"
+>       result = _run_rasterio_task(
+            qapp,
+            capability_id,
+            {"format": "GTiff", "srcWin": [1, 2, 3, 4]},
+            source_raster,
+            out,
+        )
+
+tests\integration\test_p4_rasterio_contract.py:290: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\integration\test_p4_rasterio_contract.py:153: in _run_rasterio_task
+    client.start(timeout=20.0)
+src\spectra_workbench\scheduler\client.py:103: in start
+    return self._worker.start(timeout=timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <spectra_workbench.workers.process.WorkerProcess object at 0x000001AC3DAB82F0>
+timeout = 20.0
+
+    def start(self, timeout: float = 15.0) -> Envelope:
+        """启动 Worker 进程并阻塞等待握手完成（hello -> ready）。"""
+        cmd = [
+            str(self._python_exe),
+            "-m",
+            "spectra_workbench.workers.entrypoint",
+            self.provider_id,
+            "--worker-id",
+            self.worker_id,
+            "--generation",
+            str(self.generation),
+        ]
+    
+        try:
+            self._proc = subprocess.Popen(
+                cmd,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                env=self._env,
+                bufsize=0,
+            )
+        except Exception as exc:
+            raise WorkerProcessError(f"启动 Worker 进程失败: {exc} (cmd={cmd})") from exc
+    
+        # 启动 stdout 与 stderr 读取线程
+        self._stop_event.clear()
+        self._stdout_thread = threading.Thread(
+            target=self._read_stdout_loop,
+            name=f"worker-{self.worker_id}-stdout",
+            daemon=True,
+        )
+        self._stderr_thread = threading.Thread(
+            target=self._read_stderr_loop,
+            name=f"worker-{self.worker_id}-stderr",
+            daemon=True,
+        )
+        self._stdout_thread.start()
+        self._stderr_thread.start()
+    
+        # 等待 ready 消息
+        start_t = time.monotonic()
+        while time.monotonic() - start_t < timeout:
+            if not self.is_alive:
+                stderr_preview = "".join(self.stderr_lines[-20:])
+                raise WorkerProcessError(
+                    f"Worker 进程在握手期间异常退出 (code={self._proc.poll()}):\n{stderr_preview}"
+                )
+            if self._ready_envelope is not None:
+                return self._ready_envelope
+            time.sleep(0.05)
+    
+        self.kill()
+>       raise WorkerTimeoutError(f"Worker 启动握手超时 ({timeout}s)")
+E       spectra_workbench.workers.process.WorkerTimeoutError: Worker 启动握手超时 (20.0s)
+
+src\spectra_workbench\workers\process.py:209: WorkerTimeoutError
+=========================== short test summary info ===========================
+FAILED tests/integration/test_engine_probes.py::test_gdal_external_runtime_integration
+FAILED tests/integration/test_p3_viewing_flow.py::test_view_crs_switch_uses_worker_wkt
+FAILED tests/integration/test_p4_capability_boundary.py::test_translate_rejects_dst_nodata
+FAILED tests/integration/test_p4_capability_boundary.py::test_translate_rejects_dst_srs
+FAILED tests/integration/test_p4_capability_boundary.py::test_warp_accepts_dst_nodata_and_dst_srs
+FAILED tests/integration/test_p4_rasterio_contract.py::test_all_supported_rasterio_aliases_reject_grid_params[rasterio:api:copy]
+FAILED tests/integration/test_p4_rasterio_contract.py::test_all_supported_rasterio_aliases_reject_grid_params[rasterio:cli:convert]
+FAILED tests/integration/test_p4_rasterio_contract.py::test_all_supported_rasterio_aliases_reject_grid_params[rasterio:convert]
+FAILED tests/integration/test_p4_rasterio_contract.py::test_all_supported_rasterio_aliases_reject_grid_params[rasterio:copy]
+FAILED tests/integration/test_p4_rasterio_contract.py::test_all_supported_rasterio_aliases_reject_grid_params[rio:cli:convert]
+10 failed, 426 passed in 671.26s (0:11:11)
+
+=== child exited rc=1 elapsed=673.1s ===
+
+=== run_with_timeout start 2026-11-05T20:51:41.808003 timeout=1200.0s cmd=C:\Users\赵航\Desktop\studio\spectra-workbench\.venv\Scripts\python.exe -m pytest -q -o faulthandler_timeout=60 ===
+........................................................................ [ 16%]
+........................................................................ [ 33%]
+........................................................................ [ 49%]
+........................................................................ [ 66%]
+........................................................................ [ 82%]
+........................................................................ [ 99%]
+....                                                                     [100%]
+436 passed in 462.72s (0:07:42)
+
+=== child exited rc=0 elapsed=465.5s ===

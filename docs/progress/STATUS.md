@@ -229,6 +229,99 @@ CRT 检测到栈状态异常后立即终止进程，这正是 `STATUS_STACK_BUFF
 | 用合成影像完成同类验收 | 已满足 | 合成 ENVI/GTiff/GeoJSON/netCDF 样例覆盖多波段、像元数值、ROI 与对比 |
 | 保留真实数据待验状态 | **待验** | 课程原始数据位于 `C:\Users\赵航\Desktop\studio\_chaoxing_rs`（**只读**，不得运行其中的抓取/下载/OCR 脚本）；本轮全部用合成影像验收，未对课程原始 ENVI 栅格与 lena.tif 做真实打开验证 |
 
+### 第 30 轮：P4-02 成果完整性与数据语义修正
+
+按第二十九轮复核的**落盘复现**修正。上一轮已通过的默认主路径不重写，
+本轮只补成果完整性与拼接语义，不扩展 P4-03/P4-04。
+
+**一、四类缺陷与修正**
+
+| 复核项 | 修正前 | 修正后 |
+|---|---|---|
+| ENVI 成果 | 只提交 .dat，.hdr 留在 staging；最终 .dat **打不开** | .dat 与 .hdr **一起提交**，最终 .dat 可独立 GDAL 打开 |
+| dstNodata=0 | NoData 标签变 0，但缺口像元仍 -9999、mask 标**有效** | 缺口**实际值重映射为 0**、标签 0、mask 标**无效**（三者一致） |
+| 混合 CRS | 第二个源被 GDAL **静默跳过**，任务仍 succeeded | **明确拒绝**（`incompatible_sources`），不产出文件 |
+| relativePaths=False | 被忽略，最终仍全是相对引用 | **绝对模式主动改为 `relativeToVRT="0"` + 绝对路径** |
+
+**二、成果集合完整性（复用既有成果协议）**
+
+修正前 P4-02 分支只 `commit_files([主文件])`，且所谓 verifying_final 仅组装
+output_record、**并无实际 GDAL 重开**。现已完整复用 Translate/Warp 路径的做法：
+`GetFileList()` 收集全部伴生文件 → 提交前**真实重开**校验 →
+按最终命名映射提交对 → 事务提交 → 提交后**最终重开**核验，
+输出元数据（尺寸/波段/驱动）取自**实际重开**的成果。
+
+两处实测细节：
+- **VRT 的 `GetFileList()` 会把它引用的源文件一并返回**，且路径按 **VRT 当前位置**
+  （staging）解析 —— 不能用「与输入源同路径」排除。稳健判据是
+  **要提交的文件必须真实存在于 staging**（伴生文件在，被引用的源不在）。
+- BuildVRT 的实际驱动是 **VRT**，输出记录不得无条件登记为调用者默认的 GTiff。
+
+**三、NoData 语义：赋标签 ≠ 重映射无效像元**
+
+实测确认复核结论：`Translate(noData=X)` **只改标签**——
+nodata 变 0，但缺口像元仍是 -9999 且 mask 标为有效（255），缺口变成有效像元。
+修正：Translate **刻意不设** noData（保持 VRT 的标签与实际值一致），
+落盘后**按 mask**（而非值比较）把无效像元的实际值重映射为目标值并设标签。
+实测得到 nodata=0、缺口像素=0、mask 缺口=0，三者一致。
+
+**公开策略（冲突处理）**：输出 NoData 标签必须等于无效像元值；
+若有效区中恰有等于该值的真实数据（如 dstNodata=0 而有效区含真实 0），
+「三者一致」与「保全有效区」不可兼得 —— 此时**明确拒绝**并说明原因，
+不产出语义矛盾的成果。
+
+**四、输入完整性：阻止静默跳过**
+
+GDAL 的 BuildVRT 对不兼容输入会**静默跳过**（混合 CRS 丢源、非 separate 截断多波段）。
+本项目默认**不做隐式重投影**，故处理前用 `check_source_compatibility`
+核对 CRS 与波段结构，不兼容则**明确拒绝**。
+（实测 `separate=True` 时 2 波段源 + 3 波段源 → **5 个波段**，
+值序 [5, 1005, 7, 1007, 2007] —— 是「每源所有波段依次进入」，**不是**每源一个波段。）
+
+**五、取消与实际驱动**
+
+长计算阶段（BuildVRT/Translate）接入 GDAL callback：
+返回 0 表示取消，计算中即可中断（此前只在计算结束后检查）；
+成果驱动取自实际重开而非调用者默认格式。
+
+**六、支持边界（如实声明）**
+
+本轮是**后端实现**：P4-02 四项能力已在 GDAL worker 可调用，
+但 **GUI 的 `CONNECTED_CAPABILITIES` 与参数表单尚未接入这四项**，
+多输入表单、能力注册与可执行审计亦未接入。
+因此**不可表述为「桌面已可操作」**；GUI 接入列为待办，P4-02 状态维持 `implemented`。
+
+**七、验收测试**
+
+`tests/integration/test_p4_mosaic_integrity.py`（12 项）：ENVI 主文件+头文件成套提交
+且最终 .dat 可独立打开、输出记录驱动取自实际重开、BuildVRT 驱动为 VRT、
+dstNodata=0 时缺口三者一致、有效零值冲突被明确拒绝、
+混合 CRS 与波段结构不一致被拒绝、拒绝时不破坏既有目标、
+relativePaths 开关的绝对/相对两种模式、绝对模式 VRT 仍可打开、
+多波段输入堆叠的波段顺序。
+
+**观察到的测试基础设施脆弱点（如实记录）**
+
+20:15:29 那轮全量出现 10 项失败、耗时 671s（平时约 190s），失败集中在
+`WorkerTimeoutError: Worker 启动握手超时 (20.0s)`，另有 1 项隔离测试报
+`processing/mosaic_ops.py` 存在。逐项排查：
+
+- 该文件在第 29 轮已由 `processing/` 移至 `providers/gdal_provider/`
+  （因 processing 包必须保持纯 Python，GUI 会导入其参数契约模块）；
+  复跑时该文件确已不存在、工作区干净，隔离测试通过——
+  故 20:15 那轮命中的是**一次性残留状态**（迁移后的中间态），
+  非稳定缺陷。
+- 三个相关文件**单独跑**均正常（capability_boundary 15 passed in 8.10s；
+  隔离+Rasterio 契约 20 passed in 15.83s），**组合跑**却耗时 1102s 且超时 ——
+  属 worker 子进程**累积竞争**：连续启动大量 worker 时，先前进程的句柄/
+  资源尚未完全释放，后续 worker 启动握手被拖慢甚至超时。
+  属**测试基础设施**的脆弱点，非产品逻辑缺陷；本轮未为此改产品代码。
+- 复跑全量：**436 passed / rc=0**（462.72s，耗时较上一轮 186s 上升，
+  主要是本轮新增 12 项测试各自的 worker 启动开销累积）。
+
+结论：worker 启动握手的时序敏感性是**已知的待改进项**，
+与退出异常 0xC0000409 一样，本轮**不宣称根治**，两者均如实保留待查记录。
+
 ### 第 29 轮：P4-02 拼接、VRT、波段堆叠与波段管理
 
 原验收标准：「重叠策略、缺口、NoData、源路径变化及波段顺序正确」。
@@ -777,7 +870,7 @@ Thread 0x0000d064 (most recent call first):
 | P0-01 仓库与文档结构 | done | git init（2.50.1）；docs/plan/ 输入基线、contracts/、src/、tests/；AGENTS.md、README.md、pyproject.toml；docs/progress/WORKPACKAGES.md |
 | P0-02 四环境 | implemented | scripts/bootstrap_pip.ps1 -VerifyOnly → RESULT ALL OK；docs/progress/runs/env_report.json；environments/locks/*.lock.txt |
 | P0-03 自检与小型 Fixture | implemented | src/spectra_workbench/app/doctor.py + scripts/doctor.ps1 → docs/progress/runs/doctor_report.json。GTiff 往返成功、坐标转换成功、205 驱动、5 CLI 就绪；单测全绿 |
-| P0-04 自动化检查流水线 | done | scripts/test.ps1，串联 Ruff、Mypy 与 Pytest。Mypy 57 个源文件 0 错误；全量自动化测试通过：**424 passed in 186.75s**，全量回归子进程 rc=0（2026-11-05 第 29 轮，P4-02 拼接/VRT/堆叠/波段管理）；第 23 轮为 318 passed in 110.47s、rc=0；第 22 轮为 308 passed in 116.50s、rc=0；第 21 轮为 297 passed in 105.12s、rc=0；如实记录 07:48:47 历史退出异常轮次（286 passed，0xC0000409）与后续 07:54:31、07:56:16（286 passed，rc=0）及本轮（297 passed，rc=0），全面加固 Qt 对象生命周期有序销毁 |
+| P0-04 自动化检查流水线 | done | scripts/test.ps1，串联 Ruff、Mypy 与 Pytest。Mypy 57 个源文件 0 错误；全量自动化测试通过：**436 passed in 462.72s**，全量回归子进程 rc=0（2026-11-05 第 30 轮，P4-02 成果完整性与数据语义）；第 23 轮为 318 passed in 110.47s、rc=0；第 22 轮为 308 passed in 116.50s、rc=0；第 21 轮为 297 passed in 105.12s、rc=0；如实记录 07:48:47 历史退出异常轮次（286 passed，0xC0000409）与后续 07:54:31、07:56:16（286 passed，rc=0）及本轮（297 passed，rc=0），全面加固 Qt 对象生命周期有序销毁 |
 | P0-05 打包重定位可行性验证 | implemented | docs/adr/0002-relocation-and-packaging.md；tests/integration/test_relocation.py 验证 UI 与 Rasterio、GDAL 引擎在独立临时路径正常初始化并导入 |
 | P1-01 领域模型与契约对账 | done | src/spectra_workbench/domain/models.py；tests/unit/test_domain_models.py；tests/unit/test_contracts_schema.py（50 项全绿） |
 | P1-02 JSONL 客户端与 Worker 启动 | done | src/spectra_workbench/protocol/messages.py；src/spectra_workbench/workers/process.py；src/spectra_workbench/workers/entrypoint.py；tests/integration/test_worker_process.py（8 项真实跨进程测试全绿） |
@@ -796,8 +889,8 @@ Thread 0x0000d064 (most recent call first):
 | P3-05 view CRS、重投影、查询与 ROI | implemented | 旋转 Affine 与无 GT 栅格支持；地图坐标 ↔ 像元中心/角点约定；ROI 模型与点包含判定；跨 CRS 视图重投影网格读取；真实鼠标事件多边形 ROI 绘制/闭合/选中/手柄拖拽/删除/保存重开全流程；矩形展开 4 角点经 Worker 转换并精确保持 425 平方单位面积与 4 个角点；坐标转换失败异常隔离隐藏并保全权威模型；五类故障注入矩阵覆盖（向地图/回像元/项目重开/拖动反算/旧响应迟到），跨坐标空间数据混用缺陷已修复（tests/integration/test_p3_interactive_polygon_roi.py 9 项全绿） |
 
 实测命令与结果：
-- powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test.ps1 -All → **Ruff 干净、Mypy 干净（59 个源文件 0 错误）、424 passed in 186.75s，exit 0**
-  - 第 29 轮（P4-02 拼接/VRT/堆叠/波段管理）：新增 14 项；第 28 轮（Rasterio worker 参数契约）：新增 14 项；第 27 轮（能力边界 + 有界预裁剪）：新增 15 项（能力边界与有界裁剪）；第 26 轮（参数一致性修正）：新增 25 项（参数一致性端到端 18 项 + GUI 隔离运行时 3 项 + adapter 模块级隔离 3 项 + 高 DPI 表述订正 1 项）；第 25 轮（P3 验收清单 + P4-01）：新增 30 项（P3 验收缺口 5 项 + P4-01 裁剪重采样 14 项 + P4-01 表单 11 项）；**全量跑须前台运行**（需 110–122 秒，后台任务约 2 分钟上限会中途终止，见下方说明）；第 23 轮为 318 passed in 110.47s、rc=0
+- powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test.ps1 -All → **Ruff 干净、Mypy 干净（59 个源文件 0 错误）、436 passed in 462.72s，exit 0**
+  - 第 30 轮（P4-02 成果完整性与数据语义）：新增 12 项；第 29 轮（P4-02 拼接/VRT/堆叠/波段管理）：新增 14 项；第 28 轮（Rasterio worker 参数契约）：新增 14 项；第 27 轮（能力边界 + 有界预裁剪）：新增 15 项（能力边界与有界裁剪）；第 26 轮（参数一致性修正）：新增 25 项（参数一致性端到端 18 项 + GUI 隔离运行时 3 项 + adapter 模块级隔离 3 项 + 高 DPI 表述订正 1 项）；第 25 轮（P3 验收清单 + P4-01）：新增 30 项（P3 验收缺口 5 项 + P4-01 裁剪重采样 14 项 + P4-01 表单 11 项）；**全量跑须前台运行**（需 110–122 秒，后台任务约 2 分钟上限会中途终止，见下方说明）；第 23 轮为 318 passed in 110.47s、rc=0
   - 第 23 轮（P3-02 元数据实现边界修正）：新增 10 项元数据边界回归（要素数 force=0、图层类型路由、请求上下文、仿射四角范围）；本轮 pytest 临时根目录使用全新路径（见上方「运行方式的要求」）；第 22 轮为 308 passed in 116.50s、rc=0
   - 第 22 轮（P3-02 矢量与子数据集元数据）：新增 11 项（矢量与子数据集集成 10 项 + stop() 回调死锁回归 1 项）；本轮使用位于本轮工作目录内的独立临时根目录（pytest 的 basetemp 选项），避开环境删除守卫对全局旧临时目录的批量删除拦截；第 21 轮为 297 passed in 105.12s、rc=0
   - 如实记录全量回归历程：
