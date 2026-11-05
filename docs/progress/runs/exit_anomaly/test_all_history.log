@@ -223,3 +223,68 @@ ERROR tests/unit/test_capabilities_baseline.py - AttributeError: 'NoneType' o...
 396 passed in 162.92s (0:02:42)
 
 === child exited rc=0 elapsed=164.2s ===
+
+=== run_with_timeout start 2026-11-05T19:18:09.996108 timeout=1200.0s cmd=C:\Users\赵航\Desktop\studio\spectra-workbench\.venv\Scripts\python.exe -m pytest -q -o faulthandler_timeout=60 ===
+........................................................................ [ 17%]
+........................................................................ [ 35%]
+........................................................................ [ 52%]
+........................................................................ [ 70%]
+........................................................................ [ 87%]
+..................................................                       [100%]
+410 passed in 176.15s (0:02:56)
+
+=== child exited rc=0 elapsed=177.8s ===
+
+=== run_with_timeout start 2026-11-05T19:41:03.428148 timeout=1200.0s cmd=C:\Users\赵航\Desktop\studio\spectra-workbench\.venv\Scripts\python.exe -m pytest -q -o faulthandler_timeout=60 ===
+........................................................................ [ 16%]
+........................................................................ [ 33%]
+........................................................................ [ 50%]
+........................................................................ [ 67%]
+.......................................................F................ [ 84%]
+................................................................         [100%]
+================================== FAILURES ===================================
+______________ test_shared_raster_params_package_is_pure_python _______________
+
+    def test_shared_raster_params_package_is_pure_python() -> None:
+        """共享参数契约模块所在包不得引入 osgeo 等原生依赖。"""
+        root = Path(__file__).resolve().parents[2]
+        forbidden = re.compile(
+            r"^\s*(?:import|from)\s+(?:osgeo|rasterio|fiona|geopandas)\b", re.MULTILINE
+        )
+        offenders: list[str] = []
+        for f in (root / "src" / "spectra_workbench" / "processing").rglob("*.py"):
+            text = f.read_text(encoding="utf-8")
+            if forbidden.search(text):
+                offenders.append(str(f))
+>       assert not offenders, f"processing 包不得导入原生地理依赖：{offenders}"
+E       AssertionError: processing 包不得导入原生地理依赖：['C:\\Users\\赵航\\Desktop\\studio\\spectra-workbench\\src\\spectra_workbench\\processing\\mosaic_ops.py']
+E       assert not ['C:\\Users\\赵航\\Desktop\\studio\\spectra-workbench\\src\\spectra_workbench\\processing\\mosaic_ops.py']
+
+tests\unit\test_gui_isolation_runtime.py:90: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/unit/test_gui_isolation_runtime.py::test_shared_raster_params_package_is_pure_python
+1 failed, 423 passed in 165.11s (0:02:45)
+
+=== child exited rc=1 elapsed=166.1s ===
+
+=== run_with_timeout start 2026-11-05T19:44:57.343825 timeout=1200.0s cmd=C:\Users\赵航\Desktop\studio\spectra-workbench\.venv\Scripts\python.exe -m pytest -q -o faulthandler_timeout=60 ===
+........................................................................ [ 16%]
+........................................................................ [ 33%]
+........................................................................ [ 50%]
+........................................................................ [ 67%]
+........................................................................ [ 84%]
+................................................................         [100%]
+424 passed in 163.67s (0:02:43)
+
+=== child exited rc=3221226505 elapsed=169.8s ===
+
+=== run_with_timeout start 2026-11-05T19:48:05.462170 timeout=1200.0s cmd=C:\Users\赵航\Desktop\studio\spectra-workbench\.venv\Scripts\python.exe -m pytest -q -o faulthandler_timeout=60 ===
+........................................................................ [ 16%]
+........................................................................ [ 33%]
+........................................................................ [ 50%]
+........................................................................ [ 67%]
+........................................................................ [ 84%]
+................................................................         [100%]
+424 passed in 186.75s (0:03:06)
+
+=== child exited rc=0 elapsed=187.8s ===

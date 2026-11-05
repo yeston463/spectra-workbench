@@ -44,6 +44,13 @@ from spectra_workbench.providers.base import (
     ProviderAdapter,
     resolve_dataset_path,
 )
+from spectra_workbench.providers.gdal_provider.mosaic_ops import (
+    build_vrt,
+    manage_bands,
+    merge_sources,
+    rewrite_vrt_relative_sources,
+    stack_sources,
+)
 from spectra_workbench.registry.gdal_index import (
     GDAL_VERSION,
     build_gdal_baseline,
@@ -58,6 +65,48 @@ def _resolve_raster_input(path: Path) -> Path:
             if candidate.exists():
                 return candidate
     return path
+
+
+#: P4-02 能力集合：这些能力统一走多输入提取（inputs["inputs"] 列表）。
+P402_CAPABILITIES: frozenset[str] = frozenset(
+    {
+        "gdal:buildvrt",
+        "gdalbuildvrt",
+        "gdal:merge",
+        "gdal_merge",
+        "gdal:stack",
+        "gdal:bandmanage",
+    }
+)
+
+
+def _extract_raster_inputs(spec: Any) -> list[Path]:
+    """按任务协议提取**多**个栅格输入源。
+
+    约定：
+    - `spec.inputs["inputs"]` 为 `list[DatasetRef]`（P4-02 多输入能力的标准形式）；
+    - `spec.inputs["input"]` 若是列表同样按多输入处理（兼容写法）。
+
+    路径解析规则与单输入路径保持一致（基于 project_root，ENVI .hdr 自动转 .dat）。
+    """
+    inputs = getattr(spec, "inputs", {}) or {}
+    raw_list: list[Any] = []
+    multi = inputs.get("inputs")
+    if isinstance(multi, (list, tuple)):
+        raw_list.extend(multi)
+    single = inputs.get("input")
+    if isinstance(single, (list, tuple)):
+        raw_list.extend(single)
+    elif single is not None:
+        raw_list.append(single)
+
+    paths: list[Path] = []
+    for ref in raw_list:
+        raw_uri = ref.uri if hasattr(ref, "uri") else str(ref)
+        paths.append(
+            _resolve_raster_input(resolve_dataset_path(raw_uri, spec.project_root))
+        )
+    return paths
 
 
 def _affine_bounds(
@@ -153,7 +202,28 @@ class GDALProviderAdapter(ProviderAdapter):
                 c.state.availability = Availability.missing_dependency
         return baseline
 
-    SUPPORTED_CAPABILITIES = {"gdal:translate", "gdal_translate", "gdal:warp", "gdalwarp"}
+    SUPPORTED_CAPABILITIES = {
+        "gdal:translate",
+        "gdal_translate",
+        "gdal:warp",
+        "gdalwarp",
+        # --- P4-02：拼接 / VRT / 堆叠 / 波段管理 ---
+        "gdal:buildvrt",
+        "gdalbuildvrt",
+        "gdal:merge",
+        "gdal_merge",
+        "gdal:stack",
+        "gdal:bandmanage",
+    }
+
+    #: 需要多个输入源的能力（至少 2 个）。
+    MULTI_INPUT_CAPABILITIES = {
+        "gdal:buildvrt",
+        "gdalbuildvrt",
+        "gdal:merge",
+        "gdal_merge",
+        "gdal:stack",
+    }
 
     def validate(self, spec: TaskSpec) -> dict[str, Any]:
         errors: list[str] = []
@@ -165,7 +235,35 @@ class GDALProviderAdapter(ProviderAdapter):
                 "errors": [f"GDAL 引擎尚未接入该能力执行器: '{spec.capability_id}'（当前已支持: gdal:translate, gdal:warp）"],
             }
 
-        if "input" not in spec.inputs:
+        is_multi = spec.capability_id in self.MULTI_INPUT_CAPABILITIES
+        if spec.capability_id == "gdal:bandmanage":
+            # 波段管理：恰好 1 个输入源，但同样用 inputs["inputs"] 列表形式
+            srcs = _extract_raster_inputs(spec)
+            if len(srcs) != 1:
+                errors.append(
+                    f"能力 {spec.capability_id} 需要恰好 1 个输入源，实际 {len(srcs)} 个"
+                )
+                code = "input_not_found"
+            else:
+                for in_path in srcs:
+                    if not in_path.exists():
+                        errors.append(f"输入文件不存在: {in_path}")
+                        code = "input_not_found"
+        elif is_multi:
+            # 多输入能力：inputs["inputs"] 为列表（兼容 inputs["input"] 为列表）
+            srcs = _extract_raster_inputs(spec)
+            if len(srcs) < 2:
+                errors.append(
+                    f"能力 {spec.capability_id} 需要至少 2 个输入源，"
+                    f"实际提供 {len(srcs)} 个（请在 inputs['inputs'] 中给出列表）"
+                )
+                code = "input_not_found"
+            else:
+                for in_path in srcs:
+                    if not in_path.exists():
+                        errors.append(f"输入文件不存在: {in_path}")
+                        code = "input_not_found"
+        elif "input" not in spec.inputs:
             errors.append("TaskSpec inputs 缺少必需的 'input' 端口")
             code = "input_not_found"
         else:
@@ -182,7 +280,12 @@ class GDALProviderAdapter(ProviderAdapter):
         else:
             out_plan = spec.outputs[0]
             target_path = resolve_dataset_path(out_plan.uri, spec.project_root)
-            if "input" in spec.inputs:
+            if is_multi or spec.capability_id == "gdal:bandmanage":
+                for in_p in _extract_raster_inputs(spec):
+                    if in_p.resolve() == target_path.resolve():
+                        errors.append(f"输入与输出目标指向同一文件: {target_path}")
+                        code = "input_output_conflict"
+            elif "input" in spec.inputs:
                 in_ref = spec.inputs["input"]
                 raw_in_uri = in_ref.uri if hasattr(in_ref, "uri") else str(in_ref)
                 in_p = _resolve_raster_input(resolve_dataset_path(raw_in_uri, spec.project_root))
@@ -224,16 +327,22 @@ class GDALProviderAdapter(ProviderAdapter):
         context.progress(0.05, "initializing", "Verifying inputs and parameters")
 
         # 1. 严格解析输入路径（基于 project_root）
-        in_ref = spec.inputs["input"]
-        raw_in_uri = in_ref.uri if hasattr(in_ref, "uri") else str(in_ref)
-        in_path = _resolve_raster_input(resolve_dataset_path(raw_in_uri, spec.project_root))
-        if not in_path.exists():
-            return TaskResult(
-                task_id=spec.task_id,
-                attempt=spec.attempt,
-                status=TaskStatus.failed,
-                error={"code": "input_not_found", "message": f"Input raster file does not exist: {in_path}"},
-            )
+        is_p402 = spec.capability_id in P402_CAPABILITIES
+        if is_p402:
+            # P4-02 能力：输入来自 inputs["inputs"] 列表（多输入），
+            # 由 P4-02 分支自行解析与校验，这里不强制要求单输入端口。
+            in_path = None
+        else:
+            in_ref = spec.inputs["input"]
+            raw_in_uri = in_ref.uri if hasattr(in_ref, "uri") else str(in_ref)
+            in_path = _resolve_raster_input(resolve_dataset_path(raw_in_uri, spec.project_root))
+            if not in_path.exists():
+                return TaskResult(
+                    task_id=spec.task_id,
+                    attempt=spec.attempt,
+                    status=TaskStatus.failed,
+                    error={"code": "input_not_found", "message": f"Input raster file does not exist: {in_path}"},
+                )
 
         # 2. 严格解析目标输出路径（基于 project_root）
         out_plan = spec.outputs[0]
@@ -241,8 +350,8 @@ class GDALProviderAdapter(ProviderAdapter):
         out_format = spec.parameters.get("format", out_plan.driver or "GTiff")
         overwrite = out_plan.overwrite
 
-        # 2.1 同源冲突防范
-        if in_path.resolve() == target_path.resolve():
+        # 2.1 同源冲突防范（P4-02 的多输入同源检查在 validate 中统一处理）
+        if in_path is not None and in_path.resolve() == target_path.resolve():
             context.log("ERROR", f"Input and output target point to the same file: {target_path}")
             return TaskResult(
                 task_id=spec.task_id,
@@ -311,7 +420,21 @@ class GDALProviderAdapter(ProviderAdapter):
             for k, v in out_plan.creation_options.items():
                 creation_options.append(f"{k}={v}")
 
-        # 4. 执行算法（按 capability_id 明确分派 Translate 或 Warp）
+        # 4. 执行算法（按 capability_id 明确分派）
+        #    P4-02：拼接 / VRT / 堆叠 / 波段管理走独立分支（多输入），
+        #    复用既有事务（staging → 重开校验 → commit → 登记）。
+        p402_result = self._execute_p402(
+            spec,
+            context,
+            norm=norm,
+            out_format=out_format,
+            target_path=target_path,
+            staged_path=staged_path,
+            start_time=start_time,
+        )
+        if p402_result is not None:
+            return p402_result
+
         is_warp = spec.capability_id in ("gdal:warp", "gdalwarp")
 
         # 重采样算法：契约已保证是受支持的 canonical 名，这里只做名字 -> GDAL 常量映射
@@ -633,6 +756,173 @@ class GDALProviderAdapter(ProviderAdapter):
                 "provider_id": "gdal",
                 "version": gdal.__version__,
             },
+        )
+
+    def _execute_p402(
+        self,
+        spec: Any,
+        context: Any,
+        *,
+        norm: dict[str, Any],
+        out_format: str,
+        target_path: Path,
+        staged_path: Path,
+        start_time: float,
+    ) -> Any:
+        """P4-02 能力（拼接/VRT/堆叠/波段管理）的执行分支。
+
+        非 P4-02 能力返回 None，调用方继续走 Translate/Warp 分支。
+        """
+        cid = spec.capability_id
+        if cid not in {
+            "gdal:buildvrt",
+            "gdalbuildvrt",
+            "gdal:merge",
+            "gdal_merge",
+            "gdal:stack",
+            "gdal:bandmanage",
+        }:
+            return None
+
+        sources = _extract_raster_inputs(spec)
+        if not sources:
+            context.log("ERROR", "P4-02 能力缺少输入数据集")
+            return TaskResult(
+                task_id=spec.task_id,
+                attempt=spec.attempt,
+                status=TaskStatus.failed,
+                error={"code": "input_not_found", "message": "任务未提供任何输入栅格"},
+                duration_seconds=round(time.monotonic() - start_time, 4),
+            )
+        missing = [str(p) for p in sources if not p.exists()]
+        if missing:
+            context.log("ERROR", f"输入数据集不存在: {missing}")
+            return TaskResult(
+                task_id=spec.task_id,
+                attempt=spec.attempt,
+                status=TaskStatus.failed,
+                error={"code": "input_not_found", "message": f"输入数据集不存在：{missing}"},
+                duration_seconds=round(time.monotonic() - start_time, 4),
+            )
+
+        out_plan = spec.outputs[0]
+        overwrite = out_plan.overwrite
+        context.log(
+            "INFO",
+            f"P4-02 能力 {cid}：{len(sources)} 个输入源 → {target_path.name}",
+        )
+        context.progress(0.10, "processing", "执行拼接 / VRT / 堆叠 / 波段管理")
+
+        try:
+            if cid in ("gdal:buildvrt", "gdalbuildvrt"):
+                info = build_vrt(
+                    staged_path,
+                    sources,
+                    overlap_priority=norm.get("overlapPriority", "last"),
+                    resolution=norm.get("resolution"),
+                    src_nodata=norm.get("srcNodata"),
+                    vrt_nodata=norm.get("vrtNodata"),
+                    separate=bool(norm.get("separate", False)),
+                    use_relative=bool(norm.get("relativePaths", True)),
+                )
+                # VRT 的 relativeToVRT 路径相对于 VRT 文件所在目录解析；
+                # staging 与最终目标目录不同，必须重写基准，否则 commit 后源引用失效。
+                rewritten = rewrite_vrt_relative_sources(staged_path, target_path.parent)
+                context.log(
+                    "INFO",
+                    f"VRT 源引用已按最终目录重写（{rewritten} 条），保证目录整体搬移后仍可打开",
+                )
+            elif cid in ("gdal:merge", "gdal_merge"):
+                info = merge_sources(
+                    staged_path,
+                    sources,
+                    overlap_priority=norm.get("overlapPriority", "last"),
+                    resolution=norm.get("resolution"),
+                    src_nodata=norm.get("srcNodata"),
+                    vrt_nodata=norm.get("vrtNodata"),
+                    dst_nodata=norm.get("dstNodata"),
+                    x_res=norm.get("xRes"),
+                    y_res=norm.get("yRes"),
+                    output_bounds=norm.get("outputBounds"),
+                    output_type=norm.get("outputType"),
+                    out_format=out_format,
+                )
+            elif cid == "gdal:stack":
+                info = stack_sources(
+                    staged_path,
+                    sources,
+                    src_nodata=norm.get("srcNodata"),
+                    vrt_nodata=norm.get("vrtNodata"),
+                    x_res=norm.get("xRes"),
+                    y_res=norm.get("yRes"),
+                    output_bounds=norm.get("outputBounds"),
+                    output_type=norm.get("outputType"),
+                    out_format=out_format,
+                )
+            else:  # gdal:bandmanage
+                info = manage_bands(
+                    staged_path,
+                    sources[0],
+                    band_list=norm.get("bandList"),
+                    output_type=norm.get("outputType"),
+                    out_format=out_format,
+                )
+        except Exception as exc:
+            context.log("ERROR", f"P4-02 处理失败: {exc}")
+            return TaskResult(
+                task_id=spec.task_id,
+                attempt=spec.attempt,
+                status=TaskStatus.failed,
+                error={"code": "p402_error", "message": str(exc)},
+                duration_seconds=round(time.monotonic() - start_time, 4),
+            )
+
+        context.check_cancelled()
+
+        # staging 重开校验
+        context.progress(0.85, "verifying_staging", "校验 staging 成果")
+        if not staged_path.exists() or staged_path.stat().st_size == 0:
+            context.log("ERROR", "staging 成果缺失或为空")
+            return TaskResult(
+                task_id=spec.task_id,
+                attempt=spec.attempt,
+                status=TaskStatus.failed,
+                error={"code": "staging_invalid", "message": "staging 成果缺失或为空"},
+                duration_seconds=round(time.monotonic() - start_time, 4),
+            )
+
+        # 事务提交
+        context.progress(0.90, "committing", "提交 staging 成果至目标路径")
+        commit_pairs = [(staged_path, target_path)]
+        try:
+            context.commit_files(commit_pairs, overwrite=overwrite)
+        except Exception as exc:
+            context.log("ERROR", f"提交失败: {exc}")
+            return TaskResult(
+                task_id=spec.task_id,
+                attempt=spec.attempt,
+                status=TaskStatus.failed,
+                error={"code": "commit_failed", "message": str(exc)},
+                duration_seconds=round(time.monotonic() - start_time, 4),
+            )
+
+        context.progress(0.97, "verifying_final", "核验已安装目标")
+        output_record: dict[str, Any] = {
+            "key": out_plan.key,
+            "uri": target_path.as_uri(),
+            "driver": out_format,
+            "width": int(info.get("width", 0)),
+            "height": int(info.get("height", 0)),
+            "bands": int(info.get("bands", 1)),
+        }
+        duration = round(time.monotonic() - start_time, 4)
+        context.progress(1.0, "completed", "P4-02 处理任务全部完成")
+        return TaskResult(
+            task_id=spec.task_id,
+            attempt=spec.attempt,
+            status=TaskStatus.succeeded,
+            outputs=[output_record],
+            duration_seconds=duration,
         )
 
     def probe_dataset(self, path: Path | str) -> dict[str, Any]:

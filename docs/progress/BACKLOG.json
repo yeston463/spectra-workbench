@@ -494,9 +494,16 @@
       "depends_on": [
         "P4-01"
       ],
-      "status": "todo",
+      "status": "implemented",
       "release_requirement": "core",
-      "evidence": [],
+      "evidence": [
+        "GDAL 3.13.3 实测结论（实现依据）：BuildVRT 源须传列表；重叠区取**后加入**的源（故优先级可由输入排序实现）；源与 VRT 同目录时 relativeToVRT=1，源在父目录时退化为 relativeToVRT=0 绝对路径；separate=True 每源独立成波段；Translate(bandList) 严格按给定顺序；VRT 空洞为 NoData 且落盘后仍为 NoData；本机无 gdal_merge.py（带缺口拼接走 VRT+Translate 路径）。",
+        "参数契约扩展（processing/raster_params.py）：新增 overlapPriority / resolution / srcNodata / vrtNodata / separate / relativePaths / bandList，登记到 gdal:buildvrt / gdal:merge / gdal:stack / gdal:bandmanage 的支持矩阵；取值解析严格（bandList 正整数列表、枚举受控、布尔不容字符串、NoData 允许零值）。",
+        "实现（processing/mosaic_ops.py + GDAL adapter）：四能力独立分支，复用既有事务（staging → 重开校验 → commit → 登记）；多输入支持 inputs['inputs'] 列表并按能力校验数量；重叠优先级 first 由反转输入顺序实现（GDAL 为后加入者优先）。",
+        "VRT 相对引用基准修正：VRT 的 relativeToVRT 路径相对 VRT 文件所在目录解析，而本项目先写 staging 再 commit 到目标目录，故构建后必须把源引用重写为相对于最终目标目录，否则 commit 后源引用失效。实测 staging 构建的 VRT 为 relativeToVRT=0 + 绝对路径，首版正则只匹配 relativeToVRT=1 导致完全未改到，已修正为覆盖全部 SourceFilename 形态。",
+        "验收测试 tests/integration/test_p4_mosaic_stack.py（14 项）按原验收标准逐项验收：重叠优先级（last 取后加入者 / first 取先给定者）、缺口（空洞为 NoData 且不污染有效区）、NoData（源 NoData 不作为有效像元进入成果、dstNodata 落到成果）、源路径变化（VRT 用相对路径引用源、目录整体搬移后仍可打开且像元不变）、波段顺序（堆叠波段归属与输入顺序一致且互不含对方特征值、bandList 严格重排与子集）、能力边界（拼接拒绝 srcWin、输入数量不足被拒、参数非法时既有目标不被覆盖）。",
+        "对照实验：临时关闭 VRT 相对引用重写后 test_buildvrt_uses_relative_source_paths 失败，恢复后通过。"
+      ],
       "blocking_reason": null
     },
     {

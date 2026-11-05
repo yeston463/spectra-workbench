@@ -134,7 +134,30 @@ _PARAM_ALIASES: dict[str, tuple[str, ...]] = {
     "targetAlignedPixels": ("target_aligned_pixels", "tap", "align_pixels"),
     "width": ("out_width", "outwidth", "output_width"),
     "height": ("out_height", "outheight", "output_height"),
+    # --- P4-02 拼接 / VRT / 堆叠 / 波段管理 ---
+    "overlapPriority": ("overlap_priority", "priority"),
+    "resolution": ("resolution_policy", "res"),
+    "srcNodata": ("src_nodata", "source_nodata"),
+    "vrtNodata": ("vrt_nodata",),
+    "separate": ("separate_sources",),
+    "relativePaths": ("relative_paths", "use_relative_paths"),
+    "bandList": ("band_list", "band_order", "bands"),
 }
+
+#: 重叠区的取值来源优先级。
+#: **GDAL 3.13.3 实测**：BuildVRT 的重叠区取**后加入**的源（`[A,B]` → B 胜），
+#: 因此 "last" 直接按原顺序传入，"first" 需**反转输入顺序**后传入。
+OVERLAP_PRIORITIES: tuple[str, ...] = ("last", "first")
+
+#: GDAL BuildVRT 的分辨率策略。
+VRT_RESOLUTIONS: tuple[str, ...] = (
+    "first",
+    "estimate",
+    "average",
+    "highest",
+    "lowest",
+    "same",
+)
 
 #: 允许出现在 parameters 里、但不属于上述栅格几何参数的非几何键。
 _OTHER_ALLOWED_KEYS: frozenset[str] = frozenset(
@@ -144,7 +167,6 @@ _OTHER_ALLOWED_KEYS: frozenset[str] = frozenset(
         "creation_options",
         "driver",
         "band",
-        "bands",
         "select",
         "scale",
         "offset",
@@ -206,6 +228,41 @@ _CAPABILITY_SUPPORT: dict[str, frozenset[str]] = {
     # Rasterio convert 当前不消费裁剪/网格/重投影参数：
     # 给出这些参数必须报错，而不是接受后忽略。
     "rasterio:convert": frozenset(),
+    # --- P4-02：拼接 / VRT / 堆叠 / 波段管理 ---
+    "gdal:buildvrt": frozenset(
+        {
+            "overlapPriority",
+            "resolution",
+            "srcNodata",
+            "vrtNodata",
+            "separate",
+            "relativePaths",
+        }
+    ),
+    "gdal:merge": frozenset(
+        {
+            "overlapPriority",
+            "resolution",
+            "srcNodata",
+            "vrtNodata",
+            "dstNodata",
+            "xRes",
+            "yRes",
+            "outputBounds",
+            "outputType",
+        }
+    ),
+    "gdal:stack": frozenset(
+        {
+            "srcNodata",
+            "vrtNodata",
+            "xRes",
+            "yRes",
+            "outputBounds",
+            "outputType",
+        }
+    ),
+    "gdal:bandmanage": frozenset({"bandList", "outputType"}),
 }
 
 #: 能力别名 -> canonical capability_id。
@@ -223,6 +280,12 @@ _CAPABILITY_ALIASES: dict[str, str] = {
     "rio:cli:convert": "rasterio:convert",
     "rasterio:copy": "rasterio:convert",
     "rasterio:api:copy": "rasterio:convert",
+    # --- P4-02 能力别名（registry 的 CLI 风格名）---
+    "gdalbuildvrt": "gdal:buildvrt",
+    "gdal:build-vrt": "gdal:buildvrt",
+    "gdal_merge": "gdal:merge",
+    "gdal_merge.py": "gdal:merge",
+    "gdal mosaic": "gdal:merge",
     # 保留 rio_convert / rio:convert 等 CLI 风格别名
     "rio:convert": "rasterio:convert",
 }
@@ -452,6 +515,59 @@ def normalize_raster_params(
         if not isinstance(value, bool):
             raise ParameterError(f"targetAlignedPixels 必须是布尔值，实际 {value!r}")
         out["targetAlignedPixels"] = value
+
+    # 11.5) P4-02：拼接 / VRT / 堆叠 / 波段管理
+    if "bandList" in collected:
+        _, value = collected["bandList"]
+        if not isinstance(value, (list, tuple)) or not value:
+            raise ParameterError("参数 bandList 必须是非空的整数列表")
+        bands: list[int] = []
+        for v in value:
+            if not _is_int_like(v):
+                raise ParameterError(f"参数 bandList 的元素必须是整数，实际含 {v!r}")
+            iv = int(v)
+            if iv < 1:
+                raise ParameterError(f"参数 bandList 的波段号必须为正数（1-based），实际 {iv}")
+            bands.append(iv)
+        out["bandList"] = bands
+
+    if "overlapPriority" in collected:
+        _, value = collected["overlapPriority"]
+        key = str(value).strip().lower()
+        if key not in OVERLAP_PRIORITIES:
+            raise ParameterError(
+                f"未知的重叠优先级 {value!r}；可用：{', '.join(OVERLAP_PRIORITIES)}"
+            )
+        out["overlapPriority"] = key
+
+    if "resolution" in collected:
+        _, value = collected["resolution"]
+        key = str(value).strip().lower()
+        if key not in VRT_RESOLUTIONS:
+            raise ParameterError(
+                f"未知的 VRT 分辨率策略 {value!r}；可用：{', '.join(VRT_RESOLUTIONS)}"
+            )
+        out["resolution"] = key
+
+    if "srcNodata" in collected:
+        _, value = collected["srcNodata"]
+        out["srcNodata"] = _require_finite_float(value, "srcNodata")
+
+    if "vrtNodata" in collected:
+        _, value = collected["vrtNodata"]
+        out["vrtNodata"] = _require_finite_float(value, "vrtNodata")
+
+    if "separate" in collected:
+        _, value = collected["separate"]
+        if not isinstance(value, bool):
+            raise ParameterError(f"separate 必须是布尔值，实际 {value!r}")
+        out["separate"] = value
+
+    if "relativePaths" in collected:
+        _, value = collected["relativePaths"]
+        if not isinstance(value, bool):
+            raise ParameterError(f"relativePaths 必须是布尔值，实际 {value!r}")
+        out["relativePaths"] = value
 
     # 12) 互斥组合：分辨率与输出尺寸不能同时指定
     # （GDAL 侧表现为 "-outsize 与 -tr 冲突"，但那是在引擎里才发现；
