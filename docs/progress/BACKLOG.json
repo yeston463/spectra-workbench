@@ -92,7 +92,8 @@
         "流水线脚本 scripts/test.ps1（UTF-8 带 BOM），按序执行 Ruff 静态检查、Mypy 核心类型检查与 Pytest 测试分组（-Unit / -Integration / -All）。退出码真实透传，不静默吞错。",
         "类型健全性：补充 pyproject.toml mypy 配置与 PEP 561 py.typed 标记，mypy 检查 49 个源文件 0 错误（Success: no issues found in 49 source files）。",
         "测试分组：tests/unit 与 tests/integration 覆盖领域模型、调度、生命周期、UI 组件与跨进程集成。",
-        "实测流水线：powershell -ExecutionPolicy Bypass -File scripts/test.ps1 -All => Ruff 干净、Mypy 干净、Pytest 169 passed，exit 0。"
+        "实测流水线：powershell -ExecutionPolicy Bypass -File scripts/test.ps1 -All => Ruff 干净、Mypy 干净、Pytest 169 passed，exit 0。",
+        "退出异常 0xC0000409 诊断（第 21 轮）：保留失败轮与成功轮全部证据（docs/progress/runs/exit_anomaly/test_all_history.log 共 11 轮，其中 11-04 20:00:24 与 11-05 07:48:47 两轮 rc=3221226505）；Windows 事件日志定位崩溃模块为 ucrtbase.dll（偏移 0xa527e，反汇编确认为 int 0x15 的 __fastfail 指令）与 Qt6Core.dll；07:48:47 失败轮与 07:56:16 成功轮为同一工作树快照，确认为退出阶段随机异常而非某次改动引入；实测 win.deleteLater()+processEvents() 并未真正销毁窗口（work/probe_deferred_delete.py），Qt 对象析构顺序在解释器退出阶段不确定；已实施 tests/conftest.py 的 pytest_sessionfinish 有序销毁、QtWorkerClient._closed 信号派发保护、closeEvent 无条件回收请求线程，并以 tests/unit/test_p3_exit_lifecycle.py 6 项回归固化；本机缺少符号工具，无法将 ucrtbase.dll+0xa527e 映射到具体函数，如实记录为根因未完全定位，不宣称根治。；同期修复 worker 并发启动竞态：start() 此前无锁保护，多个请求线程并发 start() 会互相覆盖子进程句柄导致请求丢失（界面表现为图层加载不出来），已用 _start_lock 串行化并在锁内二次检查存活状态，回归断言见 tests/unit/test_p3_exit_lifecycle.py（8 项，含并发启动与锁序列化）。"
       ],
       "blocking_reason": null
     },
@@ -436,7 +437,12 @@
         "Worker 扩展 query_pixel / map_to_pixel / transform_bounds / read_view_window，支持中心 (center) 与角点 (corner) 两种坐标约定。",
         "tests/integration/test_p3_query_stats.py（19 项）验证旋转 Affine、无 GT 栅格与坐标换算。",
         "tests/integration/test_p3_viewing_flow.py（17 项）验证跨 CRS 视图重投影、项目保存重开与句柄释放。",
-        "真实鼠标事件多边形 ROI 绘制/闭合/选中/手柄拖拽/删除/保存重开全流程；矩形展开 4 角点经 Worker 转换并精确保持 425 平方单位面积与 4 个角点；坐标转换失败异常隔离隐藏并保全权威模型（tests/integration/test_p3_interactive_polygon_roi.py 8 项全绿）"
+        "真实鼠标事件多边形 ROI 绘制/闭合/选中/手柄拖拽/删除/保存重开全流程（tests/integration/test_p3_interactive_polygon_roi.py）。",
+        "矩形权威几何与显示轮廓分离：权威对角两点在权威空间展开为 4 角点交 Worker 转换，渲染真实轮廓（PolyLineROI）而非轴对齐矩形；旋转 Affine 下精确断言 4 个地图角点 (500025,3199985)/(500045,3199990)/(500050,3199970)/(500030,3199965) 与 425.0 平方地图单位覆盖面积（杜绝错误值 375.0）；变换视图下手柄隐藏禁用且不可平移，权威几何不被改写；覆盖切换 CRS、返回像元、保存重开与编辑后几何一致性。",
+        "转换失败隔离：_make_err / _sync_rois_to_view / _add_roi / 拖动反算四处均已删除「用原坐标冒充转换结果」的兜底；失败时隐藏图形项、清空 display_points、置 transform_error 标志，权威几何与 layer.rois 保持不变；UI 在 ROI 列表标出「坐标转换失败」并提供可恢复路径（切回有效视图自动恢复）。",
+        "五类故障注入矩阵（test_roi_transform_failure_fault_matrix）：A 向地图转换失败、B 回像元转换失败、C 项目重开时转换失败、D 拖动反算失败、E 切换 CRS 后旧响应迟到；每类均验证图形状态、权威几何与保存结果，而不仅检查错误消息。",
+        "修复跨坐标空间数据混用缺陷：state 显式记录显示点所属坐标空间与 CRS（display_space/display_crs），反算按显示点自身空间判定，视图切换后未完成的异步转换不再把旧空间坐标当作新空间坐标反算，权威几何不再被垃圾值污染。",
+        "拖动反算失败时显示图形恢复到最近一次已知良好轮廓（display_points 快照），权威几何保持不变，杜绝「图形画在 A 处、模型记着 B 处」的分叉污染保存结果。"
       ],
       "blocking_reason": null
     },

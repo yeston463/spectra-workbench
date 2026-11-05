@@ -199,13 +199,26 @@ class InfoPanel(QWidget):
         self.lbl_stats.setText(f"统计失败：{message}")
 
     # ------------------------------------------------------------------- ROI
-    def set_rois(self, rois: list[Any]) -> None:
+    def set_rois(self, rois: list[Any], failed_ids: set[str] | None = None) -> None:
+        """刷新 ROI 列表。
+
+        ``failed_ids`` 为坐标转换失败的 ROI 集合：这类 ROI 的权威几何仍然完好，
+        但当前视图下无法显示或编辑，必须在列表中明确标出，
+        让用户看到「转换失败」这一可恢复状态，而不是以为 ROI 丢失了。
+        """
+        failed = failed_ids or set()
         self._rois = {r.roi_id: r for r in rois}
         self.lst_rois.blockSignals(True)
         self.lst_rois.clear()
         for r in rois:
-            item = QListWidgetItem(f"{r.name}  [{r.shape.value}]")
+            if r.roi_id in failed:
+                text = f"{r.name}  [{r.shape.value}]  ⚠ 坐标转换失败"
+            else:
+                text = f"{r.name}  [{r.shape.value}]"
+            item = QListWidgetItem(text)
             item.setData(Qt.ItemDataRole.UserRole, r.roi_id)
+            if r.roi_id in failed:
+                item.setToolTip("坐标转换失败：权威几何已保留，当前视图下不显示也不可编辑")
             self.lst_rois.addItem(item)
         self.lst_rois.blockSignals(False)
 

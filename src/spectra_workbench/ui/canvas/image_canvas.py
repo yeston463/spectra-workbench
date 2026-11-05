@@ -350,6 +350,8 @@ class ImageCanvas(QWidget):
                     new_item.setVisible(True)
                     st["item"] = new_item
                     st["display_points"] = pts
+                    st["display_space"] = "map"
+                    st["display_crs"] = target_view_crs
                     st["gen"] = current_gen
                     st["transform_error"] = False
                     self.plot_item.addItem(new_item)
@@ -365,6 +367,8 @@ class ImageCanvas(QWidget):
 
             self.fit_extent()
             self.refresh()
+            # 成功与失败都要通知 UI：失败的 ROI 必须在列表中标出转换失败状态
+            self.sig_roi_changed.emit()
             if on_ready:
                 on_ready()
 
@@ -400,6 +404,10 @@ class ImageCanvas(QWidget):
             else:
                 def _make_ok(r_id: str):
                     def _ok_roi(res: dict[str, Any]) -> None:
+                        # 过期响应（代际已变）必须直接丢弃，不得写入结果字典，
+                        # 否则脏数据会被同代际的 _try_finish 读到并污染图形与权威几何
+                        if self._gen.generation != current_gen:
+                            return
                         pts = [(float(p[0]), float(p[1])) for p in res.get("points", [])]
                         roi_results[r_id] = pts if pts else None
                         _try_finish()
@@ -407,6 +415,8 @@ class ImageCanvas(QWidget):
 
                 def _make_err(r_id: str):
                     def _err_roi(msg: str) -> None:
+                        if self._gen.generation != current_gen:
+                            return
                         self._status(f"ROI [{r_id}] 转换到视图 CRS 失败：{msg}")
                         roi_results[r_id] = None
                         _try_finish()
@@ -461,6 +471,8 @@ class ImageCanvas(QWidget):
                 new_item.setVisible(True)
                 state["item"] = new_item
                 state["display_points"] = pts
+                state["display_space"] = target_space
+                state["display_crs"] = target_crs
                 state["gen"] = current_gen
                 state["transform_error"] = False
                 self.plot_item.addItem(new_item)
@@ -471,6 +483,9 @@ class ImageCanvas(QWidget):
                 state["display_points"] = None
                 state["gen"] = current_gen
                 state["transform_error"] = True
+
+        # 通知 UI 刷新 ROI 列表与转换失败标记
+        self.sig_roi_changed.emit()
 
     def set_display(self, settings: DisplaySettings) -> None:
         """显示参数变化：递增代际丢弃旧结果，但不清缓存（缓存的是原值，不需重读盘）。"""
@@ -733,6 +748,18 @@ class ImageCanvas(QWidget):
     def roi_list(self) -> list[ROI]:
         return [self._roi_geometry(state) for state in self._roi_states.values()]
 
+    def roi_transform_failed_ids(self) -> set[str]:
+        """返回坐标转换失败、当前视图下不可显示/编辑的 ROI id 集合。
+
+        这些 ROI 的权威几何完好保存在模型里，只是当前视图坐标系转换失败。
+        UI 必须把它们标出来，提供明确可恢复状态，而不是让用户以为 ROI 丢失了。
+        """
+        return {
+            rid
+            for rid, state in self._roi_states.items()
+            if state.get("transform_error") or state.get("display_points") is None
+        }
+
     def select_roi(self, roi_id: str | None) -> None:
         self._selected_roi_id = roi_id
         for rid, state in self._roi_states.items():
@@ -755,47 +782,115 @@ class ImageCanvas(QWidget):
         self.sig_roi_changed.emit()
         return roi_id
 
-    def _roi_geometry(self, state: dict[str, Any]) -> ROI:
+    def _roi_view_points(self, state: dict[str, Any]) -> list[tuple[float, float]]:
+        """取当前显示图形在视图坐标系下的点位。"""
         item = state["item"]
         base: ROI = state["roi"]
+        if base.shape is ROIShape.rectangle and isinstance(item, pg.RectROI):
+            c0, r0, c1, r1 = self._rect_bounds(item)
+            return [(c0, r0), (c1, r1)]
+        return [
+            (float(pt.x()), float(pt.y()))
+            for pt in (item.mapToParent(p) for p in item.getState()["points"])
+        ]
+
+    def _roi_geometry(self, state: dict[str, Any]) -> ROI:
+        """读取当前显示图形对应的权威几何（只读，无副作用）。
+
+        编辑路径请用 ``_roi_geometry_for_edit``，它额外报告编辑是否被拒绝。
+        """
+        roi, _ok = self._roi_geometry_for_edit(state)
+        return roi
+
+    def _roi_geometry_for_edit(self, state: dict[str, Any]) -> tuple[ROI, bool]:
+        """把当前显示图形反算回权威几何，返回 (权威几何, 编辑是否被拒绝)。
+
+        反算失败时返回原权威模型（权威几何保持不变），并把 rejected 置为 True，
+        供调用方恢复显示图形——绝不允许权威几何与显示图形悄悄分叉。
+        """
+        base: ROI = state["roi"]
         if state.get("transform_error") or state.get("display_points") is None:
-            return base
-        if base.shape is ROIShape.rectangle:
-            if isinstance(item, pg.RectROI):
-                c0, r0, c1, r1 = self._rect_bounds(item)
-                view_points = [(c0, r0), (c1, r1)]
-            else:
-                # 变换视图下的矩形轮廓（多边形）受权威矩形约束，不可任意形变为任意四边形
-                return base
-        else:
-            view_points = [
-                (float(pt.x()), float(pt.y()))
-                for pt in (item.mapToParent(p) for p in item.getState()["points"])
-            ]
+            return base, True
+        view_points = self._roi_view_points(state)
         view_space = "map" if self.view_crs_wkt else "pixel"
         view_crs = self.view_crs_wkt
 
-        if base.coordinate_space == view_space and (view_space == "pixel" or base.crs_wkt == view_crs):
-            return base.model_copy(update={"points": view_points})
+        # 显示点属于哪个坐标空间由状态记录，不可用当前视图空间臆测：
+        # 视图切换后异步转换尚未完成时，显示点仍停留在旧空间，
+        # 此时若按新视图空间反算，会把不同坐标空间的数据直接混用，产出垃圾几何。
+        disp_space = state.get("display_space")
+        disp_crs = state.get("display_crs")
+        if disp_space is None:
+            # 旧状态没有记录空间信息：保守起见不反算，保持权威几何不变
+            return base, True
+        if disp_space != view_space or (disp_space == "map" and disp_crs != view_crs):
+            # 显示点与当前视图不在同一坐标空间：拒绝反算，权威几何原样保留
+            return base, True
+
+        if base.coordinate_space == disp_space and (disp_space == "pixel" or base.crs_wkt == disp_crs):
+            return base.model_copy(update={"points": view_points}), False
+
+        if base.shape is ROIShape.rectangle and not isinstance(state["item"], pg.RectROI):
+            # 变换视图下的矩形轮廓受权威矩形约束，不可任意形变为任意四边形：
+            # 权威几何原样保留，编辑被拒绝，轮廓恢复为已知良好形状。
+            return base, True
 
         if self._client is not None and self._layer is not None:
             try:
                 res = self._client.transform_coordinates(
                     path=self._layer.file_path,
                     points=view_points,
-                    from_space=view_space,
+                    from_space=disp_space,
                     to_space=base.coordinate_space,
-                    src_crs_wkt=view_crs,
+                    src_crs_wkt=disp_crs,
                     dst_crs_wkt=base.crs_wkt,
                     convention=base.pixel_convention,
                 )
                 auth_pts = [(float(p[0]), float(p[1])) for p in res.get("points", [])]
                 if auth_pts and len(auth_pts) == len(view_points):
-                    return base.model_copy(update={"points": auth_pts})
+                    return base.model_copy(update={"points": auth_pts}), False
+                self._status("ROI 反算权威坐标失败：返回点数不匹配，已保留原几何")
             except Exception as exc:
-                self._status(f"ROI 反算权威坐标失败：{exc}")
-                return base
-        return base
+                self._status(f"ROI 反算权威坐标失败：{exc}；已保留原几何")
+            return base, True
+        return base, True
+
+    def _restore_roi_display(self, state: dict[str, Any]) -> None:
+        """编辑被拒绝或反算失败后，把显示图形恢复到最近一次已知良好的轮廓。
+
+        权威几何保持不变，显示图形必须回到与之一致的位置，
+        否则会出现「图形画在 A 处、模型记着 B 处」的分叉，并污染保存结果。
+        这里只用本地保存的轮廓快照恢复，不再调用 worker——刚刚失败的通道不可再依赖。
+        """
+        roi: ROI = state["roi"]
+        display_points = state.get("display_points")
+        if not display_points:
+            # 没有可用轮廓快照：明确隐藏并标记不可编辑，而不是显示错误图形
+            with contextlib.suppress(Exception):
+                self.plot_item.removeItem(state["item"])
+            item = (
+                pg.RectROI(pos=(0, 0), size=(0, 0))
+                if roi.shape is ROIShape.rectangle
+                else pg.PolyLineROI([(0, 0), (0, 0), (0, 0)], closed=True)
+            )
+            item.setVisible(False)
+            state["item"] = item
+            state["transform_error"] = True
+            self.plot_item.addItem(item)
+            return
+
+        with contextlib.suppress(Exception):
+            self.plot_item.removeItem(state["item"])
+        new_item = self._create_roi_item(
+            roi, list(display_points), selected=(roi.roi_id == self._selected_roi_id)
+        )
+        new_item.setVisible(True)
+        state["item"] = new_item
+        state["transform_error"] = False
+        # 空间标记保持不变：恢复的正是同一空间下的原轮廓
+        self.plot_item.addItem(new_item)
+        new_item.sigRegionChanged.connect(lambda *a, s=state: self._on_roi_moved(s))
+        new_item.sigClicked.connect(lambda *a, r_id=roi.roi_id: self.select_roi(roi.roi_id))
 
     def _create_roi_item(
         self, roi: ROI, display_points: list[tuple[float, float]], selected: bool = False
@@ -885,8 +980,12 @@ class ImageCanvas(QWidget):
             "roi": roi,
             "item": item,
             "display_points": display_points,
+            # 显示点所属坐标空间与 CRS：反算时必须按它判定，不能用当前视图臆测
+            "display_space": view_space if display_points else None,
+            "display_crs": view_crs if display_points else None,
             "gen": self._gen.generation,
             "transform_error": transform_error,
+            "inverse_error": False,
         }
         self._roi_states[roi.roi_id] = state
         if self._layer is not None and not any(r.roi_id == roi.roi_id for r in self._layer.rois):
@@ -895,12 +994,32 @@ class ImageCanvas(QWidget):
         if not transform_error:
             item.sigRegionChanged.connect(lambda *a, s=state: self._on_roi_moved(s))
             item.sigClicked.connect(lambda *a, rid=roi.roi_id: self.select_roi(rid))
+        # 转换失败时也通知 UI：列表中标出失败状态，用户才知道 ROI 还在但当前不可见
+        self.sig_roi_changed.emit()
 
     def _on_roi_moved(self, state: dict[str, Any]) -> None:
-        """手柄拖动 / 平移后把几何写回模型，供保存与统计使用。"""
+        """手柄拖动 / 平移后把几何写回模型，供保存与统计使用。
+
+        反算失败时权威几何保持不变，并把显示图形恢复到与之一致的轮廓，
+        杜绝「图形画在 A 处、模型记着 B 处」的分叉污染保存结果。
+        """
         if state.get("transform_error") or state.get("display_points") is None:
             return
-        state["roi"] = self._roi_geometry(state)
+        previous_display = state.get("display_points")
+        roi, rejected = self._roi_geometry_for_edit(state)
+        if rejected:
+            # 编辑被拒绝：显示图形回到上一次已知良好的轮廓，权威几何保持不变
+            state["roi"] = roi
+            state["display_points"] = previous_display
+            self._restore_roi_display(state)
+            if self._layer is not None:
+                self._layer.rois = self.roi_list()
+            self.sig_roi_changed.emit()
+            return
+        state["roi"] = roi
+        # 编辑生效：把当前显示轮廓登记为新的「已知良好」快照，供后续失败时回滚
+        state["display_points"] = self._roi_view_points(state)
+        # 编辑不改变显示点所属坐标空间，此处仅刷新快照，空间标记保持不变
         if self._layer is not None:
             self._layer.rois = self.roi_list()
         self.sig_roi_changed.emit()

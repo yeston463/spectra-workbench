@@ -753,17 +753,20 @@ class MainWindow(QMainWindow):
         )
 
     # ------------------------------------------------------------------- ROI
-    def _on_roi_changed(self) -> None:
+    def _sync_roi_list(self) -> None:
+        """把 ROI 列表与转换失败标记同步到信息面板。"""
         layer = self.canvas.current_layer
-        if layer is not None:
-            self.info_panel.set_rois(self.canvas.roi_list())
+        if layer is None:
+            return
+        self.info_panel.set_rois(self.canvas.roi_list(), self.canvas.roi_transform_failed_ids())
+
+    def _on_roi_changed(self) -> None:
+        self._sync_roi_list()
         self._mark_dirty()
 
     def _on_roi_delete(self, roi_id: str) -> None:
         self.canvas.remove_roi(roi_id)
-        layer = self.canvas.current_layer
-        if layer is not None:
-            self.info_panel.set_rois(self.canvas.roi_list())
+        self._sync_roi_list()
 
     def _on_roi_clear(self) -> None:
         self.canvas.load_rois([])
@@ -1281,7 +1284,10 @@ class MainWindow(QMainWindow):
                 cleanup()
         self._task_subscriptions.clear()
         for client in self._clients.values():
-            if client.is_alive:
+            # 必须无条件回收请求线程：client.is_alive 只反映 worker 子进程状态，
+            # worker 已退出时若跳过 stop()，仍在跑的守护请求线程会活到解释器退出，
+            # 在 Windows 上随机触发 STATUS_STACK_BUFFER_OVERRUN（0xC0000409）异常退出码。
+            with contextlib.suppress(Exception):
                 client.stop(timeout=1.0)
         self._cache.clear()
         super().closeEvent(event)

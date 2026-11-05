@@ -1,0 +1,15 @@
+{
+  "tag": "atexit",
+  "at": "2026-11-05T11:11:22.293260",
+  "pid": 42288,
+  "alive_threads": [],
+  "python_processes": [
+    "\"python.exe\",\"17648\",\"Console\",\"1\",\"72,640 K\"",
+    "\"python.exe\",\"27032\",\"Console\",\"1\",\"4,908 K\"",
+    "\"python.exe\",\"39648\",\"Console\",\"1\",\"78,108 K\"",
+    "\"python.exe\",\"53140\",\"Console\",\"1\",\"5,508 K\"",
+    "\"python.exe\",\"33724\",\"Console\",\"1\",\"16,488 K\"",
+    "\"python.exe\",\"31628\",\"Console\",\"1\",\"5,508 K\"",
+    "\"python.exe\",\"42288\",\"Console\",\"1\",\"442,524 K\""
+  ]
+}

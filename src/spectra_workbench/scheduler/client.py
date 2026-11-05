@@ -19,7 +19,7 @@ from PySide6.QtCore import QObject, Signal
 
 from spectra_workbench.domain.models import TaskResult, TaskSpec
 from spectra_workbench.protocol.messages import Envelope, Kind
-from spectra_workbench.workers.process import WorkerProcess
+from spectra_workbench.workers.process import WorkerProcess, WorkerTimeoutError
 
 
 class QtWorkerClient(QObject):
@@ -63,7 +63,13 @@ class QtWorkerClient(QObject):
         self._read_callbacks: dict[str, tuple[Callable[[dict[str, Any]], None] | None, Callable[[str], None] | None]] = {}
         self._call_callbacks: dict[str, tuple[Callable[[dict[str, Any]], None] | None, Callable[[str], None] | None]] = {}
         self._callbacks_lock = threading.Lock()
+        # worker 启动必须串行化：多个请求线程并发 start() 会互相覆盖子进程句柄
+        self._start_lock = threading.Lock()
         self._req_threads: list[threading.Thread] = []
+        # 关闭标志：关闭后不再向 Qt 对象派发信号。
+        # QtWorkerClient 是 QObject，其 C++ 侧被销毁后再 emit 信号属于未定义行为，
+        # 在 Windows 上会随机触发 STATUS_STACK_BUFFER_OVERRUN（0xC0000409）异常退出码。
+        self._closed = False
 
         # 连接内部排队信号，槽函数在 QObject 所属线程（主线程）执行
         self._sig_probe_dispatch.connect(self._on_probe_dispatched)
@@ -79,8 +85,21 @@ class QtWorkerClient(QObject):
         return self._worker.is_alive
 
     def start(self, timeout: float = 15.0) -> Envelope:
-        """同步启动 Worker 并建立握手（通常在后台初始化或快速启动）。"""
-        return self._worker.start(timeout=timeout)
+        """同步启动 Worker 并建立握手（通常在后台初始化或快速启动）。
+
+        必须串行化：多个请求线程可能同时发现 worker 尚未启动而并发调用 start()，
+        后一次会覆盖前一次的子进程句柄，导致前一个 worker 泄漏、其请求永远收不到响应。
+        """
+        with self._start_lock:
+            if self._worker.is_alive:
+                # 另一个线程已完成启动：复用现有 worker，不重复拉起子进程
+                env = self._worker._ready_envelope
+                if env is None:
+                    raise WorkerTimeoutError(
+                        f"Worker 已启动但缺少 ready 握手消息 (timeout={timeout}s)"
+                    )
+                return env
+            return self._worker.start(timeout=timeout)
 
     def _spawn_thread(self, target: Callable[[], None], name: str) -> None:
         thread = threading.Thread(target=target, name=name, daemon=True)
@@ -102,7 +121,15 @@ class QtWorkerClient(QObject):
         self._req_threads = [t for t in self._req_threads if t.is_alive()]
 
     def _on_worker_envelope(self, env: Envelope) -> None:
-        """从 Worker 读取线程派发消息至 Qt 信号。"""
+        """从 Worker 读取线程派发消息至 Qt 信号。
+
+        该回调运行在 worker 的 stdout 读取线程（守护线程）上。
+        客户端关闭后本 Qt 对象的 C++ 侧可能已被销毁，此时继续 emit 信号属于
+        未定义行为，在 Windows 上会随机触发 STATUS_STACK_BUFFER_OVERRUN（0xC0000409）。
+        因此关闭后必须直接丢弃在途消息。
+        """
+        if self._closed:
+            return
         if env.kind is Kind.hello:
             self.sig_hello.emit(env.payload)
         elif env.kind is Kind.ready:
@@ -199,9 +226,13 @@ class QtWorkerClient(QObject):
                 if not self.is_alive:
                     self.start()
                 info = self._worker.probe_dataset(path, timeout=timeout)
+                if self._closed:
+                    return
                 self.sig_dataset_probed.emit(info)
                 self._sig_probe_dispatch.emit(req_id, info, False)
             except Exception as exc:
+                if self._closed:
+                    return
                 self.sig_error.emit("probe_error", str(exc))
                 self._sig_probe_dispatch.emit(req_id, str(exc), True)
 
@@ -276,9 +307,13 @@ class QtWorkerClient(QObject):
                     raw=raw,
                     overview=overview,
                 )
+                if self._closed:
+                    return
                 self.sig_window_read.emit(data)
                 self._sig_read_dispatch.emit(req_id, data, False)
             except Exception as exc:
+                if self._closed:
+                    return
                 self.sig_error.emit("read_window_error", str(exc))
                 self._sig_read_dispatch.emit(req_id, str(exc), True)
 
@@ -320,8 +355,13 @@ class QtWorkerClient(QObject):
                 if not self.is_alive:
                     self.start()
                 data = fn()
+                if self._closed:
+                    # 客户端已关闭：不再向已销毁的 Qt 对象派发信号
+                    return
                 self._sig_call_dispatch.emit(req_id, data, False)
             except Exception as exc:
+                if self._closed:
+                    return
                 self._sig_call_dispatch.emit(req_id, f"{type(exc).__name__}: {exc}", True)
 
         self._spawn_thread(_runner, f"qt-call-{req_id[:6]}")
@@ -552,6 +592,8 @@ class QtWorkerClient(QObject):
 
     def stop(self, timeout: float = 5.0) -> int:
         """停止 Worker 进程并释放资源。"""
+        # 先关闭信号派发：此后任何在途请求线程都不会再向本 Qt 对象发信号
+        self._closed = True
         with self._callbacks_lock:
             for _, on_err in self._probe_callbacks.values():
                 if on_err:
@@ -572,6 +614,7 @@ class QtWorkerClient(QObject):
 
     def kill(self) -> None:
         """强制杀死子进程。"""
+        self._closed = True
         self._join_request_threads(timeout=1.0)
         with self._callbacks_lock:
             self._probe_callbacks.clear()

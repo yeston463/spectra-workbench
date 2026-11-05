@@ -868,3 +868,294 @@ def test_roi_coordinate_transform_failure_hides_item_and_preserves_authority(
         qapp.processEvents()
 
 
+def test_roi_transform_failure_fault_matrix(
+    qapp: QApplication, tmp_path: Path, p3_samples: dict
+) -> None:
+    """坐标转换失败的五类故障注入矩阵验收。
+
+    任务要求的故障注入覆盖面：
+      A. 向地图转换失败（异步 on_error）
+      B. 回像元转换失败（同步 transform_coordinates 抛错）
+      C. 项目重开时转换失败
+      D. 拖动反算失败
+      E. 切换图层或 CRS 后旧响应迟到
+
+    对每一类都必须验证三件事（而不是只检查错误消息）：
+      1. 图形状态：失败图形被隐藏、不可编辑，绝不显示错误坐标；
+      2. 权威几何：roi.points / roi_list() / layer.rois 全部保持不变；
+      3. 保存结果：保存并重开后，项目里的 ROI 仍是原始权威几何。
+
+    另外要求：UI 有明确可恢复状态（列表标出转换失败），不能无限等待。
+    """
+    from spectra_workbench.domain.roi import ROI
+
+    rotated_path = Path(p3_samples["samples"]["rotated"]["path"]).resolve()
+    pixel_rect = [(10.0, 10.0), (20.0, 20.0)]
+    pixel_rect_t = ((10.0, 10.0), (20.0, 20.0))
+
+    def roi_snapshot(win: MainWindow) -> list[tuple]:
+        return [tuple(tuple(pt) for pt in r.points) for r in win.canvas.roi_list()]
+
+    # ---------------------------------------------------------------- A. 向地图转换失败
+    win = MainWindow()
+    win.show()
+    try:
+        win.open_dataset(rotated_path)
+        _wait_layers(win, qapp, count=1)
+
+        roi = ROI(name="RectA", shape=ROIShape.rectangle, points=list(pixel_rect), coordinate_space="pixel")
+        win.canvas._add_roi(roi)
+        qapp.processEvents()
+        st = win.canvas._roi_states[roi.roi_id]
+        assert st["item"].isVisible(), "前置条件：像元视图下 ROI 必须可见"
+
+        # 注入异步向地图转换失败
+        with patch.object(
+            win.canvas._client,
+            "transform_coordinates_async",
+            side_effect=lambda *a, **kw: kw["on_error"]("injected async map transform failure"),
+        ):
+            win.cmb_view_crs.setCurrentIndex(1)
+            deadline = time.monotonic() + 10.0
+            while time.monotonic() < deadline and win.canvas._view_bounds is None:
+                qapp.processEvents()
+                time.sleep(0.02)
+
+        st = win.canvas._roi_states[roi.roi_id]
+        assert not st["item"].isVisible(), "A: 转换失败图形必须隐藏，不得显示原像元坐标冒充地图坐标"
+        assert st["display_points"] is None, "A: display_points 必须清空"
+        assert st["transform_error"] is True, "A: 必须标记转换失败"
+        assert roi_snapshot(win) == [pixel_rect_t], "A: 权威几何必须保持不变"
+        assert win.layer_panel.layers[0].rois[0].points == pixel_rect, "A: 图层权威几何必须保持不变"
+        # UI 明确可恢复状态
+        assert roi.roi_id in win.canvas.roi_transform_failed_ids(), "A: 必须能枚举出失败的 ROI"
+        assert "转换失败" in win.info_panel.lst_rois.item(0).text(), (
+            f"A: ROI 列表必须标出转换失败状态，实际文本 {win.info_panel.lst_rois.item(0).text()!r}"
+        )
+        # 不能无限等待：恢复视图后必须自动回到可见可用状态
+        win.canvas.set_view_crs(None)
+        qapp.processEvents()
+        st = win.canvas._roi_states[roi.roi_id]
+        assert st["item"].isVisible(), "A: 切回像元视图后必须自动恢复可见"
+        assert st["display_points"] == pixel_rect
+        assert not st["transform_error"]
+    finally:
+        win.close()
+        win.deleteLater()
+        qapp.processEvents()
+
+    # ---------------------------------------------------------------- B. 回像元转换失败
+    win = MainWindow()
+    win.show()
+    try:
+        win.open_dataset(rotated_path)
+        _wait_layers(win, qapp, count=1)
+        win.cmb_view_crs.setCurrentIndex(1)
+        deadline = time.monotonic() + 10.0
+        while time.monotonic() < deadline and win.canvas._view_bounds is None:
+            qapp.processEvents()
+            time.sleep(0.02)
+
+        # 权威在 map 空间的 ROI：切回像元视图必须真正走「回像元」转换通道
+        map_rect = [(500025.0, 3199985.0), (500045.0, 3199990.0)]
+        roi = ROI(
+            name="RectB",
+            shape=ROIShape.rectangle,
+            points=list(map_rect),
+            coordinate_space="map",
+            crs_wkt=win.canvas.view_crs_wkt,
+        )
+        win.canvas._add_roi(roi)
+        qapp.processEvents()
+        st = win.canvas._roi_states[roi.roi_id]
+        assert st["item"].isVisible(), "B: 前置条件：地图视图下 ROI 必须可见"
+
+        # 注入「回像元」转换失败：_sync_rois_to_view 走同步 transform_coordinates
+        with patch.object(
+            win.canvas._client,
+            "transform_coordinates",
+            side_effect=RuntimeError("injected back-to-pixel failure"),
+        ):
+            win.canvas.set_view_crs(None)
+            qapp.processEvents()
+
+        st = win.canvas._roi_states[roi.roi_id]
+        assert not st["item"].isVisible(), "B: 回像元失败后图形必须隐藏，不得显示原坐标冒充像元坐标"
+        assert st["display_points"] is None, "B: display_points 必须清空"
+        assert st["transform_error"] is True
+        assert roi_snapshot(win) == [tuple(map_rect)], "B: 权威几何必须保持不变"
+        assert win.layer_panel.layers[0].rois[0].points == map_rect, "B: 图层权威几何必须保持不变"
+        assert roi.roi_id in win.canvas.roi_transform_failed_ids()
+    finally:
+        win.close()
+        win.deleteLater()
+        qapp.processEvents()
+
+    # ---------------------------------------------------------------- C. 项目重开时转换失败
+    win = MainWindow()
+    win.show()
+    proj_file = tmp_path / "fault_matrix.spectra.json"
+    try:
+        win.open_dataset(rotated_path)
+        _wait_layers(win, qapp, count=1)
+        # 权威在 map 空间的矩形：重开时必须真的走坐标换算通道，才能验证「重开转换失败」
+        win.cmb_view_crs.setCurrentIndex(1)
+        deadline = time.monotonic() + 10.0
+        while time.monotonic() < deadline and win.canvas._view_bounds is None:
+            qapp.processEvents()
+            time.sleep(0.02)
+        map_rect_c = [(500025.0, 3199985.0), (500045.0, 3199990.0)]
+        roi = ROI(
+            name="RectC",
+            shape=ROIShape.rectangle,
+            points=list(map_rect_c),
+            coordinate_space="map",
+            crs_wkt=win.canvas.view_crs_wkt,
+        )
+        win.canvas._add_roi(roi)
+        qapp.processEvents()
+        with patch(
+            "spectra_workbench.ui.main_window.QFileDialog.getSaveFileName",
+            return_value=(str(proj_file), ""),
+        ):
+            win.save_project_action(save_as=True)
+    finally:
+        win.close()
+        win.deleteLater()
+        qapp.processEvents()
+
+    win2 = MainWindow()
+    win2.show()
+    try:
+        # 重开项目；随后注入转换失败，模拟「项目重开时坐标转换失败」
+        win2.open_project(proj_file)
+        deadline = time.monotonic() + 10.0
+        while time.monotonic() < deadline and not win2.layer_panel.layers:
+            qapp.processEvents()
+            time.sleep(0.02)
+
+        client = win2.canvas._client
+        assert client is not None, "C: 前置条件：重开后必须已建立 worker 客户端"
+        with patch.object(
+            client,
+            "transform_coordinates",
+            side_effect=RuntimeError("injected project reopen failure"),
+        ):
+            # 重新加载项目，注入的失败会命中重开时的 ROI 坐标换算
+            win2.open_project(proj_file)
+            deadline = time.monotonic() + 10.0
+            while time.monotonic() < deadline and not win2.layer_panel.layers:
+                qapp.processEvents()
+                time.sleep(0.02)
+
+        assert len(win2.layer_panel.layers) == 1, "C: 项目必须能打开"
+        assert len(win2.canvas.roi_list()) == 1, "C: 重开后权威模型中必须仍有该 ROI"
+        assert win2.canvas.roi_list()[0].points == map_rect_c, "C: 重开后权威几何必须完好"
+        assert win2.layer_panel.layers[0].rois[0].points == map_rect_c, "C: 重开后图层权威几何必须完好"
+        # 失败态必须被显式标记，而不是无声消失
+        assert win2.canvas.roi_transform_failed_ids(), "C: 重开转换失败必须显式标记"
+    finally:
+        win2.close()
+        win2.deleteLater()
+        qapp.processEvents()
+
+    # ---------------------------------------------------------------- D. 拖动反算失败
+    win = MainWindow()
+    win.show()
+    try:
+        win.open_dataset(rotated_path)
+        _wait_layers(win, qapp, count=1)
+        win.cmb_view_crs.setCurrentIndex(1)
+        deadline = time.monotonic() + 10.0
+        while time.monotonic() < deadline and win.canvas._view_bounds is None:
+            qapp.processEvents()
+            time.sleep(0.02)
+
+        poly = ROI(
+            name="PolyD",
+            shape=ROIShape.polygon,
+            points=[(10.0, 10.0), (20.0, 10.0), (15.0, 20.0)],
+            coordinate_space="pixel",
+        )
+        win.canvas._add_roi(poly)
+        qapp.processEvents()
+        st = win.canvas._roi_states[poly.roi_id]
+        item = st["item"]
+        before_display = [(round(p.x(), 3), round(p.y(), 3)) for p in item.getState()["points"]]
+        assert before_display, "D: 前置条件：地图视图下多边形必须可见"
+
+        # 反算失败时：图形恢复原轮廓，权威几何不变
+        with patch.object(
+            win.canvas._client,
+            "transform_coordinates",
+            side_effect=RuntimeError("injected drag inverse failure"),
+        ):
+            item.movePoint(0, pg.Point(500030.0, 3199995.0))
+
+        st = win.canvas._roi_states[poly.roi_id]
+        after_display = [(round(p.x(), 3), round(p.y(), 3)) for p in st["item"].getState()["points"]]
+        assert after_display == before_display, (
+            f"D: 反算失败后显示图形必须恢复原轮廓，实际 {after_display} != {before_display}"
+        )
+        assert st["item"].isVisible(), "D: 反算失败后图形不得被隐藏，应保持原样可继续编辑"
+        assert poly.points == [(10.0, 10.0), (20.0, 10.0), (15.0, 20.0)], "D: 权威几何必须保持不变"
+        assert roi_snapshot(win) == [((10.0, 10.0), (20.0, 10.0), (15.0, 20.0))], "D: roi_list 必须返回原权威几何"
+        assert win.layer_panel.layers[0].rois[0].points == [(10.0, 10.0), (20.0, 10.0), (15.0, 20.0)], (
+            "D: 图层权威几何必须保持不变"
+        )
+    finally:
+        win.close()
+        win.deleteLater()
+        qapp.processEvents()
+
+    # ---------------------------------------------------------------- E. 旧响应迟到
+    win = MainWindow()
+    win.show()
+    try:
+        win.open_dataset(rotated_path)
+        _wait_layers(win, qapp, count=1)
+        roi = ROI(name="RectE", shape=ROIShape.rectangle, points=list(pixel_rect), coordinate_space="pixel")
+        win.canvas._add_roi(roi)
+        qapp.processEvents()
+
+        # 捕获异步回调，稍后手工投递，模拟「切换 CRS 后旧响应迟到」
+        late: list[tuple] = []
+
+        def capture(*a, **kw):
+            late.append((kw["on_success"], kw["on_error"]))
+            return "req-late"
+
+        with patch.object(win.canvas._client, "transform_coordinates_async", side_effect=capture):
+            win.cmb_view_crs.setCurrentIndex(1)
+            qapp.processEvents()
+
+        assert late, "E: 前置条件：必须捕获到一次异步转换请求"
+        assert win.canvas.view_crs_wkt is not None, "E: 前置条件：视图 CRS 必须已切换"
+
+        # 触发代际递增（模拟切换图层/CRS），此后第一次请求的响应即成为「过期响应」
+        win.canvas._gen.bump(win.canvas.current_layer.layer_id if win.canvas.current_layer else None)
+        gen_after_bump = win.canvas.generation
+
+        # 迟到响应现在才投递：代际保护必须让它被丢弃
+        on_success, _on_error = late[0]
+        on_success({"points": [[123456.0, 654321.0], [123466.0, 654331.0]]})
+        qapp.processEvents()
+
+        assert win.canvas.generation == gen_after_bump, "E: 代际号不应被迟到响应改变"
+        st = win.canvas._roi_states[roi.roi_id]
+        # 迟到响应绝不能污染权威几何
+        assert roi_snapshot(win) == [pixel_rect_t], f"E: 迟到响应污染了权威几何：{roi_snapshot(win)}"
+        assert win.layer_panel.layers[0].rois[0].points == pixel_rect, "E: 迟到响应污染了图层权威几何"
+        # 图形不得显示迟到的假坐标
+        disp = st["display_points"]
+        if disp is not None:
+            for c, r in disp:
+                assert not (abs(c - 123456.0) < 1e-6 and abs(r - 654321.0) < 1e-6), (
+                    f"E: 迟到响应把假坐标写进了显示图形：{disp}"
+                )
+        # 迟到响应也不能破坏保存状态
+        assert len(win.canvas.roi_list()) == 1, "E: ROI 数量必须不变"
+    finally:
+        win.close()
+        win.deleteLater()
+        qapp.processEvents()
