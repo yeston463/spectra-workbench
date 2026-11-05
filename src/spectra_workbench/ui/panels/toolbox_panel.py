@@ -22,17 +22,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from spectra_workbench.domain.capability_wiring import CONNECTED_CAPABILITIES
 from spectra_workbench.domain.models import CapabilityDescriptor
 from spectra_workbench.registry.catalog import get_default_registry
-
-CONNECTED_CAPABILITIES = {
-    "gdal:translate",
-    "gdal_translate",
-    "gdal:warp",
-    "gdalwarp",
-    "rasterio:convert",
-    "rio:cli:convert",
-}
 
 
 class ToolboxPanel(QWidget):

@@ -158,9 +158,13 @@ def test_random_sampling_matches_official_catalog():
 
 
 def test_gdal_algorithms_count_and_structure():
-    """GDAL 18 项结构化算法规格完整，包含参数规格、输入输出端口与执行入口。"""
+    """GDAL 结构化算法规格完整（20 项 = 18 项原生 + 2 项平台组合）。
+
+    其中 `gdal:stack` / `gdal:bandmanage` 是平台基于原生 API 的组合实现，
+    性质与 18 项原生工具不同，已在 registry 文档串中标注。
+    """
     algorithms = build_gdal_algorithms()
-    assert len(algorithms) == 18
+    assert len(algorithms) == 20
 
     algo_ids = {a.capability_id for a in algorithms}
     expected_ids = {
@@ -182,6 +186,9 @@ def test_gdal_algorithms_count_and_structure():
         "gdal:retile",
         "gdal:pansharpen",
         "ogr:vectortranslate",
+        # 平台组合能力（非 GDAL 原生独立工具）
+        "gdal:stack",
+        "gdal:bandmanage",
     }
     assert algo_ids == expected_ids
 
@@ -328,12 +335,21 @@ def test_four_dimensional_state_independence_and_audit():
     report = reg.audit_report()
 
     assert report["completeness"] == "partial"
-    assert report["total_baseline_count"] == 443
-    assert report["discovered"]["count"] == 438
-    assert report["callable"]["count"] == 229
-    assert report["platform_executable"]["count"] == 3
+    # 第 32 轮：新增 gdal:stack / gdal:bandmanage 两项平台组合能力编目，
+    # 并把 gdal:buildvrt / gdal:merge 的 binding 修正为 cli（有原生 CLI 工具）、
+    # 新增两项为 form（仅平台表单入口）。据此：
+    #   基线总数 443 -> 445；已发现 438 -> 440；
+    #   可调用 229 -> 232（buildvrt/stack/bandmanage 各 +1，merge 恢复 cli 不变）；
+    #   平台可执行 3 -> 5。
+    assert report["total_baseline_count"] == 445
+    assert report["discovered"]["count"] == 440
+    assert report["callable"]["count"] == 232
+    assert report["platform_executable"]["count"] == 5
     assert report["verified"]["count"] == 5
-    assert report["missing"]["count"] == 9
+    # 第 32 轮：gdal:buildvrt 由 blocked 改为 ready（平台已接入），
+    # 故从缺失清单移出，缺失项 9 -> 8。其余 8 项是运行时确实不可用的
+    # （gdal_auth 不存在、HDF5 驱动缺失、rio cogeo/color/mbtiles 等未安装）。
+    assert report["missing"]["count"] == 8
 
     assert report["discovered"]["ratio"] > 0.90
     assert report["callable"]["ratio"] > 0.50
@@ -344,9 +360,12 @@ def test_four_dimensional_state_independence_and_audit():
     assert "rasterio" in by_provider
 
     gdal_rep = by_provider["gdal"]
-    assert gdal_rep["total_baseline_count"] == 402
-    assert gdal_rep["discovered"]["count"] == 400
-    assert gdal_rep["missing"]["count"] == 6
+    # 第 32 轮新增 gdal:stack / gdal:bandmanage 两个平台组合能力编目：
+    # 基线总数 402 -> 404，已发现 400 -> 402。
+    # gdal:buildvrt 由 blocked 改为 ready（平台已接入），故 GDAL 缺失项 6 -> 5。
+    assert gdal_rep["total_baseline_count"] == 404
+    assert gdal_rep["discovered"]["count"] == 402
+    assert gdal_rep["missing"]["count"] == 5
 
     rio_rep = by_provider["rasterio"]
     assert rio_rep["total_baseline_count"] == 41
@@ -358,7 +377,8 @@ def test_provider_adapters_discover_baseline():
     """GDAL 与 Rasterio 适配器在各自 worker 内均可发现基准能力。"""
     gdal_adapter = GDALProviderAdapter()
     gdal_caps = gdal_adapter.discover()
-    assert len(gdal_caps) == 402
+    # 第 32 轮新增两个平台组合能力编目
+    assert len(gdal_caps) == 404
 
     rio_adapter = RasterioProviderAdapter()
     rio_caps = rio_adapter.discover()

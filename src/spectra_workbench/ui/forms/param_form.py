@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QListWidget,
     QMessageBox,
     QPushButton,
     QScrollArea,
@@ -30,6 +31,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from spectra_workbench.domain.capability_wiring import (
+    CONNECTED_CAPABILITIES,
+    is_multi_input,
+)
 from spectra_workbench.domain.models import (
     DatasetKind,
     DatasetRef,
@@ -48,14 +53,6 @@ if TYPE_CHECKING:
     from spectra_workbench.domain.models import CapabilityDescriptor
 
 
-CONNECTED_CAPABILITIES = {
-    "gdal:translate",
-    "gdal_translate",
-    "gdal:warp",
-    "gdalwarp",
-    "rasterio:convert",
-    "rio:cli:convert",
-}
 
 
 class CapabilityFormWidget(QWidget):
@@ -122,7 +119,36 @@ class CapabilityFormWidget(QWidget):
         in_row = QHBoxLayout()
         in_row.addWidget(self.txt_input, stretch=1)
         in_row.addWidget(self.btn_browse_in)
-        self.params_form.addRow("输入影像 (Input):", in_row)
+        self.lbl_input = QLabel("输入影像 (Input):")
+        self.params_form.addRow(self.lbl_input, in_row)
+
+        # --- 多输入（P4-02 拼接 / VRT / 堆叠）---
+        # 顺序即输入顺序，而输入顺序决定重叠优先级（GDAL「后加入者优先」），
+        # 因此必须可增删且可上下移动，不能只做一个无序集合。
+        self.lbl_inputs = QLabel(
+            "输入源列表（顺序决定重叠优先级：first=先列的胜，last=后列的胜）:"
+        )
+        self.lst_inputs = QListWidget()
+        self.lst_inputs.setMinimumHeight(90)
+        self.btn_add_input = QPushButton("添加...")
+        self.btn_del_input = QPushButton("移除")
+        self.btn_up_input = QPushButton("上移")
+        self.btn_down_input = QPushButton("下移")
+        self.btn_add_input.clicked.connect(self._add_input_files)
+        self.btn_del_input.clicked.connect(self._remove_selected_input)
+        self.btn_up_input.clicked.connect(lambda: self._move_selected_input(-1))
+        self.btn_down_input.clicked.connect(lambda: self._move_selected_input(1))
+        in_btns = QHBoxLayout()
+        for b in (self.btn_add_input, self.btn_del_input, self.btn_up_input, self.btn_down_input):
+            in_btns.addWidget(b)
+        in_btns.addStretch(1)
+
+        self.grp_inputs = QGroupBox("多输入源")
+        gi_layout = QVBoxLayout(self.grp_inputs)
+        gi_layout.addWidget(self.lbl_inputs)
+        gi_layout.addWidget(self.lst_inputs)
+        gi_layout.addLayout(in_btns)
+        self.params_form.addRow(self.grp_inputs)
 
         self.txt_output = QLineEdit()
         self.btn_browse_out = QPushButton("保存为...")
@@ -142,6 +168,62 @@ class CapabilityFormWidget(QWidget):
         self.cmb_format.addItems(["GTiff (GeoTIFF)", "ENVI (.dat/.hdr)", "COG (云优化 GeoTIFF)", "PNG", "JPEG"])
         self.lbl_format = QLabel("输出格式 (Format):")
         self.params_form.addRow(self.lbl_format, self.cmb_format)
+
+        # --- P4-02 拼接 / VRT / 堆叠 / 波段管理 ---
+        # 重叠优先级：GDAL 的重叠区取**后加入**的源，故 first 由反转顺序实现。
+        self.cmb_overlap_priority = QComboBox()
+        self.cmb_overlap_priority.addItem("后列的源优先 (last)", "last")
+        self.cmb_overlap_priority.addItem("先列的源优先 (first)", "first")
+        self.lbl_overlap_priority = QLabel("重叠优先级 (overlapPriority):")
+        self.params_form.addRow(self.lbl_overlap_priority, self.cmb_overlap_priority)
+
+        self.cmb_resolution = QComboBox()
+        for label, val in (
+            ("自动 (不指定)", ""),
+            ("沿用第一个源 (first)", "first"),
+            ("沿用最后一个源 (last)", "last"),
+            ("取最高 (highest)", "highest"),
+            ("取最低 (lowest)", "lowest"),
+            ("取平均 (average)", "average"),
+            ("估算 (estimate)", "estimate"),
+            ("取相同 (same)", "same"),
+        ):
+            self.cmb_resolution.addItem(label, val)
+        self.lbl_resolution = QLabel("VRT 分辨率策略 (resolution):")
+        self.params_form.addRow(self.lbl_resolution, self.cmb_resolution)
+
+        # NoData 用 QLineEdit：必须能区分「未设置（留空）」与「设置为 0（填 0）」。
+        # 用 QSpinBox 无法表达「未设置」，会让 dstNodata=0 被当作未设置丢掉。
+        self.txt_src_nodata = QLineEdit()
+        self.txt_src_nodata.setPlaceholderText("留空=未设置；填 0 表示 NoData 为 0")
+        self.lbl_src_nodata = QLabel("源 NoData (srcNodata):")
+        self.params_form.addRow(self.lbl_src_nodata, self.txt_src_nodata)
+
+        self.txt_vrt_nodata = QLineEdit()
+        self.txt_vrt_nodata.setPlaceholderText("留空=未设置；填 0 表示 NoData 为 0")
+        self.lbl_vrt_nodata = QLabel("VRT NoData (vrtNodata):")
+        self.params_form.addRow(self.lbl_vrt_nodata, self.txt_vrt_nodata)
+
+        self.txt_dst_nodata = QLineEdit()
+        self.txt_dst_nodata.setPlaceholderText(
+            "留空=不重映射；填 0 表示把无效像元重映射为 0（三者一致）"
+        )
+        self.lbl_dst_nodata = QLabel("输出 NoData (dstNodata):")
+        self.params_form.addRow(self.lbl_dst_nodata, self.txt_dst_nodata)
+
+        self.chk_separate = QCheckBox("每个源独立成波段（separate，用于堆叠）")
+        self.lbl_separate = QLabel("独立波段 (separate):")
+        self.params_form.addRow(self.lbl_separate, self.chk_separate)
+
+        self.chk_relative_paths = QCheckBox("源引用使用相对路径（relativePaths，推荐）")
+        self.chk_relative_paths.setChecked(True)
+        self.lbl_relative_paths = QLabel("相对路径 (relativePaths):")
+        self.params_form.addRow(self.lbl_relative_paths, self.chk_relative_paths)
+
+        self.txt_band_list = QLineEdit()
+        self.txt_band_list.setPlaceholderText("留空=保留全部；例：3,1,2 表示按此顺序重排")
+        self.lbl_band_list = QLabel("波段顺序 (bandList):")
+        self.params_form.addRow(self.lbl_band_list, self.txt_band_list)
 
         # --- P4-01 裁剪（像元窗口 xoff,yoff,xsize,ysize）---
         self.txt_clip = QLineEdit()
@@ -298,6 +380,27 @@ class CapabilityFormWidget(QWidget):
         self.lbl_resampling.setVisible(is_warp)
         self.cmb_resampling.setVisible(is_warp)
 
+        # 输入区：多输入能力用「可排序列表」，单输入能力用单文件行
+        multi = is_multi_input(cid)
+        self._set_row_visible(self.lbl_input, self.txt_input, not multi)
+        self.btn_browse_in.setVisible(not multi)
+        self.grp_inputs.setVisible(multi)
+
+        # P4-02 专属参数：按共享契约的支持矩阵显隐
+        sup = supported_params_for(cid) or frozenset()
+        self._set_row_visible(
+            self.lbl_overlap_priority, self.cmb_overlap_priority, "overlapPriority" in sup
+        )
+        self._set_row_visible(self.lbl_resolution, self.cmb_resolution, "resolution" in sup)
+        self._set_row_visible(self.lbl_src_nodata, self.txt_src_nodata, "srcNodata" in sup)
+        self._set_row_visible(self.lbl_vrt_nodata, self.txt_vrt_nodata, "vrtNodata" in sup)
+        self._set_row_visible(self.lbl_dst_nodata, self.txt_dst_nodata, "dstNodata" in sup)
+        self._set_row_visible(self.lbl_separate, self.chk_separate, "separate" in sup)
+        self._set_row_visible(
+            self.lbl_relative_paths, self.chk_relative_paths, "relativePaths" in sup
+        )
+        self._set_row_visible(self.lbl_band_list, self.txt_band_list, "bandList" in sup)
+
         # P4-01：裁剪 / 重采样 / 输出网格
         self._set_row_visible(self.lbl_clip, self.txt_clip, is_translate or is_warp)
         self._set_row_visible(self.lbl_xres, self.spin_xres, is_translate or is_warp)
@@ -309,6 +412,36 @@ class CapabilityFormWidget(QWidget):
         # 仅隐藏控件是不够的——残留值仍会进入 TaskSpec（复核实测：
         # 切到 Rasterio convert 后隐藏的 srcWin/xRes/yRes 仍被提交）。
         self._reset_inapplicable_grid_state(cid)
+
+    # ------------------------------------------------------------------
+    # 多输入列表操作（P4-02）
+    # ------------------------------------------------------------------
+    def _add_input_files(self) -> None:
+        """向多输入列表追加文件（可多选）。"""
+        paths, _ = QFileDialog.getOpenFileNames(
+            self, "选择输入影像（可多选）", str(self._project_root), "栅格影像 (*.tif *.tiff *.img *.dat *.vrt);;全部文件 (*)"
+        )
+        for path in paths:
+            self.lst_inputs.addItem(path)
+
+    def _remove_selected_input(self) -> None:
+        row = self.lst_inputs.currentRow()
+        if row >= 0:
+            self.lst_inputs.takeItem(row)
+
+    def _move_selected_input(self, delta: int) -> None:
+        """上下移动选中项——顺序即输入顺序，决定重叠优先级。"""
+        row = self.lst_inputs.currentRow()
+        target = row + delta
+        if row < 0 or target < 0 or target >= self.lst_inputs.count():
+            return
+        item = self.lst_inputs.takeItem(row)
+        self.lst_inputs.insertItem(target, item)
+        self.lst_inputs.setCurrentRow(target)
+
+    def input_paths(self) -> list[Path]:
+        """当前多输入列表里的路径（按显示顺序）。"""
+        return [Path(self.lst_inputs.item(i).text()) for i in range(self.lst_inputs.count())]
 
     def _reset_inapplicable_grid_state(self, capability_id: str) -> None:
         """重置当前能力**不适用**的裁剪/网格控件值。
@@ -332,11 +465,87 @@ class CapabilityFormWidget(QWidget):
         if "targetAlignedPixels" not in supported:
             self.chk_tap.setChecked(False)
 
+        # P4-02 专属控件的状态隔离（隐藏控件的值不得进入 TaskSpec）
+        if "overlapPriority" not in supported:
+            self.cmb_overlap_priority.setCurrentIndex(0)
+        if "resolution" not in supported:
+            self.cmb_resolution.setCurrentIndex(0)
+        if "srcNodata" not in supported:
+            self.txt_src_nodata.clear()
+        if "vrtNodata" not in supported:
+            self.txt_vrt_nodata.clear()
+        if "dstNodata" not in supported:
+            self.txt_dst_nodata.clear()
+        if "separate" not in supported:
+            self.chk_separate.setChecked(False)
+        if "relativePaths" not in supported:
+            self.chk_relative_paths.setChecked(True)
+        if "bandList" not in supported:
+            self.txt_band_list.clear()
+
     @staticmethod
     def _set_row_visible(label: QLabel, widget: QWidget, visible: bool) -> None:
         """同时显隐 QFormLayout 里的标签与控件。"""
         label.setVisible(visible)
         widget.setVisible(visible)
+
+    def _collect_p402_params(self, capability_id: str) -> tuple[dict[str, Any], str | None]:
+        """采集 P4-02 专属参数（只采集当前能力适用的控件）。
+
+        返回 (参数字典, 错误消息)。
+
+        NoData 语义关键：**留空表示未设置**（不产生参数），
+        **填 0 表示设置为 0**（必须产生参数）——
+        二者不可混淆，否则 dstNodata=0 会被当成未设置丢掉，
+        缺口就不会被重映射（第 29 轮复核的实际缺陷）。
+        """
+        params: dict[str, Any] = {}
+        supported = supported_params_for(capability_id) or frozenset()
+
+        if "overlapPriority" in supported:
+            params["overlapPriority"] = self.cmb_overlap_priority.currentData()
+
+        if "resolution" in supported:
+            res = self.cmb_resolution.currentData()
+            if res:
+                params["resolution"] = res
+
+        for widget, key in (
+            (self.txt_src_nodata, "srcNodata"),
+            (self.txt_vrt_nodata, "vrtNodata"),
+            (self.txt_dst_nodata, "dstNodata"),
+        ):
+            if key not in supported:
+                continue
+            raw = widget.text().strip()
+            if not raw:
+                continue  # 留空 = 未设置
+            try:
+                params[key] = float(raw)
+            except ValueError:
+                return params, f"{key} 必须是数字（留空表示不设置），当前为：{raw}"
+
+        if "separate" in supported:
+            params["separate"] = self.chk_separate.isChecked()
+
+        if "relativePaths" in supported:
+            params["relativePaths"] = self.chk_relative_paths.isChecked()
+
+        if "bandList" in supported:
+            raw_bands = self.txt_band_list.text().strip()
+            if raw_bands:
+                parts = [x.strip() for x in raw_bands.replace(";", ",").split(",") if x.strip()]
+                bands: list[int] = []
+                for part in parts:
+                    try:
+                        bands.append(int(part))
+                    except ValueError:
+                        return params, f"波段顺序需要逗号分隔的整数，当前为：{raw_bands}"
+                if not bands:
+                    return params, "波段顺序不能为空列表（留空表示保留全部）"
+                params["bandList"] = bands
+
+        return params, None
 
     def _collect_grid_params(
         self,
@@ -430,28 +639,44 @@ class CapabilityFormWidget(QWidget):
         if not self._current_cap:
             return
 
-        in_str = self.txt_input.text().strip()
-        out_str = self.txt_output.text().strip()
+        cid = self._current_cap.capability_id
+        multi = is_multi_input(cid)
 
-        if not in_str:
-            QMessageBox.warning(self, "参数不全", "请指定输入影像路径！")
-            return
+        out_str = self.txt_output.text().strip()
         if not out_str:
             QMessageBox.warning(self, "参数不全", "请指定输出成果路径！")
             return
 
-        in_p = Path(in_str).resolve()
+        # 输入：多输入能力用列表（顺序即重叠优先级依据），单输入能力用单文件行
+        if multi:
+            raw_inputs = [str(x) for x in self.input_paths()]
+            if len(raw_inputs) < 2:
+                QMessageBox.warning(
+                    self,
+                    "输入不足",
+                    f"能力 {cid} 需要至少 2 个输入源，当前 {len(raw_inputs)} 个。\n"
+                    "请在「多输入源」列表中继续添加（顺序决定重叠优先级）。",
+                )
+                return
+        else:
+            in_str = self.txt_input.text().strip()
+            if not in_str:
+                QMessageBox.warning(self, "参数不全", "请指定输入影像路径！")
+                return
+            raw_inputs = [in_str]
+
+        in_paths = [Path(x).resolve() for x in raw_inputs]
         out_p = Path(out_str).resolve()
 
-        if not in_p.exists():
-            QMessageBox.warning(self, "输入不存在", f"输入文件不存在:\n{in_p}")
-            return
-        if in_p == out_p:
+        for in_p in in_paths:
+            if not in_p.exists():
+                QMessageBox.warning(self, "输入不存在", f"输入文件不存在:\n{in_p}")
+                return
+        if any(in_p == out_p for in_p in in_paths):
             QMessageBox.critical(self, "同源冲突", "输入路径与输出路径指向同一文件，操作已被安全拒绝！")
             return
 
         # 组装 TaskSpec
-        cid = self._current_cap.capability_id
         overwrite = self.chk_overwrite.isChecked()
         task_id = f"task-{uuid.uuid4().hex[:8]}"
 
@@ -491,6 +716,13 @@ class CapabilityFormWidget(QWidget):
             return
         params.update(grid_params)
 
+        # P4-02：重叠优先级 / 分辨率策略 / NoData / separate / relativePaths / bandList
+        p402_params, p402_error = self._collect_p402_params(cid)
+        if p402_error is not None:
+            QMessageBox.warning(self, "参数不全", p402_error)
+            return
+        params.update(p402_params)
+
         # 提交前用**与 Worker 相同**的契约归一化并校验：
         # 未知算法、别名冲突、小数截断、非法组合都在这里被拦下，
         # 不会提交成功后才在 Worker 侧失效或被静默忽略。
@@ -515,13 +747,26 @@ class CapabilityFormWidget(QWidget):
             ),
             project_root=str(self._project_root),
             workspace=str(out_p.parent),
-            inputs={
-                "input": DatasetRef(
-                    dataset_id=f"in-{uuid.uuid4().hex[:6]}",
-                    kind=DatasetKind.raster,
-                    uri=in_p.as_uri(),
-                )
-            },
+            inputs=(
+                {
+                    "inputs": [
+                        DatasetRef(
+                            dataset_id=f"in-{i}-{uuid.uuid4().hex[:6]}",
+                            kind=DatasetKind.raster,
+                            uri=p.resolve().as_uri(),
+                        )
+                        for i, p in enumerate(in_paths)
+                    ]
+                }
+                if multi
+                else {
+                    "input": DatasetRef(
+                        dataset_id=f"in-{uuid.uuid4().hex[:6]}",
+                        kind=DatasetKind.raster,
+                        uri=in_paths[0].as_uri(),
+                    )
+                }
+            ),
             parameters=params,
             outputs=[
                 OutputPlan(

@@ -229,6 +229,93 @@ CRT 检测到栈状态异常后立即终止进程，这正是 `STATUS_STACK_BUFF
 | 用合成影像完成同类验收 | 已满足 | 合成 ENVI/GTiff/GeoJSON/netCDF 样例覆盖多波段、像元数值、ROI 与对比 |
 | 保留真实数据待验状态 | **待验** | 课程原始数据位于 `C:\Users\赵航\Desktop\studio\_chaoxing_rs`（**只读**，不得运行其中的抓取/下载/OCR 脚本）；本轮全部用合成影像验收，未对课程原始 ENVI 栅格与 lena.tif 做真实打开验证 |
 
+### 第 32 轮：P4-02 GUI 接入（后端能力变为桌面可操作）
+
+第 29/30 轮实现了 P4-02 后端，但 GUI 的 `CONNECTED_CAPABILITIES` 与参数表单
+**均未接入**那四项能力。按 AGENTS.md「implemented ≠ done」的要求，
+不能把「后端可调用」表述为「桌面已可操作」。本轮补齐接入。
+
+**一、发现并修复的三处真实缺口**
+
+| 缺口 | 后果 |
+|---|---|
+| `CONNECTED_CAPABILITIES` 在 `param_form.py` 与 `toolbox_panel.py` **各有一份** | 两份漂移会出现「工具箱显示可连、表单却禁提交」的矛盾 |
+| `gdal:stack` 与 `gdal:bandmanage` **未在 registry 编目** | adapter 支持但工具箱里根本看不到（隐形能力） |
+| `gdal:buildvrt` / `gdal:merge` 的 registry 状态仍是 `blocked`、form entrypoint 不可用 | 已实现的能力被显示为阻塞 |
+
+**二、能力集合改为单一来源**
+
+新增 `domain/capability_wiring.py`（纯 Python，GUI 可安全导入）作为唯一声明来源，
+两处 UI 均从它导入。**不直接复用 provider 的 `SUPPORTED_CAPABILITIES`**——
+因为 adapter 顶层 `from osgeo import gdal`，GUI 不得导入它。
+故声明在 UI 层，一致性由 `tests/unit/test_capability_wiring_consistency.py` 守护：
+
+- **正向**：GUI 声明的每个能力都必须在 provider 支持集里
+  （否则能点提交但 worker 报 `unsupported_capability`）；
+- **反向**：provider 支持**且 registry 提供可用 form 入口**的能力，GUI 必须声明
+  （否则可执行却点不到）。CLI 类能力（如 `rio:cli:convert` 只有 CLI 入口）
+  不走表单通道，故不在此列 —— 这也是本轮修正的一处设计区分。
+
+该测试**立刻抓到两处漂移**：3 个 adapter 支持的 Rasterio 能力 GUI 未声明、
+`rio:cli:convert` 无 form 入口。据此把 CLI 类能力从表单集合中分离。
+
+**三、可排序多输入控件**
+
+P4-02 的拼接/VRT/堆叠需要多输入，而原表单只有**单文件 `QLineEdit`**。
+更重要的是：**输入顺序决定重叠优先级**（GDAL 实测「后加入者优先」），
+所以 UI 必须能控制顺序，不能只做一个无序集合。
+
+新增多输入列表（添加/移除/上移/下移），`_build_spec` 输出
+`inputs["inputs"]` 列表（顺序即优先级依据）；单输入能力仍用原单文件行。
+GUI 侧对「少于 2 个源」提前拒绝，与 worker 的 validate 一致但不等到提交后。
+
+**四、P4-02 参数控件**
+
+按共享契约的支持矩阵显隐并采集：`overlapPriority`、`resolution`、
+`srcNodata`/`vrtNodata`/`dstNodata`、`separate`、`relativePaths`、`bandList`。
+
+**NoData 控件刻意用 `QLineEdit` 而非 `QSpinBox`**：
+必须能区分「留空 = 未设置」与「填 0 = 设置为 0」。
+用 `QSpinBox` 无法表达「未设置」，会让 `dstNodata=0` 被当作未设置丢掉——
+这正是第 29 轮复核的实际缺陷（缺口未重映射、mask 标有效）的 GUI 侧成因。
+
+切换能力时同样重置不适用的 P4-02 控件，避免隐藏值泄漏进 TaskSpec。
+
+**五、验收测试**
+
+- `tests/integration/test_p4_gui_p402.py`（13 项）：能力集合单一来源、
+  P4-02 四项已接通、多输入显隐切换、**从 GUI 提交并落盘核对顺序即优先级**
+  （[A,B] 重叠取 B、选 first 取 A、上移改变结果）、输入不足提前拒绝、
+  NoData 留空/填 0 的区分、波段顺序进入 spec 并生效、切能力不泄漏。
+- `tests/unit/test_capability_wiring_consistency.py`（6 项）：上述一致性守护。
+
+本轮专项 59 项全通过。
+
+**六、支持边界**
+
+P4-02 至此**桌面可操作**：工具箱可选中、表单可配置多输入与专属参数、
+可提交执行并按事务提交成果。仍属本次接入范围之外的：
+`rio:cli:*` 等 CLI 能力走 CLI 通道（非表单）、矢量渲染与多维分析未实现。
+
+**七、退出异常 0xC0000409：本轮连续两次复现（如实记录）**
+
+第 31 轮加了 worker 生命周期兜底后，本轮全量**连续两轮**出现
+「460 passed / 0 失败但退出码 3221226505」：
+
+| 轮次 | 用例 | 失败数 | 退出码 |
+|---|---|---|---|
+| 第 1 次 | 460 passed | 0 | **3221226505** |
+| 第 2 次 | 460 passed | 0 | **3221226505** |
+
+即所有用例通过、无任何 FAILED，但解释器退出阶段仍触发 `STATUS_STACK_BUFFER_OVERRUN`。
+按第 31 轮结论，其**候选机制**是「worker 的 stdout 读取守护线程在 Qt 对象 C++ 侧
+销毁后继续访问该对象」，但该因果链**仍缺进程级现场证据**，
+生命周期兜底（`__del__` / stop 分支 kill / `with` 语法）**未能消除**该现象。
+
+值得注意：本轮它**从间歇性变为连续复现**（两轮均触发），
+这反而提供了更稳定的观测条件，有利于下次定位；但当前**不宣称根治**，
+如实保留为待查项。
+
 ### 第 31 轮：worker 握手超时与退出异常 0xC0000409 的诊断
 
 本轮针对两个长期待查项做**受控复现实验**。结论包含**否定性**部分：
@@ -931,7 +1018,7 @@ Thread 0x0000d064 (most recent call first):
 | P0-01 仓库与文档结构 | done | git init（2.50.1）；docs/plan/ 输入基线、contracts/、src/、tests/；AGENTS.md、README.md、pyproject.toml；docs/progress/WORKPACKAGES.md |
 | P0-02 四环境 | implemented | scripts/bootstrap_pip.ps1 -VerifyOnly → RESULT ALL OK；docs/progress/runs/env_report.json；environments/locks/*.lock.txt |
 | P0-03 自检与小型 Fixture | implemented | src/spectra_workbench/app/doctor.py + scripts/doctor.ps1 → docs/progress/runs/doctor_report.json。GTiff 往返成功、坐标转换成功、205 驱动、5 CLI 就绪；单测全绿 |
-| P0-04 自动化检查流水线 | done | scripts/test.ps1，串联 Ruff、Mypy 与 Pytest。Mypy 57 个源文件 0 错误；全量自动化测试通过：**441 passed in 221.45s**，全量回归子进程 rc=0（2026-11-05 第 31 轮，worker 生命周期诊断与兜底修复）；第 23 轮为 318 passed in 110.47s、rc=0；第 22 轮为 308 passed in 116.50s、rc=0；第 21 轮为 297 passed in 105.12s、rc=0；如实记录 07:48:47 历史退出异常轮次（286 passed，0xC0000409）与后续 07:54:31、07:56:16（286 passed，rc=0）及本轮（297 passed，rc=0），全面加固 Qt 对象生命周期有序销毁 |
+| P0-04 自动化检查流水线 | done | scripts/test.ps1，串联 Ruff、Mypy 与 Pytest。Mypy 57 个源文件 0 错误；全量自动化测试通过：**460 passed / 0 失败**（仅退出码异常，见下），全量 460 passed / 0 失败（2026-11-05 第 32 轮，P4-02 GUI 接入）；**连续两轮出现 rc=3221226505 退出异常**，见待查记录；第 23 轮为 318 passed in 110.47s、rc=0；第 22 轮为 308 passed in 116.50s、rc=0；第 21 轮为 297 passed in 105.12s、rc=0；如实记录 07:48:47 历史退出异常轮次（286 passed，0xC0000409）与后续 07:54:31、07:56:16（286 passed，rc=0）及本轮（297 passed，rc=0），全面加固 Qt 对象生命周期有序销毁 |
 | P0-05 打包重定位可行性验证 | implemented | docs/adr/0002-relocation-and-packaging.md；tests/integration/test_relocation.py 验证 UI 与 Rasterio、GDAL 引擎在独立临时路径正常初始化并导入 |
 | P1-01 领域模型与契约对账 | done | src/spectra_workbench/domain/models.py；tests/unit/test_domain_models.py；tests/unit/test_contracts_schema.py（50 项全绿） |
 | P1-02 JSONL 客户端与 Worker 启动 | done | src/spectra_workbench/protocol/messages.py；src/spectra_workbench/workers/process.py；src/spectra_workbench/workers/entrypoint.py；tests/integration/test_worker_process.py（8 项真实跨进程测试全绿） |
@@ -950,8 +1037,8 @@ Thread 0x0000d064 (most recent call first):
 | P3-05 view CRS、重投影、查询与 ROI | implemented | 旋转 Affine 与无 GT 栅格支持；地图坐标 ↔ 像元中心/角点约定；ROI 模型与点包含判定；跨 CRS 视图重投影网格读取；真实鼠标事件多边形 ROI 绘制/闭合/选中/手柄拖拽/删除/保存重开全流程；矩形展开 4 角点经 Worker 转换并精确保持 425 平方单位面积与 4 个角点；坐标转换失败异常隔离隐藏并保全权威模型；五类故障注入矩阵覆盖（向地图/回像元/项目重开/拖动反算/旧响应迟到），跨坐标空间数据混用缺陷已修复（tests/integration/test_p3_interactive_polygon_roi.py 9 项全绿） |
 
 实测命令与结果：
-- powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test.ps1 -All → **Ruff 干净、Mypy 干净（59 个源文件 0 错误）、441 passed in 221.45s，exit 0**
-  - 第 31 轮（worker 生命周期诊断与兜底）：新增 5 项（兜底 4 项 + 握手耗时观测 1 项）；第 30 轮（P4-02 成果完整性与数据语义）：新增 12 项；第 29 轮（P4-02 拼接/VRT/堆叠/波段管理）：新增 14 项；第 28 轮（Rasterio worker 参数契约）：新增 14 项；第 27 轮（能力边界 + 有界预裁剪）：新增 15 项（能力边界与有界裁剪）；第 26 轮（参数一致性修正）：新增 25 项（参数一致性端到端 18 项 + GUI 隔离运行时 3 项 + adapter 模块级隔离 3 项 + 高 DPI 表述订正 1 项）；第 25 轮（P3 验收清单 + P4-01）：新增 30 项（P3 验收缺口 5 项 + P4-01 裁剪重采样 14 项 + P4-01 表单 11 项）；**全量跑须前台运行**（需 110–122 秒，后台任务约 2 分钟上限会中途终止，见下方说明）；第 23 轮为 318 passed in 110.47s、rc=0
+- powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test.ps1 -All → **Ruff 干净、Mypy 干净（60 个源文件 0 错误）、460 passed / 0 失败；连续两轮 exit code = 3221226505（0xC0000409，待查项）**
+  - 第 32 轮（P4-02 GUI 接入）：新增 19 项（GUI 端到端 13 项 + 能力一致性 6 项）；第 31 轮（worker 生命周期诊断与兜底）：新增 5 项（兜底 4 项 + 握手耗时观测 1 项）；第 30 轮（P4-02 成果完整性与数据语义）：新增 12 项；第 29 轮（P4-02 拼接/VRT/堆叠/波段管理）：新增 14 项；第 28 轮（Rasterio worker 参数契约）：新增 14 项；第 27 轮（能力边界 + 有界预裁剪）：新增 15 项（能力边界与有界裁剪）；第 26 轮（参数一致性修正）：新增 25 项（参数一致性端到端 18 项 + GUI 隔离运行时 3 项 + adapter 模块级隔离 3 项 + 高 DPI 表述订正 1 项）；第 25 轮（P3 验收清单 + P4-01）：新增 30 项（P3 验收缺口 5 项 + P4-01 裁剪重采样 14 项 + P4-01 表单 11 项）；**全量跑须前台运行**（需 110–122 秒，后台任务约 2 分钟上限会中途终止，见下方说明）；第 23 轮为 318 passed in 110.47s、rc=0
   - 第 23 轮（P3-02 元数据实现边界修正）：新增 10 项元数据边界回归（要素数 force=0、图层类型路由、请求上下文、仿射四角范围）；本轮 pytest 临时根目录使用全新路径（见上方「运行方式的要求」）；第 22 轮为 308 passed in 116.50s、rc=0
   - 第 22 轮（P3-02 矢量与子数据集元数据）：新增 11 项（矢量与子数据集集成 10 项 + stop() 回调死锁回归 1 项）；本轮使用位于本轮工作目录内的独立临时根目录（pytest 的 basetemp 选项），避开环境删除守卫对全局旧临时目录的批量删除拦截；第 21 轮为 297 passed in 105.12s、rc=0
   - 如实记录全量回归历程：

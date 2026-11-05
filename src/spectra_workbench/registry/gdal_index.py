@@ -129,7 +129,14 @@ def _source_spec(doc_path: str) -> CapabilitySource:
 
 
 def build_gdal_algorithms() -> list[CapabilityDescriptor]:
-    """GDAL 核心结构化算法清单（18 项核心算法）。"""
+    """GDAL 结构化算法清单（20 项）。
+
+    其中前 18 项是 GDAL **原生独立工具/算法**；
+    `gdal:stack` 与 `gdal:bandmanage` 是**平台基于原生 API 的组合实现**
+    （分别由 `BuildVRT(separate=True)` 与 `Translate(bandList=...)` 组合而来），
+    并非 GDAL 的独立命令行工具。两者性质不同，此处在清单中并列但语义已标注，
+    以免基线对账时把「平台组合能力」误当作原生算法。
+    """
     return [
         CapabilityDescriptor(
             capability_id="gdal:translate",
@@ -341,18 +348,81 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
             outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="生成的 .vrt 虚拟头文件")],
             requirements=[Requirement(kind="package", name="GDAL", reason="需 VRT 驱动支持")],
             entrypoints=[
-                Entrypoint(kind="form", target="gdal:buildvrt", available=False, notes="平台适配器暂未接入该算法的执行路由（计划在后续阶段接入）"),
+                Entrypoint(kind="form", target="gdal:buildvrt", available=True, notes="平台适配器已接入（P4-02）"),
                 Entrypoint(kind="cli", target="gdalbuildvrt.exe", available=True, notes="标准 CLI 别名"),
             ],
             state=CapabilityState(
                 presence=Presence.present,
-                binding=Binding.indexed,
+                binding=Binding.cli,
                 validation=Validation.not_run,
-                availability=Availability.blocked,
+                availability=Availability.ready,
             ),
             effects="new_dataset",
             cancellation="cooperative",
-            limitations=["平台适配器暂未接入该算法执行器；CLI 工具可正常调用"],
+            limitations=["仅构建 VRT 描述、不写物理像元；源引用默认相对最终目录"],
+            validation_evidence=[],
+        ),
+        CapabilityDescriptor(
+            capability_id="gdal:stack",
+            descriptor_revision="1.0",
+            kind=CapabilityKind.algorithm,
+            name="GDAL 波段堆叠 (Band Stack)",
+            native_name="gdal.BuildVRT(separate=True)",
+            category=["stack", "band", "raster"],
+            description="把多个栅格的波段按输入顺序堆叠为多波段成果；每个源的所有波段依次进入。",
+            engine=_engine_spec(),
+            source=_source_spec("programs/gdalbuildvrt.html"),
+            parameters=[
+                ParameterSpec(key="srcNodata", native_name="srcNodata", label="源 NoData", type="number", required=False),
+                ParameterSpec(key="vrtNodata", native_name="VRTNodata", label="VRT NoData", type="number", required=False),
+                ParameterSpec(key="xRes", native_name="xRes", label="输出像元宽", type="number", required=False),
+                ParameterSpec(key="yRes", native_name="yRes", label="输出像元高", type="number", required=False),
+            ],
+            inputs=[PortSpec(key="inputs", data_type=DatasetKind.raster, required=True, multiple=True, description="按堆叠顺序排列的源文件列表")],
+            outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="多波段成果栅格")],
+            requirements=[Requirement(kind="package", name="GDAL", reason="需 VRT 与 Translate 支持")],
+            entrypoints=[
+                Entrypoint(kind="form", target="gdal:stack", available=True, notes="平台适配器已接入（P4-02）"),
+            ],
+            state=CapabilityState(
+                presence=Presence.present,
+                binding=Binding.form,
+                validation=Validation.not_run,
+                availability=Availability.ready,
+            ),
+            effects="new_dataset",
+            cancellation="cooperative",
+            limitations=["separate=True 时每个源的所有波段依次进入，波段数不必相同"],
+            validation_evidence=[],
+        ),
+        CapabilityDescriptor(
+            capability_id="gdal:bandmanage",
+            descriptor_revision="1.0",
+            kind=CapabilityKind.algorithm,
+            name="GDAL 波段管理 (Band Management)",
+            native_name="gdal.Translate(bandList=...)",
+            category=["band", "raster"],
+            description="选择并按给定顺序重排波段（1-based），可用于抽取子集或调整波段次序。",
+            engine=_engine_spec(),
+            source=_source_spec("programs/gdal_translate.html"),
+            parameters=[
+                ParameterSpec(key="bandList", native_name="bandList", label="波段顺序 (1-based)", type="list", required=False),
+            ],
+            inputs=[PortSpec(key="inputs", data_type=DatasetKind.raster, required=True, multiple=False, description="单个输入栅格")],
+            outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="重排后的成果栅格")],
+            requirements=[Requirement(kind="package", name="GDAL", reason="需 Translate 的 -b 支持")],
+            entrypoints=[
+                Entrypoint(kind="form", target="gdal:bandmanage", available=True, notes="平台适配器已接入（P4-02）"),
+            ],
+            state=CapabilityState(
+                presence=Presence.present,
+                binding=Binding.form,
+                validation=Validation.not_run,
+                availability=Availability.ready,
+            ),
+            effects="new_dataset",
+            cancellation="cooperative",
+            limitations=["波段号从 1 开始；输出顺序严格按给定列表"],
             validation_evidence=[],
         ),
         CapabilityDescriptor(
@@ -634,8 +704,11 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
             ],
             inputs=[PortSpec(key="input", data_type=DatasetKind.raster, required=True, multiple=True, description="输入相邻待拼图像列表")],
             outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="镶嵌合并成果影像")],
-            requirements=[Requirement(kind="package", name="GDAL", reason="需 gdal_merge 脚本")],
-            entrypoints=[Entrypoint(kind="cli", target="gdal_merge.exe", available=True)],
+            requirements=[Requirement(kind="package", name="GDAL", reason="需 VRT 与 Translate 支持")],
+            entrypoints=[
+                Entrypoint(kind="form", target="gdal:merge", available=True, notes="平台适配器已接入（P4-02）"),
+                Entrypoint(kind="cli", target="gdal_merge.exe", available=True),
+            ],
             state=CapabilityState(
                 presence=Presence.present,
                 binding=Binding.cli,
@@ -643,8 +716,8 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
                 availability=Availability.ready,
             ),
             effects="new_dataset",
-            cancellation="process_termination",
-            limitations=[],
+            cancellation="cooperative",
+            limitations=["本机无 gdal_merge.py，平台实现走「VRT + Translate」路径；不兼容输入会被明确拒绝"],
             validation_evidence=[],
         ),
         CapabilityDescriptor(

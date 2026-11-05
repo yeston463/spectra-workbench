@@ -1126,3 +1126,77 @@ FAILED tests/integration/test_p4_rasterio_contract.py::test_all_supported_raster
 441 passed in 221.45s (0:03:41)
 
 === child exited rc=0 elapsed=222.9s ===
+
+=== run_with_timeout start 2026-11-05T22:20:00.735150 timeout=1200.0s cmd=C:\Users\赵航\Desktop\studio\spectra-workbench\.venv\Scripts\python.exe -m pytest -q -o faulthandler_timeout=60 ===
+........................................................................ [ 15%]
+........................................................................ [ 31%]
+........................................................................ [ 46%]
+.......................................................F.......FF....... [ 62%]
+........................................................................ [ 78%]
+........................................................................ [ 93%]
+............................                                             [100%]
+================================== FAILURES ===================================
+__________________ test_gdal_algorithms_count_and_structure ___________________
+
+    def test_gdal_algorithms_count_and_structure():
+        """GDAL 18 项结构化算法规格完整，包含参数规格、输入输出端口与执行入口。"""
+        algorithms = build_gdal_algorithms()
+>       assert len(algorithms) == 18
+E       AssertionError: assert 20 == 18
+E        +  where 20 = len([CapabilityDescriptor(schema_version='1.0', template_only=False, capability_id='gdal:translate', descriptor_revision='...ataset', cancellation='cooperative', limitations=['separate=True 时每个源的所有波段依次进入，波段数不必相同'], validation_evidence=[]), ...])
+
+tests\unit\test_capabilities_baseline.py:163: AssertionError
+_____________ test_four_dimensional_state_independence_and_audit ______________
+
+    def test_four_dimensional_state_independence_and_audit():
+        """四维状态严格解耦独立，审计报告基准分母非零，包含真实已验证与平台执行统计。"""
+        reg = get_default_registry()
+        report = reg.audit_report()
+    
+        assert report["completeness"] == "partial"
+>       assert report["total_baseline_count"] == 443
+E       assert 445 == 443
+
+tests\unit\test_capabilities_baseline.py:331: AssertionError
+__________________ test_provider_adapters_discover_baseline ___________________
+
+    def test_provider_adapters_discover_baseline():
+        """GDAL 与 Rasterio 适配器在各自 worker 内均可发现基准能力。"""
+        gdal_adapter = GDALProviderAdapter()
+        gdal_caps = gdal_adapter.discover()
+>       assert len(gdal_caps) == 402
+E       AssertionError: assert 404 == 402
+E        +  where 404 = len([CapabilityDescriptor(schema_version='1.0', template_only=False, capability_id='gdal:translate', descriptor_revision='...ataset', cancellation='cooperative', limitations=['separate=True 时每个源的所有波段依次进入，波段数不必相同'], validation_evidence=[]), ...])
+
+tests\unit\test_capabilities_baseline.py:361: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/unit/test_capabilities_baseline.py::test_gdal_algorithms_count_and_structure
+FAILED tests/unit/test_capabilities_baseline.py::test_four_dimensional_state_independence_and_audit
+FAILED tests/unit/test_capabilities_baseline.py::test_provider_adapters_discover_baseline
+3 failed, 457 passed in 204.41s (0:03:24)
+
+=== child exited rc=1 elapsed=205.5s ===
+
+=== run_with_timeout start 2026-11-05T22:27:21.610348 timeout=1200.0s cmd=C:\Users\赵航\Desktop\studio\spectra-workbench\.venv\Scripts\python.exe -m pytest -q -o faulthandler_timeout=60 ===
+........................................................................ [ 15%]
+........................................................................ [ 31%]
+........................................................................ [ 46%]
+........................................................................ [ 62%]
+........................................................................ [ 78%]
+........................................................................ [ 93%]
+............................                                             [100%]
+460 passed in 198.77s (0:03:18)
+
+=== child exited rc=3221226505 elapsed=205.3s ===
+
+=== run_with_timeout start 2026-11-05T22:31:01.364005 timeout=1200.0s cmd=C:\Users\赵航\Desktop\studio\spectra-workbench\.venv\Scripts\python.exe -m pytest -q -o faulthandler_timeout=60 ===
+........................................................................ [ 15%]
+........................................................................ [ 31%]
+........................................................................ [ 46%]
+........................................................................ [ 62%]
+........................................................................ [ 78%]
+........................................................................ [ 93%]
+............................                                             [100%]
+460 passed in 196.13s (0:03:16)
+
+=== child exited rc=3221226505 elapsed=203.0s ===
