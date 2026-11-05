@@ -157,6 +157,56 @@ CRT 检测到栈状态异常后立即终止进程，这正是 `STATUS_STACK_BUFF
 该缺陷与退出异常同属「worker 生命周期管理」范畴，但不是同一个根因：
 它发生在运行期（请求丢失），退出异常发生在解释器收尾阶段。
 
+### 第 23 轮：P3-02 元数据实现的四项边界修正
+
+按第二十二轮复核的独立复现结果修正（未重写已通过的 ROI 与持久化，未扩展矢量渲染或 P4）。
+
+**1. 要素数强制全表扫描**
+`GDALProviderAdapter._describe_vector_layer` 原先调用 `lyr.GetFeatureCount()` 未传 force；
+本机 `osgeo/ogr.py` 的签名是 `GetFeatureCount(self, force=1)`——force=1 时驱动在计数昂贵时
+会触发全表扫描，与「不强制全表扫描」的注释和结论都不符。
+修正为显式 `GetFeatureCount(force=0)`（`GetExtent(force=0)` 原本已正确）；
+驱动取不到廉价计数时返回 `feature_count=None` 并置 `feature_count_expensive=True`，
+不代为发起扫描。
+
+**2. 矢量图层重新进入栅格流程、旧影像残留**
+`ImageCanvas.set_layer` 原先把任何图层都登记为 `self._layer`（即渲染图层），
+下游据此派发栅格窗口请求；矢量图层因此进入栅格读取流程，且旧栅格图像仍然留在画布上。
+修正：新增 `ImageCanvas.is_raster_renderable(layer)`（`kind == "vector"` 或
+`metadata["renderable"] is False` 即不可渲染）；矢量图层**不登记为渲染图层**
+（`current_layer` 保持为空）、清除 `img_item`、清空范围与 ROI，并在状态栏保留明确说明。
+`MainWindow._on_layer_selected` 同步按 renderable 分支：矢量时清空显示面板与两个画布的图像。
+初次打开、重选、显隐、保存重开与双视图切换走同一套判定，不再依赖「第一次打开时的特殊清空」。
+
+**3. 元数据旧响应覆盖当前选择**
+`_probe_source_metadata` 与 `_on_subdataset_selected` 的成功/错误回调原先没有校验上下文，
+旧图层的迟到响应会覆盖当前选中的图层元数据。
+修正：引入请求上下文 `(项目代际, 图层 ID, 数据源引用)`（项目代际用 `_open_seq`，
+打开项目时递增），回调在写入面板前校验上下文；图层切换、移除、打开项目、关窗都会使旧上下文失效。
+**成功与错误回调都校验**（不只保护成功路径）；子数据集上下文取自**当前元数据选择**
+（`self._selected_layer()`）而非画布当前图层——矢量图层本就不在画布中，其子数据集仍需可探测。
+
+**4. 子数据集范围只算两个对角点**
+`probe_subdataset` 与 `probe_dataset` 原先按 (0,0) 与 (width,height) 两个对角点求范围，
+旋转/倾斜仿射下会漏掉另外两角。
+修正：提取共享的 `_affine_bounds(geotransform, width, height)`，按**四个像元外边界角点**
+`(0,0)`、`(width,0)`、`(width,height)`、`(0,height)` 计算，两处复用同一算法。
+
+**复核复现脚本对照（同一脚本、同一提交 e239e45 基线）**
+
+| 复核项 | 修正前 | 修正后 |
+|---|---|---|
+| force_argument_seen | 1 | **0** |
+| canvas_received_vector_layer | true | **false** |
+| raster_window_requests_for_vector | 1 | **0** |
+| old_raster_image_still_present | true | **false** |
+| metadata_layer_after_B_then_late_A | A | **B** |
+| rotated_subdataset_bounds | reported [500000, 3199800, 500475, 3200000] ≠ expected | **相等**：均为 [500000, 3199700, 500475, 3200100] |
+
+回归固化于 `tests/integration/test_p3_metadata_boundaries.py`（10 项），
+其中要素数用 force 默认为 1 的 OGR-like spy 断言实现确实传 0，
+迟到响应用**反向顺序投递**回调的确定性测试（不依赖 sleep 猜时序）。
+
 ### 第 22 轮发现并修复的真实缺陷：stop() 回调-锁自我死锁
 
 在接入矢量元数据回退路径后，全量测试出现 faulthandler 60 秒超时并打印全部线程栈。
@@ -201,6 +251,11 @@ Thread 0x0000d064 (most recent call first):
 | 13:06:55 | 308 passed | 有（count=156 > 阈值 50） | 3221226505 |
 | 13:11:41（独立 basetemp） | 308 passed | 无 | **0** |
 
+**运行方式的要求（实测踩到的坑）**：`--basetemp` 指定的目录**每次必须用全新路径**。
+pytest 在会话开始时会清空 basetemp；若该目录残留文件数超过删除守卫阈值（50），
+清理会被拦截并中断整轮运行（表现为日志停在某个百分比、无 timeout 记录、无残留进程）。
+本轮 13:29 那轮即因此中断（basetemp 残留 63 个文件）；换全新路径后正常完成。
+
 **两类失败模式必须区分**（这是本轮的重要澄清）：
 
 - **环境删除守卫**：拦截 pytest 收尾时的批量删除 → 表现为「全通过但退出码非 0」，
@@ -228,7 +283,7 @@ Thread 0x0000d064 (most recent call first):
 | P0-01 仓库与文档结构 | done | git init（2.50.1）；docs/plan/ 输入基线、contracts/、src/、tests/；AGENTS.md、README.md、pyproject.toml；docs/progress/WORKPACKAGES.md |
 | P0-02 四环境 | implemented | scripts/bootstrap_pip.ps1 -VerifyOnly → RESULT ALL OK；docs/progress/runs/env_report.json；environments/locks/*.lock.txt |
 | P0-03 自检与小型 Fixture | implemented | src/spectra_workbench/app/doctor.py + scripts/doctor.ps1 → docs/progress/runs/doctor_report.json。GTiff 往返成功、坐标转换成功、205 驱动、5 CLI 就绪；单测全绿 |
-| P0-04 自动化检查流水线 | done | scripts/test.ps1，串联 Ruff、Mypy 与 Pytest。Mypy 57 个源文件 0 错误；全量自动化测试通过：**308 passed in 116.50s**，全量回归子进程 rc=0（2026-11-05 第 22 轮，P3-02 矢量与子数据集元数据）；第 21 轮为 297 passed in 105.12s、rc=0；如实记录 07:48:47 历史退出异常轮次（286 passed，0xC0000409）与后续 07:54:31、07:56:16（286 passed，rc=0）及本轮（297 passed，rc=0），全面加固 Qt 对象生命周期有序销毁 |
+| P0-04 自动化检查流水线 | done | scripts/test.ps1，串联 Ruff、Mypy 与 Pytest。Mypy 57 个源文件 0 错误；全量自动化测试通过：**318 passed in 110.47s**，全量回归子进程 rc=0（2026-11-05 第 23 轮，P3-02 元数据边界修正）；第 22 轮为 308 passed in 116.50s、rc=0；第 21 轮为 297 passed in 105.12s、rc=0；如实记录 07:48:47 历史退出异常轮次（286 passed，0xC0000409）与后续 07:54:31、07:56:16（286 passed，rc=0）及本轮（297 passed，rc=0），全面加固 Qt 对象生命周期有序销毁 |
 | P0-05 打包重定位可行性验证 | implemented | docs/adr/0002-relocation-and-packaging.md；tests/integration/test_relocation.py 验证 UI 与 Rasterio、GDAL 引擎在独立临时路径正常初始化并导入 |
 | P1-01 领域模型与契约对账 | done | src/spectra_workbench/domain/models.py；tests/unit/test_domain_models.py；tests/unit/test_contracts_schema.py（50 项全绿） |
 | P1-02 JSONL 客户端与 Worker 启动 | done | src/spectra_workbench/protocol/messages.py；src/spectra_workbench/workers/process.py；src/spectra_workbench/workers/entrypoint.py；tests/integration/test_worker_process.py（8 项真实跨进程测试全绿） |
@@ -247,7 +302,8 @@ Thread 0x0000d064 (most recent call first):
 | P3-05 view CRS、重投影、查询与 ROI | implemented | 旋转 Affine 与无 GT 栅格支持；地图坐标 ↔ 像元中心/角点约定；ROI 模型与点包含判定；跨 CRS 视图重投影网格读取；真实鼠标事件多边形 ROI 绘制/闭合/选中/手柄拖拽/删除/保存重开全流程；矩形展开 4 角点经 Worker 转换并精确保持 425 平方单位面积与 4 个角点；坐标转换失败异常隔离隐藏并保全权威模型；五类故障注入矩阵覆盖（向地图/回像元/项目重开/拖动反算/旧响应迟到），跨坐标空间数据混用缺陷已修复（tests/integration/test_p3_interactive_polygon_roi.py 9 项全绿） |
 
 实测命令与结果：
-- powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test.ps1 -All → **Ruff 干净、Mypy 干净（57 个源文件 0 错误）、308 passed in 116.50s，exit 0**
+- powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test.ps1 -All → **Ruff 干净、Mypy 干净（57 个源文件 0 错误）、318 passed in 110.47s，exit 0**
+  - 第 23 轮（P3-02 元数据实现边界修正）：新增 10 项元数据边界回归（要素数 force=0、图层类型路由、请求上下文、仿射四角范围）；本轮 pytest 临时根目录使用全新路径（见上方「运行方式的要求」）；第 22 轮为 308 passed in 116.50s、rc=0
   - 第 22 轮（P3-02 矢量与子数据集元数据）：新增 11 项（矢量与子数据集集成 10 项 + stop() 回调死锁回归 1 项）；本轮使用位于本轮工作目录内的独立临时根目录（pytest 的 basetemp 选项），避开环境删除守卫对全局旧临时目录的批量删除拦截；第 21 轮为 297 passed in 105.12s、rc=0
   - 如实记录全量回归历程：
     - 历史轮次（2026-11-05 07:48:47）：286 passed in 123.74s，但在进程退出释放阶段出现异常退出（child rc=3221226505 / 0xC0000409）；

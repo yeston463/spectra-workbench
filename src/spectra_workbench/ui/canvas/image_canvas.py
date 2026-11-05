@@ -172,6 +172,23 @@ class ImageCanvas(QWidget):
         self._cache = cache
 
     # ------------------------------------------------------------------ 图层
+    @staticmethod
+    def is_raster_renderable(layer: LayerItem | None) -> bool:
+        """该图层是否可按栅格渲染。
+
+        矢量图层（kind == "vector" 或 metadata 明确 renderable=False）当前只支持
+        元数据读取，不得进入栅格读取流程，也不得保留上一幅影像的画面。
+        """
+        if layer is None:
+            return False
+        meta = getattr(layer, "metadata", None) or {}
+        kind = str(meta.get("kind") or "raster")
+        if kind == "vector":
+            return False
+        # 显式声明不可渲染的图层（矢量等）一律不走栅格流程
+        renderable = meta.get("renderable")
+        return renderable is not False
+
     def set_layer(self, layer: LayerItem | None, client: QtWorkerClient | None = None) -> None:
         if client is not None:
             self._client = client
@@ -180,13 +197,25 @@ class ImageCanvas(QWidget):
             and self._layer is not None
             and layer.layer_id == self._layer.layer_id
         )
-        self._layer = layer
         self._gen.bump(layer.layer_id if layer else None)
         self._bounds_gen = -1
         self._bounds = None
         if layer is None:
+            self._layer = None
             self.clear()
             return
+        if not self.is_raster_renderable(layer):
+            # 矢量图层：只支持元数据读取。
+            # 关键：不得把矢量登记为渲染图层（current_layer 必须保持为空），
+            # 否则下游会以为有栅格可读，进而派发栅格窗口请求；
+            # 同时清除旧影像画面，避免残留上一幅影像。
+            self._layer = None
+            self.img_item.clear()
+            self._bounds = None
+            self.load_rois([])
+            self._status("矢量图层仅支持元数据读取，暂不渲染")
+            return
+        self._layer = layer
         if not same:
             self.load_rois(list(getattr(layer, "rois", []) or []))
         if not layer.visible:
@@ -523,6 +552,9 @@ class ImageCanvas(QWidget):
     def refresh(self) -> None:
         layer, client = self._layer, self._client
         if layer is None or client is None or not layer.visible:
+            return
+        if not self.is_raster_renderable(layer):
+            # 矢量图层不派发任何栅格窗口请求
             return
         settings: DisplaySettings = layer.display
         try:

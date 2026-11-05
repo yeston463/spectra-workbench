@@ -645,40 +645,86 @@ class MainWindow(QMainWindow):
             self.status_bar.showMessage("未选中图层")
             return
         client = self._client_for(layer)
+        renderable = self.canvas.is_raster_renderable(layer)
         self.canvas.set_layer(layer, client)
         self._apply_pending_view(self.canvas, self._pending_view_v1)
         if self.canvas_b.isVisible():
             self.canvas_b.set_layer(layer, client)
             self._apply_pending_view(self.canvas_b, self._pending_view_v2)
         self.form_widget.set_input_path(layer.file_path)
-        self.display_panel.set_layer(layer.band_count, layer.display)
         self.info_panel.set_rois(list(layer.rois))
-        self.status_bar.showMessage(
-            f"图层 {layer.name} | {layer.width}x{layer.height} | {layer.band_count} 波段 | "
-            f"{layer.crs_display} | 空间模型={layer.metadata.get('spatial_model', 'affine')}"
-        )
+        if renderable:
+            self.display_panel.set_layer(layer.band_count, layer.display)
+            self.status_bar.showMessage(
+                f"图层 {layer.name} | {layer.width}x{layer.height} | {layer.band_count} 波段 | "
+                f"{layer.crs_display} | 空间模型={layer.metadata.get('spatial_model', 'affine')}"
+            )
+        else:
+            # 矢量图层：仅元数据读取。清除旧影像画面，禁用不适用的栅格操作，
+            # 并保留明确说明（不提供假入口）。
+            self.display_panel.clear()
+            self.canvas.img_item.clear()
+            self.canvas_b.img_item.clear()
+            self.status_bar.showMessage(
+                f"矢量图层 {layer.name} | "
+                f"{layer.metadata.get('layer_count', 0)} 个子图层 | "
+                "仅支持元数据读取（暂不支持矢量渲染）"
+            )
         self._probe_source_metadata(layer)
+
+    def _metadata_context(self, layer: LayerItem | None) -> tuple[str, str, str]:
+        """构造元数据请求上下文：(项目代际, 图层 ID, 数据源引用)。
+
+        回调必须校验上下文：图层切换/移除/打开项目/关窗都会让旧上下文失效，
+        迟到的旧响应不得覆盖当前选择的元数据。
+        """
+        project_gen = str(getattr(self, "_open_seq", 0))
+        layer_id = layer.layer_id if layer is not None else ""
+        source = str(layer.file_path) if layer is not None else ""
+        return project_gen, layer_id, source
+
+    def _metadata_context_valid(self, ctx: tuple[str, str, str]) -> bool:
+        """判断某个请求上下文是否仍然有效。"""
+        project_gen, layer_id, source = ctx
+        if str(getattr(self, "_open_seq", 0)) != project_gen:
+            return False
+        current = self._selected_layer()
+        if current is None:
+            return False
+        if current.layer_id != layer_id:
+            return False
+        return str(current.file_path) == source
 
     def _probe_source_metadata(self, layer: LayerItem) -> None:
         """探测并展示数据源元数据（P3-02）。
 
         矢量数据集走 probe_vector；其他容器数据集走 list_subdatasets。
         两条路径都通过 worker 完成，GUI 进程不导入任何原生地理库。
+        回调带请求上下文校验：旧图层的迟到响应直接丢弃。
         """
         client = self._client_for(layer)
         self.metadata_panel.clear_all()
         path = str(layer.file_path)
+        ctx = self._metadata_context(layer)
 
         def _on_vector(info: dict) -> None:
+            if not self._metadata_context_valid(ctx):
+                return
             self.metadata_panel.show_vector(info)
 
         def _on_vector_err(msg: str) -> None:
+            if not self._metadata_context_valid(ctx):
+                return
             self.metadata_panel.clear_vector(f"矢量元数据探测失败：{msg}")
 
         def _on_subs(info: dict) -> None:
+            if not self._metadata_context_valid(ctx):
+                return
             self.metadata_panel.show_subdatasets(info)
 
         def _on_subs_err(msg: str) -> None:
+            if not self._metadata_context_valid(ctx):
+                return
             self.metadata_panel.clear_subdatasets(f"子数据集枚举失败：{msg}")
 
         # 矢量：先按栅格探测会失败，用矢量探测单独走一条
@@ -690,17 +736,27 @@ class MainWindow(QMainWindow):
 
         ``uri`` 是引擎返回的数据源引用（可能是 ``NETCDF:"file.nc":Band1``），
         原样交给 worker，**不做路径解析**。
+
+        子数据集上下文来自**当前元数据选择**而不是画布当前图层：矢量图层本就不在
+        画布中显示，其子数据集仍需可探测。
         """
-        layer = self.canvas.current_layer
+        layer = self._selected_layer()
         if layer is None:
             self.metadata_panel.show_error("未选中图层")
             return
         client = self._client_for(layer)
+        ctx = self._metadata_context(layer)
 
         def _on_ok(info: dict) -> None:
+            if not self._metadata_context_valid(ctx):
+                return
+            if str(info.get("uri", "")) != uri:
+                return
             self.metadata_panel.show_subdataset_detail(info)
 
         def _on_err(msg: str) -> None:
+            if not self._metadata_context_valid(ctx):
+                return
             self.metadata_panel.show_error(msg)
 
         client.probe_subdataset_async(uri, on_success=_on_ok, on_error=_on_err)
@@ -1167,6 +1223,8 @@ class MainWindow(QMainWindow):
                         )
                         abs_loaded.append(rec.layer_id)
             self._open_seq = base_seq + len(spec.layers)
+            # 打开项目后，此前发起的元数据探测全部失效（上下文代际已变）
+            self._open_seq += 1
             self.missing_sources = []
             self.layer_panel.set_missing_layers([])
             self._dirty = False

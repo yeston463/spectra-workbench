@@ -379,7 +379,8 @@
         "open_dataset 在栅格探测失败时回退矢量探测，矢量文件可作为图层打开、选中并保存重开；矢量图层不进入影像画布（渲染能力未实现）。",
         "合成容器：tests/fixtures/make_p3_samples.py 新增多图层 GPKG（观测点/区域面/空图层/无坐标系图层，含中文字段名与可空字段）、中文路径 GeoJSON，以及 netCDF 多变量容器（GDAL 暴露为 2 个子数据集）。",
         "tests/integration/test_p3_vector_subdataset_metadata.py（10 项）验证：真实 worker 矢量元数据、中文/空格路径、缺失矢量与缺失子数据集的明确错误、GUI 面板展示、GUI 零原生地理库导入断言、坏文件后 worker 仍可继续处理正常请求、既有栅格 ROI 流程不受影响。",
-        "已知限制（如实记录）：netCDF 库在含中文/空格的路径下无法创建容器（报 non existing output directory），测试容器置于纯 ASCII 路径；矢量渲染与多维数据分析仍未实现。"
+        "已知限制（如实记录）：netCDF 库在含中文/空格的路径下无法创建容器（报 non existing output directory），测试容器置于纯 ASCII 路径；矢量渲染与多维数据分析仍未实现。",
+        "第 23 轮修正四项元数据实现边界（依据第二十二轮复核的独立复现）：(1) 要素数显式 GetFeatureCount(force=0)——原实现未传 force，而 ogr.Layer.GetFeatureCount 默认 force=1 会在计数昂贵时触发全表扫描，与注释和结论不符；取不到廉价计数时返回未知并置 feature_count_expensive=True；(2) 统一图层类型路由——ImageCanvas.is_raster_renderable 判定不可渲染图层，矢量图层不登记为渲染图层（current_layer 保持为空）、清除 img_item 与范围、不再派发栅格窗口请求，重选/显隐/保存重开/双视图切换走同一判定；(3) 元数据探测引入请求上下文（项目代际 _open_seq + 图层 ID + 数据源引用），成功与错误回调都校验，旧图层的迟到响应不得覆盖当前选择，子数据集上下文取自当前元数据选择而非画布当前图层；(4) 范围改由共享的 _affine_bounds 按四个像元外边界角点计算，probe_dataset 与 probe_subdataset 复用同一算法，旋转仿射下 reported 与四角预期相等（[500000, 3199700, 500475, 3200100]）。回归固化于 tests/integration/test_p3_metadata_boundaries.py（10 项）；复核方复现脚本在同一基线上六项指标全部转为正确。"
       ],
       "blocking_reason": null
     },

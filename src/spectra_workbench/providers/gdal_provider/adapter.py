@@ -56,6 +56,36 @@ def _resolve_raster_input(path: Path) -> Path:
     return path
 
 
+def _affine_bounds(
+    geotransform: list[float] | tuple[float, ...] | None,
+    width: int,
+    height: int,
+) -> list[float] | None:
+    """按四个像元外边界角点计算仿射范围，返回 [minx, miny, maxx, maxy]。
+
+    GeoTransform 为 (originX, pixelWidth, rowRotation, originY, colRotation, pixelHeight)，
+    像元 (col, row) 的**外边界**角点坐标为：
+        x = originX + col * pixelWidth + row * rowRotation
+        y = originY + col * colRotation + row * pixelHeight
+
+    四个外边界角点为 (0,0)、(width,0)、(width,height)、(0,height)。
+    只取 (0,0) 与 (width,height) 两个对角点会在旋转/倾斜仿射下漏掉另外两角，
+    导致范围偏小——因此这里必须遍历全部四角。
+    """
+    if not geotransform or len(geotransform) < 6:
+        return None
+    ox, px, row_rot, oy, col_rot, py = (float(v) for v in geotransform[:6])
+    w = float(width)
+    h = float(height)
+    corners = [
+        (ox + col * px + row * row_rot, oy + col * col_rot + row * py)
+        for col, row in ((0.0, 0.0), (w, 0.0), (w, h), (0.0, h))
+    ]
+    xs = [c[0] for c in corners]
+    ys = [c[1] for c in corners]
+    return [min(xs), min(ys), max(xs), max(ys)]
+
+
 class GDALProviderAdapter(ProviderAdapter):
     """GDAL 算法与格式转换适配器。"""
 
@@ -443,13 +473,8 @@ class GDALProviderAdapter(ProviderAdapter):
             driver_long = ds.GetDriver().LongName if ds.GetDriver() else ""
             gt = ds.GetGeoTransform(can_return_null=True)
             geotransform = [float(x) for x in gt] if gt else None
-            bounds = None
-            if geotransform:
-                minx = geotransform[0]
-                maxx = minx + geotransform[1] * w + geotransform[2] * h
-                maxy = geotransform[3]
-                miny = maxy + geotransform[4] * w + geotransform[5] * h
-                bounds = [min(minx, maxx), min(miny, maxy), max(minx, maxx), max(miny, maxy)]
+            # 范围按四个像元外边界角点计算，旋转/倾斜仿射下不会漏角
+            bounds = _affine_bounds(geotransform, w, h)
 
             crs_epsg: int | None = None
             crs_wkt: str | None = None
@@ -638,11 +663,14 @@ class GDALProviderAdapter(ProviderAdapter):
         except Exception:
             extent = None
 
-        # 要素数：默认不强制全表扫描
+        # 要素数：必须显式 force=0。
+        # ogr.Layer.GetFeatureCount 的默认形参是 force=1，驱动在计数昂贵时
+        # 会为此触发全表扫描——那正是本项要避免的。传 force=0 时驱动只返回
+        # 已缓存的廉价计数；取不到就如实标记为「昂贵/未知」，不代为发起扫描。
         feature_count: int | None = None
         feature_count_expensive = False
         try:
-            fc = lyr.GetFeatureCount()
+            fc = lyr.GetFeatureCount(force=0)
             if fc is not None and int(fc) >= 0:
                 feature_count = int(fc)
             else:
@@ -746,13 +774,8 @@ class GDALProviderAdapter(ProviderAdapter):
 
             gt = ds.GetGeoTransform(can_return_null=True)
             geotransform = [float(x) for x in gt] if gt else None
-            bounds = None
-            if geotransform:
-                minx = geotransform[0]
-                maxx = minx + geotransform[1] * width + geotransform[2] * height
-                maxy = geotransform[3]
-                miny = maxy + geotransform[4] * width + geotransform[5] * height
-                bounds = [min(minx, maxx), min(miny, maxy), max(maxx, minx), max(maxy, miny)]
+            # 范围按四个像元外边界角点计算（与栅格探测复用同一算法）
+            bounds = _affine_bounds(geotransform, width, height)
 
             crs_epsg: int | None = None
             crs_wkt: str | None = None
