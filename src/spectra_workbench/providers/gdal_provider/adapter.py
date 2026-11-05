@@ -90,6 +90,12 @@ def _affine_bounds(
     return [min(xs), min(ys), max(xs), max(ys)]
 
 
+#: 源窗口预裁剪的像元数预算上限（单波段等价像元）。
+#: 预裁剪走惰性 VRT（不物化像元），此上限用于防御「窗口过大导致下游 Warp
+#: 在目标范围上仍需展开巨量数据」的情形：超限时明确拒绝，而不是默默跑巨量作业。
+MAX_SOURCE_WINDOW_PIXELS = 64_000_000
+
+
 def _resample_gdal_constants() -> dict[str, Any]:
     """canonical 重采样算法名 -> GDAL 的 GRA_* 常量（**惰性构造**）。
 
@@ -286,7 +292,10 @@ class GDALProviderAdapter(ProviderAdapter):
         # 参数统一由契约模块归一化与校验（GUI 与 Worker 共用同一套规则）：
         # 未知算法不���退、别名冲突不择一、整数参数不截断小数、零值按 None 判断。
         try:
-            norm = normalize_raster_params(spec.parameters)
+            norm = normalize_raster_params(
+                spec.parameters,
+                capability_id=spec.capability_id,
+            )
         except ParameterError as exc:
             context.log("ERROR", f"Invalid processing parameters: {exc}")
             return TaskResult(
@@ -393,18 +402,48 @@ class GDALProviderAdapter(ProviderAdapter):
                 if src_win_list is not None or proj_win_list is not None:
                     # 两步语义：先按源窗口裁剪（源像元索引 / 源地理范围），
                     # 再对裁剪结果做重投影。源窗口与目标 CRS 的 outputBounds 不可混用。
-                    crop_kwargs: dict[str, Any] = {"format": "MEM"}
+                    #
+                    # 预裁剪用**惰性 VRT**而不是 MEM：
+                    # MEM 会物化整个裁剪区的像元（内存随窗口面积×波段×类型增长，无上限），
+                    # 违反项目「有界大影像处理」要求；VRT 只生成 XML 描述
+                    # （实测 8x9 窗口仅 1.2KB），裁剪在读取时生效，语义与 MEM 逐点一致。
+                    if src_win_list is not None:
+                        window_pixels = src_win_list[2] * src_win_list[3]
+                    else:
+                        # projWin 为源地理范围，像元数需读源尺寸估算
+                        window_pixels = 0
+                    if window_pixels > MAX_SOURCE_WINDOW_PIXELS:
+                        message = (
+                            f"源窗口过大（{window_pixels} 像元 > 上限 "
+                            f"{MAX_SOURCE_WINDOW_PIXELS}）：已拒绝，避免巨量内存作业"
+                        )
+                        context.log("ERROR", message)
+                        return TaskResult(
+                            task_id=spec.task_id,
+                            attempt=spec.attempt,
+                            status=TaskStatus.failed,
+                            error={"code": "window_too_large", "message": message},
+                            duration_seconds=round(time.monotonic() - start_time, 4),
+                        )
+                    crop_kwargs: dict[str, Any] = {
+                        "format": "VRT",
+                        # 预裁剪阶段也接入取消回调：此前未传，取消无法在此阶段生效
+                        "callback": _gdal_cb,
+                    }
                     if src_win_list is not None:
                         crop_kwargs["srcWin"] = src_win_list
                     if proj_win_list is not None:
                         crop_kwargs["projWin"] = proj_win_list
-                    cropped = gdal.Translate("", str(in_path), options=gdal.TranslateOptions(**crop_kwargs))
+                    cropped = gdal.Translate(
+                        "", str(in_path), options=gdal.TranslateOptions(**crop_kwargs)
+                    )
                     if cropped is None:
                         raise RuntimeError("源窗口裁剪失败")
                     try:
                         warp_opts = gdal.WarpOptions(**warp_kwargs)
                         ds = gdal.Warp(str(staged_path), cropped, options=warp_opts)
                     finally:
+                        # VRT 在内存中，无落盘中间成果；显式释放确保不留引用
                         cropped = None
                 else:
                     warp_opts = gdal.WarpOptions(**warp_kwargs)

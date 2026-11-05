@@ -41,6 +41,7 @@ from spectra_workbench.processing.raster_params import (
     RESAMPLE_ALGORITHM_CHOICES,
     ParameterError,
     normalize_raster_params,
+    supported_params_for,
 )
 
 if TYPE_CHECKING:
@@ -304,22 +305,61 @@ class CapabilityFormWidget(QWidget):
         self._set_row_visible(self.lbl_outsize, self.txt_outsize, is_translate or is_warp)
         self._set_row_visible(self.lbl_tap, self.chk_tap, is_warp)
 
+        # 切换能力时**隔离状态**：把新能力不适用的控件值重置。
+        # 仅隐藏控件是不够的——残留值仍会进入 TaskSpec（复核实测：
+        # 切到 Rasterio convert 后隐藏的 srcWin/xRes/yRes 仍被提交）。
+        self._reset_inapplicable_grid_state(cid)
+
+    def _reset_inapplicable_grid_state(self, capability_id: str) -> None:
+        """重置当前能力**不适用**的裁剪/网格控件值。
+
+        适用性以共享契约的支持矩阵为准（与 Worker 同一份），
+        避免 GUI 与 Worker 各维护一套能力边界。
+        """
+        supported = supported_params_for(capability_id)
+        if supported is None:
+            # 未知能力：不猜测边界，清空全部网格类控件（宁可少参数，不可错参数）
+            supported = frozenset()
+
+        if "srcWin" not in supported:
+            self.txt_clip.clear()
+        if "xRes" not in supported:
+            self.spin_xres.setValue(0.0)
+        if "yRes" not in supported:
+            self.spin_yres.setValue(0.0)
+        if "width" not in supported:
+            self.txt_outsize.clear()
+        if "targetAlignedPixels" not in supported:
+            self.chk_tap.setChecked(False)
+
     @staticmethod
     def _set_row_visible(label: QLabel, widget: QWidget, visible: bool) -> None:
         """同时显隐 QFormLayout 里的标签与控件。"""
         label.setVisible(visible)
         widget.setVisible(visible)
 
-    def _collect_grid_params(self, is_warp: bool) -> tuple[dict[str, Any], str | None]:
+    def _collect_grid_params(
+        self,
+        is_warp: bool,
+        capability_id: str | None = None,
+    ) -> tuple[dict[str, Any], str | None]:
         """采集 P4-01 的裁剪 / 重采样 / 输出网格参数。
 
         返回 (参数字典, 错误消息)。错误消息非 None 表示参数非法，调用方应提示并中止提交。
         空值一律不产生参数（绝不传 0 或空串给引擎）。
+
+        只采集**当前能力适用**的控件：能力不消费某类参数时，其控件值一律不采集，
+        即使控件里还有上一能力残留的值（仅隐藏控件不足以隔离能力状态）。
         """
         params: dict[str, Any] = {}
 
+        supported = supported_params_for(capability_id)
+        if supported is None:
+            # 未知能力：按「不采集任何网格类参数」处理（宁可少参数，不可错参数）
+            supported = frozenset()
+
         clip_text = self.txt_clip.text().strip()
-        if clip_text:
+        if clip_text and "srcWin" in supported:
             parts = [x.strip() for x in clip_text.replace(";", ",").split(",") if x.strip()]
             if len(parts) != 4:
                 return params, "裁剪窗口需要 4 个整数（xoff, yoff, xsize, ysize），例如：10,20,100,80"
@@ -331,14 +371,22 @@ class CapabilityFormWidget(QWidget):
                 return params, "裁剪窗口的宽高必须为正数"
             params["srcWin"] = clip_vals
 
-        x_res = float(self.spin_xres.value()) if self.spin_xres.value() > 0 else None
-        y_res = float(self.spin_yres.value()) if self.spin_yres.value() > 0 else None
+        x_res = (
+            float(self.spin_xres.value())
+            if "xRes" in supported and self.spin_xres.value() > 0
+            else None
+        )
+        y_res = (
+            float(self.spin_yres.value())
+            if "yRes" in supported and self.spin_yres.value() > 0
+            else None
+        )
         if x_res is not None:
             params["xRes"] = x_res
         if y_res is not None:
             params["yRes"] = y_res
 
-        outsize_text = self.txt_outsize.text().strip()
+        outsize_text = self.txt_outsize.text().strip() if "width" in supported else ""
         if outsize_text:
             parts = [x.strip() for x in outsize_text.replace(";", ",").split(",") if x.strip()]
             if len(parts) != 2:
@@ -352,7 +400,7 @@ class CapabilityFormWidget(QWidget):
             params["width"] = out_w
             params["height"] = out_h
 
-        if self.chk_tap.isChecked() and is_warp:
+        if self.chk_tap.isChecked() and is_warp and "targetAlignedPixels" in supported:
             params["targetAlignedPixels"] = True
 
         return params, None
@@ -434,7 +482,10 @@ class CapabilityFormWidget(QWidget):
             params["driver"] = out_fmt
 
         # P4-01：裁剪 / 重采样 / 输出网格
-        grid_params, grid_error = self._collect_grid_params(is_warp="warp" in cid)
+        grid_params, grid_error = self._collect_grid_params(
+            is_warp="warp" in cid,
+            capability_id=cid,
+        )
         if grid_error is not None:
             QMessageBox.warning(self, "参数不全", grid_error)
             return
@@ -444,7 +495,7 @@ class CapabilityFormWidget(QWidget):
         # 未知算法、别名冲突、小数截断、非法组合都在这里被拦下，
         # 不会提交成功后才在 Worker 侧失效或被静默忽略。
         try:
-            params.update(normalize_raster_params(params))
+            params.update(normalize_raster_params(params, capability_id=cid))
         except ParameterError as exc:
             QMessageBox.warning(self, "参数不合法", str(exc))
             return

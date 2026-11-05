@@ -229,6 +229,87 @@ CRT 检测到栈状态异常后立即终止进程，这正是 `STATUS_STACK_BUFF
 | 用合成影像完成同类验收 | 已满足 | 合成 ENVI/GTiff/GeoJSON/netCDF 样例覆盖多波段、像元数值、ROI 与对比 |
 | 保留真实数据待验状态 | **待验** | 课程原始数据位于 `C:\Users\赵航\Desktop\studio\_chaoxing_rs`（**只读**，不得运行其中的抓取/下载/OCR 脚本）；本轮全部用合成影像验收，未对课程原始 ENVI 栅格与 lena.tif 做真实打开验证 |
 
+### 第 27 轮：能力边界、GUI 状态隔离与有界预裁剪
+
+按第二十六轮复核的**实际落盘复现**修正。上一轮四类静默失效已修复，不重写有效主路径；
+本轮只补能力边界与有界预裁剪，不扩展 P4-02 及其他算法。
+
+**一、参数契约按能力区分（第 26 轮复核第 1 项）**
+
+复核指出：`normalize_raster_params` 没有 capability/operation 参数，
+**可解析的参数不等于对应算法会使用**。实测 Translate + `dstNodata=0` 与
+Translate + `dstSRS=EPSG:3857` 都 succeeded，但参数被静默忽略。
+
+修正：共享契约新增**能力支持矩阵**（`processing/raster_params.py`），
+GUI 与 Worker 用同一份矩阵：
+
+| 能力 | 支持的参数 |
+|---|---|
+| `gdal:translate` | srcWin / projWin / outputBounds / xRes / yRes / width / height / outputType / noData / resampleAlg |
+| `gdal:warp` | 上述 + dstNodata / dstSRS / srcSRS / targetAlignedPixels |
+| `rasterio:convert` | （当前不消费任何网格类参数，给出即拒绝） |
+
+- 给出当前能力**不消费**的参数 → `invalid_parameters`，错误消息列出该能力支持的参数；
+  **不要求 Translate 实现 Warp**。
+- 互斥组合在**契约层**判定：分辨率（xRes/yRes）与输出尺寸（width/height）互斥
+  （此前要到 GDAL 才报 "-outsize 与 -tr 冲突"）；Warp 下源窗口与 outputBounds 互斥、
+  srcWin 与 projWin 互斥。
+- 脚本绕过 GUI 也受同一校验（Worker 调用同一 `normalize_raster_params`）。
+
+**二、GUI 只收集当前能力适用的控件（第 26 轮复核第 2 项）**
+
+复核实测：Translate 填了裁剪与分辨率，切到 Rasterio convert 后隐藏控件的值
+仍进入 TaskSpec（`submitted_srcWin=[1,2,3,4]`、`xRes/yRes=0.002`）。
+**仅隐藏控件不足以隔离能力状态。**
+
+修正（双保险）：
+1. `load_capability` 切换能力时**重置**新能力不适用的控件值
+   （裁剪窗口、输出像元宽高、输出尺寸、输出网格对齐）；
+2. `_collect_grid_params` 只**采集当前能力适用**的控件——
+   能力不消费某类参数时，其控件值一律不采集（即使还有残留值）。
+   适用性取自共享契约的支持矩阵，GUI 与 Worker 不会各维护一套。
+
+覆盖 Translate→Warp→Rasterio→Translate 循环切换：切到 Rasterio 后相关参数为 null，
+切回 Translate 也不会复活旧值。
+
+**三、Warp 预裁剪改为有界惰性 VRT（第 26 轮复核第 3 项）**
+
+复核指出：预裁剪用 `gdal.Translate(..., format='MEM')` 会**物化整个裁剪区**，
+内存需求随窗口面积×波段×类型增长且无上限，违反项目「有界大影像处理」要求；
+且该预裁剪未接入 GDAL callback，取消无法在该阶段生效。
+
+修正：
+- 改用**惰性 VRT**（只生成 XML 描述，裁剪在读取时生效）。
+  实测 8×9 窗口的 VRT 仅 1280 字节 XML（MEM 则物化 72 个像元）；
+  VRT 与 MEM 的尺寸、像元值、NoData、GeoTransform **逐点一致**
+  （`pixels_equal_to_mem=true`），源窗口语义由 VRT 的 `SrcRect` 表达。
+- 预裁剪步骤**接入 GDAL 进度/取消回调**（此前未传）。
+- 增加**窗口像元数预算上限**（`MAX_SOURCE_WINDOW_PIXELS`），超限返回
+  `window_too_large` 明确拒绝，而不是默默跑巨量作业。
+- VRT 在内存中，不落盘中间成果，失败/取消无残留。
+
+**四、退出异常表述降级（第 26 轮复核的证据要求）**
+
+上一轮把「子进程缺少 SYSTEMROOT → 拖累父 pytest __fastfail」写成「根因」，
+但该因果链**缺少进程级现场支持**。现降级为**关联与候选触发条件**，
+并区分四类证据（探针子进程 rc / 父 pytest rc / 源码快照 / 运行环境）。
+详见下方「退出异常」章节。
+
+**五、验收测试**
+
+`tests/integration/test_p4_capability_boundary.py`（15 项）：能力拒绝（Warp 对照）、
+契约层互斥、脚本绕过 GUI 的同规则校验、GUI 循环切换隔离、GUI 提交前拒绝冲突、
+VRT 惰性与语义保持、静态断言无 MEM 预裁剪、超大窗口预算拒绝、
+参数非法时既有输出不被覆盖。
+另有 `tests/fixtures/probe_crop_driver.py` 作为独立探测脚本
+（避免在 pytest 内做多层字符串转义）。
+
+**六、顺带修正的测试实践问题**
+
+三个 P4 测试文件原先用**固定** task_id，同一文件内多次运行共用
+`.staging/{task_id}/` 路径，上一个 worker 进程句柄未完全释放时撞上 Windows 文件锁
+（报 `[WinError 5] 拒绝访问`）。已给 task_id 附加 uuid 后缀，每次运行路径唯一。
+
 ### 第 26 轮：GUI→Worker 参数一致性修正 + 两项验收表述更正
 
 按第二十五轮复核的**实际落盘复现**修正。本轮只补参数从 GUI 到实际输出的一致性，
@@ -321,10 +402,24 @@ GUI 提交前与 Worker 执行前调用**同一个** `normalize_raster_params()`
   并用 `-E` 让子进程忽略继承的 PYTHONPATH（源码根由脚本内 `sys.path.insert` 精确指定）。
 - 验证：修复后同一 363 项组合 **rc=0**；完整 381 项 **381 passed / rc=0**。
 
-**但仍不宣称根治**：归档的 23 轮历史中，2026-11-04T20:00:24（265 项）与
+**但仍不宣称根治**：归档的历史轮次中，2026-11-04T20:00:24（265 项）与
 2026-11-05T07:48:47（286 项）两轮 rc=3221226505 **早于本轮新增测试存在**，
-说明该异常至少还有一个尚未定位的触发路径。当前结论只能是
-「已定位并修复其中一个触发条件」，退出异常本身的根因仍未完全定位。
+说明该异常至少还有一个尚未定位的触发路径。
+
+**第 27 轮按复核意见降级该表述**：上一轮把「子进程缺少 SYSTEMROOT → 子进程收尾拖累
+父 pytest __fastfail」写成「根因」，这一因果链**缺少进程级现场支持**，
+不能据此独立证明机制。现在只把它记为**关联与候选触发条件**，并区分四类证据：
+
+| 证据类别 | 含义 | 本轮记录 |
+|---|---|---|
+| 探针子进程 rc | 独立子进程探针自身的退出码 | 全部为 0（探针本身成功） |
+| 父 pytest rc | 全量回归子进程的退出码 | 出现 3221226505（0xC0000409） |
+| 源码快照 | 触发轮次对应的提交与改动 | 定位到「清空 PATH/SYSTEMROOT 的子进程 env」这一改动 |
+| 运行环境 | 操作系统、Python、并发与时序条件 | Windows + 特定 pytest/worker 组合下复现 |
+
+排除组合与修改前后成功/失败**记录为关联**，不作为机制证明。
+「保留环境变量」本身是正确的 Windows 子进程实践，与异常之间**只观察到关联**。
+历史路径仍未归因，**不继续无边界重复试到绿**。
 
 ### 第 25 轮：P3 原验收清单逐句对账 + P4-01 裁剪/重采样/输出网格
 
@@ -566,7 +661,7 @@ Thread 0x0000d064 (most recent call first):
 | P0-01 仓库与文档结构 | done | git init（2.50.1）；docs/plan/ 输入基线、contracts/、src/、tests/；AGENTS.md、README.md、pyproject.toml；docs/progress/WORKPACKAGES.md |
 | P0-02 四环境 | implemented | scripts/bootstrap_pip.ps1 -VerifyOnly → RESULT ALL OK；docs/progress/runs/env_report.json；environments/locks/*.lock.txt |
 | P0-03 自检与小型 Fixture | implemented | src/spectra_workbench/app/doctor.py + scripts/doctor.ps1 → docs/progress/runs/doctor_report.json。GTiff 往返成功、坐标转换成功、205 驱动、5 CLI 就绪；单测全绿 |
-| P0-04 自动化检查流水线 | done | scripts/test.ps1，串联 Ruff、Mypy 与 Pytest。Mypy 57 个源文件 0 错误；全量自动化测试通过：**381 passed in 134.27s**，全量回归子进程 rc=0（2026-11-05 第 26 轮，参数一致性修正 + 退出异常部分归因）；第 23 轮为 318 passed in 110.47s、rc=0；第 22 轮为 308 passed in 116.50s、rc=0；第 21 轮为 297 passed in 105.12s、rc=0；如实记录 07:48:47 历史退出异常轮次（286 passed，0xC0000409）与后续 07:54:31、07:56:16（286 passed，rc=0）及本轮（297 passed，rc=0），全面加固 Qt 对象生命周期有序销毁 |
+| P0-04 自动化检查流水线 | done | scripts/test.ps1，串联 Ruff、Mypy 与 Pytest。Mypy 57 个源文件 0 错误；全量自动化测试通过：**396 passed in 162.92s**，全量回归子进程 rc=0（2026-11-05 第 27 轮，能力边界 + 有界预裁剪）；第 23 轮为 318 passed in 110.47s、rc=0；第 22 轮为 308 passed in 116.50s、rc=0；第 21 轮为 297 passed in 105.12s、rc=0；如实记录 07:48:47 历史退出异常轮次（286 passed，0xC0000409）与后续 07:54:31、07:56:16（286 passed，rc=0）及本轮（297 passed，rc=0），全面加固 Qt 对象生命周期有序销毁 |
 | P0-05 打包重定位可行性验证 | implemented | docs/adr/0002-relocation-and-packaging.md；tests/integration/test_relocation.py 验证 UI 与 Rasterio、GDAL 引擎在独立临时路径正常初始化并导入 |
 | P1-01 领域模型与契约对账 | done | src/spectra_workbench/domain/models.py；tests/unit/test_domain_models.py；tests/unit/test_contracts_schema.py（50 项全绿） |
 | P1-02 JSONL 客户端与 Worker 启动 | done | src/spectra_workbench/protocol/messages.py；src/spectra_workbench/workers/process.py；src/spectra_workbench/workers/entrypoint.py；tests/integration/test_worker_process.py（8 项真实跨进程测试全绿） |
@@ -585,8 +680,8 @@ Thread 0x0000d064 (most recent call first):
 | P3-05 view CRS、重投影、查询与 ROI | implemented | 旋转 Affine 与无 GT 栅格支持；地图坐标 ↔ 像元中心/角点约定；ROI 模型与点包含判定；跨 CRS 视图重投影网格读取；真实鼠标事件多边形 ROI 绘制/闭合/选中/手柄拖拽/删除/保存重开全流程；矩形展开 4 角点经 Worker 转换并精确保持 425 平方单位面积与 4 个角点；坐标转换失败异常隔离隐藏并保全权威模型；五类故障注入矩阵覆盖（向地图/回像元/项目重开/拖动反算/旧响应迟到），跨坐标空间数据混用缺陷已修复（tests/integration/test_p3_interactive_polygon_roi.py 9 项全绿） |
 
 实测命令与结果：
-- powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test.ps1 -All → **Ruff 干净、Mypy 干净（58 个源文件 0 错误）、381 passed in 134.27s，exit 0**
-  - 第 26 轮（参数一致性修正）：新增 25 项（参数一致性端到端 18 项 + GUI 隔离运行时 3 项 + adapter 模块级隔离 3 项 + 高 DPI 表述订正 1 项）；第 25 轮（P3 验收清单 + P4-01）：新增 30 项（P3 验收缺口 5 项 + P4-01 裁剪重采样 14 项 + P4-01 表单 11 项）；**全量跑须前台运行**（需 110–122 秒，后台任务约 2 分钟上限会中途终止，见下方说明）；第 23 轮为 318 passed in 110.47s、rc=0
+- powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test.ps1 -All → **Ruff 干净、Mypy 干净（58 个源文件 0 错误）、396 passed in 162.92s，exit 0**
+  - 第 27 轮（能力边界 + 有界预裁剪）：新增 15 项（能力边界与有界裁剪）；第 26 轮（参数一致性修正）：新增 25 项（参数一致性端到端 18 项 + GUI 隔离运行时 3 项 + adapter 模块级隔离 3 项 + 高 DPI 表述订正 1 项）；第 25 轮（P3 验收清单 + P4-01）：新增 30 项（P3 验收缺口 5 项 + P4-01 裁剪重采样 14 项 + P4-01 表单 11 项）；**全量跑须前台运行**（需 110–122 秒，后台任务约 2 分钟上限会中途终止，见下方说明）；第 23 轮为 318 passed in 110.47s、rc=0
   - 第 23 轮（P3-02 元数据实现边界修正）：新增 10 项元数据边界回归（要素数 force=0、图层类型路由、请求上下文、仿射四角范围）；本轮 pytest 临时根目录使用全新路径（见上方「运行方式的要求」）；第 22 轮为 308 passed in 116.50s、rc=0
   - 第 22 轮（P3-02 矢量与子数据集元数据）：新增 11 项（矢量与子数据集集成 10 项 + stop() 回调死锁回归 1 项）；本轮使用位于本轮工作目录内的独立临时根目录（pytest 的 basetemp 选项），避开环境删除守卫对全局旧临时目录的批量删除拦截；第 21 轮为 297 passed in 105.12s、rc=0
   - 如实记录全量回归历程：

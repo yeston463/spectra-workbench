@@ -23,6 +23,7 @@ import os
 import subprocess
 import sys
 import time
+import uuid
 from pathlib import Path
 
 import pytest
@@ -105,7 +106,7 @@ def _run_task(
 ):
     """通过真实 QtWorkerClient 提交任务并返回终态结果。"""
     spec = TaskSpec(
-        task_id=f"p401c-{capability_id.replace(':', '-')}",
+        task_id=f"p401c-{capability_id.replace(':', '-')}-{uuid.uuid4().hex[:8]}",
         attempt=1,
         capability_id=capability_id,
         descriptor_revision="1.0",

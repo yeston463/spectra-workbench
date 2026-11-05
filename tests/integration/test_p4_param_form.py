@@ -46,7 +46,7 @@ def form(qapp: QApplication, tmp_path: Path):
 
 def test_empty_controls_produce_no_extra_params(form) -> None:
     """留空的控件不得产生任何参数。"""
-    params, err = form._collect_grid_params(is_warp=False)
+    params, err = form._collect_grid_params(is_warp=False, capability_id="gdal:translate")
     assert err is None
     for key in ("srcWin", "xRes", "yRes", "width", "height", "targetAlignedPixels"):
         assert key not in params, f"留空时不应产生 {key}，实际 {params}"
@@ -55,7 +55,7 @@ def test_empty_controls_produce_no_extra_params(form) -> None:
 def test_clip_window_is_forwarded(form) -> None:
     """填写裁剪窗口后，srcWin 必须以整数列表进入参数。"""
     form.txt_clip.setText("10,20,100,80")
-    params, err = form._collect_grid_params(is_warp=False)
+    params, err = form._collect_grid_params(is_warp=False, capability_id="gdal:translate")
     assert err is None
     assert params.get("srcWin") == [10, 20, 100, 80], f"srcWin 不符：{params}"
 
@@ -65,7 +65,7 @@ def test_resolution_and_size_are_forwarded(form) -> None:
     form.spin_xres.setValue(2.5)
     form.spin_yres.setValue(0.25)
     form.txt_outsize.setText("512,256")
-    params, err = form._collect_grid_params(is_warp=False)
+    params, err = form._collect_grid_params(is_warp=False, capability_id="gdal:translate")
     assert err is None
     assert params.get("xRes") == pytest.approx(2.5)
     assert params.get("yRes") == pytest.approx(0.25)
@@ -77,7 +77,7 @@ def test_zero_resolution_means_unspecified(form) -> None:
     """分辨率控件的 0 是「不指定」哨兵，绝不能作为参数下发。"""
     form.spin_xres.setValue(0.0)
     form.spin_yres.setValue(0.0)
-    params, err = form._collect_grid_params(is_warp=False)
+    params, err = form._collect_grid_params(is_warp=False, capability_id="gdal:translate")
     assert err is None
     assert "xRes" not in params, "0 表示不指定，不得下发"
     assert "yRes" not in params, "0 表示不指定，不得下发"
@@ -86,7 +86,7 @@ def test_zero_resolution_means_unspecified(form) -> None:
 def test_invalid_clip_window_is_rejected(form) -> None:
     """非法裁剪窗口（个数不对）必须被拒绝。"""
     form.txt_clip.setText("10,20,100")
-    params, err = form._collect_grid_params(is_warp=False)
+    params, err = form._collect_grid_params(is_warp=False, capability_id="gdal:translate")
     assert err is not None, "非法裁剪窗口必须报错"
     assert "4" in err
     assert "srcWin" not in params
@@ -95,7 +95,7 @@ def test_invalid_clip_window_is_rejected(form) -> None:
 def test_non_integer_clip_window_is_rejected(form) -> None:
     """非整数裁剪窗口必须被拒绝。"""
     form.txt_clip.setText("a,b,c,d")
-    params, err = form._collect_grid_params(is_warp=False)
+    params, err = form._collect_grid_params(is_warp=False, capability_id="gdal:translate")
     assert err is not None, "非整数裁剪窗口必须报错"
     assert "srcWin" not in params
 
@@ -103,7 +103,7 @@ def test_non_integer_clip_window_is_rejected(form) -> None:
 def test_non_positive_clip_size_is_rejected(form) -> None:
     """裁剪窗口宽高非正必须被拒绝。"""
     form.txt_clip.setText("10,20,0,80")
-    params, err = form._collect_grid_params(is_warp=False)
+    params, err = form._collect_grid_params(is_warp=False, capability_id="gdal:translate")
     assert err is not None, "非正裁剪尺寸必须报错"
     assert "srcWin" not in params
 
@@ -111,7 +111,7 @@ def test_non_positive_clip_size_is_rejected(form) -> None:
 def test_invalid_output_size_is_rejected(form) -> None:
     """非法输出尺寸必须被拒绝。"""
     form.txt_outsize.setText("512")
-    params, err = form._collect_grid_params(is_warp=False)
+    params, err = form._collect_grid_params(is_warp=False, capability_id="gdal:translate")
     assert err is not None, "非法输出尺寸必须报错"
     assert "width" not in params
 
@@ -119,7 +119,7 @@ def test_invalid_output_size_is_rejected(form) -> None:
 def test_non_positive_output_size_is_rejected(form) -> None:
     """非正输出尺寸必须被拒绝。"""
     form.txt_outsize.setText("0,256")
-    params, err = form._collect_grid_params(is_warp=False)
+    params, err = form._collect_grid_params(is_warp=False, capability_id="gdal:translate")
     assert err is not None
     assert "width" not in params
 
@@ -127,11 +127,11 @@ def test_non_positive_output_size_is_rejected(form) -> None:
 def test_target_aligned_only_for_warp(form) -> None:
     """targetAlignedPixels 只对 Warp 生效。"""
     form.chk_tap.setChecked(True)
-    params, err = form._collect_grid_params(is_warp=False)
+    params, err = form._collect_grid_params(is_warp=False, capability_id="gdal:translate")
     assert err is None
     assert "targetAlignedPixels" not in params, "Translate 不得携带 targetAlignedPixels"
 
-    params2, err2 = form._collect_grid_params(is_warp=True)
+    params2, err2 = form._collect_grid_params(is_warp=True, capability_id="gdal:warp")
     assert err2 is None
     assert params2.get("targetAlignedPixels") is True, "Warp 应下发 targetAlignedPixels"
 
@@ -149,6 +149,6 @@ def test_p401_controls_exist_and_translate_loads_capability(form) -> None:
 
     # 加载后仍能正确采集参数
     form.txt_clip.setText("1,2,3,4")
-    params, err = form._collect_grid_params(is_warp=False)
+    params, err = form._collect_grid_params(is_warp=False, capability_id="gdal:translate")
     assert err is None
     assert params.get("srcWin") == [1, 2, 3, 4]

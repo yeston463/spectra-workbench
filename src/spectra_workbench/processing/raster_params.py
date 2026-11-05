@@ -165,6 +165,79 @@ for _canonical, _names in _ALL_ALIASES.items():
         _ALIAS_TO_CANONICAL[_name] = _canonical
 
 
+# --------------------------------------------------------------------------
+# 能力支持矩阵
+# --------------------------------------------------------------------------
+# 「参数名被识别」不等于「当前能力会消费它」。
+# 下列矩阵声明每种能力**实际支持**的参数；给出不支持的参数必须明确拒绝
+# （invalid_parameters），不得接受后静默忽略。
+_CAPABILITY_SUPPORT: dict[str, frozenset[str]] = {
+    "gdal:translate": frozenset(
+        {
+            "srcWin",
+            "projWin",
+            "outputBounds",
+            "xRes",
+            "yRes",
+            "width",
+            "height",
+            "outputType",
+            "noData",
+            "resampleAlg",
+        }
+    ),
+    "gdal:warp": frozenset(
+        {
+            "srcWin",
+            "projWin",
+            "outputBounds",
+            "xRes",
+            "yRes",
+            "width",
+            "height",
+            "outputType",
+            "dstNodata",
+            "dstSRS",
+            "srcSRS",
+            "targetAlignedPixels",
+            "resampleAlg",
+        }
+    ),
+    # Rasterio convert 当前不消费裁剪/网格/重投影参数：
+    # 给出这些参数必须报错，而不是接受后忽略。
+    "rasterio:convert": frozenset(),
+}
+
+#: 能力别名 -> canonical capability_id。
+_CAPABILITY_ALIASES: dict[str, str] = {
+    "gdal_translate": "gdal:translate",
+    "gdaltranslate": "gdal:translate",
+    "gdalwarp": "gdal:warp",
+    "gdal_warp": "gdal:warp",
+    "rasterio:cli:convert": "rasterio:convert",
+    "rio_convert": "rasterio:convert",
+    "rio:cli:convert": "rasterio:convert",
+}
+
+
+def canonical_capability_id(capability_id: str | None) -> str | None:
+    """把能力 ID 归一化为 canonical 名；未知返回 None。"""
+    if not capability_id:
+        return None
+    key = str(capability_id).strip()
+    if key in _CAPABILITY_SUPPORT:
+        return key
+    return _CAPABILITY_ALIASES.get(key.lower())
+
+
+def supported_params_for(capability_id: str | None) -> frozenset[str] | None:
+    """返回该能力支持的参数集合；未知能力返回 None（不做能力级校验）。"""
+    canonical = canonical_capability_id(capability_id)
+    if canonical is None:
+        return None
+    return _CAPABILITY_SUPPORT[canonical]
+
+
 def canonical_param_key(key: str) -> str | None:
     """返回某个参数名的 canonical 名；不是栅格几何参数时返回 None。"""
     return _ALIAS_TO_CANONICAL.get(key)
@@ -242,20 +315,29 @@ def _require_positive_int(value: Any, name: str) -> int:
 # --------------------------------------------------------------------------
 # 归一化
 # --------------------------------------------------------------------------
-def normalize_raster_params(raw: Mapping[str, Any] | None) -> dict[str, Any]:
+def normalize_raster_params(
+    raw: Mapping[str, Any] | None,
+    *,
+    capability_id: str | None = None,
+) -> dict[str, Any]:
     """归一化并校验栅格处理参数。
 
     返回 canonical 名 -> 解析后的值（只含**实际提供**的参数）。
-    任何非法取值、未知算法、别名冲突都抛 :class:`ParameterError`。
+    任何非法取值、未知算法、别名冲突、能力不支持的参数都抛 :class:`ParameterError`。
 
     关键约定：
     - **零值是合法值**：按「是否提供 / 是否为 None」判断，绝不用 truthiness；
-    - **未知算法不���退**：直接报错；
+    - **未知算法不回退**：直接报错；
     - **小数不截断**：整数参数遇到小数报错；
-    - **别名冲突不择一**：同一 canonical 的多个别名给出不同值时报错。
+    - **别名冲突不择一**：同一 canonical 的多个别名给出不同值时报错；
+    - **能力不支持就拒绝**：参数名被识别不等于当前能力会消费它；
+      给出当前能力不消费的参数必须报错，不得接受后静默忽略
+      （``capability_id`` 为 None 时跳过能力级校验，供纯契约单元测试使用）。
+    - **互斥组合在契约层判断**：分辨率与输出尺寸互斥等规则在此判定，
+      不再等到 GDAL 才报冲突。
     """
     if raw is None:
-        return {}
+        raw = {}
     if not isinstance(raw, Mapping):
         raise ParameterError(f"parameters 必须是映射类型，实际 {type(raw).__name__}")
 
@@ -281,6 +363,18 @@ def normalize_raster_params(raw: Mapping[str, Any] | None) -> dict[str, Any]:
                 )
             continue
         collected[canonical] = (key, value)
+
+    # 1.5) 能力级校验：当前能力不消费的参数必须拒绝（不得接受后静默忽略）
+    supported = supported_params_for(capability_id)
+    if supported is not None:
+        unsupported = sorted(set(collected) - supported)
+        if unsupported:
+            canonical_cap = canonical_capability_id(capability_id)
+            raise ParameterError(
+                f"能力 {canonical_cap!r} 不支持参数：{', '.join(unsupported)}；"
+                f"该能力支持的参数：{', '.join(sorted(supported)) or '（无）'}。"
+                "参数被识别不代表该能力会消费它——请改用支持这些参数的能力，或移除这些参数。"
+            )
 
     out: dict[str, Any] = {}
 
@@ -350,6 +444,26 @@ def normalize_raster_params(raw: Mapping[str, Any] | None) -> dict[str, Any]:
         if not isinstance(value, bool):
             raise ParameterError(f"targetAlignedPixels 必须是布尔值，实际 {value!r}")
         out["targetAlignedPixels"] = value
+
+    # 12) 互斥组合：分辨率与输出尺寸不能同时指定
+    # （GDAL 侧表现为 "-outsize 与 -tr 冲突"，但那是在引擎里才发现；
+    #   契约层提前判定，GUI 与 worker 都能给出明确错误。）
+    has_res = "xRes" in out or "yRes" in out
+    has_size = "width" in out or "height" in out
+    if has_res and has_size:
+        raise ParameterError(
+            "参数互斥：输出像元尺寸（xRes/yRes）与输出尺寸（width/height）"
+            "不能同时指定——前者按分辨率缩放，后者按固定像元数缩放"
+        )
+    # 源窗口与目标范围在 Warp 下语义不同（源像元/源地理 vs 目标 CRS 轴对齐范围）
+    if canonical_capability_id(capability_id) == "gdal:warp":
+        if ("srcWin" in out or "projWin" in out) and "outputBounds" in out:
+            raise ParameterError(
+                "参数互斥：源窗口（srcWin/projWin）与目标范围（outputBounds）"
+                "语义不同，不能同时指定"
+            )
+        if "srcWin" in out and "projWin" in out:
+            raise ParameterError("参数互斥：srcWin 与 projWin 都是源窗口语义，不能同时指定")
 
     return out
 
