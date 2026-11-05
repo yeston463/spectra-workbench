@@ -86,6 +86,74 @@ def _affine_bounds(
     return [min(xs), min(ys), max(xs), max(ys)]
 
 
+_GDAL_OUTPUT_TYPES = {
+    "byte": "Byte",
+    "uint8": "Byte",
+    "ubyte": "Byte",
+    "int8": "Int8",
+    "uint16": "UInt16",
+    "int16": "Int16",
+    "uint32": "UInt32",
+    "int32": "Int32",
+    "float32": "Float32",
+    "float64": "Float64",
+    "cfloat32": "CFloat32",
+    "cfloat64": "CFloat64",
+}
+
+
+def _first_param(spec_params: dict[str, Any], *names: str) -> Any:
+    """按给定顺序取第一个存在的参数值（兼容 GDAL CLI 风格与 snake_case）。"""
+    for name in names:
+        if name in spec_params and spec_params[name] is not None:
+            return spec_params[name]
+    return None
+
+
+def _as_float_list(value: Any, name: str, expected: int) -> list[float]:
+    """把参数解析为定长浮点列表；非法输入给出明确错误。"""
+    if not isinstance(value, (list, tuple)):
+        raise ValueError(f"参数 {name} 必须是长度 {expected} 的数值列表，实际为 {type(value).__name__}")
+    if len(value) != expected:
+        raise ValueError(f"参数 {name} 必须有 {expected} 个元素，实际 {len(value)} 个")
+    try:
+        return [float(v) for v in value]
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"参数 {name} 含非数值元素：{value!r}") from exc
+
+
+def _as_int_list(value: Any, name: str, expected: int) -> list[int]:
+    """把参数解析为定长整型列表；非法输入给出明确错误。"""
+    if not isinstance(value, (list, tuple)):
+        raise ValueError(f"参数 {name} 必须是长度 {expected} 的整数列表，实际为 {type(value).__name__}")
+    if len(value) != expected:
+        raise ValueError(f"参数 {name} 必须有 {expected} 个元素，实际 {len(value)} 个")
+    try:
+        return [int(v) for v in value]
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"参数 {name} 含非整型元素：{value!r}") from exc
+
+
+def _resolve_output_type(value: Any) -> Any:
+    """把输出数据类型名解析为 GDAL 数据类型常量。
+
+    未知类型名必须报错（不得静默回退到源类型），否则「dtype 按明确参数验收」无从谈起。
+    """
+    if value is None:
+        return None
+    key = str(value).strip().lower()
+    if key in _GDAL_OUTPUT_TYPES:
+        return getattr(gdal, f"GDT_{_GDAL_OUTPUT_TYPES[key]}")
+    # 允许直接传 GDAL 常量名（如 "GDT_Float32"）
+    if key.startswith("gdt_"):
+        const = getattr(gdal, key.upper(), None)
+        if const is not None:
+            return const
+    raise ValueError(
+        f"未知的输出数据类型 {value!r}；可用：{sorted(_GDAL_OUTPUT_TYPES)}"
+    )
+
+
 class GDALProviderAdapter(ProviderAdapter):
     """GDAL 算法与格式转换适配器。"""
 
@@ -275,25 +343,110 @@ class GDALProviderAdapter(ProviderAdapter):
         src_srs = spec.parameters.get("srcSRS") or spec.parameters.get("src_srs")
         dst_nodata = spec.parameters.get("dstNodata") or spec.parameters.get("dst_nodata")
 
+        # P4-01：裁剪 / 重采样 / 输出网格参数装配
+        # 参数非法时必须显式报错（不得静默忽略），否则「按明确参数验收」无从谈起。
+        params = spec.parameters
+        try:
+            src_win = _first_param(params, "srcWin", "src_win", "window")
+            proj_win = _first_param(params, "projWin", "proj_win")
+            out_bounds = _first_param(params, "outputBounds", "output_bounds")
+            x_res = _first_param(params, "xRes", "x_res", "x_resolution")
+            y_res = _first_param(params, "yRes", "y_res", "y_resolution")
+            out_type = _first_param(params, "outputType", "output_type", "dtype")
+            out_width = _first_param(params, "width", "out_width")
+            out_height = _first_param(params, "height", "out_height")
+            translate_nodata = _first_param(params, "noData", "no_data", "nodata")
+            target_aligned = _first_param(params, "targetAlignedPixels", "target_aligned_pixels")
+
+            src_win_list = (
+                _as_int_list(src_win, "srcWin", 4) if src_win is not None else None
+            )
+            proj_win_list = (
+                _as_float_list(proj_win, "projWin", 4) if proj_win is not None else None
+            )
+            out_bounds_list = (
+                _as_float_list(out_bounds, "outputBounds", 4) if out_bounds is not None else None
+            )
+            output_type = _resolve_output_type(out_type)
+            x_res_f = float(x_res) if x_res is not None else None
+            y_res_f = float(y_res) if y_res is not None else None
+            if x_res_f is not None and x_res_f <= 0:
+                raise ValueError(f"参数 xRes 必须为正数，实际 {x_res_f}")
+            if y_res_f is not None and y_res_f <= 0:
+                raise ValueError(f"参数 yRes 必须为正数，实际 {y_res_f}")
+            out_w_i = int(out_width) if out_width is not None else None
+            out_h_i = int(out_height) if out_height is not None else None
+            if out_w_i is not None and out_w_i <= 0:
+                raise ValueError(f"参数 width 必须为正数，实际 {out_w_i}")
+            if out_h_i is not None and out_h_i <= 0:
+                raise ValueError(f"参数 height 必须为正数，实际 {out_h_i}")
+            translate_nodata_f = (
+                float(translate_nodata) if translate_nodata is not None else None
+            )
+        except (TypeError, ValueError) as exc:
+            context.log("ERROR", f"Invalid processing parameters: {exc}")
+            return TaskResult(
+                task_id=spec.task_id,
+                attempt=spec.attempt,
+                status=TaskStatus.failed,
+                error={"code": "invalid_parameters", "message": str(exc)},
+                duration_seconds=round(time.monotonic() - start_time, 4),
+            )
+
         try:
             if is_warp:
-                warp_opts = gdal.WarpOptions(
-                    format=out_format,
-                    dstSRS=dst_srs,
-                    srcSRS=src_srs,
-                    dstNodata=dst_nodata,
-                    resampleAlg=resample_alg,
-                    creationOptions=creation_options,
-                    callback=_gdal_cb,
-                )
+                warp_kwargs: dict[str, Any] = {
+                    "format": out_format,
+                    "dstSRS": dst_srs,
+                    "srcSRS": src_srs,
+                    "dstNodata": dst_nodata,
+                    "resampleAlg": resample_alg,
+                    "creationOptions": creation_options,
+                    "callback": _gdal_cb,
+                }
+                if out_bounds_list is not None:
+                    warp_kwargs["outputBounds"] = out_bounds_list
+                if x_res_f is not None:
+                    warp_kwargs["xRes"] = x_res_f
+                if y_res_f is not None:
+                    warp_kwargs["yRes"] = y_res_f
+                if output_type is not None:
+                    warp_kwargs["outputType"] = output_type
+                if out_w_i is not None:
+                    warp_kwargs["width"] = out_w_i
+                if out_h_i is not None:
+                    warp_kwargs["height"] = out_h_i
+                if target_aligned is not None:
+                    # 仅 Warp 支持 targetAlignedPixels（实测 Translate 不接受该关键字）
+                    warp_kwargs["targetAlignedPixels"] = bool(target_aligned)
+                warp_opts = gdal.WarpOptions(**warp_kwargs)
                 ds = gdal.Warp(str(staged_path), str(in_path), options=warp_opts)
             else:
-                opts = gdal.TranslateOptions(
-                    format=out_format,
-                    resampleAlg=resample_alg,
-                    creationOptions=creation_options,
-                    callback=_gdal_cb,
-                )
+                translate_kwargs: dict[str, Any] = {
+                    "format": out_format,
+                    "resampleAlg": resample_alg,
+                    "creationOptions": creation_options,
+                    "callback": _gdal_cb,
+                }
+                if src_win_list is not None:
+                    translate_kwargs["srcWin"] = src_win_list
+                if proj_win_list is not None:
+                    translate_kwargs["projWin"] = proj_win_list
+                if out_bounds_list is not None:
+                    translate_kwargs["outputBounds"] = out_bounds_list
+                if x_res_f is not None:
+                    translate_kwargs["xRes"] = x_res_f
+                if y_res_f is not None:
+                    translate_kwargs["yRes"] = y_res_f
+                if output_type is not None:
+                    translate_kwargs["outputType"] = output_type
+                if translate_nodata_f is not None:
+                    translate_kwargs["noData"] = translate_nodata_f
+                if out_w_i is not None:
+                    translate_kwargs["width"] = out_w_i
+                if out_h_i is not None:
+                    translate_kwargs["height"] = out_h_i
+                opts = gdal.TranslateOptions(**translate_kwargs)
                 ds = gdal.Translate(str(staged_path), str(in_path), options=opts)
         except Exception as exc:
             if context.is_cancelled.is_set():

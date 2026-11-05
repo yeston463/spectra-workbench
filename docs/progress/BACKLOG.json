@@ -466,9 +466,18 @@
         "P3-05",
         "P1-05"
       ],
-      "status": "todo",
+      "status": "implemented",
       "release_requirement": "core",
-      "evidence": [],
+      "evidence": [
+        "Worker 侧接入裁剪/重采样/输出网格参数（src/spectra_workbench/providers/gdal_provider/adapter.py）：Translate 支持 srcWin（像元窗口）、projWin（地理窗口）、outputBounds、xRes/yRes、outputType、noData、width/height；Warp 支持 outputBounds、xRes/yRes、outputType、dstNodata、targetAlignedPixels、width/height。",
+        "参数名兼容 GDAL CLI 风格与 snake_case；非法参数（元素个数不对、非数值、宽高非正、未知 dtype）一律返回 invalid_parameters 错误，不静默忽略也不回退到源参数——否则「按明确参数验收」无从谈起。",
+        "关键字可用性按 **GDAL 3.13.3 实测**确定而非凭印象：Translate 不接受 targetAlignedPixels 与 scale，Warp 不接受 srcWkt（源 CRS 用 srcSRS 传入）；未实现的组合不写入代码，避免必然报错的路径。",
+        "GUI 参数表单（src/spectra_workbench/ui/forms/param_form.py）暴露 P4-01 参数：裁剪窗口（xoff,yoff,xsize,ysize）、输出像元宽高（xRes/yRes）、输出尺寸（width,height）、输出网格对齐（targetAlignedPixels，仅 Warp）；留空控件不产生任何参数；非法输入给出明确提示并中止提交；参数采集抽为 _collect_grid_params 便于直接测试。",
+        "tests/integration/test_p4_clip_resample.py（14 项）按原验收标准逐项验收：输出网格（srcWin/projWin/outputBounds/xRes/yRes/width/height/targetAlignedPixels）、dtype（outputType 落盘类型核对 + 非法类型拒绝）、mask（noData 传播与源 NoData 保留）、CRS（dstSRS 生效、EPSG 核对、量级变化核对）、像元值（裁剪后与源数据逐点一致、最近邻值必须来自源数据、双线性结果落在源值域内、裁剪+重采样组合）。",
+        "tests/integration/test_p4_param_form.py（11 项）验证 GUI 参数下发：留空不产生参数、裁剪窗口/分辨率/尺寸正确下发、0 是「不指定」哨兵不下发、非法输入被拒绝、targetAlignedPixels 只对 Warp 生效。",
+        "关键实测结论（已写入测试注释）：GDAL 的 projWin 顺序是 [minX, maxY, maxX, minY]（先上边界后下边界），传 [minX, minY, maxX, maxY] 会报 negative width and/or height；设置 NoData 后 GDAL 不一定置 GMF_NODATA 标志（本例为 GMF_ALPHA=8），因此 NoData 是否生效以 GetNoDataValue() 判定而非标志位。",
+        "本轮未覆盖（属其他条目）：网格拼接与 VRT 属 P4-02；波段堆叠与概览写入属 P4-02/P4-03；ENVI 头文件与格式高级选项属 P4-03；表达式与直方图属 P4-04。"
+      ],
       "blocking_reason": null
     },
     {

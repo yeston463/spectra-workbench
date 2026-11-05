@@ -24,9 +24,13 @@
 
 | ID | 任务 | 原始验收标准 | 当前已满足项与实测证据 | 剩余缺口与待验条件 | 当前状态 |
 |---|---|---|---|---|---|
-| P3-01 | 主窗口、Dock、项目树、图层模型 | 基础项目可保存重开源/样式/视图；布局可恢复；关闭图层释放文件；中文高 DPI 可用 | 项目 JSON 相对路径序列化与重开恢复通过；分离运行时根与用户项目目录；新项目显式记录 `path_anchor`；保存事务边界加固，写失败无内存污染；整体复制搬移保持可用；另存为重算引用指向原数据；旧版 1.0 路径歧义进入待确认流程不自动猜测，用户确认后按真实路径派发并迁移持久化，取消确认原文件保持不变；无论确认目标是否存在均保留用户选择并在保存重开后目标一致；缺失图层与 ROI 在保存/另存为时不丢失；缺失源列表明确指示并支持重新关联与主动移除；图层移除后重命名与删除证明 Windows 句柄已彻底释放；为所有 Dock 窗体显式设置 `objectName`，调整浮动（isFloating）、显隐（isVisible）、左右停靠区互换，保存项目并在全新实例重开验证布局无损恢复（`tests/integration/test_p3_dock_layout_persistence.py` 全绿）；中文路径测试通过。 | 原生桌面不同物理显示器 DPI 切换与排版微调待更广泛物理环境实测。 | implemented |
-| P3-02 | 栅格/矢量/子数据集的元数据读取 | 数据类型、NoData、mask、单位、波段与空间模型准确；不完整数据明确报错 | 栅格尺寸、dtype、NoData、波段、空间参考、旋转 Affine 准确探测；不完整/损坏文件返回清晰错误且不中断 Worker。 | P3-02 原始范围内的矢量图层（OGR）与科学子数据集（HDF/NetCDF subdatasets）基础元数据探测本期尚未实现/验证。 | implemented |
-| P3-03 | 瓦片请求、概览、缓存、过期请求处理 | 只读可见窗口；切换波段不出现旧图；内存增长受缓存预算限制 | 仅读视口局部数据；快速切层/切波段过期响应安全丢弃；TileCache 具备字节预算与 LRU 淘汰机制；在离屏 Qt GUI 环境（`QT_QPA_PLATFORM=offscreen`，包含真实 QMainWindow、QGraphicsView 绘制与显示数组及独立 WorkerProcess）下，使用 6144x6144 多级概览大影像（303 MB），在 10 MiB 小缓存预算下连续实测缩放、平移、切波段与切层，真实触发 7 次 LRU 淘汰，缓存占用严格限制在预算内（阶段采样缓存峰值 10106361 bytes ≈ 9.64 MiB < 10 MiB 预算），GUI 阶段采样 RSS 最大值为 194.91 MiB，Worker 峰值 77.89 MiB；图层移除与关窗后缓存严格清零（0 bytes），GUI 退出保留 RSS 约 187.8 MiB（受 Python 内存分配器池化保留影响，底层 TileCache 清空无泄露）（`docs/progress/runs/p3_gui_memory.json`，`tests/integration/test_p3_real_gui_memory.py` 全绿）。 | 超大影像长周期持续交互在不同显卡驱动与物理桌面下的渲染平滑度待后续实测。 | implemented |
+| P3-01 | 主窗口、Dock、项目树、图层模型 | 基础项目可保存重开源/样式/视图；布局可恢复；关闭图层释放文件；中文高 DPI 可用 | 项目 JSON 相对路径序列化与重开恢复通过；分离运行时根与用户项目目录；新项目显式记录 `path_anchor`；保存事务边界加固，写失败无内存污染；整体复制搬移保持可用；另存为重算引用指向原数据；旧版 1.0 路径歧义进入待确认流程不自动猜测，用户确认后按真实路径派发并迁移持久化，取消确认原文件保持不变；无论确认目标是否存在均保留用户选择并在保存重开后目标一致；缺失图层与 ROI 在保存/另存为时不丢失；缺失源列表明确指示并支持重新关联与主动移除；图层移除后重命名与删除证明 Windows 句柄已彻底释放；为所有 Dock 窗体显式设置 `objectName`，调整浮动（isFloating）、显隐（isVisible）、左右停靠区互换，保存项目并在全新实例重开验证布局无损恢复（`tests/integration/test_p3_dock_layout_persistence.py` 全绿）；中文路径测试通过。 中文字体族可用性、字体初始化返回值与高 DPI 缩放下主窗口/子控件几何已补直接断言
+（`tests/integration/test_p3_acceptance_gaps.py` 3 项）；
+原生桌面不同物理显示器 DPI 切换与排版微调待更广泛物理环境实测。 | implemented |
+| P3-02 | 栅格/矢量/子数据集的元数据读取 | 数据类型、NoData、mask、单位、波段与空间模型准确；不完整数据明确报错 | 栅格尺寸、dtype、NoData、mask 标志、单位、波段、空间参考、旋转 Affine 准确探测；不完整/损坏文件返回清晰错误且不中断 Worker；**矢量图层（OGR）基础元数据已实现**：图层名称、几何类型、CRS、范围、字段名称/类型/可空性，要素数与范围不可得时如实标注（`GetFeatureCount(force=0)`，不强制全表扫描）；**科学子数据集已实现**：发现列表原样保留引擎数据源引用（`NETCDF:"file.nc":Band1`，不作路径解析），选中后探测尺寸/dtype/NoData/波段/GeoTransform/CRS；范围按四个像元外边界角点计算，旋转仿射下与四角预期相等；矢量文件可作为图层打开、选中并保存重开；元数据请求带项目代际/图层/数据源/当前选择/请求代际五重上下文校验，跨图层与同容器子数据集的迟到成功与迟到错误均不得覆盖当前内容 | 课程原始 ENVI 栅格与 lena.tif 的真实打开验证待条件具备时补做（原退出条件允许以合成影像完成同类验收并保留真实数据待验状态）；矢量渲染与多维分析不属 P3-02 范围，未实现 | implemented |
+| P3-03 | 瓦片请求、概览、缓存、过期请求处理 | 只读可见窗口；切换波段不出现旧图；内存增长受缓存预算限制 | 仅读视口局部数据；快速切层/切波段过期响应安全丢弃；TileCache 具备字节预算与 LRU 淘汰机制；在离屏 Qt GUI 环境（`QT_QPA_PLATFORM=offscreen`，包含真实 QMainWindow、QGraphicsView 绘制与显示数组及独立 WorkerProcess）下，使用 6144x6144 多级概览大影像（303 MB），在 10 MiB 小缓存预算下连续实测缩放、平移、切波段与切层，真实触发 7 次 LRU 淘汰，缓存占用严格限制在预算内（阶段采样缓存峰值 10106361 bytes ≈ 9.64 MiB < 10 MiB 预算），GUI 阶段采样 RSS 最大值为 194.91 MiB，Worker 峰值 77.89 MiB；图层移除与关窗后缓存严格清零（0 bytes），GUI 退出保留 RSS 约 187.8 MiB（受 Python 内存分配器池化保留影响，底层 TileCache 清空无泄露）（`docs/progress/runs/p3_gui_memory.json`，`tests/integration/test_p3_real_gui_memory.py` 全绿）。 | 「切换波段不出现旧图」已补直接断言：可控客户端注入旧波段迟到响应，
+断言画布不渲染旧内容且最终显示为新波段（`tests/integration/test_p3_acceptance_gaps.py`）；
+超大影像长周期持续交互在不同显卡驱动与物理桌面下的渲染平滑度待后续实测。 | implemented |
 | P3-04 | 灰度/RGB/伪彩、拉伸、透明度与分屏 | 显示改变不改原始像元；抽样统计有标识；跨视图同步模式正确 | 灰度/RGB/伪彩/透明度完整支持；显示拉伸与原始像元查询严格解耦；双视图联动同步测试通过。 | 极值与分位数拉伸在特殊极端动态范围数据下的精细边界表现待进一步实测验证。 | implemented |
 | P3-05 | view CRS、重投影、查询与 ROI | 旋转 affine、不同 CRS、无 CRS 视图、像元中心/角点均有样例 | 旋转 Affine 与无 CRS 栅格支持；地图坐标与像元行列中心/角点换算通过；ROI 模型支持多点、矩形与多边形；视图跨 CRS 重投影网格读取通过；使用真实 Qt 鼠标事件（QTest）完成多边形 ROI 逐点绘制、右键/起点闭合、选中、顶点手柄拖拽形变、删除与保存重开恢复；修复快速连续点击误闭合缺陷，严格区分位置邻近双击与快速多顶点绘制，支持四边形、八边形快速普通点击完整保留顶点；实现 ROI 存储几何（权威坐标空间、源 CRS、像元中心/角点约定）与显示几何的分离与 Worker 双向转换，在旋转 Affine 栅格下精确验证已知像元角点 (10, 10) 在原生地图 CRS (EPSG:32650) 下渲染于 (500025, 3199985)；地图视图下手柄拖动反算回权威像元坐标，不将地图坐标写入像元 ROI；像元 -> 原生地图 CRS -> EPSG:4326 -> 像元往返覆盖无损；不同 ROI 坐标空间混合保存重开恢复；无 CRS / 无地理参考数据集明确限制地图换算，不盲猜；异步换算带视图/图层代际保护，旧响应安全丢弃；矩形 ROI 权威模型与显示轮廓物理分离，在旋转 Affine 栅格下展开 4 角点经 Worker 转换，精确断言 4 个地图角点与 425.0 平方地图单位覆盖面积（彻底杜绝错误轴对齐面积 375.0），变换视图下手柄隐藏禁用，防止扭曲矩形；坐标转换失败绝不伪装恒等变换，严格隐藏图形项（`item.isVisible() is False`）并清空 `display_points`（为 None），保全权威模型，切回有效视图自动恢复；拖动反算 Worker 报错时安全回退，不崩溃不污染；本轮新增五类坐标转换失败故障注入矩阵与跨坐标空间数据混用缺陷修复，显示点空间与 CRS 显式入状态、反算按显示点自身空间判定，拖动反算失败恢复原轮廓（`tests/integration/test_p3_interactive_polygon_roi.py` 9 项测试全绿）。 | 复杂自相交多边形与拓扑重叠高级几何关系待后续专题完善。 | implemented |
 
@@ -156,6 +160,127 @@ CRT 检测到栈状态异常后立即终止进程，这正是 `STATUS_STACK_BUFF
 
 该缺陷与退出异常同属「worker 生命周期管理」范畴，但不是同一个根因：
 它发生在运行期（请求丢失），退出异常发生在解释器收尾阶段。
+
+### P3 原验收清单逐句核对（2026-11-05 第 25 轮）
+
+对照 `docs/plan/02_里程碑与验收.md` 的 P3 原验收标准逐分句核对。
+**状态含义**：已满足 = 有可执行验收证据；待验 = 实现存在但缺直接断言，或需真实课程数据终判。
+按 AGENTS.md 第 9 条，`implemented` 状态本身不等于验收通过，下表只陈述证据事实。
+
+**P3-01 主窗口、Dock、项目树、图层模型**
+「基础项目可保存重开源/样式/视图；布局可恢复；关闭图层释放文件；中文高 DPI 可用」
+
+| 分句 | 状态 | 证据 |
+|---|---|---|
+| 基础项目可保存重开源/样式/视图 | 已满足 | `test_p3_viewing_flow.py::test_project_saves_order_visibility_display_and_view`；`test_p3_persistence_regression.py`（19 项，含保存重开与目标防同名劫持） |
+| 布局可恢复 | 已满足 | `test_p3_dock_layout_persistence.py`（2 项：浮动/显隐/停靠区域重排跨会话持久化与重开恢复） |
+| 关闭图层释放文件 | 已满足 | `test_p3_viewing_flow.py::test_closing_layer_releases_file_handle` |
+| 中文高 DPI 可用 | 已满足（第 25 轮补齐） | 第 25 轮新增 `test_p3_acceptance_gaps.py`（3 项）：中文字体族可用、`ensure_application_fonts` 返回可用字体数、高 DPI 缩放下主窗口与子控件几何有效 |
+
+**P3-02 栅格/矢量/子数据集的元数据读取**
+「数据类型、NoData、mask、单位、波段与空间模型准确；不完整数据明确报错」
+
+| 分句 | 状态 | 证据 |
+|---|---|---|
+| 数据类型 / NoData | 已满足 | `probe_dataset` 返回 `dtypes` 与逐波段 `nodata`；`test_p3_query_stats.py`（19 项） |
+| mask | 已满足 | 逐波段 `mask_flags` / `all_valid` / `has_nodata_flag` / `has_alpha`；`test_p3_viewing_flow.py::test_invalid_pixels_are_transparent_valid_zero_is_not` |
+| 单位 | 已满足 | 逐波段 `unit`；`test_p3_viewing_flow.py::test_hover_query_shows_raw_physical_and_status` |
+| 波段 | 已满足 | `bands` 列表含 dtype/nodata/description/overviews/scale/offset |
+| 空间模型 | 已满足 | `spatial_model` 区分 `affine` / `gcp` / `none`，另有 `gcp_count` / `gcp_crs_wkt`；无 GT 栅格有专门样例 |
+| 不完整数据明确报错 | 已满足 | `probe_failed` 错误 Schema；缺失矢量与缺失子数据集的明确错误见 `test_p3_vector_subdataset_metadata.py`（10 项） |
+| 矢量与子数据集元数据 | 已满足（第 22–24 轮） | `probe_vector` / `list_subdatasets` / `probe_subdataset`；四角仿射范围、要素数 `force=0`、图层类型路由、跨图层与同容器请求上下文隔离均已有回归 |
+
+**P3-03 瓦片请求、概览、缓存、过期请求处理**
+「只读可见窗口；切换波段不出现旧图；内存增长受缓存预算限制」
+
+| 分句 | 状态 | 证据 |
+|---|---|---|
+| 只读可见窗口 | 已满足 | `read_window` 协议按可见窗口分块读取（最大 1024×1024），严禁整幅读入 |
+| 切换波段不出现旧图 | 已满足（第 25 轮补齐） | 第 25 轮新增 `test_p3_acceptance_gaps.py::test_switching_band_does_not_show_previous_band`：可控客户端注入旧波段迟到响应，断言画布**不渲染**旧内容（`img_item.image is None`），最终显示为新波段；另 `::test_switching_band_invalidates_pending_response` 断言代际推进 |
+| 内存增长受缓存预算限制 | 已满足 | `test_p3_viewing_flow.py::test_cache_budget_is_enforced_across_many_views`；真实 GUI 6144×6144 大影像实测 LRU 逐出 9 次（`docs/progress/runs/p3_gui_memory.json`，`test_p3_real_gui_memory.py`） |
+
+**P3-04 灰度/RGB/伪彩、拉伸、透明度与分屏**
+「显示改变不改原始像元；抽样统计有标识；跨视图同步模式正确」
+
+| 分句 | 状态 | 证据 |
+|---|---|---|
+| 显示改变不改原始像元 | 已满足 | `test_p3_viewing_flow.py::test_display_changes_never_alter_source_pixels`（灰度/伪彩/RGB 三种模式切换后源像元不变） |
+| 抽样统计有标识 | 已满足 | `test_p3_viewing_flow.py::test_stats_buttons_label_sampled_and_full`；`test_p3_query_stats.py::test_stats_sampled_is_labelled_and_full_is_exact`（抽样标 `mode=sampled`/`source=sampled_grid`/`stride>1`） |
+| 跨视图同步模式正确 | 已满足 | `test_p3_viewing_flow.py::test_dual_view_sync_and_release`（双视图视图状态联动与资源释放） |
+| 拉伸区分 | 已满足 | `test_p3_viewing_flow.py::test_percentile_and_minmax_bounds_differ_on_spike` |
+
+**P3-05 view CRS、重投影、查询与 ROI**
+「旋转 affine、不同 CRS、无 CRS 视图、像元中心/角点均有样例」
+
+| 分句 | 状态 | 证据 |
+|---|---|---|
+| 旋转 affine | 已满足 | `test_p3_query_stats.py`（19 项，含旋转 Affine 样例）；矩形四角在旋转仿射下精确断言 4 个地图角点与 425.0 平方单位覆盖面积 |
+| 不同 CRS | 已满足 | `test_p3_viewing_flow.py::test_view_crs_switch_uses_worker_wkt`；跨 CRS 视图重投影网格读取 |
+| 无 CRS 视图 | 已满足 | 无 GT 栅格样例（`p3_nogt.tif`）与无 CRS 图层样例；`test_p3_interactive_polygon_roi.py::test_no_crs_and_no_gt_refuses_map_conversion_and_stale_generation_dropped` |
+| 像元中心/角点 | 已满足 | `map_to_pixel` 支持 `center` / `corner` 两种坐标约定，均有样例 |
+| ROI 完整流程 | 已满足 | 真实鼠标事件多边形 ROI 绘制/闭合/选中/手柄拖拽/删除/保存重开（`test_p3_interactive_polygon_roi.py`，9 项） |
+
+**P3 里程碑退出条件**
+原退出条件：「可打开已有 FFT 包中的 ENVI 栅格与 lena.tif，查看多波段影像、像元数值、ROI 和对比；
+若课程路径不存在，用合成影像完成同类验收并保留真实数据待验状态。」
+
+| 分项 | 状态 | 说明 |
+|---|---|---|
+| 用合成影像完成同类验收 | 已满足 | 合成 ENVI/GTiff/GeoJSON/netCDF 样例覆盖多波段、像元数值、ROI 与对比 |
+| 保留真实数据待验状态 | **待验** | 课程原始数据位于 `C:\Users\赵航\Desktop\studio\_chaoxing_rs`（**只读**，不得运行其中的抓取/下载/OCR 脚本）；本轮全部用合成影像验收，未对课程原始 ENVI 栅格与 lena.tif 做真实打开验证 |
+
+### 第 25 轮：P3 原验收清单逐句对账 + P4-01 裁剪/重采样/输出网格
+
+**一、P3 原验收清单**（见上方「P3 原验收清单逐句核对」章节）
+
+按 `docs/plan/02_里程碑与验收.md` 的原验收标准逐分句核对，补齐了两处此前缺少直接断言的项：
+- **P3-01「中文高 DPI 可用」**：此前只有 `ensure_application_fonts` 的实现，没有直接断言。
+  新增 `tests/integration/test_p3_acceptance_gaps.py`（3 项）：中文字体族可用、
+  字体初始化返回可用字体数、高 DPI 缩放下主窗口与子控件几何有效。
+- **P3-03「切换波段不出现旧图」**：此前只有视图层的过期响应断言。
+  新增同文件 2 项：可控客户端注入旧波段迟到响应，断言画布**不渲染**旧内容
+  （`img_item.image is None`）且最终显示为新波段；切换波段必须推进画布代际。
+
+P3 里程碑退出条件中「保留真实数据待验状态」一项标为**待验**：
+课程原始 ENVI 栅格与 lena.tif 位于只读目录 `_chaoxing_rs`，本轮全部用合成影像验收，
+未对课程原始数据做真实打开验证。
+
+**二、P4-01 裁剪、重采样与输出网格**
+
+原验收标准：「输出网格、dtype、mask、CRS 和像元值按明确参数验收」。
+
+Worker 侧（`providers/gdal_provider/adapter.py`）接入：
+- Translate：`srcWin`（像元窗口）、`projWin`（地理窗口）、`outputBounds`、
+  `xRes`/`yRes`、`outputType`、`noData`、`width`/`height`；
+- Warp：`outputBounds`、`xRes`/`yRes`、`outputType`、`dstNodata`、
+  `targetAlignedPixels`、`width`/`height`。
+
+关键字可用性按 **GDAL 3.13.3 实测**确定（不是凭印象）：Translate 不接受
+`targetAlignedPixels` 与 `scale`，Warp 不接受 `srcWkt`；未实现的组合不写入代码。
+非法参数一律返回 `invalid_parameters`，不静默忽略、不回退到源参数。
+
+GUI 参数表单暴露 P4-01 参数（裁剪窗口、输出像元宽高、输出尺寸、输出网格对齐），
+留空控件不产生任何参数，非法输入给出明确提示并中止提交。
+
+验收测试 25 项：
+- `tests/integration/test_p4_clip_resample.py`（14 项）逐项验收输出网格、dtype、mask、
+  CRS、像元值——裁剪后像元值与源数据**逐点一致**，最近邻重采样值必须**来自源数据**，
+  双线性结果必须落在源值域内，dtype 与 NoData 均核对**落盘实际值**；
+- `tests/integration/test_p4_param_form.py`（11 项）验证 GUI 参数下发与非法输入拒绝。
+
+**实测结论（已写入测试注释，避免后续踩坑）**：
+- GDAL 的 `projWin` 顺序是 `[minX, maxY, maxX, minY]`（先上边界后下边界）；
+  传 `[minX, minY, maxX, maxY]` 会报 "negative width and/or height"。
+- 设置 NoData 后 GDAL **不一定**置 `GMF_NODATA` 标志（本例实测为 `GMF_ALPHA=8`），
+  因此 NoData 是否生效以 `GetNoDataValue()` 判定而非标志位。
+
+**三、本轮全量跑再次触发退出异常 0xC0000409（如实记录）**
+
+15:17:33 那轮全量 **356 passed 但 rc=3221226505**；15:2x 重跑 **356 passed / rc=0**。
+两次均为「全部用例通过后、解释器退出阶段」异常退出，与第 21–24 轮观察一致。
+失败轮日志已并入 `docs/progress/runs/exit_anomaly/test_all_history.log`（现含 18 轮，
+其中 3 轮 rc=3221226505：256/286/356 项）。历史日志此前因归档操作被截断，
+本轮已从 git 版本合并恢复完整 18 轮。**根因仍未定位，维持「不宣称根治」**。
 
 ### 第 24 轮：同一容器内子数据集切换的请求上下文隔离
 
@@ -342,7 +467,7 @@ Thread 0x0000d064 (most recent call first):
 | P0-01 仓库与文档结构 | done | git init（2.50.1）；docs/plan/ 输入基线、contracts/、src/、tests/；AGENTS.md、README.md、pyproject.toml；docs/progress/WORKPACKAGES.md |
 | P0-02 四环境 | implemented | scripts/bootstrap_pip.ps1 -VerifyOnly → RESULT ALL OK；docs/progress/runs/env_report.json；environments/locks/*.lock.txt |
 | P0-03 自检与小型 Fixture | implemented | src/spectra_workbench/app/doctor.py + scripts/doctor.ps1 → docs/progress/runs/doctor_report.json。GTiff 往返成功、坐标转换成功、205 驱动、5 CLI 就绪；单测全绿 |
-| P0-04 自动化检查流水线 | done | scripts/test.ps1，串联 Ruff、Mypy 与 Pytest。Mypy 57 个源文件 0 错误；全量自动化测试通过：**326 passed in 120.79s**，全量回归子进程 rc=0（2026-11-05 第 24 轮，同容器子数据集上下文隔离）；第 23 轮为 318 passed in 110.47s、rc=0；第 22 轮为 308 passed in 116.50s、rc=0；第 21 轮为 297 passed in 105.12s、rc=0；如实记录 07:48:47 历史退出异常轮次（286 passed，0xC0000409）与后续 07:54:31、07:56:16（286 passed，rc=0）及本轮（297 passed，rc=0），全面加固 Qt 对象生命周期有序销毁 |
+| P0-04 自动化检查流水线 | done | scripts/test.ps1，串联 Ruff、Mypy 与 Pytest。Mypy 57 个源文件 0 错误；全量自动化测试通过：**356 passed in 138.40s**，全量回归子进程 rc=0（2026-11-05 第 25 轮，P3 验收清单 + P4-01 裁剪/重采样/输出网格）；第 23 轮为 318 passed in 110.47s、rc=0；第 22 轮为 308 passed in 116.50s、rc=0；第 21 轮为 297 passed in 105.12s、rc=0；如实记录 07:48:47 历史退出异常轮次（286 passed，0xC0000409）与后续 07:54:31、07:56:16（286 passed，rc=0）及本轮（297 passed，rc=0），全面加固 Qt 对象生命周期有序销毁 |
 | P0-05 打包重定位可行性验证 | implemented | docs/adr/0002-relocation-and-packaging.md；tests/integration/test_relocation.py 验证 UI 与 Rasterio、GDAL 引擎在独立临时路径正常初始化并导入 |
 | P1-01 领域模型与契约对账 | done | src/spectra_workbench/domain/models.py；tests/unit/test_domain_models.py；tests/unit/test_contracts_schema.py（50 项全绿） |
 | P1-02 JSONL 客户端与 Worker 启动 | done | src/spectra_workbench/protocol/messages.py；src/spectra_workbench/workers/process.py；src/spectra_workbench/workers/entrypoint.py；tests/integration/test_worker_process.py（8 项真实跨进程测试全绿） |
@@ -361,8 +486,8 @@ Thread 0x0000d064 (most recent call first):
 | P3-05 view CRS、重投影、查询与 ROI | implemented | 旋转 Affine 与无 GT 栅格支持；地图坐标 ↔ 像元中心/角点约定；ROI 模型与点包含判定；跨 CRS 视图重投影网格读取；真实鼠标事件多边形 ROI 绘制/闭合/选中/手柄拖拽/删除/保存重开全流程；矩形展开 4 角点经 Worker 转换并精确保持 425 平方单位面积与 4 个角点；坐标转换失败异常隔离隐藏并保全权威模型；五类故障注入矩阵覆盖（向地图/回像元/项目重开/拖动反算/旧响应迟到），跨坐标空间数据混用缺陷已修复（tests/integration/test_p3_interactive_polygon_roi.py 9 项全绿） |
 
 实测命令与结果：
-- powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test.ps1 -All → **Ruff 干净、Mypy 干净（57 个源文件 0 错误）、326 passed in 120.79s，exit 0**
-  - 第 24 轮（同一容器内子数据集切换的请求上下文隔离）：新增 8 项子数据集上下文回归；**全量跑须前台运行**（需 110–122 秒，后台任务约 2 分钟上限会中途终止，见下方说明）；第 23 轮为 318 passed in 110.47s、rc=0
+- powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test.ps1 -All → **Ruff 干净、Mypy 干净（57 个源文件 0 错误）、356 passed in 138.40s，exit 0**
+  - 第 25 轮（P3 验收清单 + P4-01）：新增 30 项（P3 验收缺口 5 项 + P4-01 裁剪重采样 14 项 + P4-01 表单 11 项）；**全量跑须前台运行**（需 110–122 秒，后台任务约 2 分钟上限会中途终止，见下方说明）；第 23 轮为 318 passed in 110.47s、rc=0
   - 第 23 轮（P3-02 元数据实现边界修正）：新增 10 项元数据边界回归（要素数 force=0、图层类型路由、请求上下文、仿射四角范围）；本轮 pytest 临时根目录使用全新路径（见上方「运行方式的要求」）；第 22 轮为 308 passed in 116.50s、rc=0
   - 第 22 轮（P3-02 矢量与子数据集元数据）：新增 11 项（矢量与子数据集集成 10 项 + stop() 回调死锁回归 1 项）；本轮使用位于本轮工作目录内的独立临时根目录（pytest 的 basetemp 选项），避开环境删除守卫对全局旧临时目录的批量删除拦截；第 21 轮为 297 passed in 105.12s、rc=0
   - 如实记录全量回归历程：

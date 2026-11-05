@@ -16,6 +16,7 @@ from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
+    QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
     QGroupBox,
@@ -136,6 +137,43 @@ class CapabilityFormWidget(QWidget):
         self.lbl_format = QLabel("输出格式 (Format):")
         self.params_form.addRow(self.lbl_format, self.cmb_format)
 
+        # --- P4-01 裁剪（像元窗口 xoff,yoff,xsize,ysize）---
+        self.txt_clip = QLineEdit()
+        self.txt_clip.setPlaceholderText("留空表示不裁剪；例：10,20,100,80")
+        self.lbl_clip = QLabel("裁剪窗口 (像元 xoff,yoff,xsize,ysize):")
+        self.params_form.addRow(self.lbl_clip, self.txt_clip)
+
+        # --- P4-01 输出像元尺寸 ---
+        self.spin_xres = QDoubleSpinBox()
+        self.spin_xres.setDecimals(8)
+        # 0 是「不指定」哨兵（specialValueText 在最小值显示）；
+        # 组装参数时只有 value() > 0 才会传给引擎，0 永不下发。
+        self.spin_xres.setRange(0.0, 1e12)
+        self.spin_xres.setSpecialValueText("不指定")
+        self.spin_xres.setValue(0.0)
+        self.lbl_xres = QLabel("输出像元宽 (xRes):")
+        self.params_form.addRow(self.lbl_xres, self.spin_xres)
+
+        self.spin_yres = QDoubleSpinBox()
+        self.spin_yres.setDecimals(8)
+        self.spin_yres.setRange(0.0, 1e12)
+        self.spin_yres.setSpecialValueText("不指定")
+        self.spin_yres.setValue(0.0)
+        self.lbl_yres = QLabel("输出像元高 (yRes):")
+        self.params_form.addRow(self.lbl_yres, self.spin_yres)
+
+        # --- P4-01 输出尺寸 ---
+        self.txt_outsize = QLineEdit()
+        self.txt_outsize.setPlaceholderText("留空表示不指定；例：512,512")
+        self.lbl_outsize = QLabel("输出尺寸 (width,height):")
+        self.params_form.addRow(self.lbl_outsize, self.txt_outsize)
+
+        # --- P4-01 输出网格对齐（仅 Warp）---
+        self.chk_tap = QCheckBox("输出网格对齐到像元边界 (targetAlignedPixels)")
+        self.chk_tap.setChecked(False)
+        self.lbl_tap = QLabel("输出网格:")
+        self.params_form.addRow(self.lbl_tap, self.chk_tap)
+
         # --- 数据类型 ---
         self.cmb_out_type = QComboBox()
         self.cmb_out_type.addItems(["保持原样 (Default)", "Byte (uint8)", "UInt16", "Int16", "Float32", "Float64"])
@@ -251,6 +289,66 @@ class CapabilityFormWidget(QWidget):
         self.lbl_resampling.setVisible(is_warp)
         self.cmb_resampling.setVisible(is_warp)
 
+        # P4-01：裁剪 / 重采样 / 输出网格
+        self._set_row_visible(self.lbl_clip, self.txt_clip, is_translate or is_warp)
+        self._set_row_visible(self.lbl_xres, self.spin_xres, is_translate or is_warp)
+        self._set_row_visible(self.lbl_yres, self.spin_yres, is_translate or is_warp)
+        self._set_row_visible(self.lbl_outsize, self.txt_outsize, is_translate or is_warp)
+        self._set_row_visible(self.lbl_tap, self.chk_tap, is_warp)
+
+    @staticmethod
+    def _set_row_visible(label: QLabel, widget: QWidget, visible: bool) -> None:
+        """同时显隐 QFormLayout 里的标签与控件。"""
+        label.setVisible(visible)
+        widget.setVisible(visible)
+
+    def _collect_grid_params(self, is_warp: bool) -> tuple[dict[str, Any], str | None]:
+        """采集 P4-01 的裁剪 / 重采样 / 输出网格参数。
+
+        返回 (参数字典, 错误消息)。错误消息非 None 表示参数非法，调用方应提示并中止提交。
+        空值一律不产生参数（绝不传 0 或空串给引擎）。
+        """
+        params: dict[str, Any] = {}
+
+        clip_text = self.txt_clip.text().strip()
+        if clip_text:
+            parts = [x.strip() for x in clip_text.replace(";", ",").split(",") if x.strip()]
+            if len(parts) != 4:
+                return params, "裁剪窗口需要 4 个整数（xoff, yoff, xsize, ysize），例如：10,20,100,80"
+            try:
+                clip_vals = [int(x) for x in parts]
+            except ValueError:
+                return params, "裁剪窗口必须是整数，例如：10,20,100,80"
+            if clip_vals[2] <= 0 or clip_vals[3] <= 0:
+                return params, "裁剪窗口的宽高必须为正数"
+            params["srcWin"] = clip_vals
+
+        x_res = float(self.spin_xres.value()) if self.spin_xres.value() > 0 else None
+        y_res = float(self.spin_yres.value()) if self.spin_yres.value() > 0 else None
+        if x_res is not None:
+            params["xRes"] = x_res
+        if y_res is not None:
+            params["yRes"] = y_res
+
+        outsize_text = self.txt_outsize.text().strip()
+        if outsize_text:
+            parts = [x.strip() for x in outsize_text.replace(";", ",").split(",") if x.strip()]
+            if len(parts) != 2:
+                return params, "输出尺寸需要 2 个整数（width, height）"
+            try:
+                out_w, out_h = int(parts[0]), int(parts[1])
+            except ValueError:
+                return params, "输出尺寸必须是整数"
+            if out_w <= 0 or out_h <= 0:
+                return params, "输出尺寸必须为正数"
+            params["width"] = out_w
+            params["height"] = out_h
+
+        if self.chk_tap.isChecked() and is_warp:
+            params["targetAlignedPixels"] = True
+
+        return params, None
+
     def _browse_input(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
             self,
@@ -321,8 +419,16 @@ class CapabilityFormWidget(QWidget):
             co_text = self.txt_co.text().strip()
             if co_text:
                 params["creation_options"] = [opt.strip() for opt in co_text.split(",") if opt.strip()]
+
         elif "rasterio" in cid:
             params["driver"] = out_fmt
+
+        # P4-01：裁剪 / 重采样 / 输出网格
+        grid_params, grid_error = self._collect_grid_params(is_warp="warp" in cid)
+        if grid_error is not None:
+            QMessageBox.warning(self, "参数不全", grid_error)
+            return
+        params.update(grid_params)
 
         provider_id = "rasterio" if "rasterio" in cid or "rio" in cid else "gdal"
         runtime_id = "rasterio-venv" if provider_id == "rasterio" else "gdal-qgis"
