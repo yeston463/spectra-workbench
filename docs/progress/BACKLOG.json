@@ -436,7 +436,7 @@
         "Worker 扩展 query_pixel / map_to_pixel / transform_bounds / read_view_window，支持中心 (center) 与角点 (corner) 两种坐标约定。",
         "tests/integration/test_p3_query_stats.py（19 项）验证旋转 Affine、无 GT 栅格与坐标换算。",
         "tests/integration/test_p3_viewing_flow.py（17 项）验证跨 CRS 视图重投影、项目保存重开与句柄释放。",
-        "真实鼠标事件多边形 ROI 绘制/闭合/选中/手柄拖拽/删除/保存重开全流程，多图层切换隔离与旋转 Affine/视图 CRS 坐标空间保全（tests/integration/test_p3_interactive_polygon_roi.py）"
+        "真实鼠标事件多边形 ROI 绘制/闭合/选中/手柄拖拽/删除/保存重开全流程；矩形展开 4 角点经 Worker 转换并精确保持 425 平方单位面积与 4 个角点；坐标转换失败异常隔离隐藏并保全权威模型（tests/integration/test_p3_interactive_polygon_roi.py 8 项全绿）"
       ],
       "blocking_reason": null
     },

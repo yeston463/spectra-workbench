@@ -278,6 +278,28 @@ class ImageCanvas(QWidget):
             self._sync_guard = False
         self.refresh()
 
+    @staticmethod
+    def _roi_points_for_transform(roi: ROI) -> list[tuple[float, float]]:
+        """将 ROI 权威几何展开为供坐标转换的顶点序列。
+
+        矩形权威模型在自身空间仅存对角两点，但在旋转仿射、倾斜或投影形变下，
+        其在其它坐标空间不再是轴对齐矩形。必须将权威对角两点展开为全部 4 个角点：
+        (min_x, min_y), (max_x, min_y), (max_x, max_y), (min_x, max_y)
+        经 Worker 转换后渲染实际几何轮廓，以严格保持真实覆盖面积与角点位置，
+        绝不能仅转换两个对角点后再用包围盒重建轴对齐矩形。
+        """
+        if roi.shape is ROIShape.rectangle and len(roi.points) == 2:
+            (x0, y0), (x1, y1) = roi.points
+            min_x, max_x = min(x0, x1), max(x0, x1)
+            min_y, max_y = min(y0, y1), max(y0, y1)
+            return [
+                (min_x, min_y),
+                (max_x, min_y),
+                (max_x, max_y),
+                (min_x, max_y),
+            ]
+        return [(float(c), float(r)) for (c, r) in roi.points]
+
     def set_view_crs(self, wkt: str | None, on_ready: Any = None) -> None:
         """切换显示 CRS。范围与 ROI 坐标换算交给 worker，带代际保护。"""
         layer = self._layer
@@ -298,7 +320,7 @@ class ImageCanvas(QWidget):
 
         target_view_crs = wkt
         bounds_data: list[float] | None = None
-        roi_results: dict[str, list[tuple[float, float]]] = {}
+        roi_results: dict[str, list[tuple[float, float]] | None] = {}
         pending_roi_ids = set(self._roi_states.keys())
         bounds_ready = False
 
@@ -321,15 +343,25 @@ class ImageCanvas(QWidget):
                 if st is None:
                     continue
                 old_item = st["item"]
-                with contextlib.suppress(Exception):
-                    self.plot_item.removeItem(old_item)
-                new_item = self._create_roi_item(st["roi"], pts, selected=(rid == self._selected_roi_id))
-                st["item"] = new_item
-                st["display_points"] = pts
-                st["gen"] = current_gen
-                self.plot_item.addItem(new_item)
-                new_item.sigRegionChanged.connect(lambda *a, s=st: self._on_roi_moved(s))
-                new_item.sigClicked.connect(lambda *a, r_id=rid: self.select_roi(r_id))
+                if pts is not None and len(pts) > 0:
+                    with contextlib.suppress(Exception):
+                        self.plot_item.removeItem(old_item)
+                    new_item = self._create_roi_item(st["roi"], pts, selected=(rid == self._selected_roi_id))
+                    new_item.setVisible(True)
+                    st["item"] = new_item
+                    st["display_points"] = pts
+                    st["gen"] = current_gen
+                    st["transform_error"] = False
+                    self.plot_item.addItem(new_item)
+                    new_item.sigRegionChanged.connect(lambda *a, s=st: self._on_roi_moved(s))
+                    new_item.sigClicked.connect(lambda *a, r_id=rid: self.select_roi(r_id))
+                else:
+                    # 转换失败：绝不使用原像元坐标冒充地图坐标！
+                    # 隐藏失败的图形项，清空 display_points，保留权威模型不变
+                    old_item.setVisible(False)
+                    st["display_points"] = None
+                    st["gen"] = current_gen
+                    st["transform_error"] = True
 
             self.fit_extent()
             self.refresh()
@@ -369,27 +401,27 @@ class ImageCanvas(QWidget):
                 def _make_ok(r_id: str):
                     def _ok_roi(res: dict[str, Any]) -> None:
                         pts = [(float(p[0]), float(p[1])) for p in res.get("points", [])]
-                        roi_results[r_id] = pts
+                        roi_results[r_id] = pts if pts else None
                         _try_finish()
                     return _ok_roi
 
-                def _make_err(r_id: str, default_pts: list[tuple[float, float]]):
+                def _make_err(r_id: str):
                     def _err_roi(msg: str) -> None:
                         self._status(f"ROI [{r_id}] 转换到视图 CRS 失败：{msg}")
-                        roi_results[r_id] = default_pts
+                        roi_results[r_id] = None
                         _try_finish()
                     return _err_roi
 
                 self._client.transform_coordinates_async(
                     path=layer.file_path,
-                    points=roi.points,
+                    points=self._roi_points_for_transform(roi),
                     from_space=roi.coordinate_space,
                     to_space="map",
                     src_crs_wkt=roi.crs_wkt,
                     dst_crs_wkt=target_view_crs,
                     convention=roi.pixel_convention,
                     on_success=_make_ok(rid),
-                    on_error=_make_err(rid, roi.points),
+                    on_error=_make_err(rid),
                 )
 
     def _sync_rois_to_view(
@@ -398,13 +430,14 @@ class ImageCanvas(QWidget):
         layer = self._layer
         for rid, state in list(self._roi_states.items()):
             roi: ROI = state["roi"]
+            pts: list[tuple[float, float]] | None = None
             if roi.coordinate_space == target_space and (target_space == "pixel" or roi.crs_wkt == target_crs):
                 pts = [(float(c), float(r)) for (c, r) in roi.points]
             elif self._client is not None and layer is not None:
                 try:
                     res = self._client.transform_coordinates(
                         path=layer.file_path,
-                        points=roi.points,
+                        points=self._roi_points_for_transform(roi),
                         from_space=roi.coordinate_space,
                         to_space=target_space,
                         src_crs_wkt=roi.crs_wkt,
@@ -412,22 +445,32 @@ class ImageCanvas(QWidget):
                         convention=roi.pixel_convention,
                     )
                     pts = [(float(p[0]), float(p[1])) for p in res.get("points", [])]
+                    if not pts:
+                        pts = None
                 except Exception as exc:
                     self._status(f"ROI 转换失败：{exc}")
-                    pts = [(float(c), float(r)) for (c, r) in roi.points]
+                    pts = None
             else:
-                pts = [(float(c), float(r)) for (c, r) in roi.points]
+                pts = None
 
             old_item = state["item"]
-            with contextlib.suppress(Exception):
-                self.plot_item.removeItem(old_item)
-            new_item = self._create_roi_item(roi, pts, selected=(rid == self._selected_roi_id))
-            state["item"] = new_item
-            state["display_points"] = pts
-            state["gen"] = current_gen
-            self.plot_item.addItem(new_item)
-            new_item.sigRegionChanged.connect(lambda *a, s=state: self._on_roi_moved(s))
-            new_item.sigClicked.connect(lambda *a, r_id=rid: self.select_roi(r_id))
+            if pts is not None and len(pts) > 0:
+                with contextlib.suppress(Exception):
+                    self.plot_item.removeItem(old_item)
+                new_item = self._create_roi_item(roi, pts, selected=(rid == self._selected_roi_id))
+                new_item.setVisible(True)
+                state["item"] = new_item
+                state["display_points"] = pts
+                state["gen"] = current_gen
+                state["transform_error"] = False
+                self.plot_item.addItem(new_item)
+                new_item.sigRegionChanged.connect(lambda *a, s=state: self._on_roi_moved(s))
+                new_item.sigClicked.connect(lambda *a, r_id=rid: self.select_roi(r_id))
+            else:
+                old_item.setVisible(False)
+                state["display_points"] = None
+                state["gen"] = current_gen
+                state["transform_error"] = True
 
     def set_display(self, settings: DisplaySettings) -> None:
         """显示参数变化：递增代际丢弃旧结果，但不清缓存（缓存的是原值，不需重读盘）。"""
@@ -715,9 +758,15 @@ class ImageCanvas(QWidget):
     def _roi_geometry(self, state: dict[str, Any]) -> ROI:
         item = state["item"]
         base: ROI = state["roi"]
-        if isinstance(item, pg.RectROI):
-            c0, r0, c1, r1 = self._rect_bounds(item)
-            view_points = [(c0, r0), (c1, r1)]
+        if state.get("transform_error") or state.get("display_points") is None:
+            return base
+        if base.shape is ROIShape.rectangle:
+            if isinstance(item, pg.RectROI):
+                c0, r0, c1, r1 = self._rect_bounds(item)
+                view_points = [(c0, r0), (c1, r1)]
+            else:
+                # 变换视图下的矩形轮廓（多边形）受权威矩形约束，不可任意形变为任意四边形
+                return base
         else:
             view_points = [
                 (float(pt.x()), float(pt.y()))
@@ -753,16 +802,30 @@ class ImageCanvas(QWidget):
     ) -> pg.GraphicsObject:
         pen = pg.mkPen((255, 220, 0) if selected else (0, 200, 255), width=3)
         if roi.shape is ROIShape.rectangle:
-            (c0, r0), (c1, r1) = display_points
-            item = pg.RectROI(
-                pos=(min(c0, c1), min(r0, r1)),
-                size=(max(abs(c1 - c0), 1e-6), max(abs(r1 - r0), 1e-6)),
-                pen=pen,
-                resizable=True,
-                movable=True,
-            )
-            item.addScaleHandle([1, 1], [0, 0])
-            item.addScaleHandle([0, 1], [1, 0])
+            if len(display_points) == 2:
+                (c0, r0), (c1, r1) = display_points
+                item = pg.RectROI(
+                    pos=(min(c0, c1), min(r0, r1)),
+                    size=(max(abs(c1 - c0), 1e-6), max(abs(r1 - r0), 1e-6)),
+                    pen=pen,
+                    resizable=True,
+                    movable=True,
+                )
+                item.addScaleHandle([1, 1], [0, 0])
+                item.addScaleHandle([0, 1], [1, 0])
+            else:
+                # 变换视图下的矩形轮廓：按真实转换后的 4 角点渲染闭合多边形轮廓。
+                # 禁用顶点手柄编辑与平移，防止将权威矩形扭曲为任意四边形。
+                item = pg.PolyLineROI(
+                    [(float(c), float(r)) for (c, r) in display_points],
+                    closed=True,
+                    pen=pen,
+                    movable=False,
+                )
+                for h in item.getHandles():
+                    h.setVisible(False)
+                    h.setEnabled(False)
+                item.translatable = False
         else:
             item = pg.PolyLineROI(
                 [(float(c), float(r)) for (c, r) in display_points], closed=True, pen=pen, movable=True
@@ -781,7 +844,7 @@ class ImageCanvas(QWidget):
                 try:
                     res = self._client.transform_coordinates(
                         path=self._layer.file_path,
-                        points=roi.points,
+                        points=self._roi_points_for_transform(roi),
                         from_space=roi.coordinate_space,
                         to_space=view_space,
                         src_crs_wkt=roi.crs_wkt,
@@ -789,33 +852,54 @@ class ImageCanvas(QWidget):
                         convention=roi.pixel_convention,
                     )
                     display_points = [(float(p[0]), float(p[1])) for p in res.get("points", [])]
+                    if not display_points:
+                        display_points = None
                 except Exception as exc:
                     self._status(f"ROI 坐标换算失败：{exc}")
-                    display_points = [(float(c), float(r)) for (c, r) in roi.points]
+                    display_points = None
             else:
-                display_points = [(float(c), float(r)) for (c, r) in roi.points]
+                display_points = None
+
         if self._layer is not None:
             # ROI 必须记住所属图层，否则项目重开后无法归回正确图层
             attrs = dict(roi.attributes or {})
             if attrs.get("layer_id") != self._layer.layer_id:
                 attrs["layer_id"] = self._layer.layer_id
                 roi = roi.model_copy(update={"attributes": attrs})
-        item = self._create_roi_item(roi, display_points, selected=(roi.roi_id == self._selected_roi_id))
+
+        if display_points is not None and len(display_points) > 0:
+            item = self._create_roi_item(roi, display_points, selected=(roi.roi_id == self._selected_roi_id))
+            item.setVisible(True)
+            transform_error = False
+        else:
+            # 转换失败：创建不可见占位项，保留权威模型不变
+            if roi.shape is ROIShape.rectangle:
+                item = pg.RectROI(pos=(0, 0), size=(0, 0))
+            else:
+                item = pg.PolyLineROI([(0, 0), (0, 0), (0, 0)], closed=True)
+            item.setVisible(False)
+            display_points = None
+            transform_error = True
+
         state = {
             "roi": roi,
             "item": item,
             "display_points": display_points,
             "gen": self._gen.generation,
+            "transform_error": transform_error,
         }
         self._roi_states[roi.roi_id] = state
         if self._layer is not None and not any(r.roi_id == roi.roi_id for r in self._layer.rois):
             self._layer.rois.append(roi)
         self.plot_item.addItem(item)
-        item.sigRegionChanged.connect(lambda *a, s=state: self._on_roi_moved(s))
-        item.sigClicked.connect(lambda *a, rid=roi.roi_id: self.select_roi(rid))
+        if not transform_error:
+            item.sigRegionChanged.connect(lambda *a, s=state: self._on_roi_moved(s))
+            item.sigClicked.connect(lambda *a, rid=roi.roi_id: self.select_roi(rid))
 
     def _on_roi_moved(self, state: dict[str, Any]) -> None:
         """手柄拖动 / 平移后把几何写回模型，供保存与统计使用。"""
+        if state.get("transform_error") or state.get("display_points") is None:
+            return
         state["roi"] = self._roi_geometry(state)
         if self._layer is not None:
             self._layer.rois = self.roi_list()
@@ -953,8 +1037,9 @@ class ImageCanvas(QWidget):
         self._add_roi(roi)
         state = self._roi_states[roi.roi_id]
         item = state["item"]
-        item.addScaleHandle([1, 1], [0, 0])
-        item.addScaleHandle([0, 1], [1, 0])
+        if isinstance(item, pg.RectROI) and len(item.getHandles()) == 0:
+            item.addScaleHandle([1, 1], [0, 0])
+            item.addScaleHandle([0, 1], [1, 0])
         # 只挂缩放手柄，不挂旋转手柄：ROI 模型与 worker 的 rectangle_window 只表示轴对齐矩形，
         # 允许旋转会静默丢失几何（画出来能转，存下来却对不上）。
         self.select_roi(roi.roi_id)
