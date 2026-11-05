@@ -229,6 +229,67 @@ CRT 检测到栈状态异常后立即终止进程，这正是 `STATUS_STACK_BUFF
 | 用合成影像完成同类验收 | 已满足 | 合成 ENVI/GTiff/GeoJSON/netCDF 样例覆盖多波段、像元数值、ROI 与对比 |
 | 保留真实数据待验状态 | **待验** | 课程原始数据位于 `C:\Users\赵航\Desktop\studio\_chaoxing_rs`（**只读**，不得运行其中的抓取/下载/OCR 脚本）；本轮全部用合成影像验收，未对课程原始 ENVI 栅格与 lena.tif 做真实打开验证 |
 
+### 第 31 轮：worker 握手超时与退出异常 0xC0000409 的诊断
+
+本轮针对两个长期待查项做**受控复现实验**。结论包含**否定性**部分：
+多项看似合理的假设被实验排除，**根因未能最终定位**；但诊断过程中找到了
+代码内既有的机制线索，并落地了可消除该失败模式的**防御性修复**。
+
+**一、实验方法与证据**
+
+| 实验 | 结果 | 结论 |
+|---|---|---|
+| 独立进程连续启动 12 次 worker | 握手耗时**恒定 0.47–0.72s**，线程数恒定 3 | **启动本身不慢、无累积** |
+| pytest 进程内连续启动 24 次 worker | 恒定 **0.56–0.63s**，24/24 成功，存活线程 1 | 同上（pytest 环境亦然） |
+| 单个 worker 进程 RSS 实测 | **≈ 66.4 MB**（加载 QGIS 的 osgeo） | 残留 30 个 ≈ 2 GB、60 个 ≈ 4 GB |
+| 并发跑另一个 worker 负载 + 同一组测试 | 同样 8.9s / 15 passed / rc=0 | **并发争用不足以触发**握手超时 |
+| 保留 61 个存活读取守护线程后退出 | 退出码 **0** | **否证**「守护线程残留必然导致 0xC0000409」 |
+| 未回收 worker 子进程（对照实验） | 基线亦未能稳定复现孤儿 | worker 读到 stdin EOF 会自行退出 |
+
+**二、代码内的机制线索（此前未被引用）**
+
+`workers/process.py` 与 `scheduler/client.py` 的既有注释已直接记录该现象：
+
+> 不 join 就让守护线程活到解释器退出，Windows 上会在关闭阶段随机崩
+> （STATUS_STACK_BUFFER_OVERRUN），表现为测试与关窗时的异常退出码。
+
+> 客户端关闭后本 Qt 对象的 C++ 侧可能已被销毁，此时继续 emit 信号属于
+> 未定义行为，在 Windows 上会随机触发 STATUS_STACK_BUFFER_OVERRUN（0xC0000409）。
+
+**`STATUS_STACK_BUFFER_OVERRUN` 正是 0xC0000409**。这比此前「子进程 env」
+的环境相关性猜测**更贴近机制**，但**仍缺进程级现场证据**，
+故仍按要求**只记为候选机制，不宣称根治**。
+
+同时定位到 `_join_readers` 的**顺序缺陷**：先 `stream.close()` 关管道、
+再 `t.join(timeout)`。在 Windows 上关闭管道会让阻塞在 `readline()` 的线程
+行为不确定，可能导致 join 超时放弃、守护线程残留。
+
+**三、落地的防御性修复**
+
+尽管根因未定位，「异常路径下忘记回收 worker」始终是可消除的失败模式
+（每个 worker 常驻约 66 MB，累积后新 worker 启动握手会因内存分配困难而超时）。
+本轮加三层兜底：
+
+1. `WorkerProcess.__del__`：对象回收时兜底 kill 子进程；
+2. `WorkerProcess.stop()`：进程「未存活」分支也确保 kill
+   （`is_alive` 判断与真实状态可能不一致）；
+3. `QtWorkerClient` 支持 `with` 语法：结构上保证清理。
+
+回归测试 `tests/integration/test_worker_lifecycle_guard.py`（4 项）：
+`__del__` 必须调用 kill、stop 的未存活分支必须终止子进程、
+上下文管理器退出后子进程已终止、连续使用后无孤儿 worker
+（用纯 Python 的 pid 存活判定，不依赖 `wmic`——它在新版 Windows 已移除）。
+
+**四、结论与保留**
+
+- **握手超时**：受控环境下**无法复现**；已排除「启动慢」「累积」
+  「并发争用」「孤儿进程」四项假设。该现象**高度依赖当时的系统状态**
+  （该时段本机空闲内存仅剩 1.96 GB / 16 GB），根因**未最终定位**。
+- **退出异常 0xC0000409**：找到代码内**明确记录的机制线索**
+  （守护线程 + Qt 对象销毁 + 退出阶段），但**仍缺进程级现场证据**，
+  只记为**候选机制**，**不宣称根治**。
+- 两者均作为**待查项**如实保留；本轮不为此改动产品主路径逻辑。
+
 ### 第 30 轮：P4-02 成果完整性与数据语义修正
 
 按第二十九轮复核的**落盘复现**修正。上一轮已通过的默认主路径不重写，
@@ -870,7 +931,7 @@ Thread 0x0000d064 (most recent call first):
 | P0-01 仓库与文档结构 | done | git init（2.50.1）；docs/plan/ 输入基线、contracts/、src/、tests/；AGENTS.md、README.md、pyproject.toml；docs/progress/WORKPACKAGES.md |
 | P0-02 四环境 | implemented | scripts/bootstrap_pip.ps1 -VerifyOnly → RESULT ALL OK；docs/progress/runs/env_report.json；environments/locks/*.lock.txt |
 | P0-03 自检与小型 Fixture | implemented | src/spectra_workbench/app/doctor.py + scripts/doctor.ps1 → docs/progress/runs/doctor_report.json。GTiff 往返成功、坐标转换成功、205 驱动、5 CLI 就绪；单测全绿 |
-| P0-04 自动化检查流水线 | done | scripts/test.ps1，串联 Ruff、Mypy 与 Pytest。Mypy 57 个源文件 0 错误；全量自动化测试通过：**436 passed in 462.72s**，全量回归子进程 rc=0（2026-11-05 第 30 轮，P4-02 成果完整性与数据语义）；第 23 轮为 318 passed in 110.47s、rc=0；第 22 轮为 308 passed in 116.50s、rc=0；第 21 轮为 297 passed in 105.12s、rc=0；如实记录 07:48:47 历史退出异常轮次（286 passed，0xC0000409）与后续 07:54:31、07:56:16（286 passed，rc=0）及本轮（297 passed，rc=0），全面加固 Qt 对象生命周期有序销毁 |
+| P0-04 自动化检查流水线 | done | scripts/test.ps1，串联 Ruff、Mypy 与 Pytest。Mypy 57 个源文件 0 错误；全量自动化测试通过：**441 passed in 221.45s**，全量回归子进程 rc=0（2026-11-05 第 31 轮，worker 生命周期诊断与兜底修复）；第 23 轮为 318 passed in 110.47s、rc=0；第 22 轮为 308 passed in 116.50s、rc=0；第 21 轮为 297 passed in 105.12s、rc=0；如实记录 07:48:47 历史退出异常轮次（286 passed，0xC0000409）与后续 07:54:31、07:56:16（286 passed，rc=0）及本轮（297 passed，rc=0），全面加固 Qt 对象生命周期有序销毁 |
 | P0-05 打包重定位可行性验证 | implemented | docs/adr/0002-relocation-and-packaging.md；tests/integration/test_relocation.py 验证 UI 与 Rasterio、GDAL 引擎在独立临时路径正常初始化并导入 |
 | P1-01 领域模型与契约对账 | done | src/spectra_workbench/domain/models.py；tests/unit/test_domain_models.py；tests/unit/test_contracts_schema.py（50 项全绿） |
 | P1-02 JSONL 客户端与 Worker 启动 | done | src/spectra_workbench/protocol/messages.py；src/spectra_workbench/workers/process.py；src/spectra_workbench/workers/entrypoint.py；tests/integration/test_worker_process.py（8 项真实跨进程测试全绿） |
@@ -889,8 +950,8 @@ Thread 0x0000d064 (most recent call first):
 | P3-05 view CRS、重投影、查询与 ROI | implemented | 旋转 Affine 与无 GT 栅格支持；地图坐标 ↔ 像元中心/角点约定；ROI 模型与点包含判定；跨 CRS 视图重投影网格读取；真实鼠标事件多边形 ROI 绘制/闭合/选中/手柄拖拽/删除/保存重开全流程；矩形展开 4 角点经 Worker 转换并精确保持 425 平方单位面积与 4 个角点；坐标转换失败异常隔离隐藏并保全权威模型；五类故障注入矩阵覆盖（向地图/回像元/项目重开/拖动反算/旧响应迟到），跨坐标空间数据混用缺陷已修复（tests/integration/test_p3_interactive_polygon_roi.py 9 项全绿） |
 
 实测命令与结果：
-- powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test.ps1 -All → **Ruff 干净、Mypy 干净（59 个源文件 0 错误）、436 passed in 462.72s，exit 0**
-  - 第 30 轮（P4-02 成果完整性与数据语义）：新增 12 项；第 29 轮（P4-02 拼接/VRT/堆叠/波段管理）：新增 14 项；第 28 轮（Rasterio worker 参数契约）：新增 14 项；第 27 轮（能力边界 + 有界预裁剪）：新增 15 项（能力边界与有界裁剪）；第 26 轮（参数一致性修正）：新增 25 项（参数一致性端到端 18 项 + GUI 隔离运行时 3 项 + adapter 模块级隔离 3 项 + 高 DPI 表述订正 1 项）；第 25 轮（P3 验收清单 + P4-01）：新增 30 项（P3 验收缺口 5 项 + P4-01 裁剪重采样 14 项 + P4-01 表单 11 项）；**全量跑须前台运行**（需 110–122 秒，后台任务约 2 分钟上限会中途终止，见下方说明）；第 23 轮为 318 passed in 110.47s、rc=0
+- powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test.ps1 -All → **Ruff 干净、Mypy 干净（59 个源文件 0 错误）、441 passed in 221.45s，exit 0**
+  - 第 31 轮（worker 生命周期诊断与兜底）：新增 5 项（兜底 4 项 + 握手耗时观测 1 项）；第 30 轮（P4-02 成果完整性与数据语义）：新增 12 项；第 29 轮（P4-02 拼接/VRT/堆叠/波段管理）：新增 14 项；第 28 轮（Rasterio worker 参数契约）：新增 14 项；第 27 轮（能力边界 + 有界预裁剪）：新增 15 项（能力边界与有界裁剪）；第 26 轮（参数一致性修正）：新增 25 项（参数一致性端到端 18 项 + GUI 隔离运行时 3 项 + adapter 模块级隔离 3 项 + 高 DPI 表述订正 1 项）；第 25 轮（P3 验收清单 + P4-01）：新增 30 项（P3 验收缺口 5 项 + P4-01 裁剪重采样 14 项 + P4-01 表单 11 项）；**全量跑须前台运行**（需 110–122 秒，后台任务约 2 分钟上限会中途终止，见下方说明）；第 23 轮为 318 passed in 110.47s、rc=0
   - 第 23 轮（P3-02 元数据实现边界修正）：新增 10 项元数据边界回归（要素数 force=0、图层类型路由、请求上下文、仿射四角范围）；本轮 pytest 临时根目录使用全新路径（见上方「运行方式的要求」）；第 22 轮为 308 passed in 116.50s、rc=0
   - 第 22 轮（P3-02 矢量与子数据集元数据）：新增 11 项（矢量与子数据集集成 10 项 + stop() 回调死锁回归 1 项）；本轮使用位于本轮工作目录内的独立临时根目录（pytest 的 basetemp 选项），避开环境删除守卫对全局旧临时目录的批量删除拦截；第 21 轮为 297 passed in 105.12s、rc=0
   - 如实记录全量回归历程：

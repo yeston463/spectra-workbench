@@ -654,10 +654,39 @@ class WorkerProcess:
             if t is not None and t.is_alive():
                 t.join(timeout=timeout)
 
+    def __del__(self) -> None:
+        """对象回收时兜底终止子进程。
+
+        单个 GDAL worker 常驻内存约 66 MB（加载 QGIS 的 osgeo）。
+        任何异常路径若漏掉 stop()/kill()，孤儿进程会持续占用内存，
+        累积到一定程度后新 worker 的启动握手会因内存分配困难而超时
+        （表现为 `WorkerTimeoutError: Worker 启动握手超时`）。
+        这里做最后一道兜底：确保子进程不会随调用方一起被遗弃。
+
+        解释器退出阶段调用时资源可能已不可用，因此全部操作都吞掉异常。
+        """
+        try:
+            proc = getattr(self, "_proc", None)
+            if proc is None:
+                return
+            if proc.poll() is None:
+                proc.kill()
+                proc.wait(timeout=2.0)
+        except Exception:
+            pass
+
     def stop(self, timeout: float = 5.0) -> int:
         """向 Worker 发送 shutdown 命令并等待进程退出。"""
         if not self.is_alive or self._proc is None:
+            # 进程已退出或未存活：仍需确保子进程被回收
+            # （is_alive 判断与真实状态可能不一致，残留子进程会持续占内存）。
             self._stop_event.set()
+            try:
+                if self._proc is not None and self._proc.poll() is None:
+                    self._proc.kill()
+                    self._proc.wait(timeout=2.0)
+            except Exception:
+                pass
             self._join_readers()
             return 0
 

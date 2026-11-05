@@ -687,6 +687,21 @@ class QtWorkerClient(QObject):
             self._call_callbacks.clear()
         return pending
 
+    def __enter__(self) -> QtWorkerClient:
+        """支持 `with` 语法，确保退出上下文时一定清理 worker 子进程。
+
+        单个 worker 常驻内存约 66 MB；调用方忘记 stop() 会留下孤儿进程，
+        累积后表现为新 worker 启动握手超时。用上下文管理器可从结构上避免。
+        """
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        try:
+            self.stop(timeout=5.0)
+        except Exception:
+            with contextlib.suppress(Exception):
+                self.kill()
+
     def stop(self, timeout: float = 5.0) -> int:
         """停止 Worker 进程并释放资源。"""
         # 先关闭信号派发：此后任何在途请求线程都不会再向本 Qt 对象发信号
