@@ -70,6 +70,10 @@ from spectra_workbench.providers.gdal_provider.mosaic_ops import (
     set_vrt_source_paths,
     stack_sources,
 )
+from spectra_workbench.providers.gdal_provider.sidecars import (
+    SidecarOwnershipError,
+    ensure_no_stale_sidecars,
+)
 from spectra_workbench.providers.gdal_provider.statistics_ops import (
     compute_statistics,
     write_statistics_report,
@@ -824,6 +828,26 @@ class GDALProviderAdapter(ProviderAdapter):
                 tf = target_path.parent / sf.name
             commit_pairs.append((sf, tf))
 
+        # 7.5 sidecar 所有权预检：旧成果中本次不生成的 sidecar 拒绝覆盖
+        try:
+            ensure_no_stale_sidecars(target_path, [tf for _, tf in commit_pairs])
+        except SidecarOwnershipError as sidecar_err:
+            context.log("ERROR", f"sidecar 所有权预检失败: {sidecar_err}")
+            return TaskResult(
+                task_id=spec.task_id,
+                attempt=spec.attempt,
+                status=TaskStatus.failed,
+                error={
+                    "code": "stale_sidecar_conflict",
+                    "message": str(sidecar_err),
+                    "details": {
+                        "stale": [str(p) for p in sidecar_err.stale],
+                        "unknown": [str(p) for p in sidecar_err.unknown],
+                    },
+                },
+                duration_seconds=round(time.monotonic() - start_time, 4),
+            )
+
         # 8. 事务性提交全部成果文件
         context.progress(0.95, "committing", "Committing staged output and sidecars to destination")
         try:
@@ -1441,6 +1465,27 @@ class GDALProviderAdapter(ProviderAdapter):
                 attempt=spec.attempt,
                 status=TaskStatus.failed,
                 error={"code": "sidecar_mapping_failed", "message": str(map_err)},
+                duration_seconds=round(time.monotonic() - start_time, 4),
+            )
+
+        # ---- sidecar 所有权预检：旧成果中存在本次不生成的 sidecar 则拒绝覆盖 ----
+        try:
+            ensure_no_stale_sidecars(target_path, [tf for _, tf in commit_pairs])
+        except SidecarOwnershipError as sidecar_err:
+            context.log("ERROR", f"sidecar 所有权预检失败: {sidecar_err}")
+            self._cleanup_staged_bundle(staged_path)
+            return TaskResult(
+                task_id=spec.task_id,
+                attempt=spec.attempt,
+                status=TaskStatus.failed,
+                error={
+                    "code": "stale_sidecar_conflict",
+                    "message": str(sidecar_err),
+                    "details": {
+                        "stale": [str(p) for p in sidecar_err.stale],
+                        "unknown": [str(p) for p in sidecar_err.unknown],
+                    },
+                },
                 duration_seconds=round(time.monotonic() - start_time, 4),
             )
 

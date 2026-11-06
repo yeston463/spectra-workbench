@@ -229,7 +229,8 @@
         "恢复异常不吞：恢复操作遭遇 PermissionError 等 I/O 故障时，保留 staging 计算文件与备份供排查重试，清单真实标记 recovery_failed，绝不谎报 recovered（test_restore_error_preserves_staging_and_reports_recovery_failed 测试通过）。",
         "修正递归 mock：跨卷/移动失败测试捕获真实原始 move，验证部分写入失败后多文件事务回滚与原文件保护（test_cross_volume_or_move_failure_transactional_rollback 测试通过）。",
         "边界说明：已验证确定的真实子进程强杀、第七轮终态重放与内存模拟 I/O 异常；真实物理断电与跨物理卷硬件尚未测试，不做过度宣传。",
-        "tests/integration/test_staging_manifest.py：9 项集成测试全绿。"
+        "tests/integration/test_staging_manifest.py：9 项集成测试全绿。",
+        "第 41 轮 S3 通用 sidecar 所有权预检（阶段一保守拒绝）：新增 providers/gdal_provider/sidecars.py，建立 old_owned/new_owned/stale_owned 语义。old_owned 由目标数据集 GetFileList 与目标命名规则（.hdr/.aux.xml/.ovr/.msk/.wld/.tfw/.tifw/.jgw/.pgw 等）共同确认；new_owned 来自本次 staging 完整集合并映射为最终名；stale=old-new。VRT 的 GetFileList 输入依赖按目标名/stem 过滤，源文件绝不当 sidecar 删除；非 VRT 同目录但无法分类的文件记 unknown 并拒绝。P4-02 与通用 Translate/Warp 在 commit 前调用 ensure_no_stale_sidecars，发现本次不生成的旧 sidecar 返回 stale_sidecar_conflict 并保留旧文件，不做 basename* 通配删除，也不把源依赖当 sidecar。目标不可读但无任何可识别 sidecar 时允许正常 overwrite（保留既有覆盖损坏主文件能力）。回归 tests/integration/test_p4_sidecar_ownership.py（9 项：GTiff .aux.xml/.ovr/.msk/.tfw、ENVI 正常覆盖、ENVI 旧 .ovr 拒绝、中文空格、损坏目标无 sidecar 可替换、VRT 源依赖不受影响）；P4 定向 72 passed；Clean 全量 609 passed / 0 failed / rc=0 / clean_exit_verified=true（336.94s）。阶段二事务删除（旧集合备份+删除记录+崩溃恢复）尚未实现，当前为保守拒绝。"
       ],
       "blocking_reason": null
     },

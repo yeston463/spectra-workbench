@@ -1,6 +1,6 @@
 # 执行状态
 
-更新：2026-11-06（第 40 轮 · S2 Worker 生命周期状态机：STOPPED/STARTING/READY/STOPPING、并发启动共享握手、独立 generation/进程/管道/读取线程、迟到 ready 拒绝、启动中停止/超时重启/提前退出；Clean 全量 600 项 / 0 失败 / rc=0 / clean_exit_verified=true。第 39 轮为 S0/S1 可信退出）
+更新：2026-11-06（第 41 轮 · S3 阶段一 sidecar 所有权预检：old/new/stale 三集合、VRT 源依赖不误删、旧 sidecar 保守拒绝；Clean 全量 609 项 / 0 失败 / rc=0 / clean_exit_verified=true。第 40 轮为 S2 Worker 生命周期状态机）
 
 ## 当前里程碑
 
@@ -228,6 +228,33 @@ CRT 检测到栈状态异常后立即终止进程，这正是 `STATUS_STACK_BUFF
 |---|---|---|
 | 用合成影像完成同类验收 | 已满足 | 合成 ENVI/GTiff/GeoJSON/netCDF 样例覆盖多波段、像元数值、ROI 与对比 |
 | 保留真实数据待验状态 | **待验** | 课程原始数据位于 `C:\Users\赵航\Desktop\studio\_chaoxing_rs`（**只读**，不得运行其中的抓取/下载/OCR 脚本）；本轮全部用合成影像验收，未对课程原始 ENVI 栅格与 lena.tif 做真实打开验证 |
+
+### 第 41 轮：S3 通用 sidecar 所有权预检（阶段一）
+
+**一、三集合语义**
+
+- `old_owned`：既有目标驱动的 `GetFileList()` 与目标命名规则共同确认的文件；覆盖 ENVI `.hdr`、PAM `.aux.xml`、外部 `.ovr`、`.msk`、world file（`.tfw/.tifw/.jgw/.pgw/.wld`）等。
+- `new_owned`：本次 staging 中真实生成的完整成果集合，按最终目标名映射。
+- `stale_owned = old_owned - new_owned`：本次不生成的旧 sidecar。
+- VRT 的 `GetFileList()` 输入依赖按目标名/stem 过滤；源文件绝不是目标 sidecar，不参与删除。非 VRT 同目录但无法分类的文件记 `unknown`，同样拒绝覆盖。
+
+**二、保守拒绝（阶段一）**
+
+- 新增 `providers/gdal_provider/sidecars.py`；P4-02 与通用 Translate/Warp 在 `commit_files` 前调用 `ensure_no_stale_sidecars`。
+- 发现 stale/unknown 时返回 `stale_sidecar_conflict`，附带文件列表，旧目标与旧 sidecar 保持原样；不执行任何 `basename*` 通配删除。
+- 目标不可读但不存在任何可识别 sidecar 时，仍允许正常 `overwrite` 替换主文件（保留既有“覆盖损坏目标”能力）。
+- 不做“提交后反向回滚”；阶段二的事务删除（旧集合备份、删除记录、崩溃恢复）尚未实现。
+
+**三、验证**
+
+- 新增 `tests/integration/test_p4_sidecar_ownership.py`（9 项）：GTiff 旧 `.aux.xml/.ovr/.msk/.tfw` 拒绝覆盖、ENVI 正常覆盖成功、ENVI 旧 `.ovr` 拒绝、中文空格目标、损坏目标无 sidecar 可替换、VRT 源依赖在重复覆盖后仍存在且可读。
+- P4 定向组合：**72 passed**（64.33s）。
+- Clean 全量：**609 passed / 0 failed / rc=0 / clean_exit_verified=true**（336.94s，`process_observation=job`、`residual=0`、`cleanup_complete=true`）。
+
+**四、边界**
+
+- S3 阶段一完成；事务删除、旧集合备份、删除动作 WAL 与故障注入恢复留待阶段二。
+- S4 格式矩阵、S5 桌面端到端仍未开始。
 
 ### 第 40 轮：S2 Worker 生命周期状态机
 
