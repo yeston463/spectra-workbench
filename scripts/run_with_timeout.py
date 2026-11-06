@@ -39,6 +39,9 @@ from source_snapshot import compute_source_snapshot_details  # noqa: E402
 
 CREATE_NEW_PROCESS_GROUP = 0x00000200
 CREATE_BREAKAWAY_FROM_JOB = 0x01000000
+CREATE_SUSPENDED = 0x00000004
+THREAD_SUSPEND_RESUME = 0x0002
+TH32CS_SNAPTHREAD = 0x00000004
 
 EXIT_RESULT_INVALID = 92
 EXIT_CLEAN_NOT_VERIFIED = 90
@@ -103,6 +106,22 @@ _JOBOBJECT_BASIC_PROCESS_ID_LIST = type(
             ("NumberOfAssignedProcesses", ctypes.c_uint32),
             ("NumberOfProcessIdsInList", ctypes.c_uint32),
             ("ProcessIdList", ctypes.c_size_t * 1),
+        ]
+    },
+)
+
+_THREADENTRY32 = type(
+    "THREADENTRY32",
+    (ctypes.Structure,),
+    {
+        "_fields_": [
+            ("dwSize", ctypes.c_uint32),
+            ("cntUsage", ctypes.c_uint32),
+            ("th32ThreadID", ctypes.c_uint32),
+            ("th32OwnerProcessID", ctypes.c_uint32),
+            ("tpBasePri", ctypes.c_long),
+            ("tpDeltaPri", ctypes.c_long),
+            ("dwFlags", ctypes.c_uint32),
         ]
     },
 )
@@ -221,6 +240,19 @@ class ProcessJob:
         k.TerminateJobObject.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
         k.CloseHandle.restype = ctypes.c_int
         k.CloseHandle.argtypes = [ctypes.c_void_p]
+        k.CreateToolhelp32Snapshot.restype = ctypes.c_void_p
+        k.CreateToolhelp32Snapshot.argtypes = [ctypes.c_uint32, ctypes.c_uint32]
+        k.Thread32First.restype = ctypes.c_int
+        k.Thread32First.argtypes = [ctypes.c_void_p, ctypes.POINTER(_THREADENTRY32)]
+        k.Thread32Next.restype = ctypes.c_int
+        k.Thread32Next.argtypes = [ctypes.c_void_p, ctypes.POINTER(_THREADENTRY32)]
+        k.OpenThread.restype = ctypes.c_void_p
+        k.OpenThread.argtypes = [ctypes.c_uint32, ctypes.c_int, ctypes.c_uint32]
+        k.ResumeThread.restype = ctypes.c_uint32
+        k.ResumeThread.argtypes = [ctypes.c_void_p]
+        self._ntdll = ctypes.WinDLL("ntdll", use_last_error=True)
+        self._ntdll.NtResumeProcess.restype = ctypes.c_long
+        self._ntdll.NtResumeProcess.argtypes = [ctypes.c_void_p]
 
     def assign(self, child_pid: int, child_handle: int) -> bool:
         handle = self._kernel32.CreateJobObjectW(None, None)
@@ -243,6 +275,42 @@ class ProcessJob:
             return False
         self.observation = "job"
         return True
+
+    def _resume_threads(self, pid: int) -> bool:
+        snapshot = self._kernel32.CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0)
+        invalid = ctypes.c_void_p(-1).value
+        if not snapshot or int(snapshot) == invalid:
+            return False
+        entry = _THREADENTRY32()
+        entry.dwSize = ctypes.sizeof(_THREADENTRY32)
+        resumed = 0
+        try:
+            if not self._kernel32.Thread32First(snapshot, ctypes.byref(entry)):
+                return False
+            while True:
+                if entry.th32OwnerProcessID == pid:
+                    handle = self._kernel32.OpenThread(
+                        THREAD_SUSPEND_RESUME, False, entry.th32ThreadID
+                    )
+                    if handle:
+                        try:
+                            if self._kernel32.ResumeThread(handle) != 0xFFFFFFFF:
+                                resumed += 1
+                        finally:
+                            self._kernel32.CloseHandle(handle)
+                if not self._kernel32.Thread32Next(snapshot, ctypes.byref(entry)):
+                    break
+        finally:
+            self._kernel32.CloseHandle(snapshot)
+        return resumed > 0
+
+    def resume(self, pid: int, child_handle: int) -> bool:
+        """Resume a CREATE_SUSPENDED child only after it is in the Job Object."""
+        status = int(self._ntdll.NtResumeProcess(child_handle))
+        if status == 0:
+            return True
+        # Fallback for hosts where NtResumeProcess is unavailable/blocked.
+        return self._resume_threads(pid)
 
     def pids(self) -> list[int]:
         if self._handle is None:
@@ -405,6 +473,7 @@ def run(
     validation_reasons: list[str] = []
     job = ProcessJob()
     timed_out = False
+    startup_failure = False
 
     with log_path.open("ab") as log:
         log.write(
@@ -418,49 +487,79 @@ def run(
             stdout=log,
             stderr=subprocess.STDOUT,
             env=env,
-            creationflags=CREATE_NEW_PROCESS_GROUP | CREATE_BREAKAWAY_FROM_JOB,
+            # 先挂起创建，加入 Job 后再恢复；否则子进程可能在两步之间派生后代。
+            creationflags=(
+                CREATE_NEW_PROCESS_GROUP | CREATE_BREAKAWAY_FROM_JOB | CREATE_SUSPENDED
+            ),
         )
-        assigned = job.assign(child.pid, int(getattr(child, "_handle", 0) or 0))
-        if not assigned:
+        child_handle = int(getattr(child, "_handle", 0) or 0)
+        assigned = job.assign(child.pid, child_handle)
+        resumed = False
+        if assigned:
+            try:
+                resumed = job.resume(child.pid, child_handle)
+            except Exception as exc:
+                cleanup_errors.append(f"job_resume: {type(exc).__name__}: {exc}")
+        if not assigned or not resumed:
+            startup_failure = True
             process_observation = "unknown"
-            cleanup_errors.append(f"job_unavailable: {job.error or 'unknown'}")
+            detail = "assign_failed" if not assigned else "resume_failed"
+            cleanup_errors.append(f"job_start_failure: {detail}: {job.error or 'unknown'}")
+            job.terminate()
+            job.close()
+            job.observation = "unknown"
+            with contextlib.suppress(Exception):
+                child.kill()
+            try:
+                child_exit_code = int(child.wait(timeout=5.0))
+            except Exception:
+                child_exit_code = 1
+            log.write(
+                f"\n=== startup failed before resume: {detail}; "
+                f"killed suspended child pid={child.pid} rc={child_exit_code} ===\n".encode()
+            )
         else:
             process_observation = "job"
 
-        try:
-            child_exit_code = child.wait(timeout=timeout)
-            elapsed = time.monotonic() - started
-            log.write(f"\n=== child exited rc={child_exit_code} elapsed={elapsed:.1f}s ===\n".encode())
-            child_exit_code = int(child_exit_code if child_exit_code is not None else 1)
-        except subprocess.TimeoutExpired:
-            timed_out = True
-            elapsed = time.monotonic() - started
-            if job.observation == "job":
-                try:
-                    residual_before = job.pids()
-                except Exception as exc:
-                    cleanup_errors.append(f"job_query_at_timeout: {type(exc).__name__}: {exc}")
-                job.terminate()
-            killed = kill_tree(child.pid)
-            residual_after = killed
-            log.write(
-                f"\n=== HARD TIMEOUT after {elapsed:.1f}s (limit {timeout}s); "
-                f"killed pids={killed} ===\n".encode()
-            )
-            evidence = {
-                "timeout_seconds": timeout,
-                "elapsed_seconds": round(elapsed, 1),
-                "root_pid": child.pid,
-                "killed_pids": killed,
-                "log": str(log_path),
-                "command": cmd,
-                "at": datetime.now().isoformat(),
-            }
-            with contextlib.suppress(Exception):
-                log_path.with_suffix(log_path.suffix + ".timeout.json").write_text(
-                    json.dumps(evidence, ensure_ascii=False, indent=2), encoding="utf-8"
+        if not startup_failure:
+            try:
+                child_exit_code = child.wait(timeout=timeout)
+                elapsed = time.monotonic() - started
+                log.write(
+                    f"\n=== child exited rc={child_exit_code} elapsed={elapsed:.1f}s ===\n".encode()
                 )
-            child_exit_code = 124
+                child_exit_code = int(child_exit_code if child_exit_code is not None else 1)
+            except subprocess.TimeoutExpired:
+                timed_out = True
+                elapsed = time.monotonic() - started
+                if job.observation == "job":
+                    try:
+                        residual_before = job.pids()
+                    except Exception as exc:
+                        cleanup_errors.append(
+                            f"job_query_at_timeout: {type(exc).__name__}: {exc}"
+                        )
+                    job.terminate()
+                killed = kill_tree(child.pid)
+                residual_after = killed
+                log.write(
+                    f"\n=== HARD TIMEOUT after {elapsed:.1f}s (limit {timeout}s); "
+                    f"killed pids={killed} ===\n".encode()
+                )
+                evidence = {
+                    "timeout_seconds": timeout,
+                    "elapsed_seconds": round(elapsed, 1),
+                    "root_pid": child.pid,
+                    "killed_pids": killed,
+                    "log": str(log_path),
+                    "command": cmd,
+                    "at": datetime.now().isoformat(),
+                }
+                with contextlib.suppress(Exception):
+                    log_path.with_suffix(log_path.suffix + ".timeout.json").write_text(
+                        json.dumps(evidence, ensure_ascii=False, indent=2), encoding="utf-8"
+                    )
+                child_exit_code = 124
 
         # 父进程已退出，但 Job Object 仍在，可在中间层退出后继续看到存活后代。
         if job.observation == "job":
@@ -602,6 +701,8 @@ def run(
 
         if timed_out:
             return 124
+        if startup_failure:
+            return EXIT_RESULT_INVALID
         if child_exit_code != 0:
             return child_exit_code
         if not validation_ok:

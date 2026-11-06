@@ -235,6 +235,66 @@ def test_actual_bypass_cannot_satisfy_clean(tmp_path: Path) -> None:
     assert any("mode_mismatch" in r for r in result["validation"]["reasons"])
 
 
+def test_job_assign_precedes_resume(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    events: list[str] = []
+    original_assign = run_with_timeout.ProcessJob.assign
+    original_resume = run_with_timeout.ProcessJob.resume
+
+    def assign(self, pid, handle):
+        events.append("assign")
+        return original_assign(self, pid, handle)
+
+    def resume(self, pid, handle):
+        events.append("resume")
+        return original_resume(self, pid, handle)
+
+    monkeypatch.setattr(run_with_timeout.ProcessJob, "assign", assign)
+    monkeypatch.setattr(run_with_timeout.ProcessJob, "resume", resume)
+    rc, result = _run(
+        tmp_path,
+        [sys.executable, "-c", _fake_child_script()],
+        exit_mode="clean",
+    )
+    assert rc == 0
+    assert events[:2] == ["assign", "resume"]
+    assert result["clean_exit_verified"] is True
+
+
+def test_resume_failure_kills_suspended_child_and_is_not_green(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(run_with_timeout.ProcessJob, "resume", lambda self, pid, handle: False)
+    rc, result = _run(
+        tmp_path,
+        [sys.executable, "-c", "pass"],
+        exit_mode="clean",
+    )
+    assert rc == run_with_timeout.EXIT_RESULT_INVALID
+    assert result["clean_exit_verified"] is False
+    assert any("job_start_failure" in e for e in result["cleanup_errors"])
+    assert result["process_observation"] == "unknown"
+
+
+def test_child_is_suspended_until_job_assignment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CREATE_SUSPENDED：assign 回调执行时子进程尚未运行任何用户代码。"""
+    marker = tmp_path / "child_started.txt"
+    observed: list[bool] = []
+    original_assign = run_with_timeout.ProcessJob.assign
+
+    def assign(self, pid, handle):
+        observed.append(marker.exists())
+        return original_assign(self, pid, handle)
+
+    monkeypatch.setattr(run_with_timeout.ProcessJob, "assign", assign)
+    code = f"import pathlib; pathlib.Path({str(marker)!r}).write_text('started')"
+    rc, result = _run(tmp_path, [sys.executable, "-c", code], exit_mode="clean")
+    assert observed == [False], "assign 时子进程不应已经执行用户代码"
+    assert marker.exists(), "resume 后子进程应正常执行"
+    assert rc != 0 and result["clean_exit_verified"] is False
+
+
 def test_residual_descendant_is_detected_and_cleaned(tmp_path: Path) -> None:
     script = (
         "import subprocess,sys; "
@@ -255,7 +315,7 @@ def test_process_observation_failure_is_not_green(tmp_path: Path, monkeypatch: p
         [sys.executable, "-c", _fake_child_script()],
         exit_mode="clean",
     )
-    assert rc == run_with_timeout.EXIT_CLEAN_NOT_VERIFIED
+    assert rc == run_with_timeout.EXIT_RESULT_INVALID
     assert result["clean_exit_verified"] is False
     assert result["process_observation"] == "unknown"
 
