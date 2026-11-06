@@ -1,6 +1,6 @@
 # 执行状态
 
-更新：2026-11-06（第 36 轮 · P4-05 首个完整用户流程：补齐桌面「重试」与「导出」两环，真实 MainWindow 串起打开→选择工具→配置→执行→取消/重试→加载→导出→保存项目→重开；视图截图 + 带 CRS 栅格双导出通道；全量 539 项收集 / 0 失败 / rc=0。第 35 轮为 P4-04 表达式/统计，全量 536 项 / rc=0）
+更新：2026-11-06（第 38 轮 · P4-02 复核补强：完整成果集合/提交前后真实重开、NoData/mask/alpha、源集合与 VRT XML/relativePaths、真实计算取消；全量 573 项 / 0 失败 / rc=0。第 36 轮为 P4-05 首个完整用户流程，全量 539 项收集 / rc=0；第 37 轮工作区改动保留未提交）
 
 ## 当前里程碑
 
@@ -228,6 +228,44 @@ CRT 检测到栈状态异常后立即终止进程，这正是 `STATUS_STACK_BUFF
 |---|---|---|
 | 用合成影像完成同类验收 | 已满足 | 合成 ENVI/GTiff/GeoJSON/netCDF 样例覆盖多波段、像元数值、ROI 与对比 |
 | 保留真实数据待验状态 | **待验** | 课程原始数据位于 `C:\Users\赵航\Desktop\studio\_chaoxing_rs`（**只读**，不得运行其中的抓取/下载/OCR 脚本）；本轮全部用合成影像验收，未对课程原始 ENVI 栅格与 lena.tif 做真实打开验证 |
+
+### 第 38 轮：P4-02 复核补强（成果集合、NoData/mask/alpha、源集合、VRT 路径与取消）
+
+复核基线 `7118db3`；本轮起点 HEAD `f8850ad`（已含第 30 轮 `60b63f0` 的 P4-02 修正与第 32 轮 `1f0c2e4` 的 GUI 接入）。先核对差异，保留既有有效修复；不重写已通过的默认 Translate/Warp 主路径，不扩展 P4-03/P4-04。
+
+**一、复核发现的仍存缺陷（独立复现，非仅读代码）**
+
+| 复核项 | 本轮独立复现 | 修正 |
+|---|---|---|
+| BuildVRT 混合 CRS | 只对 merge/stack 做了 CRS 预检，`gdal:buildvrt` 仍会静默跳过第二个源并 succeeded | buildvrt 同样预检；源集合不一致明确拒绝 |
+| 无地理参考源 | 非 separate BuildVRT 对无 GeoTransform 影像发 warning 后整体跳过，旧检查未覆盖 | 非 separate 明确拒绝；separate=True 实测仍可逐源成带，允许但保留无地理参考事实 |
+| 源集合 | BuildVRT/merge/stack 只看返回值/首个源，未核对实际使用了哪些源 | 从 `GetFileList()` 核对实际源集合；捕获 GDAL warning 随错误返回 |
+| 成果收集 | staging 目录扫描/映射只覆盖部分 sidecar；ENVI `.hdr` 与主文件命名未强制同名 | 收集 staging 内主文件+全部 sidecar，ENVI 头文件缺失即失败；按最终命名映射并检查映射冲突 |
+| 提交前校验 | 旧实现只打开 staging（VRT 仍按 staging 基准解析），未读像元 | 提交前真实重开并读取样本像元；VRT 先复制到最终目录再打开，按 final_dir 校验源 |
+| 提交后校验 | 只取驱动/尺寸，未与提交前对比 | 对比驱动/尺寸/波段/类型/NoData/样本像元/mask；输出记录取最终重开结果 |
+| 旧 ENVI 头 | 非 ENVI 新数据写 `out.dat` 时可能遗留旧 `out.hdr` | 目标 `.dat/.img` 旁存在旧 `.hdr` 且新格式非 ENVI → 明确拒绝，保留旧文件 |
+| 不支持格式 | buildvrt 显式请求 GTiff 仍写 VRT 后按实际驱动登记 | 显式不支持的格式在写盘前拒绝（`unsupported_output_format`） |
+| alpha | color band mask 全 255、alpha=0 的缺口被当有效；alpha 波段被当数据计入冲突 | alpha=0 参与无效判定；只重映射 color 数据带，alpha 不被重映射；写显式 dataset mask 使 NoData/值/mask 一致 |
+| 显式 mask | 已有显式 mask 时未验证与 dstNodata 的交互 | 按 mask 分块重映射；显式 mask 与 alpha 同时存在时取交集，不把原无效区重新标有效 |
+| 测试退出码 | `pytest_unconfigure` 读不到真实 exitstatus，4 failed 仍 `os._exit(0)` | 在 `pytest_sessionfinish` 保存真实退出码；失败探针实测 rc=1 |
+
+**二、成果事务与数据语义**
+
+1. **完整成果集合**：staging 目录中按主文件名前缀/同 stem 收集主文件与 sidecar（ENVI `.hdr`、`.aux.xml`、`.ovr` 等）；ENVI 缺少与主文件同 stem 的头文件时直接失败。提交对按最终目标名映射（`.hdr` 强制 `target.with_suffix(".hdr")`，其余保留 tail），映射冲突拒绝。
+2. **提交前/后真实校验**：提交前 `inspect_raster` 读取尺寸/波段/驱动/类型/NoData 与样本像元；VRT 复制到最终目录后打开并按 final_dir 解析源。提交后再次真实重开，逐项对比并核对提交集合；输出记录（驱动/尺寸/波段/类型/NoData/committed_files）全部来自最终重开，不采信处理函数返回值。
+3. **事务边界**：`commit_files` 失败时保留 staging/manifest 作为可恢复证据；提交决断点之后不反向回滚。ENVI 提交第二个文件失败与提交中断恢复均有测试，验证旧 `.dat` 与旧 `.hdr` 成套还原，不会新数据配旧头。
+4. **NoData/mask**：写盘后按 mask 分块重映射无效像元并设置标签；alpha 波段不设 NoData、不改值，alpha=0 时写显式 mask；有效区真实值与 dstNodata 冲突时保持既有公开策略——明确拒绝，不产出语义矛盾成果。
+5. **源完整性**：BuildVRT/merge/stack 处理前核对 CRS（`SpatialReference.IsSame`）、GeoTransform 存在性、波段数与波段类型；不兼容不做隐式重投影，直接拒绝。处理后用 `GetFileList` 核对实际源集合，部分源被跳过不会被登记为整体成功。
+6. **relativePaths**：用 ElementTree 处理 VRT XML，按最终 VRT 目录写相对路径；绝对模式主动写 `relativeToVRT="0"` + 绝对路径；跨盘符无法相对时退化为绝对并保持可读。保留 `&amp;`、中文、空格与 GDAL 数据集引用语义；相对/绝对两种模式均实际读取像元验证。
+7. **取消**：BuildVRT/Translate 均接入 GDAL callback；取消时返回 cancelled，清理 staging 计算文件，不提交目标成果；真实 1200×1200 源取消测试覆盖。
+
+**三、验证与支持边界**
+
+- 针对性：`tests/integration/test_p4_mosaic_integrity.py` **29 passed / rc=0**（28.07s，独立 basetemp）。
+- 全量：`scripts/test.ps1 -All` **573 passed / 0 失败 / rc=0**（247.96s，Ruff 通过、Mypy 64 文件 0 错误）。
+- 环境：`scripts/doctor.ps1` rc=0（GDAL 3.13.3 / PROJ 9.8.1 / GUI 隔离通过）。
+- 退出异常：日志保留历史失败轮（556 passed 后 child rc=3221226505）；本轮全量使用测试侧 `skip-finalization` 止血，**不宣称根治 0xC0000409**。测试退出码传播已修复，失败时不会再被 `os._exit(0)` 掩盖。
+- **支持边界**：本轮未改 GUI；P4-02 的多输入表单与工具箱接入仍是第 32 轮成果，本轮未重新做桌面端到端审计，不把本轮后端修复表述为新的桌面验收。能力注册/可执行审计未改。P4-02 状态保持 `implemented`，未宣称 `done`。
 
 ### 第 36 轮：P4-05 首个完整用户流程（重试、导出与端到端验收）
 

@@ -14,7 +14,9 @@ from __future__ import annotations
 import contextlib
 import json
 import math
+import shutil
 import time
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -55,8 +57,14 @@ from spectra_workbench.providers.gdal_provider.metadata_ops import (
     snapshot_hdr_lines,
 )
 from spectra_workbench.providers.gdal_provider.mosaic_ops import (
+    IncompatibleSourcesError,
+    NodataConflictError,
+    SourceUsageError,
+    assert_vrt_sources,
     build_vrt,
     check_source_compatibility,
+    compare_rasters,
+    inspect_raster,
     manage_bands,
     merge_sources,
     set_vrt_source_paths,
@@ -459,6 +467,41 @@ class GDALProviderAdapter(ProviderAdapter):
                 duration_seconds=round(time.monotonic() - start_time, 4),
             )
 
+        # 2.2b P4-02 输出格式与旧 sidecar 预检（在任何 staging 写入之前）
+        if spec.capability_id in (
+            "gdal:buildvrt",
+            "gdalbuildvrt",
+            "gdal:merge",
+            "gdal_merge",
+            "gdal:stack",
+            "gdal:bandmanage",
+        ):
+            format_explicit = bool(
+                str(spec.parameters.get("format") or "").strip()
+            )
+            fmt_err = self._validate_p402_output_format(
+                spec.capability_id, out_format, format_explicit=format_explicit
+            )
+            if fmt_err is not None:
+                context.log("ERROR", f"不支持的输出格式: {fmt_err}")
+                return TaskResult(
+                    task_id=spec.task_id,
+                    attempt=spec.attempt,
+                    status=TaskStatus.failed,
+                    error={"code": "unsupported_output_format", "message": fmt_err},
+                    duration_seconds=round(time.monotonic() - start_time, 4),
+                )
+            stale_err = self._stale_header_conflict(target_path, out_format)
+            if stale_err is not None:
+                context.log("ERROR", f"目标存在可能配错新数据的旧头文件: {stale_err}")
+                return TaskResult(
+                    task_id=spec.task_id,
+                    attempt=spec.attempt,
+                    status=TaskStatus.failed,
+                    error={"code": "stale_header_conflict", "message": stale_err},
+                    duration_seconds=round(time.monotonic() - start_time, 4),
+                )
+
         # 2.3 构造专有 staging 路径
         staging_filename = f"staging_{spec.task_id}_{target_path.name}"
         staged_path = context.create_staging_path(staging_filename)
@@ -847,6 +890,150 @@ class GDALProviderAdapter(ProviderAdapter):
             },
         )
 
+    # ------------------------------------------------------------------
+    # P4-02 成果完整性辅助
+    # ------------------------------------------------------------------
+    def _validate_p402_output_format(
+        self, capability_id: str, out_format: str, *, format_explicit: bool
+    ) -> str | None:
+        """校验请求的输出格式能被当前能力真实产出。
+
+        BuildVRT 的物理成果永远是 VRT：如果调用方**显式**要求 GTiff 等其他格式，
+        必须拒绝，而不是写出 VRT 后按调用者默认格式登记。未显式给 format 时
+        （GUI 的 buildvrt 表单不暴露格式），允许使用实际 VRT 驱动。
+        """
+        if gdal is None:
+            return "GDAL 不可用"
+        if capability_id in ("gdal:buildvrt", "gdalbuildvrt"):
+            if format_explicit and out_format.upper() != "VRT":
+                return (
+                    f"gdal:buildvrt 只能产出 VRT，不能按 {out_format!r} 输出；"
+                    "需要 GeoTIFF 等物理格式请使用 gdal:merge 或格式转换"
+                )
+            return None
+        if out_format.upper() == "VRT":
+            return None
+        driver = gdal.GetDriverByName(out_format)
+        if driver is None:
+            return f"GDAL 未注册输出驱动 {out_format!r}"
+        can_create = bool(driver.GetMetadataItem(gdal.DCAP_CREATE))
+        can_copy = bool(driver.GetMetadataItem(gdal.DCAP_CREATECOPY))
+        if not can_create and not can_copy:
+            return f"GDAL 驱动 {out_format!r} 不支持创建/写出数据集"
+        return None
+
+    def _stale_header_conflict(self, target_path: Path, out_format: str) -> str | None:
+        """阻止新数据覆盖 ENVI 数据文件却遗留旧 .hdr 的歧义目标。
+
+        典型场景：目标 out.dat 旁已有旧 out.hdr，新任务却请求 GTiff（或 VRT）
+        写到 out.dat。提交只替换 out.dat，GDAL 可能按旧 .hdr 把新数据识别成
+        ENVI，造成「新数据配旧头文件」。这里在写入前明确拒绝，并保留旧文件。
+        """
+        header = target_path.with_suffix(".hdr")
+        if not header.exists() or out_format.upper() == "ENVI":
+            return None
+        if target_path.suffix.lower() in ("", ".dat", ".img"):
+            return (
+                f"目标 {target_path.name} 旁存在旧 ENVI 头文件 {header.name}，"
+                f"但本次输出格式是 {out_format}；继续会留下「新数据配旧头文件」的歧义。"
+                "请改用明确的输出扩展名（如 .tif/.vrt），或先移除旧头文件。"
+            )
+        return None
+
+    def _collect_staged_bundle(self, staged_path: Path, *, driver: str) -> list[Path]:
+        """收集 staging 目录中的主文件与全部伴生成果文件。
+
+        只收集**真实存在于 staging** 的文件，避免把 VRT 引用的源文件误当成成果。
+        命名判据覆盖：主文件前缀（.dat.aux.xml/.dat.ovr）、同 stem 不同后缀
+        （ENVI .hdr、GTiff .ovr）、以及驱动强制要求的头文件。
+        """
+        main = staged_path.resolve()
+        files: set[Path] = {main}
+        parent = staged_path.parent
+        if parent.is_dir():
+            for p in parent.iterdir():
+                if not p.is_file() or p.name == "manifest.json":
+                    continue
+                resolved = p.resolve()
+                if resolved == main:
+                    continue
+                if p.name.startswith(staged_path.name) or p.stem == staged_path.stem:
+                    files.add(resolved)
+        if driver.upper() == "ENVI":
+            header = staged_path.with_suffix(".hdr")
+            if not header.exists():
+                raise RuntimeError(
+                    f"ENVI 成果缺少主文件同名头文件：{header.name}（拒绝提交不完整成果）"
+                )
+            files.add(header.resolve())
+        # 非 VRT 成果再用驱动自身的 GetFileList 补充；只接受确实位于 staging
+        # 的文件，避免把被引用的输入源误当成果。VRT 的 GetFileList 会返回源，
+        # 且按 staging 位置解析，不能用于成果收集。
+        if driver.upper() != "VRT" and gdal is not None:
+            with contextlib.suppress(Exception):
+                ds = gdal.Open(str(staged_path), gdal.GA_ReadOnly)
+                if ds is not None:
+                    try:
+                        for raw in ds.GetFileList() or []:
+                            p = Path(raw)
+                            if p.is_file() and p.parent.resolve() == parent.resolve():
+                                files.add(p.resolve())
+                    finally:
+                        ds = None
+        return sorted(files, key=lambda p: (p != main, p.name))
+
+    def _map_bundle_target(self, staged_path: Path, staged_file: Path, target_path: Path) -> Path:
+        """把 staging 文件名映射为最终目标文件名（主文件 + sidecar 一致命名）。"""
+        main = staged_path.resolve()
+        sf = staged_file.resolve()
+        if sf == main:
+            return target_path
+        if sf.suffix.lower() == ".hdr":
+            # ENVI 头文件必须与最终主文件同 stem，不能保留 staging 前缀
+            return target_path.with_suffix(".hdr")
+        if sf.name.startswith(staged_path.name):
+            tail = sf.name[len(staged_path.name):]
+            return target_path.parent / f"{target_path.name}{tail}"
+        if sf.stem == staged_path.stem:
+            return target_path.with_suffix(sf.suffix)
+        return target_path.parent / sf.name
+
+    def _cleanup_staged_bundle(self, staged_path: Path) -> None:
+        """取消/提交前失败时清理 staging 计算文件；保留 manifest 作为审计证据。"""
+        parent = staged_path.parent
+        if not parent.is_dir():
+            return
+        for p in list(parent.iterdir()):
+            if p.is_file() and p.name != "manifest.json":
+                with contextlib.suppress(OSError):
+                    p.unlink()
+
+    def _log_engine_warnings(self, context: Any, info: dict[str, Any] | None) -> None:
+        """把 GDAL warning 写入任务日志（源集合核验失败时也会随错误返回）。"""
+        if not info:
+            return
+        for warning in info.get("warnings", []) or []:
+            context.log("WARNING", f"GDAL: {warning}")
+
+    def _inspect_staged_for_commit(
+        self, staged_path: Path, target_path: Path, *, driver: str
+    ) -> dict[str, Any]:
+        """提交前真实重开 staging 成果并读取必要像元。
+
+        VRT 的相对源引用以**最终目标目录**为基准；因此先复制一份到最终目录再打开，
+        不能用 staging 位置打开来冒充最终可读性。
+        """
+        if driver.upper() != "VRT":
+            return inspect_raster(staged_path)
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        verify_path = target_path.parent / f".verify_{uuid.uuid4().hex[:12]}_{target_path.name}"
+        try:
+            shutil.copy2(staged_path, verify_path)
+            return inspect_raster(verify_path)
+        finally:
+            with contextlib.suppress(OSError):
+                verify_path.unlink()
+
     def _execute_p402(
         self,
         spec: Any,
@@ -932,12 +1119,23 @@ class GDALProviderAdapter(ProviderAdapter):
             context.log("INFO", f"in-place：源文件集合已复制到 staging（{staged_path.name}）")
 
         # 输入兼容性预检：GDAL 对不兼容输入会**静默跳过**（混合 CRS 丢源、
-        # 非 separate 截断多波段），必须先核对并明确拒绝。
-        if not is_inplace and cid in ("gdal:merge", "gdal_merge"):
+        # 非 separate 跳过多波段源），必须先核对并明确拒绝。
+        # BuildVRT 也要查：此前只查 merge/stack，导致 buildvrt 混合 CRS 仍 succeeded。
+        if not is_inplace and cid in ("gdal:buildvrt", "gdalbuildvrt"):
+            separate = bool(norm.get("separate", False))
+            compat = check_source_compatibility(
+                sources,
+                require_same_bands=not separate,
+                allow_ungeoreferenced=separate,
+            )
+        elif not is_inplace and cid in ("gdal:merge", "gdal_merge"):
             compat = check_source_compatibility(sources, require_same_bands=True)
         elif cid == "gdal:stack":
-            # separate=True 时每个源的所有波段依次进入，波段数可以不同
-            compat = check_source_compatibility(sources, require_same_bands=False)
+            # separate=True 时每个源的所有波段依次进入，波段数可以不同；
+            # 实测无地理参考源在 separate=True 下仍可堆叠（不同于非 separate）。
+            compat = check_source_compatibility(
+                sources, require_same_bands=False, allow_ungeoreferenced=True
+            )
         else:
             compat = {"compatible": True, "reason": None, "details": {}}
         if not compat["compatible"]:
@@ -996,7 +1194,7 @@ class GDALProviderAdapter(ProviderAdapter):
                         f"（主影像尺寸契约保持 {inplace_info.get('width')}x{inplace_info.get('height')}）",
                     )
             elif cid in ("gdal:buildvrt", "gdalbuildvrt"):
-                build_vrt(
+                info = build_vrt(
                     staged_path,
                     sources,
                     overlap_priority=norm.get("overlapPriority", "last"),
@@ -1006,6 +1204,7 @@ class GDALProviderAdapter(ProviderAdapter):
                     separate=bool(norm.get("separate", False)),
                     callback=_progress_cb,
                 )
+                self._log_engine_warnings(context, info)
                 # VRT 源引用按开关统一处理：
                 # 相对模式 → 相对于**最终目标目录**（保证目录整体搬移后仍可打开）；
                 # 绝对模式 → 主动改为绝对引用（不能指望引擎一定输出绝对路径）。
@@ -1019,7 +1218,7 @@ class GDALProviderAdapter(ProviderAdapter):
                     f"模式={'相对' if use_relative else '绝对'}）",
                 )
             elif cid in ("gdal:merge", "gdal_merge"):
-                merge_sources(
+                info = merge_sources(
                     staged_path,
                     sources,
                     overlap_priority=norm.get("overlapPriority", "last"),
@@ -1034,8 +1233,9 @@ class GDALProviderAdapter(ProviderAdapter):
                     out_format=out_format,
                     callback=_progress_cb,
                 )
+                self._log_engine_warnings(context, info)
             elif cid == "gdal:stack":
-                stack_sources(
+                info = stack_sources(
                     staged_path,
                     sources,
                     src_nodata=norm.get("srcNodata"),
@@ -1047,6 +1247,7 @@ class GDALProviderAdapter(ProviderAdapter):
                     out_format=out_format,
                     callback=_progress_cb,
                 )
+                self._log_engine_warnings(context, info)
             elif cid == "gdal:calc":
                 expression = str(norm.get("calc") or "").strip()
                 if not expression:
@@ -1072,7 +1273,7 @@ class GDALProviderAdapter(ProviderAdapter):
                     f"数学无效（除零等）{calc_info.get('n_math_invalid')} 像元→输出 NoData",
                 )
             else:  # gdal:bandmanage
-                manage_bands(
+                info = manage_bands(
                     staged_path,
                     sources[0],
                     band_list=norm.get("bandList"),
@@ -1080,9 +1281,11 @@ class GDALProviderAdapter(ProviderAdapter):
                     out_format=out_format,
                     callback=_progress_cb,
                 )
+                self._log_engine_warnings(context, info)
         except ExpressionError as exc:
             # 表达式解析/白名单/输出语义错误：与引擎故障区分，便于用户直接改表达式
             context.log("ERROR", f"表达式被拒绝: {exc}")
+            self._cleanup_staged_bundle(staged_path)
             return TaskResult(
                 task_id=spec.task_id,
                 attempt=spec.attempt,
@@ -1090,8 +1293,39 @@ class GDALProviderAdapter(ProviderAdapter):
                 error={"code": "invalid_expression", "message": str(exc)},
                 duration_seconds=round(time.monotonic() - start_time, 4),
             )
+        except (SourceUsageError, IncompatibleSourcesError) as exc:
+            context.log("ERROR", f"输入源集合不完整: {exc}")
+            self._cleanup_staged_bundle(staged_path)
+            return TaskResult(
+                task_id=spec.task_id,
+                attempt=spec.attempt,
+                status=TaskStatus.failed,
+                error={"code": "incompatible_sources", "message": str(exc)},
+                duration_seconds=round(time.monotonic() - start_time, 4),
+            )
+        except NodataConflictError as exc:
+            context.log("ERROR", f"输出 NoData 语义冲突: {exc}")
+            self._cleanup_staged_bundle(staged_path)
+            return TaskResult(
+                task_id=spec.task_id,
+                attempt=spec.attempt,
+                status=TaskStatus.failed,
+                error={"code": "nodata_conflict", "message": str(exc)},
+                duration_seconds=round(time.monotonic() - start_time, 4),
+            )
         except Exception as exc:
+            if context.is_cancelled.is_set():
+                context.log("WARNING", f"任务 {spec.task_id} 在处理期间被取消")
+                self._cleanup_staged_bundle(staged_path)
+                return TaskResult(
+                    task_id=spec.task_id,
+                    attempt=spec.attempt,
+                    status=TaskStatus.cancelled,
+                    error={"code": "task_cancelled", "message": "Operation cancelled by user"},
+                    duration_seconds=round(time.monotonic() - start_time, 4),
+                )
             context.log("ERROR", f"P4-02 处理失败: {exc}")
+            self._cleanup_staged_bundle(staged_path)
             return TaskResult(
                 task_id=spec.task_id,
                 attempt=spec.attempt,
@@ -1102,6 +1336,7 @@ class GDALProviderAdapter(ProviderAdapter):
 
         if context.is_cancelled.is_set():
             context.log("WARNING", "检测到取消请求，中止 P4-02 任务")
+            self._cleanup_staged_bundle(staged_path)
             return TaskResult(
                 task_id=spec.task_id,
                 attempt=spec.attempt,
@@ -1110,34 +1345,73 @@ class GDALProviderAdapter(ProviderAdapter):
                 duration_seconds=round(time.monotonic() - start_time, 4),
             )
 
-        # ---- 成果完整性：收集全部 sidecar（ENVI .hdr / .aux.xml 等）----
+        # ---- 成果完整性：收集 staging 内主文件与全部 sidecar ----
         context.progress(0.80, "collecting", "收集成果与伴生文件")
         try:
             ds = gdal.Open(str(staged_path), gdal.GA_ReadOnly)
             if ds is None:
                 raise RuntimeError(f"无法重开 staging 成果：{staged_path}")
-            raw_files = ds.GetFileList() or []
-            staged_files: list[Path] = [Path(f).resolve() for f in raw_files]
-            if staged_path.resolve() not in staged_files:
-                staged_files.insert(0, staged_path.resolve())
-            # **排除输入源**：VRT 的 GetFileList() 会把它引用的源文件一并返回，
-            # 且这些路径是按 **VRT 当前位置**（staging）解析的，
-            # 因此不能用「与输入源同路径」来排除。
-            # 稳健判据：**要提交的文件必须真实存在于 staging**——
-            # 伴生文件（.hdr/.aux.xml）确实在 staging，而被引用的源不在。
-            source_set = {sp.resolve() for sp in sources}
-            staged_files = [
-                sf
-                for sf in staged_files
-                if sf.exists() and sf not in source_set
-            ]
-            if staged_path.resolve() not in staged_files:
-                staged_files.insert(0, staged_path.resolve())
-            # 提交前真实重开校验：确认 staging 成果确实可读
-            # （尺寸/波段等元数据在提交后由**最终重开**给出，不采信此处快照）
+            driver = ds.GetDriver().ShortName
             del ds
+            if not staged_path.exists() or staged_path.stat().st_size == 0:
+                raise RuntimeError("staging 成果缺失或为空")
+
+            staged_files = self._collect_staged_bundle(staged_path, driver=driver)
+            for sf in staged_files:
+                if not sf.exists() or sf.stat().st_size == 0:
+                    raise RuntimeError(f"staging 成果文件缺失或为空：{sf}")
+
+            if cid in ("gdal:buildvrt", "gdalbuildvrt"):
+                expected_driver = "VRT"
+            elif cid in INPLACE_CAPABILITIES or cid == "gdal:calc":
+                # 就地更新/表达式计算的输出格式由源或表达式实现决定，
+                # 以实际驱动为准；合并/堆叠等新建栅格则必须与请求格式一致。
+                expected_driver = driver
+            else:
+                expected_driver = out_format
+            if driver.upper() != expected_driver.upper():
+                raise RuntimeError(
+                    f"staging 成果驱动不符：期望 {expected_driver}，实际 {driver}"
+                )
+
+            if driver.upper() == "ENVI":
+                header = staged_path.with_suffix(".hdr")
+                if not header.exists():
+                    raise RuntimeError(
+                        f"ENVI 头文件未与主文件同目录就绪：{header.name}"
+                    )
+
+            if driver.upper() == "VRT":
+                # VRT 的源引用以**最终目标目录**为基准；在 commit 前按 final_dir
+                # 解析并核对每个源存在，不能只凭 staging 位置打开。
+                summary = assert_vrt_sources(
+                    staged_path,
+                    target_path.parent,
+                    sources,
+                    operation="提交前 VRT 成果",
+                )
+                context.log(
+                    "INFO",
+                    f"VRT 源引用按最终目录校验通过（{summary['source_count']} 条，"
+                    f"相对 {summary['relative_count']} 条）",
+                )
+
+            expected = self._inspect_staged_for_commit(
+                staged_path, target_path, driver=driver
+            )
+            if expected["driver"].upper() != expected_driver.upper():
+                raise RuntimeError(
+                    f"提交前重开驱动不符：期望 {expected_driver}，实际 {expected['driver']}"
+                )
+            context.log(
+                "INFO",
+                f"staging 成果真实重开通过：{expected['width']}x{expected['height']}, "
+                f"{expected['bands']} 波段, 驱动 {expected['driver']}, "
+                f"样本像元已读取",
+            )
         except Exception as verify_err:
             context.log("ERROR", f"staging 成果校验失败: {verify_err}")
+            self._cleanup_staged_bundle(staged_path)
             return TaskResult(
                 task_id=spec.task_id,
                 attempt=spec.attempt,
@@ -1146,38 +1420,37 @@ class GDALProviderAdapter(ProviderAdapter):
                 duration_seconds=round(time.monotonic() - start_time, 4),
             )
 
-        if not staged_path.exists() or staged_path.stat().st_size == 0:
-            context.log("ERROR", "staging 成果缺失或为空")
+        # ---- 构造完整提交对（主文件 + 全部 sidecar，按最终命名映射）----
+        commit_pairs: list[tuple[Path, Path]] = []
+        seen_targets: dict[Path, Path] = {}
+        try:
+            for sf in staged_files:
+                tf = self._map_bundle_target(staged_path, sf, target_path)
+                if tf in seen_targets:
+                    raise RuntimeError(
+                        f"sidecar 命名映射冲突：{seen_targets[tf].name} 与 {sf.name} "
+                        f"都映射到 {tf.name}"
+                    )
+                seen_targets[tf] = sf
+                commit_pairs.append((sf, tf))
+        except Exception as map_err:
+            context.log("ERROR", f"成果命名映射失败: {map_err}")
+            self._cleanup_staged_bundle(staged_path)
             return TaskResult(
                 task_id=spec.task_id,
                 attempt=spec.attempt,
                 status=TaskStatus.failed,
-                error={"code": "staging_invalid", "message": "staging 成果缺失或为空"},
+                error={"code": "sidecar_mapping_failed", "message": str(map_err)},
                 duration_seconds=round(time.monotonic() - start_time, 4),
             )
-
-        # ---- 构造完整提交对（主文件 + 全部 sidecar，按最终命名映射）----
-        commit_pairs: list[tuple[Path, Path]] = []
-        for sf in staged_files:
-            if sf == staged_path.resolve():
-                tf = target_path
-            elif sf.suffix.lower() == ".hdr":
-                tf = target_path.with_suffix(".hdr")
-            elif sf.name.endswith(".aux.xml"):
-                tf = target_path.parent / f"{target_path.name}.aux.xml"
-            elif sf.name.startswith(staged_path.name):
-                tail = sf.name[len(staged_path.name) :]
-                tf = target_path.parent / f"{target_path.name}{tail}"
-            else:
-                tf = target_path.parent / sf.name
-            commit_pairs.append((sf, tf))
 
         # ---- 事务提交全部成果文件 ----
         context.progress(0.92, "committing", "提交 staging 成果与伴生文件")
         try:
-            context.commit_files(commit_pairs, overwrite=overwrite)
+            committed_files = context.commit_files(commit_pairs, overwrite=overwrite)
         except OutputConflictError as conflict_err:
             context.log("ERROR", f"提交被拒（目标已存在）: {conflict_err}")
+            self._cleanup_staged_bundle(staged_path)
             return TaskResult(
                 task_id=spec.task_id,
                 attempt=spec.attempt,
@@ -1186,7 +1459,8 @@ class GDALProviderAdapter(ProviderAdapter):
                 duration_seconds=round(time.monotonic() - start_time, 4),
             )
         except Exception as commit_err:
-            context.log("ERROR", f"事务提交失败: {commit_err}")
+            # 事务内部已回滚；staging/manifest 保留为可恢复证据，绝不反向回滚已 committed。
+            context.log("ERROR", f"事务提交失败（保留 staging/manifest 供恢复）: {commit_err}")
             return TaskResult(
                 task_id=spec.task_id,
                 attempt=spec.attempt,
@@ -1195,18 +1469,39 @@ class GDALProviderAdapter(ProviderAdapter):
                 duration_seconds=round(time.monotonic() - start_time, 4),
             )
 
-        # ---- 提交后最终核验：真实重开目标文件 ----
+        # ---- 提交后最终核验：真实重开目标文件，核对驱动/尺寸/波段/像元/mask ----
         context.progress(0.97, "verifying_final", "核验已安装目标")
         try:
-            final_ds = gdal.Open(str(target_path), gdal.GA_ReadOnly)
-            if final_ds is None:
-                raise RuntimeError(f"提交后的成果无法重开：{target_path}")
-            final_w = final_ds.RasterXSize
-            final_h = final_ds.RasterYSize
-            final_bands = final_ds.RasterCount
-            final_driver = final_ds.GetDriver().ShortName
-            del final_ds
+            actual = inspect_raster(target_path)
+            compare_rasters(expected, actual)
+            if actual["driver"].upper() != expected_driver.upper():
+                raise RuntimeError(
+                    f"最终成果驱动不符：期望 {expected_driver}，实际 {actual['driver']}"
+                )
+            if actual["driver"].upper() == "VRT":
+                assert_vrt_sources(
+                    target_path,
+                    target_path.parent,
+                    sources,
+                    operation="提交后最终 VRT 成果",
+                )
+            if actual["driver"].upper() == "ENVI":
+                header = target_path.with_suffix(".hdr")
+                if not header.exists():
+                    raise RuntimeError(f"提交后 ENVI 头文件缺失：{header.name}")
+            expected_targets = {tf.resolve() for _, tf in commit_pairs}
+            committed_targets = {Path(p).resolve() for p in committed_files}
+            missing_committed = expected_targets - committed_targets
+            if missing_committed:
+                raise RuntimeError(
+                    f"提交返回的文件集合不完整，缺少：{[str(p) for p in sorted(missing_committed)]}"
+                )
+            final_w = actual["width"]
+            final_h = actual["height"]
+            final_bands = actual["bands"]
+            final_driver = actual["driver"]
         except Exception as final_err:
+            # 提交决断点已过：不反向回滚已生效事务，只如实报告失败。
             context.log("ERROR", f"最终成果重开核验失败: {final_err}")
             return TaskResult(
                 task_id=spec.task_id,
@@ -1224,7 +1519,7 @@ class GDALProviderAdapter(ProviderAdapter):
             f"驱动 {final_driver})",
         )
 
-        # 输出记录来自**实际重开**的成果
+        # 输出记录来自**实际重开的最终成果**，不采信处理函数返回的 info。
         output_record: dict[str, Any] = {
             "key": out_plan.key,
             "uri": target_path.as_uri(),
@@ -1232,6 +1527,9 @@ class GDALProviderAdapter(ProviderAdapter):
             "width": final_w,
             "height": final_h,
             "bands": final_bands,
+            "data_type": actual["types"][0] if actual["types"] else None,
+            "nodata": actual["nodata"][0] if actual["nodata"] else None,
+            "committed_files": [Path(p).as_uri() for p in committed_files],
         }
         if calc_info:
             # 表达式语义证据随成果返回（除零/无效区计数），供验收与日志核对
