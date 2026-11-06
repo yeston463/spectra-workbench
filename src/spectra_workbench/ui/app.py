@@ -14,7 +14,7 @@ import os
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QApplication
 
 from spectra_workbench.ui.main_window import MainWindow
@@ -36,6 +36,12 @@ def run_app(argv: list[str] | None = None) -> int:
 
     app = QApplication.instance()
     if app is None:
+        # Qt6 默认开启高 DPI，但缩放因子舍入策略默认是「四舍五入到整数」，
+        # 会把 125% / 150% 这类常见 Windows 缩放压成 100%，导致文字与图形偏小。
+        # PassThrough 保留系统真实缩放因子；该调用必须在 QApplication 构造之前。
+        QApplication.setHighDpiScaleFactorRoundingPolicy(
+            Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
+        )
         app = QApplication(sys.argv[:1])
 
     app.setApplicationName("SpectraWorkbench")

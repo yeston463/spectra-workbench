@@ -1608,7 +1608,8 @@ class MainWindow(QMainWindow):
             "contains_georeference": False,
             "note": "屏幕渲染截图，不含地理参考；像元值与坐标请导出栅格数据集。",
             "image_size": [image.width(), image.height()],
-            "supersampling": 2.0,
+            "supersampling": float(image.devicePixelRatioF()),
+            "device_pixel_ratio": float(self.canvas.devicePixelRatioF()),
             "rendered": getattr(self.canvas.img_item, "image", None) is not None,
             "view": self.canvas.view_state(),
             "layer": {

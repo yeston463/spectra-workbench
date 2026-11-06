@@ -289,12 +289,17 @@ class ImageCanvas(QWidget):
             "view_crs_wkt": self.view_crs_wkt,
         }
 
-    def capture_view_image(self, scale_factor: float = 2.0) -> QImage:
+    def capture_view_image(self, scale_factor: float | None = None) -> QImage:
         """把当前绘图区的真实渲染结果（影像 + 网格 + ROI）导出为 QImage。
 
         用 ``QGraphicsScene.render`` 而不是 ``QWidget.grab``：后者依赖原生窗口句柄与
         可见状态，在离屏或未显示时可能得到空白图；场景渲染不依赖这些，且可超采样。
         产物是**屏幕渲染截图**，不含地理参考；需要带坐标的数据请走栅格导出通道。
+
+        第 37 轮：渲染倍率不再固定 2.0，而是取 ``max(2.0, devicePixelRatioF())``
+        （显式传 ``scale_factor`` 时同样不低于 dpr）。高 DPI 屏幕上若仍按 2.0
+        出图，2x/3x 缩放下的截图会相对屏幕变糊；同时给 QImage 写入 dpr 元数据，
+        让查看器按正确的逻辑尺寸显示。
         """
         scene = self.plot_item.scene()
         if scene is None:
@@ -303,10 +308,13 @@ class ImageCanvas(QWidget):
         if rect.width() < 2 or rect.height() < 2:
             size = self.gl_widget.size()
             rect = QRectF(0, 0, max(1, size.width()), max(1, size.height()))
-        factor = max(1.0, float(scale_factor))
+        dpr = max(1.0, float(self.devicePixelRatioF()))
+        base = 2.0 if scale_factor is None else max(1.0, float(scale_factor))
+        factor = max(base, dpr)
         width = max(1, int(round(rect.width() * factor)))
         height = max(1, int(round(rect.height() * factor)))
         image = QImage(width, height, QImage.Format.Format_ARGB32)
+        image.setDevicePixelRatio(factor)
         image.fill(QColor("#ffffff"))
         painter = QPainter(image)
         try:
