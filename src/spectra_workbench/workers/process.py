@@ -155,6 +155,12 @@ class WorkerProcess:
 
     def start(self, timeout: float = 15.0) -> Envelope:
         """启动 Worker 进程并阻塞等待握手完成（hello -> ready）。"""
+        # 每次拉起新进程前清空上一代握手状态。超时 / 崩溃后若复用本对象，
+        # 残留的 _ready_envelope 会让新的 start() 立刻返回**过期**握手，
+        # 表现为请求发往一个根本不存在的进程（第 31 轮疑点之一）。
+        self._hello_envelope = None
+        self._ready_envelope = None
+        self.received_envelopes.clear()
         cmd = [
             str(self._python_exe),
             "-m",
@@ -205,8 +211,19 @@ class WorkerProcess:
                 return self._ready_envelope
             time.sleep(0.05)
 
+        elapsed = time.monotonic() - start_t
+        hello_seen = self._hello_envelope is not None
+        proc_alive = self.is_alive
+        stderr_preview = "".join(self.stderr_lines[-20:])[-600:]
         self.kill()
-        raise WorkerTimeoutError(f"Worker 启动握手超时 ({timeout}s)")
+        # kill() 之后也清空，保证下次 start() 不会误认这次的半截握手
+        self._hello_envelope = None
+        self._ready_envelope = None
+        raise WorkerTimeoutError(
+            f"Worker 启动握手超时 ({timeout}s，实测 {elapsed:.2f}s): "
+            f"hello_received={hello_seen}, ready_received=False, "
+            f"proc_alive_at_timeout={proc_alive}, stderr_tail={stderr_preview!r}"
+        )
 
     def _read_stdout_loop(self) -> None:
         """后台分帧读取 stdout 二进制流。"""
@@ -640,19 +657,39 @@ class WorkerProcess:
         return self._simple_call("read_view_window", args, timeout=timeout)
 
     def _join_readers(self, timeout: float = 2.0) -> None:
-        """等读者线程结束：子进程已退出时管道会 EOF，线程随即返回。
+        """等读者线程结束，再关闭管道。
 
         不 join 就让守护线程活到解释器退出，Windows 上会在关闭阶段随机崩
         （STATUS_STACK_BUFFER_OVERRUN），表现为测试与关窗时的异常退出码。
+
+        **顺序修正（第 37 轮）**：旧实现先 ``stream.close()`` 再 ``join()``。
+        在 Windows 上关闭仍被 ``readline()`` 阻塞的管道会让读者线程行为
+        不确定，可能 join 超时放弃而残留守护线程。正常路径下 stop()/kill()
+        已让子进程退出、管道 EOF，读者线程会自行返回，因此改为
+        **先 join、后 close**；只有 join 超时的异常路径才强制关管道并二次 join。
         """
+        readers = [t for t in (self._stdout_thread, self._stderr_thread) if t is not None]
+        for t in readers:
+            if t.is_alive():
+                t.join(timeout=timeout)
+
+        streams: tuple[Any, ...] = ()
         if self._proc is not None:
-            for stream in (self._proc.stdout, self._proc.stderr, self._proc.stdin):
+            streams = (self._proc.stdout, self._proc.stderr, self._proc.stdin)
+
+        still_alive = [t for t in readers if t.is_alive()]
+        if still_alive:
+            for stream in streams:
                 if stream is not None:
                     with contextlib.suppress(OSError, ValueError):
                         stream.close()
-        for t in (self._stdout_thread, self._stderr_thread):
-            if t is not None and t.is_alive():
-                t.join(timeout=timeout)
+            for t in still_alive:
+                t.join(timeout=1.0)
+
+        for stream in streams:
+            if stream is not None:
+                with contextlib.suppress(OSError, ValueError):
+                    stream.close()
 
     def __del__(self) -> None:
         """对象回收时兜底终止子进程。

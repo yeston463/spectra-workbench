@@ -314,6 +314,9 @@ class TaskScheduler:
                         time.sleep(0.02)
 
                 canceller_thread = threading.Thread(target=_cancel_monitor, daemon=True)
+                # 纳入统一跟踪：此前该线程没有 join/stop，stop() 后可能残留守护
+                # 线程到解释器退出（第 37 轮线程生命周期收口）。
+                self._dispatch_threads.append(canceller_thread)
                 canceller_thread.start()
 
                 # 执行任务

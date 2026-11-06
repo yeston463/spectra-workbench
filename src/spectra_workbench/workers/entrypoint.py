@@ -284,8 +284,13 @@ class WorkerRuntime:
         details: dict[str, Any] | None = None,
         request_id: str | None = None,
         task_id: str | None = None,
+        category: str | None = None,
     ) -> None:
-        """按 Schema 规范构造并发送合法 Kind.error 响应（必须包含 retryable）。"""
+        """按 Schema 规范构造并发送合法 Kind.error 响应（必须包含 retryable）。
+
+        ``category="query"`` 标记只读查询失败：这类错误已由客户端的定向
+        ``on_error`` 回调处理，不应再全客户端广播污染任务面板。
+        """
         payload: dict[str, Any] = {
             "code": code,
             "message": message,
@@ -293,6 +298,8 @@ class WorkerRuntime:
         }
         if details is not None:
             payload["details"] = details
+        if category is not None:
+            payload["category"] = category
         self.send_kind(
             Kind.error,
             payload,
@@ -535,6 +542,7 @@ class WorkerRuntime:
                 retryable=False,
                 request_id=env.request_id,
                 task_id=env.task_id,
+                category="query",
             )
 
     def _handle_simple_call(self, env: Envelope, action: str) -> None:
@@ -585,6 +593,7 @@ class WorkerRuntime:
                 retryable=False,
                 request_id=env.request_id,
                 task_id=env.task_id,
+                category="query",
             )
 
     def _handle_probe_dataset(self, env: Envelope) -> None:
@@ -620,6 +629,7 @@ class WorkerRuntime:
                 retryable=False,
                 request_id=env.request_id,
                 task_id=env.task_id,
+                category="query",
             )
 
     def _handle_read_window(self, env: Envelope) -> None:

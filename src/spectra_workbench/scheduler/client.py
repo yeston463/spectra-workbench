@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import contextlib
+import queue
 import threading
 import time
 import uuid
@@ -16,7 +17,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QCoreApplication, QObject, QThread, QTimer, Signal
 
 from spectra_workbench.domain.models import TaskResult, TaskSpec
 from spectra_workbench.protocol.messages import Envelope, Kind
@@ -77,6 +78,69 @@ class QtWorkerClient(QObject):
         self._sig_read_dispatch.connect(self._on_read_dispatched)
         self._sig_call_dispatch.connect(self._on_call_dispatched)
 
+        # --- 跨线程信号统一收敛到 GUI 线程（第 37 轮，0xC0000409 根治）---
+        # 旧实现里 worker 的 stdout 读取线程与各请求线程（都是 Python 守护线程）
+        # 会直接 emit Qt 信号。PySide6 为这些「非 QThread 的外部线程」分配
+        # QThreadStorage / TLS，在模块卸载阶段按不确定顺序析构，正是
+        # `QThreadStorage: entry destroyed before end of thread` 与
+        # Python finalization 期间 ucrtbase fastfail 的机制链条。
+        # 现在这些线程**只写纯 Python 队列**，完全不调用任何 Qt API；
+        # QTimer 属于本 QObject 所在的 GUI 线程，由它把消息转成信号。
+        self._signal_queue: queue.Queue[tuple[str, tuple[Any, ...]]] = queue.Queue()
+        self._dispatch_timer = QTimer(self)
+        self._dispatch_timer.setInterval(5)
+        self._dispatch_timer.timeout.connect(self._drain_signal_queue)
+        self._dispatch_timer.start()
+
+    def _ensure_dispatcher(self) -> None:
+        """QApplication 可能晚于 client 构造，补一次定时器启动（幂等）。"""
+        if self._closed or self._dispatch_timer.isActive():
+            return
+        if QCoreApplication.instance() is None:
+            return
+        # QTimer 只能在其所属线程启动；从外部线程调用时跳过，等 GUI 线程再补
+        if QThread.currentThread() is not self.thread():
+            return
+        self._dispatch_timer.start()
+
+    def _enqueue(self, name: str, *args: Any) -> None:
+        """非 GUI 线程唯一的信号出口：只写队列，绝不触碰 Qt。"""
+        if self._closed:
+            return
+        self._signal_queue.put((name, args))
+
+    def _drain_signal_queue(self) -> None:
+        """在 client 所属线程（GUI 线程）把队列消息转成 Qt 信号 / 定向回调。"""
+        while True:
+            try:
+                name, args = self._signal_queue.get_nowait()
+            except queue.Empty:
+                return
+            if self._closed:
+                continue
+            if name == "hello":
+                self.sig_hello.emit(*args)
+            elif name == "ready":
+                self.sig_ready.emit(*args)
+            elif name == "progress":
+                self.sig_progress.emit(*args)
+            elif name == "log":
+                self.sig_log.emit(*args)
+            elif name == "error":
+                self.sig_error.emit(*args)
+            elif name == "result":
+                self.sig_result.emit(*args)
+            elif name == "dataset_probed":
+                self.sig_dataset_probed.emit(*args)
+            elif name == "window_read":
+                self.sig_window_read.emit(*args)
+            elif name == "probe_dispatch":
+                self._on_probe_dispatched(*args)
+            elif name == "read_dispatch":
+                self._on_read_dispatched(*args)
+            elif name == "call_dispatch":
+                self._on_call_dispatched(*args)
+
     @property
     def worker(self) -> WorkerProcess:
         return self._worker
@@ -91,6 +155,7 @@ class QtWorkerClient(QObject):
         必须串行化：多个请求线程可能同时发现 worker 尚未启动而并发调用 start()，
         后一次会覆盖前一次的子进程句柄，导致前一个 worker 泄漏、其请求永远收不到响应。
         """
+        self._ensure_dispatcher()
         with self._start_lock:
             if self._worker.is_alive:
                 # 另一个线程已完成启动：复用现有 worker，不重复拉起子进程
@@ -122,34 +187,37 @@ class QtWorkerClient(QObject):
         self._req_threads = [t for t in self._req_threads if t.is_alive()]
 
     def _on_worker_envelope(self, env: Envelope) -> None:
-        """从 Worker 读取线程派发消息至 Qt 信号。
+        """Worker 读取线程入口：只做纯 Python 入队，不接触任何 Qt API。
 
-        该回调运行在 worker 的 stdout 读取线程（守护线程）上。
-        客户端关闭后本 Qt 对象的 C++ 侧可能已被销毁，此时继续 emit 信号属于
-        未定义行为，在 Windows 上会随机触发 STATUS_STACK_BUFFER_OVERRUN（0xC0000409）。
-        因此关闭后必须直接丢弃在途消息。
+        该回调运行在 worker 的 stdout 读取线程（Python 守护线程）上。
+        由 ``_drain_signal_queue`` 在 GUI 线程统一 emit，避免 PySide6
+        为外部线程分配 QThreadStorage/TLS（见 __init__ 中的机制说明）。
         """
         if self._closed:
             return
         if env.kind is Kind.hello:
-            self.sig_hello.emit(env.payload)
+            self._enqueue("hello", env.payload)
         elif env.kind is Kind.ready:
-            self.sig_ready.emit(env.payload)
+            self._enqueue("ready", env.payload)
         elif env.kind is Kind.progress:
             ratio = env.payload.get("ratio")
             r_val = float(ratio) if ratio is not None else -1.0
             phase = env.payload.get("phase", "")
             msg = env.payload.get("message", "")
-            self.sig_progress.emit(r_val, phase, msg)
+            self._enqueue("progress", r_val, phase, msg)
         elif env.kind is Kind.log:
             level = env.payload.get("level", "INFO")
             msg = env.payload.get("message", "")
             stream = env.payload.get("stream", "engine")
-            self.sig_log.emit(level, msg, stream)
+            self._enqueue("log", level, msg, stream)
         elif env.kind is Kind.error:
+            if env.payload.get("category") == "query":
+                # 只读查询失败已由 call_async / *_async 的 on_error 定向回调处理，
+                # 不再全客户端广播（否则栅格图层的矢量探测失败会污染任务面板）。
+                return
             code = env.payload.get("code", "unknown_error")
             msg = env.payload.get("message", "")
-            self.sig_error.emit(code, msg)
+            self._enqueue("error", code, msg)
 
     def submit_task_async(self, spec: TaskSpec, timeout: float = 60.0) -> None:
         """异步在后台线程提交任务执行，结果通过 sig_result / sig_error 信号发射。"""
@@ -160,9 +228,9 @@ class QtWorkerClient(QObject):
                 if not self.is_alive:
                     self.start()
                 result = self._worker.execute_task(spec, timeout=timeout)
-                self.sig_result.emit(result)
+                self._enqueue("result", result)
             except Exception as exc:
-                self.sig_error.emit("task_submission_error", str(exc))
+                self._enqueue("error", "task_submission_error", str(exc))
             finally:
                 self._active_task_id = None
 
@@ -229,13 +297,13 @@ class QtWorkerClient(QObject):
                 info = self._worker.probe_dataset(path, timeout=timeout)
                 if self._closed:
                     return
-                self.sig_dataset_probed.emit(info)
-                self._sig_probe_dispatch.emit(req_id, info, False)
+                self._enqueue("dataset_probed", info)
+                self._enqueue("probe_dispatch", req_id, info, False)
             except Exception as exc:
                 if self._closed:
                     return
-                self.sig_error.emit("probe_error", str(exc))
-                self._sig_probe_dispatch.emit(req_id, str(exc), True)
+                self._enqueue("error", "probe_error", str(exc))
+                self._enqueue("probe_dispatch", req_id, str(exc), True)
 
         self._spawn_thread(_runner, f"qt-probe-{Path(path).stem}")
 
@@ -310,13 +378,13 @@ class QtWorkerClient(QObject):
                 )
                 if self._closed:
                     return
-                self.sig_window_read.emit(data)
-                self._sig_read_dispatch.emit(req_id, data, False)
+                self._enqueue("window_read", data)
+                self._enqueue("read_dispatch", req_id, data, False)
             except Exception as exc:
                 if self._closed:
                     return
-                self.sig_error.emit("read_window_error", str(exc))
-                self._sig_read_dispatch.emit(req_id, str(exc), True)
+                self._enqueue("error", "read_window_error", str(exc))
+                self._enqueue("read_dispatch", req_id, str(exc), True)
 
         self._spawn_thread(_runner, f"qt-read-{Path(path).stem}")
 
@@ -359,11 +427,13 @@ class QtWorkerClient(QObject):
                 if self._closed:
                     # 客户端已关闭：不再向已销毁的 Qt 对象派发信号
                     return
-                self._sig_call_dispatch.emit(req_id, data, False)
+                self._enqueue("call_dispatch", req_id, data, False)
             except Exception as exc:
                 if self._closed:
                     return
-                self._sig_call_dispatch.emit(req_id, f"{type(exc).__name__}: {exc}", True)
+                self._enqueue(
+                    "call_dispatch", req_id, f"{type(exc).__name__}: {exc}", True
+                )
 
         self._spawn_thread(_runner, f"qt-call-{req_id[:6]}")
         return req_id
@@ -706,6 +776,7 @@ class QtWorkerClient(QObject):
         """停止 Worker 进程并释放资源。"""
         # 先关闭信号派发：此后任何在途请求线程都不会再向本 Qt 对象发信号
         self._closed = True
+        self._dispatch_timer.stop()
         # 回调必须在锁外通知：回调内部可能再次发起请求并获取同一把锁
         for on_err in self._drain_pending_callbacks():
             with contextlib.suppress(Exception):
@@ -718,6 +789,7 @@ class QtWorkerClient(QObject):
     def kill(self) -> None:
         """强制杀死子进程。"""
         self._closed = True
+        self._dispatch_timer.stop()
         self._drain_pending_callbacks()
         self._join_request_threads(timeout=1.0)
         self._worker.kill()
