@@ -85,12 +85,13 @@ $Runner = Join-Path $PSScriptRoot 'pytest_runner.py'
 $logName = if ($targetMarker) { "test_$targetMarker" } else { 'test_all' }
 $RunLog = Join-Path $ProjectRoot ("work\test_runs\$logName.log")
 $ResultJson = Join-Path $ProjectRoot ("work\test_runs\$logName.result.json")
-$RunId = (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + [guid]::NewGuid().ToString('N').Substring(0, 8)
+$ChildResultJson = Join-Path $ProjectRoot ("work\test_runs\$logName.child.result.json")
+$CleanupReport = Join-Path $ProjectRoot ("work\test_runs\$logName.cleanup.json")
 $ExitMode = if ($BypassFinalization) { 'bypass' } else { 'clean' }
 if ($BypassFinalization) {
     Write-Host ">>> [WARN] BypassFinalization：跳过 finalization；clean_exit_verified=false，不满足发布门槛" -ForegroundColor Yellow
 }
-Remove-Item -Force -ErrorAction SilentlyContinue $ResultJson
+Remove-Item -Force -ErrorAction SilentlyContinue $ResultJson, $ChildResultJson, $CleanupReport
 # 使用项目内独立 basetemp：系统临时目录（%TEMP%\pytest-of-*）里历史残留的
 # pytest-current 断链会让 pytest_sessionfinish 的 cleanup_dead_symlinks 抛
 # WinError 5，表现为「全部测试通过但 rc=1」。这与测试内容无关，属于环境问题；
@@ -99,8 +100,9 @@ $runStamp = (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + [guid]::NewGuid().ToStr
 $baseTemp = Join-Path $ProjectRoot ("work\test_runs\pytest_tmp\run-$runStamp")
 # pytest 用 os.mkdir(basetemp)（parents=False），父目录必须先存在
 New-Item -ItemType Directory -Force -Path (Split-Path -Parent $baseTemp) | Out-Null
+# child result 与 supervisor final 必须是不同文件；身份由 supervisor 通过环境变量注入。
 $pytestArgs = @(
-    $Runner, '--mode', $ExitMode, '--result-json', $ResultJson, '--run-id', $RunId,
+    $Runner, '--mode', $ExitMode, '--result-json', $ChildResultJson,
     '--', '-q', '-o', 'faulthandler_timeout=60', '--basetemp', $baseTemp
 )
 if ($targetMarker -ne '') {
@@ -110,7 +112,8 @@ if ($targetMarker -ne '') {
 Run-Step ("Pytest 自动化测试 (marker: {0}, exit_mode: {1}, 硬超时 {2}s, 日志: {3})" -f `
     $(if ($targetMarker) { $targetMarker } else { 'ALL' }), $ExitMode, $TimeoutSeconds, $RunLog) {
     & $Python $Guard --timeout $TimeoutSeconds --log $RunLog `
-        --result-json $ResultJson --exit-mode $ExitMode --run-id $RunId `
+        --result-json $ResultJson --child-result-json $ChildResultJson `
+        --cleanup-report-json $CleanupReport --exit-mode $ExitMode `
         -- $Python @pytestArgs
 }
 
@@ -119,9 +122,12 @@ if (-not (Test-Path $ResultJson)) {
     exit 90
 }
 $ExitResult = Get-Content -Raw -Encoding UTF8 $ResultJson | ConvertFrom-Json
-Write-Host ("    exit_mode={0} pytest_exit_code={1} child_exit_code={2} clean_exit_verified={3}" -f `
-    $ExitResult.exit_mode, $ExitResult.pytest_exit_code, $ExitResult.child_exit_code, `
-    $ExitResult.clean_exit_verified)
+Write-Host ("    exit_mode={0} actual_exit_mode={1} pytest_exit_code={2} child_exit_code={3} clean_exit_verified={4}" -f `
+    $ExitResult.exit_mode, $ExitResult.actual_exit_mode, $ExitResult.pytest_exit_code, `
+    $ExitResult.child_exit_code, $ExitResult.clean_exit_verified)
+Write-Host ("    process_observation={0} residual={1} cleanup_complete={2} cleanup_errors={3}" -f `
+    $ExitResult.process_observation, @($ExitResult.residual_processes).Count, `
+    $ExitResult.cleanup_check_complete, @($ExitResult.cleanup_errors).Count)
 
 if ($ExitMode -eq 'clean' -and -not $ExitResult.clean_exit_verified) {
     Write-Host ">>> [FAIL] Clean 退出未验证：finalization 未正常完成或存在残留/清理错误" -ForegroundColor Red

@@ -1,6 +1,6 @@
 # 执行状态
 
-更新：2026-11-06（第 39 轮 · S0 冻结 + S1 可信退出：默认 Clean finalization、Bypass 标记且返回 91、外层统一 result JSON、QApplication 显式销毁；两次连续 Clean 全量 578 项 / 0 失败 / rc=0 / clean_exit_verified=true。第 38 轮为 P4-02 复核补强）
+更新：2026-11-06（第 39 轮 · S0 冻结 + S1 可信退出（含监督器加固）：默认 Clean finalization、Bypass 返回 91、运行身份/模式一致性/Job Object 残留观测/真实 cleanup report/未跟踪目录快照；Clean 全量 589 项 / 0 失败 / rc=0 / clean_exit_verified=true。第 38 轮为 P4-02 复核补强）
 
 ## 当前里程碑
 
@@ -243,14 +243,17 @@ CRT 检测到栈状态异常后立即终止进程，这正是 `STATUS_STACK_BUFF
   - `d43e03f`：课程真实栅格数据验收。
 - 拆分前针对性验证：worker/高 DPI/课程数据 35 passed；快照期间固定源码，不边改边对照。
 
-**二、S1 可信退出（已完成）**
+**二、S1 可信退出（已加固）**
 
 - `tests/conftest.py` **删除** `pytest_unconfigure` 中的 `os._exit`；默认完整走 pytest 收尾与 Python finalization。
 - 新增 `scripts/pytest_runner.py`：Clean 模式正常返回；Bypass 只能在 `pytest.main()` 返回后显式 `os._exit`，并写 `bypass_finalization=true`、`clean_exit_verified=false`。
-- `scripts/run_with_timeout.py` 作为外层监督器写统一 result JSON（`run_id`、`source_snapshot`、`exit_mode`、`pytest_exit_code`、`child_exit_code`、`clean_exit_verified`、`cleanup_errors`、`residual_processes`）；只有 Clean、pytest rc=0、OS rc=0、无残留/清理错误时才置 true。
+- `scripts/run_with_timeout.py` 作为外层监督器**持有运行身份**并注入 child 环境；final、child preliminary、cleanup report 使用三个不同文件，启动前删除旧文件，不再从旧 JSON 覆盖 run_id/snapshot。
+- 严格校验 child 结果：schema、run_id、source_snapshot、实际/期望 exit_mode、bypass 标记、completed、pytest_was_run、finished_at、runner_error、pytest 退出码一致性、cleanup complete/errors。旧结果、损坏 JSON、缺失结果、模式不符均失败（返回 92）。
+- 进程跟踪改为 Windows **Job Object**（kill-on-close）：父进程退出后仍能查询存活后代，不再依赖已消失中间层的 ParentProcessId 递归。清理记录前/后 PID 与错误；无法确认完整观测标 `unknown`，不得为绿。
+- cleanup report 由 pytest `sessionfinish` 真实写入；Qt teardown 的每一步异常不再被 `suppress` 抹去，缺失/不完整/有错误都使 Clean 失败。
 - `scripts/test.ps1` 默认 Clean；`-BypassFinalization` 功能通过也返回 **91**，不满足发布门槛；Clean 未验证返回 90。
-- 新增 `scripts/source_snapshot.py` 与 `scripts/collect_exit_evidence.ps1`；后者只读收集 Application 事件/WER 报告，非管理员不修改 LocalDumps，dump 明确标注不可得。
-- 新增 `tests/unit/test_exit_supervisor.py`（5 项）：Bypass 永不为绿、无 pytest 结果不得为绿、runner 写真实 pytest code、source snapshot 带 git 身份。
+- `scripts/source_snapshot.py` 使用 `git ls-files --others --exclude-standard -z` 枚举未跟踪文件，逐个纳入规范路径/长度/内容哈希；目录递归、中文、空格均覆盖；读取失败标 `verified=false`；测试输出 `docs/progress/runs/**` 与 `work/**` 排除。
+- 新增 `tests/unit/test_exit_supervisor.py`（16 项）：旧结果、mode mismatch、run_id/snapshot 不符、缺失/损坏/未完成 child、真实失败 pytest、超时、残留后代、进程观测失败、cleanup error、真实 cleanup report 注入、未跟踪嵌套目录内容变化、生成目录排除。
 
 **三、退出异常修复与证据边界**
 
@@ -258,7 +261,8 @@ CRT 检测到栈状态异常后立即终止进程，这正是 `STATUS_STACK_BUFF
 - 措施：
   1. `pytest_runtest_teardown` 在用例边界 `gc.collect()`，避免循环垃圾在无关 Qt 构造中途回收（测试隔离，不宣称根因修复）；
   2. `pytest_sessionfinish` 中对 QApplication 使用 `deleteLater()` + DeferredDelete，在 finalization 前显式销毁单例；此前直接调用 `app.shutdown()` 会在该处 fastfail，已移除。
-- 修复后 **两次连续 Clean 全量**：578 passed / 0 failed / rc=0 / `clean_exit_verified=true`（285.62s、307.71s）；单元 Clean 与失败探针 rc=1 也通过。
+- 修复后早期 **两次连续 Clean 全量**：578 passed / 0 failed / rc=0 / `clean_exit_verified=true`（285.62s、307.71s）；监督器加固后再次 Clean 全量：**589 passed / 0 failed / rc=0 / clean_exit_verified=true**（330.34s，`process_observation=job`、`residual=0`、`cleanup_complete=true`）。
+- 监督器负向独立复现（`work/runs/S1-hardened-negative.json`）：旧结果 + 普通命令 → rc=92/clean=false；真实 Bypass + 外层 Clean → rc=92/actual=bypass/clean=false；父进程退出但后代存活 → `residual_processes=[7700,39752]`、clean=false；未跟踪嵌套文件内容变化 → snapshot 改变。临时进程已按 Job Object 清理并二次查询为空。
 - 历史失败轮与诊断日志保留：`work/test_runs/test_all.log`、`work/runs/S1-exit-20261106-190842`；WER 事件确认 `ucrtbase.dll` / c0000409 / offset 0xa527e，但当前无 native dump（非管理员、LocalDumps 未配置），**不根据 DLL 名宣称根因**，也不宣称所有 Qt 关闭路径永久根治。
 
 **四、当前边界**

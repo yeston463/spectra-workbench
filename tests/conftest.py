@@ -37,9 +37,12 @@ from __future__ import annotations
 import atexit
 import contextlib
 import gc
+import json
+import os
 import signal
 import sys
 import threading
+from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import QCoreApplication, QEvent
@@ -100,6 +103,56 @@ def _dump_threads_at_interpreter_exit() -> None:
 atexit.register(_dump_threads_at_interpreter_exit)
 
 
+# ============================================================================
+# S1：把真实清理异常交给外层监督器，不再用 suppress(Exception) 静默抹去。
+# ============================================================================
+
+_cleanup_errors: list[str] = []
+_cleanup_checks: list[str] = []
+
+
+def _record_check(name: str) -> None:
+    _cleanup_checks.append(name)
+
+
+def _record_cleanup_error(stage: str, exc: BaseException) -> None:
+    _cleanup_errors.append(f"{stage}: {type(exc).__name__}: {exc}")
+
+
+def _write_cleanup_report(pytest_exitstatus: int) -> None:
+    """把清理检查完成情况写到 supervisor 指定的路径。
+
+    缺失报告（进程崩溃/未到 sessionfinish）会被 supervisor 视为未验证，
+    不能因为「没有错误列表」就当作干净。
+    """
+    path_text = os.environ.get("SW_CLEANUP_REPORT")
+    if not path_text:
+        return
+    path = Path(path_text)
+    injected = os.environ.get("SW_CLEANUP_INJECT_ERROR")
+    if injected:
+        _cleanup_errors.append(f"injected_cleanup_error: {injected}")
+    payload = {
+        "schema_version": "1.0",
+        "complete": True,
+        "errors": list(_cleanup_errors),
+        "checks": list(_cleanup_checks),
+        "pytest_exitstatus": int(pytest_exitstatus),
+    }
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(f".{path.name}.tmp_{os.getpid()}")
+        with tmp.open("w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+    except Exception as exc:
+        _cleanup_errors.append(f"write_cleanup_report: {type(exc).__name__}: {exc}")
+        sys.stderr.write(f"[cleanup-report] write failed: {exc}\n")
+        sys.stderr.flush()
+
+
 def _drain_qt_events(app: QApplication, rounds: int = 3) -> None:
     """派发 DeferredDelete 并处理事件，直到没有待处理的删除。"""
     for _ in range(rounds):
@@ -109,34 +162,71 @@ def _drain_qt_events(app: QApplication, rounds: int = 3) -> None:
 
 
 def teardown_qt_application() -> None:
-    """有序销毁 Qt 对象，避开解释器退出阶段的不确定析构顺序。"""
+    """有序销毁 Qt 对象，并把每一步的真实异常记录到 cleanup report。"""
     app = QApplication.instance()
     if app is None:
+        _record_check("no_qapplication")
         return
 
     # 1) 关闭全部顶层控件（触发各自的 closeEvent，释放 worker 客户端等资源）
     for widget in list(app.topLevelWidgets()):
-        with contextlib.suppress(Exception):
+        try:
             widget.close()
-    _drain_qt_events(app)
+        except Exception as exc:
+            _record_cleanup_error(f"close_widget:{type(widget).__name__}", exc)
+    _record_check("close_top_levels")
+    try:
+        _drain_qt_events(app)
+    except Exception as exc:
+        _record_cleanup_error("drain_after_close", exc)
+    _record_check("drain_after_close")
 
     # 2) 回收 Python 侧引用；PySide6 在最后一个 Python 包装对象消失时销毁 C++ 对象
-    gc.collect()
-    _drain_qt_events(app)
+    try:
+        gc.collect()
+    except Exception as exc:
+        _record_cleanup_error("gc_after_close", exc)
+    _record_check("gc_after_close")
+    try:
+        _drain_qt_events(app)
+    except Exception as exc:
+        _record_cleanup_error("drain_after_gc", exc)
+    _record_check("drain_after_gc")
 
     # 3) 退出 QApplication：此后不再有新的 Qt 事件投递
-    with contextlib.suppress(Exception):
+    try:
         app.quit()
-    with contextlib.suppress(Exception):
+    except Exception as exc:
+        _record_cleanup_error("app_quit", exc)
+    _record_check("app_quit")
+    try:
         app.processEvents()
-    gc.collect()
+    except Exception as exc:
+        _record_cleanup_error("app_process_events", exc)
+    _record_check("app_process_events")
+    try:
+        gc.collect()
+    except Exception as exc:
+        _record_cleanup_error("gc_before_delete", exc)
+    _record_check("gc_before_delete")
     # 显式把 QApplication 的 C++ 对象交给 DeferredDelete，避免解释器
     # finalization 阶段再销毁单例（实测 app.shutdown() 会直接 fastfail）。
-    with contextlib.suppress(Exception):
+    try:
         app.deleteLater()
-    with contextlib.suppress(Exception):
+    except Exception as exc:
+        _record_cleanup_error("app_delete_later", exc)
+    _record_check("app_delete_later")
+    try:
         QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
-    gc.collect()
+    except Exception as exc:
+        _record_cleanup_error("dispatch_deferred_delete", exc)
+    _record_check("dispatch_deferred_delete")
+    try:
+        gc.collect()
+    except Exception as exc:
+        _record_cleanup_error("gc_after_delete", exc)
+    _record_check("gc_after_delete")
+    _record_check("qt_teardown_complete")
 
 
 def pytest_runtest_teardown(item: Any, nextitem: Any) -> None:  # noqa: ARG001
@@ -158,3 +248,4 @@ def pytest_sessionfinish(session: Any, exitstatus: int) -> None:  # noqa: ARG001
     scripts/run_with_timeout.py 外层监督器记录。
     """
     teardown_qt_application()
+    _write_cleanup_report(exitstatus)
