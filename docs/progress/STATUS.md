@@ -1,6 +1,6 @@
 # 执行状态
 
-更新：2026-11-06（第 42 轮 · S3 阶段二 sidecar 事务删除：旧 sidecar 备份/删除 WAL/决断点回滚与 committed 恢复；Clean 全量 616 项 / 0 失败 / rc=0 / clean_exit_verified=true。第 41 轮为 S3 输入保护与所有权预检）
+更新：2026-11-06（第 43 轮 · S4 输出格式矩阵与预检：GTiff/COG/ENVI/PNG/JPEG/VRT 的 dtype/波段/NoData/mask/alpha 实际支持、执行前拒绝与提交前重开核对；Clean 全量 631 项 / 0 失败 / rc=0 / clean_exit_verified=true。第 42 轮为 S3 事务删除）
 
 ## 当前里程碑
 
@@ -228,6 +228,41 @@ CRT 检测到栈状态异常后立即终止进程，这正是 `STATUS_STACK_BUFF
 |---|---|---|
 | 用合成影像完成同类验收 | 已满足 | 合成 ENVI/GTiff/GeoJSON/netCDF 样例覆盖多波段、像元数值、ROI 与对比 |
 | 保留真实数据待验状态 | **待验** | 课程原始数据位于 `C:\Users\赵航\Desktop\studio\_chaoxing_rs`（**只读**，不得运行其中的抓取/下载/OCR 脚本）；本轮全部用合成影像验收，未对课程原始 ENVI 栅格与 lena.tif 做真实打开验证 |
+
+### 第 43 轮：S4 输出格式矩阵与执行前预检
+
+**一、矩阵**
+
+新增 `processing/output_formats.py`（纯 Python，GUI 可导入），按 GDAL 3.13.3 实测登记：
+
+| 格式 | dtype | 波段 | NoData | mask | alpha |
+|---|---|---|---|---|---|
+| GTiff | 常见全部 | 任意 | 是 | 是 | 是 |
+| COG | 按 GTiff | 任意 | 是 | 是 | 是 |
+| ENVI | Byte/UInt/Int/Float/Complex | 任意 | 是 | 是 | **否**（重新打开不保留 alpha color interpretation） |
+| PNG | Byte/UInt16 | 1/2/3/4 | 否 | 否 | 是 |
+| JPEG | Byte | 1/3 | 否 | 否 | 否 |
+| VRT | 继承源 | 任意 | 是 | 是 | 是 |
+
+**二、执行前/提交前**
+
+- P4-02 merge/stack/bandmanage 与通用 Translate/Warp 在写盘前按源 dtype、波段数、NoData/mask/alpha 预检；不支持组合返回 `unsupported_format_combination`。
+- P4-02 在提交前用实际重开结果再次核对矩阵，防止驱动静默丢 alpha/NoData/mask 或改变 dtype。
+- COG 实际驱动名为 GTiff；通用输出记录改为取实际重开驱动，不登记调用者默认格式。
+- PNG/JPEG 的 sidecar（如 `.aux.xml`）继续由成果集合映射与事务提交。
+- GUI 表单尚未按矩阵禁用/解释；当前由 worker 明确拒绝并返回原因。能力注册/审计未同步。
+
+**三、验证**
+
+- `tests/unit/test_output_format_matrix.py`（7 项）。
+- `tests/integration/test_p4_format_matrix.py`（8 项）：PNG RGB、PNG RGBA、JPEG RGB、PNG Float32 拒绝、JPEG alpha 拒绝、PNG dstNodata 拒绝、ENVI alpha 拒绝、COG Float32+NoData 成功。
+- 定向专项 **15 passed**（6.96s）。
+- Clean 全量：**631 passed / 0 failed / rc=0 / clean_exit_verified=true**（368.03s，`process_observation=job`、`residual=0`、`cleanup_complete=true`）。
+
+**四、边界**
+
+- S4 后端矩阵与预检完成；GUI 层按矩阵禁用/解释、注册表 limitations 与可执行审计尚未更新。
+- S5 P4-02 桌面端到端验收仍未开始。
 
 ### 第 42 轮：S3 阶段二 sidecar 事务删除
 

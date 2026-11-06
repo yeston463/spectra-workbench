@@ -1012,6 +1012,8 @@ def inspect_raster(path: str | Path, *, sample: bool = True) -> dict[str, Any]:
         driver = ds.GetDriver().ShortName
         types: list[str] = []
         nodata: list[float | None] = []
+        color_interpretations: list[int] = []
+        mask_flags: list[int] = []
         samples: list[dict[str, Any]] = []
         mask_samples: list[list[int]] = []
         positions = _sample_positions(width, height) if sample else []
@@ -1019,6 +1021,8 @@ def inspect_raster(path: str | Path, *, sample: bool = True) -> dict[str, Any]:
             band = ds.GetRasterBand(i)
             types.append(gdal.GetDataTypeName(band.DataType))
             nodata.append(band.GetNoDataValue())
+            color_interpretations.append(int(band.GetColorInterpretation()))
+            mask_flags.append(int(band.GetMaskFlags()))
             if sample:
                 values: list[Any] = []
                 masks: list[int] = []
@@ -1044,6 +1048,8 @@ def inspect_raster(path: str | Path, *, sample: bool = True) -> dict[str, Any]:
             "bands": bands,
             "types": types,
             "nodata": nodata,
+            "color_interpretations": color_interpretations,
+            "mask_flags": mask_flags,
             "samples": samples,
             "mask_samples": mask_samples,
         }

@@ -38,6 +38,7 @@ from spectra_workbench.domain.models import (
     TaskSpec,
     TaskStatus,
 )
+from spectra_workbench.processing.output_formats import validate_output_format
 from spectra_workbench.processing.raster_params import (
     ParameterError,
     normalize_raster_params,
@@ -548,6 +549,25 @@ class GDALProviderAdapter(ProviderAdapter):
         # 4. 执行算法（按 capability_id 明确分派）
         #    P4-02：拼接 / VRT / 堆叠 / 波段管理走独立分支（多输入），
         #    复用既有事务（staging → 重开校验 → commit → 登记）。
+        if (
+            not is_p402
+            and in_path is not None
+            and spec.capability_id != P404_STATISTICS_CAPABILITY
+        ):
+            format_violations = self._general_format_violations(in_path, norm, out_format)
+            if format_violations:
+                context.log("ERROR", f"输出格式组合不受支持: {format_violations}")
+                return TaskResult(
+                    task_id=spec.task_id,
+                    attempt=spec.attempt,
+                    status=TaskStatus.failed,
+                    error={
+                        "code": "unsupported_format_combination",
+                        "message": "；".join(format_violations),
+                    },
+                    duration_seconds=round(time.monotonic() - start_time, 4),
+                )
+
         p402_result = self._execute_p402(
             spec,
             context,
@@ -898,6 +918,7 @@ class GDALProviderAdapter(ProviderAdapter):
             final_verify_ds = gdal.Open(str(target_path), gdal.GA_ReadOnly)
             if final_verify_ds is None:
                 raise RuntimeError(f"Committed dataset at {target_path} failed to reopen")
+            final_driver = final_verify_ds.GetDriver().ShortName
             del final_verify_ds
         except Exception as final_err:
             context.log("ERROR", f"Final dataset reopen check failed: {final_err}")
@@ -917,7 +938,7 @@ class GDALProviderAdapter(ProviderAdapter):
             "key": out_plan.key,
             "uri": target_path.as_uri(),
             "data_type": "raster",
-            "driver": out_format,
+            "driver": final_driver,
             "width": w,
             "height": h,
             "bands": bands,
@@ -1080,6 +1101,170 @@ class GDALProviderAdapter(ProviderAdapter):
             with contextlib.suppress(OSError):
                 verify_path.unlink()
 
+    def _validate_actual_output_format(self, info: dict[str, Any], format_name: str) -> list[str]:
+        """Validate a real reopened output against the format support matrix."""
+        gdal_mod = gdal
+        if gdal_mod is None:
+            return ["GDAL 不可用"]
+        types = info.get("types") or []
+        bands = int(info.get("bands") or 0)
+        nodata = info.get("nodata") or []
+        color_interps = info.get("color_interpretations") or []
+        mask_flags = info.get("mask_flags") or []
+        has_nodata = any(v is not None for v in nodata)
+        has_alpha = any(int(v) == int(gdal_mod.GCI_AlphaBand) for v in color_interps)
+        has_mask = (not has_alpha) and any(
+            int(v) & int(gdal_mod.GMF_PER_DATASET) for v in mask_flags
+        )
+        return validate_output_format(
+            format_name,
+            dtype=str(types[0]) if types else "",
+            bands=bands,
+            has_nodata=has_nodata,
+            has_alpha=has_alpha,
+            has_mask=has_mask,
+        )
+
+    def _p402_format_violations(
+        self,
+        capability_id: str,
+        sources: list[Path],
+        norm: dict[str, Any],
+        out_format: str,
+    ) -> list[str]:
+        """Preflight output format against source dtype/bands/alpha/NoData."""
+        if gdal is None or capability_id in ("gdal:buildvrt", "gdalbuildvrt"):
+            return []
+        if capability_id in INPLACE_CAPABILITIES:
+            return []
+        dtype = norm.get("outputType")
+        bands = 0
+        has_nodata = any(
+            norm.get(key) is not None for key in ("srcNodata", "vrtNodata", "dstNodata")
+        )
+        has_alpha = False
+        has_mask = False
+        try:
+            if capability_id in ("gdal:merge", "gdal_merge"):
+                ds0 = gdal.Open(str(sources[0]))
+                if ds0 is None:
+                    return []
+                bands = ds0.RasterCount
+                dtype = dtype or gdal.GetDataTypeName(ds0.GetRasterBand(1).DataType)
+                ds0 = None
+                for source in sources:
+                    ds = gdal.Open(str(source))
+                    if ds is None:
+                        continue
+                    for i in range(1, ds.RasterCount + 1):
+                        band = ds.GetRasterBand(i)
+                        has_nodata = has_nodata or band.GetNoDataValue() is not None
+                        has_alpha = has_alpha or int(band.GetColorInterpretation()) == int(
+                            gdal.GCI_AlphaBand
+                        )
+                        has_mask = has_mask or bool(
+                            int(band.GetMaskFlags()) & int(gdal.GMF_PER_DATASET)
+                        )
+                    ds = None
+            elif capability_id == "gdal:stack":
+                total_bands = 0
+                for source in sources:
+                    ds = gdal.Open(str(source))
+                    if ds is None:
+                        continue
+                    total_bands += ds.RasterCount
+                    if dtype is None:
+                        dtype = gdal.GetDataTypeName(ds.GetRasterBand(1).DataType)
+                    for i in range(1, ds.RasterCount + 1):
+                        band = ds.GetRasterBand(i)
+                        has_nodata = has_nodata or band.GetNoDataValue() is not None
+                        has_alpha = has_alpha or int(band.GetColorInterpretation()) == int(
+                            gdal.GCI_AlphaBand
+                        )
+                        has_mask = has_mask or bool(
+                            int(band.GetMaskFlags()) & int(gdal.GMF_PER_DATASET)
+                        )
+                    ds = None
+                bands = total_bands
+            elif capability_id == "gdal:bandmanage":
+                ds = gdal.Open(str(sources[0]))
+                if ds is None:
+                    return []
+                band_list = norm.get("bandList")
+                selected = (
+                    [int(b) for b in band_list]
+                    if isinstance(band_list, (list, tuple)) and band_list
+                    else list(range(1, ds.RasterCount + 1))
+                )
+                bands = len(selected)
+                first = ds.GetRasterBand(selected[0])
+                dtype = dtype or gdal.GetDataTypeName(first.DataType)
+                for idx in selected:
+                    band = ds.GetRasterBand(int(idx))
+                    has_nodata = has_nodata or band.GetNoDataValue() is not None
+                    has_alpha = has_alpha or int(band.GetColorInterpretation()) == int(
+                        gdal.GCI_AlphaBand
+                    )
+                    has_mask = has_mask or bool(
+                        int(band.GetMaskFlags()) & int(gdal.GMF_PER_DATASET)
+                    )
+                ds = None
+            else:
+                return []
+        except Exception:
+            return []
+        if has_alpha:
+            # Alpha is a mask channel; do not report it as an independent
+            # per-dataset mask (PNG only exposes alpha).
+            has_mask = False
+        return validate_output_format(
+            out_format,
+            dtype=str(dtype or ""),
+            bands=bands,
+            has_nodata=has_nodata,
+            has_alpha=has_alpha,
+            has_mask=has_mask,
+        )
+
+    def _general_format_violations(
+        self, in_path: Path, norm: dict[str, Any], out_format: str
+    ) -> list[str]:
+        if gdal is None:
+            return []
+        ds = gdal.Open(str(in_path))
+        if ds is None:
+            return []
+        try:
+            dtype = norm.get("outputType") or gdal.GetDataTypeName(
+                ds.GetRasterBand(1).DataType
+            )
+            has_nodata = any(
+                norm.get(key) is not None for key in ("noData", "dstNodata")
+            )
+            has_alpha = False
+            has_mask = False
+            for i in range(1, ds.RasterCount + 1):
+                band = ds.GetRasterBand(i)
+                has_nodata = has_nodata or band.GetNoDataValue() is not None
+                has_alpha = has_alpha or int(band.GetColorInterpretation()) == int(
+                    gdal.GCI_AlphaBand
+                )
+                has_mask = has_mask or bool(
+                    int(band.GetMaskFlags()) & int(gdal.GMF_PER_DATASET)
+                )
+            if has_alpha:
+                has_mask = False
+            return validate_output_format(
+                out_format,
+                dtype=str(dtype),
+                bands=ds.RasterCount,
+                has_nodata=has_nodata,
+                has_alpha=has_alpha,
+                has_mask=has_mask,
+            )
+        finally:
+            ds = None
+
     def _execute_p402(
         self,
         spec: Any,
@@ -1126,6 +1311,19 @@ class GDALProviderAdapter(ProviderAdapter):
 
         is_inplace = cid in INPLACE_CAPABILITIES
         protected_inputs = collect_protected_inputs(sources)
+        format_violations = self._p402_format_violations(cid, sources, norm, out_format)
+        if format_violations:
+            context.log("ERROR", f"输出格式组合不受支持: {format_violations}")
+            return TaskResult(
+                task_id=spec.task_id,
+                attempt=spec.attempt,
+                status=TaskStatus.failed,
+                error={
+                    "code": "unsupported_format_combination",
+                    "message": "；".join(format_violations),
+                },
+                duration_seconds=round(time.monotonic() - start_time, 4),
+            )
         inplace_info: dict[str, Any] = {}
         calc_info: dict[str, Any] = {}
         if is_inplace:
@@ -1414,6 +1612,9 @@ class GDALProviderAdapter(ProviderAdapter):
                 # 就地更新/表达式计算的输出格式由源或表达式实现决定，
                 # 以实际驱动为准；合并/堆叠等新建栅格则必须与请求格式一致。
                 expected_driver = driver
+            elif out_format.upper() == "COG":
+                # GDAL COG 是 GTiff 容器，实际驱动名为 GTiff。
+                expected_driver = "GTiff"
             else:
                 expected_driver = out_format
             if driver.upper() != expected_driver.upper():
@@ -1449,6 +1650,14 @@ class GDALProviderAdapter(ProviderAdapter):
             if expected["driver"].upper() != expected_driver.upper():
                 raise RuntimeError(
                     f"提交前重开驱动不符：期望 {expected_driver}，实际 {expected['driver']}"
+                )
+            actual_format_violations = self._validate_actual_output_format(
+                expected, expected["driver"]
+            )
+            if actual_format_violations:
+                raise RuntimeError(
+                    "实际成果不符合输出格式矩阵："
+                    + "；".join(actual_format_violations)
                 )
             context.log(
                 "INFO",
