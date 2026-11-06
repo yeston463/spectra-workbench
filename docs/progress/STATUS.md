@@ -1,6 +1,6 @@
 # 执行状态
 
-更新：2026-11-06（第 38 轮 · P4-02 复核补强：完整成果集合/提交前后真实重开、NoData/mask/alpha、源集合与 VRT XML/relativePaths、真实计算取消；全量 573 项 / 0 失败 / rc=0。第 36 轮为 P4-05 首个完整用户流程，全量 539 项收集 / rc=0；第 37 轮工作区改动保留未提交）
+更新：2026-11-06（第 39 轮 · S0 冻结 + S1 可信退出：默认 Clean finalization、Bypass 标记且返回 91、外层统一 result JSON、QApplication 显式销毁；两次连续 Clean 全量 578 项 / 0 失败 / rc=0 / clean_exit_verified=true。第 38 轮为 P4-02 复核补强）
 
 ## 当前里程碑
 
@@ -228,6 +228,43 @@ CRT 检测到栈状态异常后立即终止进程，这正是 `STATUS_STACK_BUFF
 |---|---|---|
 | 用合成影像完成同类验收 | 已满足 | 合成 ENVI/GTiff/GeoJSON/netCDF 样例覆盖多波段、像元数值、ROI 与对比 |
 | 保留真实数据待验状态 | **待验** | 课程原始数据位于 `C:\Users\赵航\Desktop\studio\_chaoxing_rs`（**只读**，不得运行其中的抓取/下载/OCR 脚本）；本轮全部用合成影像验收，未对课程原始 ENVI 栅格与 lena.tif 做真实打开验证 |
+
+### 第 39 轮：S0 冻结 / S1 可信退出验收
+
+按《未解决问题收敛方案》先做 S0→S1；S2 之后的生命周期/ sidecar / 矩阵 / 桌面验收尚未在本轮展开。
+
+**一、S0 冻结与分拆（已完成）**
+
+- 快照：`work/runs/S0-freeze-20261106-181403`（HEAD、`git diff --binary`、未跟踪文件副本、SHA-256 清单、运行环境、全量与专项日志）。
+- 第 37 轮工作树拆分为四个独立提交：
+  - `e9d8f8b`：项目内独立 pytest basetemp；
+  - `345c019`：worker 派发/握手状态/读者线程收口；
+  - `0bf6a21`：高 DPI 渲染与截图 dpr；
+  - `d43e03f`：课程真实栅格数据验收。
+- 拆分前针对性验证：worker/高 DPI/课程数据 35 passed；快照期间固定源码，不边改边对照。
+
+**二、S1 可信退出（已完成）**
+
+- `tests/conftest.py` **删除** `pytest_unconfigure` 中的 `os._exit`；默认完整走 pytest 收尾与 Python finalization。
+- 新增 `scripts/pytest_runner.py`：Clean 模式正常返回；Bypass 只能在 `pytest.main()` 返回后显式 `os._exit`，并写 `bypass_finalization=true`、`clean_exit_verified=false`。
+- `scripts/run_with_timeout.py` 作为外层监督器写统一 result JSON（`run_id`、`source_snapshot`、`exit_mode`、`pytest_exit_code`、`child_exit_code`、`clean_exit_verified`、`cleanup_errors`、`residual_processes`）；只有 Clean、pytest rc=0、OS rc=0、无残留/清理错误时才置 true。
+- `scripts/test.ps1` 默认 Clean；`-BypassFinalization` 功能通过也返回 **91**，不满足发布门槛；Clean 未验证返回 90。
+- 新增 `scripts/source_snapshot.py` 与 `scripts/collect_exit_evidence.ps1`；后者只读收集 Application 事件/WER 报告，非管理员不修改 LocalDumps，dump 明确标注不可得。
+- 新增 `tests/unit/test_exit_supervisor.py`（5 项）：Bypass 永不为绿、无 pytest 结果不得为绿、runner 写真实 pytest code、source snapshot 带 git 身份。
+
+**三、退出异常修复与证据边界**
+
+- 默认 Clean 全量曾复现两类崩溃：pyqtgraph `AxisItem` 构造中 Python GC 触发（Python 栈 `Garbage-collecting`）与 finalization 阶段；均为 child rc=3221226505。
+- 措施：
+  1. `pytest_runtest_teardown` 在用例边界 `gc.collect()`，避免循环垃圾在无关 Qt 构造中途回收（测试隔离，不宣称根因修复）；
+  2. `pytest_sessionfinish` 中对 QApplication 使用 `deleteLater()` + DeferredDelete，在 finalization 前显式销毁单例；此前直接调用 `app.shutdown()` 会在该处 fastfail，已移除。
+- 修复后 **两次连续 Clean 全量**：578 passed / 0 failed / rc=0 / `clean_exit_verified=true`（285.62s、307.71s）；单元 Clean 与失败探针 rc=1 也通过。
+- 历史失败轮与诊断日志保留：`work/test_runs/test_all.log`、`work/runs/S1-exit-20261106-190842`；WER 事件确认 `ucrtbase.dll` / c0000409 / offset 0xa527e，但当前无 native dump（非管理员、LocalDumps 未配置），**不根据 DLL 名宣称根因**，也不宣称所有 Qt 关闭路径永久根治。
+
+**四、当前边界**
+
+- S2 Worker 启动状态机、S3 通用 sidecar 事务删除、S4 格式矩阵、S5 桌面端到端仍未完成；P4-02 继续 `implemented`。
+- 本轮只把“退出验收”恢复为可信门槛，不等于所有未解决问题已收敛。
 
 ### 第 38 轮：P4-02 复核补强（成果集合、NoData/mask/alpha、源集合、VRT 路径与取消）
 

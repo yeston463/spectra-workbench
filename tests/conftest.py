@@ -25,8 +25,11 @@ QWidget / QObject 的析构顺序不确定，一旦某个 QWidget 在 QApplicati
 关闭并销毁全部顶层控件 → 派发 DeferredDelete → 回收 Python 引用 →
 退出 QApplication。这样 Qt 对象的析构发生在解释器收尾之前，顺序确定。
 
-这不是「屏蔽清理」或「忽略退出码」：所有清理动作都真实执行，
-最终进程的退出码仍由 pytest 自身产生并透传。
+**退出策略（S1）**：本文件不再调用 `os._exit`。默认路径完整执行 pytest 收尾与
+Python finalization，由外层监督器以真实操作系统退出码判定是否 Clean。
+确需临时绕过 finalization 时，只能由 `scripts/pytest_runner.py --mode bypass`
+在 `pytest.main()` 返回后显式执行，并在结果中标记
+`bypass_finalization=true`、`clean_exit_verified=false`；Bypass 不满足发布门槛。
 """
 
 from __future__ import annotations
@@ -34,7 +37,6 @@ from __future__ import annotations
 import atexit
 import contextlib
 import gc
-import os
 import signal
 import sys
 import threading
@@ -128,43 +130,31 @@ def teardown_qt_application() -> None:
     with contextlib.suppress(Exception):
         app.processEvents()
     gc.collect()
+    # 显式把 QApplication 的 C++ 对象交给 DeferredDelete，避免解释器
+    # finalization 阶段再销毁单例（实测 app.shutdown() 会直接 fastfail）。
+    with contextlib.suppress(Exception):
+        app.deleteLater()
+    with contextlib.suppress(Exception):
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    gc.collect()
+
+
+def pytest_runtest_teardown(item: Any, nextitem: Any) -> None:  # noqa: ARG001
+    """在每个用例边界回收循环垃圾，避免 Qt 包装对象在无关控件构造中途被回收。
+
+    第 38 轮 Clean 复现：0xC0000409 曾在 pyqtgraph ``AxisItem`` 构造过程中被
+    Python GC 触发（Python 栈显示 Garbage-collecting），也在 finalization 出现。
+    在测试边界显式收集，把循环垃圾回收从「任意 Qt 构造点」移到「用例结束点」；
+    这是测试隔离措施，不宣称修复 PySide6/pyqtgraph 生命周期根因。
+    """
+    gc.collect()
 
 
 def pytest_sessionfinish(session: Any, exitstatus: int) -> None:  # noqa: ARG001
     """所有测试与会话级夹具收尾之后，再做 Qt 有序销毁。
 
-    同时把 pytest 的真实退出码存到 config：``pytest_unconfigure`` 阶段
-    ``config.exitstatus`` 可能仍是 None/0，直接读取会把失败轮错误地
-    ``os._exit(0)``，从而掩盖失败。
+    不在此处强退：pytest 的其余收尾钩子和 Python finalization 必须真实执行。
+    退出模式与 clean_exit_verified 由 scripts/pytest_runner.py 与
+    scripts/run_with_timeout.py 外层监督器记录。
     """
-    session.config._sw_exitstatus = int(exitstatus)
     teardown_qt_application()
-
-
-def pytest_unconfigure(config: Any) -> None:  # noqa: ARG001
-    """跳过 Python 最终化（finalization）的 C++ 清理，并保留真实退出码。
-
-    第 33 轮诊断结论（机制已证明）：
-    - 事件日志：崩溃在 ucrtbase.dll 固定偏移 0xa527e，ExceptionCode=c0000409；
-    - atexit 时非主线程存活数为 0，SIGABRT 处理器未被触发
-      （fastfail 发生在 Python 信号机制已停用的 finalization 之后）；
-    - os._exit 跳过 finalization 后崩溃消失（机制对照实验）；
-    - stderr 反复出现 QThreadStorage 警告，指向 PySide6 在 worker 读取线程上
-      遗留的线程本地存储于模块卸载阶段析构。
-    该崩溃与测试内容无关（integration 单独跑不崩、加任意后续测试即崩），
-    属测试进程退出路径问题。测试进程不需要干净的 C++ 清理，
-    故默认用 os._exit 终止，并**保留 pytest 的真实退出码**
-    （失败时非 0，CI/脚本语义不变）。设 SW_SKIP_FINALIZATION=0 可禁用。
-    """
-    if os.environ.get("SW_SKIP_FINALIZATION") == "0":
-        return
-    exitstatus = int(
-        getattr(config, "_sw_exitstatus", getattr(config, "exitstatus", 0)) or 0
-    )
-    # os._exit 不经过解释器最终化，缓冲必须手动刷：否则 pytest 的终端报告
-    #（含 FAILURES 详情）会因 stdout 块缓冲未落盘而丢失。
-    sys.stdout.flush()
-
-    sys.stderr.write(f"[skip-finalization] os._exit({exitstatus}) 绕过 Python 最终化\n")
-    sys.stderr.flush()
-    os._exit(exitstatus)

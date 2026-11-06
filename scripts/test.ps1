@@ -7,6 +7,9 @@
   3. Pytest (根据 -Marker / -Unit / -Integration / -Gui 分组运行)
      pytest 由 scripts/run_with_timeout.py 托管：超过 -TimeoutSeconds（默认 1200 秒）
      即结束整棵子进程树、保留日志与 faulthandler 堆栈，并以退出码 124 失败。
+     默认 Clean：完整执行 finalization，由外层监督器写统一结果并验证
+     clean_exit_verified；Bypass 仅用于临时功能验证，功能通过也返回 91，
+     并标记 clean_exit_verified=false，不满足发布门槛。
 
   用法：
     powershell -ExecutionPolicy Bypass -File scripts\test.ps1
@@ -15,6 +18,7 @@
     powershell -ExecutionPolicy Bypass -File scripts\test.ps1 -Gui
     powershell -ExecutionPolicy Bypass -File scripts\test.ps1 -All
     powershell -ExecutionPolicy Bypass -File scripts\test.ps1 -All -TimeoutSeconds 1800
+    powershell -ExecutionPolicy Bypass -File scripts\test.ps1 -All -BypassFinalization
 #>
 [CmdletBinding()]
 param(
@@ -26,6 +30,7 @@ param(
     [switch]$Quick,
     [switch]$NoLint,
     [switch]$NoTypeCheck,
+    [switch]$BypassFinalization,
     [int]$TimeoutSeconds = 1200
 )
 
@@ -76,8 +81,16 @@ if (-not $Quick -and -not $NoTypeCheck) {
 
 # Step 3: Pytest（进程级硬超时：挂起时保留日志与堆栈、清理本次子进程并返回 124）
 $Guard = Join-Path $PSScriptRoot 'run_with_timeout.py'
+$Runner = Join-Path $PSScriptRoot 'pytest_runner.py'
 $logName = if ($targetMarker) { "test_$targetMarker" } else { 'test_all' }
 $RunLog = Join-Path $ProjectRoot ("work\test_runs\$logName.log")
+$ResultJson = Join-Path $ProjectRoot ("work\test_runs\$logName.result.json")
+$RunId = (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + [guid]::NewGuid().ToString('N').Substring(0, 8)
+$ExitMode = if ($BypassFinalization) { 'bypass' } else { 'clean' }
+if ($BypassFinalization) {
+    Write-Host ">>> [WARN] BypassFinalization：跳过 finalization；clean_exit_verified=false，不满足发布门槛" -ForegroundColor Yellow
+}
+Remove-Item -Force -ErrorAction SilentlyContinue $ResultJson
 # 使用项目内独立 basetemp：系统临时目录（%TEMP%\pytest-of-*）里历史残留的
 # pytest-current 断链会让 pytest_sessionfinish 的 cleanup_dead_symlinks 抛
 # WinError 5，表现为「全部测试通过但 rc=1」。这与测试内容无关，属于环境问题；
@@ -86,15 +99,40 @@ $runStamp = (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + [guid]::NewGuid().ToStr
 $baseTemp = Join-Path $ProjectRoot ("work\test_runs\pytest_tmp\run-$runStamp")
 # pytest 用 os.mkdir(basetemp)（parents=False），父目录必须先存在
 New-Item -ItemType Directory -Force -Path (Split-Path -Parent $baseTemp) | Out-Null
-$pytestArgs = @('-m', 'pytest', '-q', '-o', 'faulthandler_timeout=60', '--basetemp', $baseTemp)
+$pytestArgs = @(
+    $Runner, '--mode', $ExitMode, '--result-json', $ResultJson, '--run-id', $RunId,
+    '--', '-q', '-o', 'faulthandler_timeout=60', '--basetemp', $baseTemp
+)
 if ($targetMarker -ne '') {
     $pytestArgs += @('-m', $targetMarker)
 }
 
-Run-Step ("Pytest 自动化测试 (marker: {0}, 硬超时 {1}s, 日志: {2})" -f `
-    $(if ($targetMarker) { $targetMarker } else { 'ALL' }), $TimeoutSeconds, $RunLog) {
-    & $Python $Guard --timeout $TimeoutSeconds --log $RunLog -- $Python @pytestArgs
+Run-Step ("Pytest 自动化测试 (marker: {0}, exit_mode: {1}, 硬超时 {2}s, 日志: {3})" -f `
+    $(if ($targetMarker) { $targetMarker } else { 'ALL' }), $ExitMode, $TimeoutSeconds, $RunLog) {
+    & $Python $Guard --timeout $TimeoutSeconds --log $RunLog `
+        --result-json $ResultJson --exit-mode $ExitMode --run-id $RunId `
+        -- $Python @pytestArgs
 }
 
-Write-Host "`n=== ALL CHECKS PASSED ===" -ForegroundColor Green
+if (-not (Test-Path $ResultJson)) {
+    Write-Host ">>> [FAIL] 缺少统一退出结果：$ResultJson" -ForegroundColor Red
+    exit 90
+}
+$ExitResult = Get-Content -Raw -Encoding UTF8 $ResultJson | ConvertFrom-Json
+Write-Host ("    exit_mode={0} pytest_exit_code={1} child_exit_code={2} clean_exit_verified={3}" -f `
+    $ExitResult.exit_mode, $ExitResult.pytest_exit_code, $ExitResult.child_exit_code, `
+    $ExitResult.clean_exit_verified)
+
+if ($ExitMode -eq 'clean' -and -not $ExitResult.clean_exit_verified) {
+    Write-Host ">>> [FAIL] Clean 退出未验证：finalization 未正常完成或存在残留/清理错误" -ForegroundColor Red
+    Write-Host ("    结果：{0}" -f $ResultJson) -ForegroundColor Red
+    exit 90
+}
+if ($ExitMode -eq 'bypass') {
+    Write-Host "=== FUNCTIONAL CHECKS PASSED (BYPASS; NOT RELEASE ELIGIBLE) ===" -ForegroundColor Yellow
+    Write-Host "    Bypass 结果仅证明用例执行，不证明正常退出；退出码 91" -ForegroundColor Yellow
+    exit 91
+}
+
+Write-Host "`n=== ALL CHECKS PASSED (CLEAN EXIT VERIFIED) ===" -ForegroundColor Green
 exit 0
