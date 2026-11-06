@@ -250,6 +250,7 @@ CRT 检测到栈状态异常后立即终止进程，这正是 `STATUS_STACK_BUFF
 - 新增 `tests/integration/test_p4_sidecar_ownership.py`（9 项）：GTiff 旧 `.aux.xml/.ovr/.msk/.tfw` 拒绝覆盖、ENVI 正常覆盖成功、ENVI 旧 `.ovr` 拒绝、中文空格目标、损坏目标无 sidecar 可替换、VRT 源依赖在重复覆盖后仍存在且可读。
 - P4 定向组合：**72 passed**（64.33s）。
 - Clean 全量：**609 passed / 0 failed / rc=0 / clean_exit_verified=true**（336.94s，`process_observation=job`、`residual=0`、`cleanup_complete=true`）。
+- 21:18 轮曾出现 **607 passed / 1 failed**：初次实现把“目标不可读且无任何 sidecar”误判为所有权未知，拒绝覆盖损坏主文件；修正为仅在 stale/unknown 存在时拒绝后通过。该失败轮保留在 `work/test_runs/test_all.log`。
 
 **四、边界**
 
