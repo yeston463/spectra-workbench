@@ -230,11 +230,13 @@ def ensure_no_stale_sidecars(
     *,
     protected_inputs: set[Path] | None = None,
     allow_inplace: bool = False,
+    allow_stale_deletion: bool = False,
 ) -> SidecarReport:
     """Refuse overwrite when output collides with inputs or leaves stale files.
 
-    Phase 1 is conservative: no deletion is attempted. A later phase can extend
-    the transaction to back up and delete stale files.
+    With ``allow_stale_deletion=True`` stale files are returned to the caller so
+    they can be included in the commit transaction. Unknown ownership is still
+    refused. The default remains conservative refusal.
     """
     target = target.resolve()
     protected = {p.resolve() for p in (protected_inputs or set())}
@@ -257,16 +259,16 @@ def ensure_no_stale_sidecars(
             stale=stale,
             unknown=unknown,
         )
-    if stale or unknown:
-        parts: list[str] = []
-        if stale:
-            parts.append("本次不生成的旧 sidecar: " + ", ".join(p.name for p in stale))
-        if unknown:
-            parts.append("归属不明: " + ", ".join(p.name for p in unknown))
+    if unknown:
+        raise SidecarOwnershipError(
+            f"目标 {target.name} 存在归属不明的邻近文件，拒绝覆盖以免误删："
+            + ", ".join(p.name for p in unknown),
+            unknown=unknown,
+        )
+    if stale and not allow_stale_deletion:
         raise SidecarOwnershipError(
             f"目标 {target.name} 存在旧成果的 sidecar，拒绝覆盖以免新旧混用："
-            + "；".join(parts),
+            + ", ".join(p.name for p in stale),
             stale=stale,
-            unknown=unknown,
         )
     return report

@@ -829,12 +829,15 @@ class GDALProviderAdapter(ProviderAdapter):
                 tf = target_path.parent / sf.name
             commit_pairs.append((sf, tf))
 
-        # 7.5 sidecar 所有权预检：旧成果中本次不生成的 sidecar 拒绝覆盖
+        # 7.5 sidecar 所有权预检：输入碰撞拒绝；stale 交给提交事务备份/删除
+        new_targets = [tf for _, tf in commit_pairs]
+        protected_inputs = collect_protected_inputs([in_path]) if in_path else set()
         try:
-            ensure_no_stale_sidecars(
+            report = ensure_no_stale_sidecars(
                 target_path,
-                [tf for _, tf in commit_pairs],
-                protected_inputs=collect_protected_inputs([in_path]) if in_path else set(),
+                new_targets,
+                protected_inputs=protected_inputs,
+                allow_stale_deletion=True,
             )
         except SidecarOwnershipError as sidecar_err:
             context.log("ERROR", f"sidecar 所有权预检失败: {sidecar_err}")
@@ -853,11 +856,24 @@ class GDALProviderAdapter(ProviderAdapter):
                 },
                 duration_seconds=round(time.monotonic() - start_time, 4),
             )
+        new_set = {p.resolve() for p in new_targets}
+        stale_sidecars = [p for p in report.owned if p.resolve() not in new_set]
+        if stale_sidecars:
+            context.log(
+                "INFO",
+                "旧 sidecar 将随事务备份后删除："
+                + ", ".join(p.name for p in stale_sidecars),
+            )
 
         # 8. 事务性提交全部成果文件
         context.progress(0.95, "committing", "Committing staged output and sidecars to destination")
         try:
-            committed_files = context.commit_files(commit_pairs, overwrite=overwrite)
+            committed_files = context.commit_files(
+                commit_pairs,
+                overwrite=overwrite,
+                delete_paths=stale_sidecars,
+                protected_paths=protected_inputs,
+            )
         except OutputConflictError as conflict_err:
             context.log("ERROR", f"Commit rejected due to existing target: {conflict_err}")
             return TaskResult(
@@ -1475,13 +1491,15 @@ class GDALProviderAdapter(ProviderAdapter):
                 duration_seconds=round(time.monotonic() - start_time, 4),
             )
 
-        # ---- sidecar 所有权预检：旧成果中存在本次不生成的 sidecar 则拒绝覆盖 ----
+        # ---- sidecar 所有权预检：输入碰撞拒绝；stale 交给提交事务备份/删除 ----
+        new_targets = [tf for _, tf in commit_pairs]
         try:
-            ensure_no_stale_sidecars(
+            report = ensure_no_stale_sidecars(
                 target_path,
-                [tf for _, tf in commit_pairs],
+                new_targets,
                 protected_inputs=protected_inputs,
                 allow_inplace=is_inplace,
+                allow_stale_deletion=True,
             )
         except SidecarOwnershipError as sidecar_err:
             context.log("ERROR", f"sidecar 所有权预检失败: {sidecar_err}")
@@ -1501,11 +1519,24 @@ class GDALProviderAdapter(ProviderAdapter):
                 },
                 duration_seconds=round(time.monotonic() - start_time, 4),
             )
+        new_set = {p.resolve() for p in new_targets}
+        stale_sidecars = [p for p in report.owned if p.resolve() not in new_set]
+        if stale_sidecars:
+            context.log(
+                "INFO",
+                "旧 sidecar 将随事务备份后删除："
+                + ", ".join(p.name for p in stale_sidecars),
+            )
 
         # ---- 事务提交全部成果文件 ----
         context.progress(0.92, "committing", "提交 staging 成果与伴生文件")
         try:
-            committed_files = context.commit_files(commit_pairs, overwrite=overwrite)
+            committed_files = context.commit_files(
+                commit_pairs,
+                overwrite=overwrite,
+                delete_paths=stale_sidecars,
+                protected_paths=protected_inputs,
+            )
         except OutputConflictError as conflict_err:
             context.log("ERROR", f"提交被拒（目标已存在）: {conflict_err}")
             self._cleanup_staged_bundle(staged_path)

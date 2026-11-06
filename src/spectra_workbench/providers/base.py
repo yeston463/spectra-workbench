@@ -36,6 +36,10 @@ class OutputConflictError(Exception):
     """目标成果已存在且未声明 overwrite=True。"""
 
 
+class ProtectedInputError(OutputConflictError):
+    """提交计划试图删除或覆盖受保护的输入文件。"""
+
+
 class InputOutputConflictError(Exception):
     """输出成果与输入源指向同一文件。"""
 
@@ -128,28 +132,49 @@ class ExecutionContext:
         self,
         pairs: list[tuple[Path, Path]],
         overwrite: bool = False,
+        *,
+        delete_paths: list[Path] | None = None,
+        protected_paths: set[Path] | None = None,
     ) -> list[Path]:
-        """将 staging 目录下的成果文件列表原子或带备份事务地提交至目标位置。
+        """将 staging 成果与可选删除动作作为一个事务提交。
 
-        持久化与安全保证（P1-05）：
-        1. 前置冲突检查：任何 target_path 已存在且 overwrite=False，抛出 OutputConflictError。
-        2. 清单预先持久化：在任何物理移动前，将计划提交对与 staging 文件哈希持久化至 manifest.json。
-        3. 允许覆盖时：
-           - 对已有目标建立临时同目录备份 (.filename.bak_<uuid>)；
-           - 备份文件路径同步持久化至 manifest.json。
-        4. 移动与跨卷容灾：
-           - 尝试 shutil.move；跨卷或同卷均由备份机制保护；
-           - 若某文件移动失败，立即触发反向回滚，将已移文件移回 staging 并恢复备份，最后将 manifest 标记为 failed。
-        5. 全量成功：清理临时备份，将 manifest 状态持久化为 'committed' 并返回已提交路径。
+        - ``pairs``：staged → target 的新成果；
+        - ``delete_paths``：旧成果中本次不生成的 sidecar，先备份再删除；
+        - ``protected_paths``：输入依赖，任何删除/覆盖命中都必须拒绝。
+
+        事务顺序：预写意图 → 备份所有已有目标/待删除文件 → 安装新成果 →
+        committed 决断点 → 清理备份。决断点前失败恢复完整旧集合；决断点后
+        绝不反向回滚新成果。
         """
-        if not pairs:
+        delete_list = sorted({Path(p).resolve() for p in (delete_paths or [])})
+        protected = {Path(p).resolve() for p in (protected_paths or set())}
+        normalized_pairs = [(Path(s).resolve(), Path(t).resolve()) for s, t in pairs]
+        if not normalized_pairs and not delete_list:
             return []
 
+        staged_set = {s for s, _ in normalized_pairs}
+        target_set = {t for _, t in normalized_pairs}
+        for target in delete_list:
+            if target in target_set:
+                raise ValueError(f"Delete path is also a new target: {target}")
+            if target in staged_set:
+                raise ValueError(f"Delete path is also a staged file: {target}")
+            if target in protected:
+                raise ProtectedInputError(
+                    f"Refusing to delete protected input file: {target}"
+                )
+            if target.exists() and not target.is_file():
+                raise ValueError(f"Delete path is not a regular file: {target}")
+        if delete_list and not overwrite:
+            raise OutputConflictError(
+                "Deleting stale sidecars requires overwrite=true"
+            )
+
         # 阶段 1：静态前置冲突检查（全量，不落任何盘）
-        for staged, target in pairs:
+        for staged, target in normalized_pairs:
             if not staged.exists():
                 raise FileNotFoundError(f"Staged file not found: {staged}")
-            if target.resolve() == staged.resolve():
+            if target == staged:
                 raise ValueError(f"Staged path and target path are identical: {target}")
             if target.exists() and not overwrite:
                 raise OutputConflictError(f"Target already exists and overwrite=false: {target}")
@@ -158,24 +183,23 @@ class ExecutionContext:
 
         # 阶段 2：预检目标状态，生成操作意图与确定性备份路径（WAL Intent）
         file_entries: list[dict[str, Any]] = []
-        commit_pairs: list[dict[str, str]] = []
+        commit_pairs: list[dict[str, Any]] = []
         staged_info: list[dict[str, Any]] = []
+        backup_idx = 0
 
-        for idx, (staged, target) in enumerate(pairs):
+        for staged, target in normalized_pairs:
             staged_size = staged.stat().st_size
             staged_sha = hash_file(staged)
             staged_info.append({"path": str(staged), "size": staged_size, "sha256": staged_sha})
-            commit_pairs.append({"staged": str(staged), "target": str(target)})
-
             tgt_exists = target.exists()
             init_size = target.stat().st_size if tgt_exists else None
             init_sha = hash_file(target) if tgt_exists else None
             bak_path = (
-                target.with_name(f".{target.name}.bak_{self.task_id}_{idx}_{uuid.uuid4().hex[:6]}")
+                target.with_name(f".{target.name}.bak_{self.task_id}_{backup_idx}_{uuid.uuid4().hex[:6]}")
                 if tgt_exists
                 else None
             )
-
+            backup_idx += 1
             entry = {
                 "staged_path": str(staged),
                 "target_path": str(target),
@@ -189,21 +213,61 @@ class ExecutionContext:
                 "status": "planned",
             }
             file_entries.append(entry)
+            commit_pairs.append(
+                {
+                    "staged": str(staged),
+                    "target": str(target),
+                    "action": entry["action"],
+                }
+            )
+
+        for target in delete_list:
+            if not target.exists():
+                continue
+            init_size = target.stat().st_size
+            init_sha = hash_file(target)
+            bak_path = target.with_name(
+                f".{target.name}.bak_{self.task_id}_{backup_idx}_{uuid.uuid4().hex[:6]}"
+            )
+            backup_idx += 1
+            entry = {
+                "staged_path": None,
+                "target_path": str(target),
+                "action": "delete",
+                "initial_exists": True,
+                "initial_size": init_size,
+                "initial_sha256": init_sha,
+                "backup_path": str(bak_path),
+                "staged_size": None,
+                "staged_sha256": None,
+                "status": "planned",
+            }
+            file_entries.append(entry)
+            commit_pairs.append(
+                {
+                    "staged": None,
+                    "target": str(target),
+                    "action": "delete",
+                }
+            )
 
         # 阶段 3：预写意图日志并持久化落盘
         self.manifest.commit_pairs = commit_pairs
         self.manifest.staged_files = staged_info
         self.manifest.file_entries = file_entries
         self.manifest.backups = []
+        self.manifest.committed_files = []
+        self.manifest.deleted_files = []
         self.manifest.state = "committing"
         save_manifest(self.staging_dir, self.manifest)
 
         backups_created: list[tuple[Path, Path]] = []
         installed_files: list[tuple[Path, Path]] = []
+        deleted_files: list[Path] = []
 
         # 阶段 4：带事务备份与安全提交执行（决断点前：可回滚）
         try:
-            # 4.1 先为所有需要替换的已有目标建立备份
+            # 4.1 先为所有需要替换/删除的已有文件建立备份
             for entry in file_entries:
                 if entry["initial_exists"] and entry["backup_path"]:
                     target_p = Path(str(entry["target_path"]))
@@ -213,11 +277,15 @@ class ExecutionContext:
                         os.replace(target_p, backup_p)
                         backups_created.append((target_p, backup_p))
                         entry["status"] = "backed_up"
-                        self.manifest.backups.append({"target": str(target_p), "backup": str(backup_p)})
+                        self.manifest.backups.append(
+                            {"target": str(target_p), "backup": str(backup_p)}
+                        )
                         save_manifest(self.staging_dir, self.manifest)
 
-            # 4.2 安装新成果（移动 staged 到 target）
+            # 4.2 安装新成果（delete 条目只备份，不安装）
             for entry in file_entries:
+                if entry["action"] == "delete":
+                    continue
                 staged_p = Path(str(entry["staged_path"]))
                 target_p = Path(str(entry["target_path"]))
                 target_p.parent.mkdir(parents=True, exist_ok=True)
@@ -228,14 +296,18 @@ class ExecutionContext:
                 save_manifest(self.staging_dir, self.manifest)
 
             # 阶段 5：提交决断点（Commit Point，单向不可逆）
-            # 严格顺序：先持久化 committed 状态！在 committed 落盘前绝不清理任何备份！
             self.manifest.state = "committed"
+            self.manifest.deleted_files = []
             for entry in file_entries:
-                entry["status"] = "committed"
+                if entry["action"] == "delete":
+                    entry["status"] = "deleted"
+                    self.manifest.deleted_files.append(str(entry["target_path"]))
+                    deleted_files.append(Path(str(entry["target_path"])))
+                else:
+                    entry["status"] = "committed"
             save_manifest(self.staging_dir, self.manifest)
         except Exception as exc:
             # 阶段 7：事务回滚（仅限提交决断前故障）
-            # 7.1 将已安装的成果移回 staging 或清除
             for staged_p, target_p in reversed(installed_files):
                 with contextlib.suppress(Exception):
                     if target_p.exists():
@@ -244,21 +316,18 @@ class ExecutionContext:
                         else:
                             target_p.unlink()
 
-            # 7.2 还原原始备份目标
             for target_p, backup_p in reversed(backups_created):
                 with contextlib.suppress(Exception):
                     if backup_p.exists():
                         os.replace(backup_p, target_p)
 
-            # 7.3 标记清单为 failed 状态并持久化
             self.manifest.state = "failed"
+            self.manifest.deleted_files = []
             self.manifest.error = {"code": "commit_failed", "message": str(exc)}
             save_manifest(self.staging_dir, self.manifest)
             raise
 
         # 阶段 6：提交后维护与清理（Post-Commit Cleanup，不可逆决断点已过）
-        # 此时新目标已成功提交。任何清理或日志更新失败只能记录为 cleanup_pending 或警告，
-        # 绝不反向回滚或删除已提交的新目标！
         try:
             for _, bak in backups_created:
                 with contextlib.suppress(Exception):

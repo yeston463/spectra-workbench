@@ -1,6 +1,6 @@
 # 执行状态
 
-更新：2026-11-06（第 41 轮 · S3 阶段一 sidecar 所有权预检与输入保护：protected_inputs、old/new/stale 三集合、输入 header 碰撞拒绝、VRT 源依赖不误判、旧 sidecar 保守拒绝；Clean 全量 613 项 / 0 失败 / rc=0 / clean_exit_verified=true。第 40 轮为 S2 Worker 生命周期状态机）
+更新：2026-11-06（第 42 轮 · S3 阶段二 sidecar 事务删除：旧 sidecar 备份/删除 WAL/决断点回滚与 committed 恢复；Clean 全量 616 项 / 0 失败 / rc=0 / clean_exit_verified=true。第 41 轮为 S3 输入保护与所有权预检）
 
 ## 当前里程碑
 
@@ -229,7 +229,32 @@ CRT 检测到栈状态异常后立即终止进程，这正是 `STATUS_STACK_BUFF
 | 用合成影像完成同类验收 | 已满足 | 合成 ENVI/GTiff/GeoJSON/netCDF 样例覆盖多波段、像元数值、ROI 与对比 |
 | 保留真实数据待验状态 | **待验** | 课程原始数据位于 `C:\Users\赵航\Desktop\studio\_chaoxing_rs`（**只读**，不得运行其中的抓取/下载/OCR 脚本）；本轮全部用合成影像验收，未对课程原始 ENVI 栅格与 lena.tif 做真实打开验证 |
 
-### 第 41 轮：S3 通用 sidecar 所有权预检（阶段一）
+### 第 42 轮：S3 阶段二 sidecar 事务删除
+
+**一、事务扩展**
+
+- `ExecutionContext.commit_files` 新增 `delete_paths` 与 `protected_paths`：
+  - `delete_paths` 先进入 WAL 意图，与已有目标一样先 `os.replace` 到同目录备份；
+  - 安装新成果后到达 `committed` 决断点，再清理旧 sidecar 备份；
+  - 决断点前任何失败回滚已安装新文件并恢复完整旧集合（含待删除 sidecar）；
+  - 决断点后只做幂等清理，绝不反向恢复已提交删除。
+- `StagingManifest` 新增 `deleted_files`；`recover_staging` 能在 `committing` 状态恢复 delete 备份，在 `committed` 状态清理备份且不恢复已删除 sidecar。
+- 适配器把 `stale_sidecars` 与 `protected_inputs` 传入事务；protected 输入仍拒绝删除/覆盖，未知归属仍拒绝。
+- 新增 `ProtectedInputError`；提交层二次防御，即使适配器误传也不允许删除输入依赖。
+
+**二、验证**
+
+- `tests/integration/test_staging_manifest.py` 新增 3 项：删除旧 sidecar 时第二个文件移动失败 → 旧主文件/旧 sidecar 成套恢复；committed 前强杀恢复 delete 备份；committed 后恢复不反向恢复已删除文件。
+- `test_p4_sidecar_ownership.py` 的 stale 场景从“拒绝”升级为“事务删除成功且旧 sidecar 消失”，输入碰撞/受保护输入仍拒绝。
+- 专项：`test_p4_sidecar_ownership.py + test_staging_manifest.py` **25 passed**（18.44s）。
+- Clean 全量：**616 passed / 0 failed / rc=0 / clean_exit_verified=true**（336.14s，`process_observation=job`、`residual=0`、`cleanup_complete=true`）。
+
+**三、边界**
+
+- S3 阶段二完成；未扩大到 S4 格式矩阵/S5 桌面端到端。
+- 删除动作只针对 `old_owned - new_owned` 且已证明不属于 protected 的文件；unknown 仍不自动删除。
+
+### 第 41 轮：S3 阶段一：sidecar 所有权与输入保护
 
 **一、保护集与三集合语义**
 

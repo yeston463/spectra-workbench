@@ -232,7 +232,7 @@ print(json.dumps({{"driver": ds.GetDriver().ShortName, "w": ds.RasterXSize,
 
 
 @pytest.mark.parametrize("sidecar", [".aux.xml", ".ovr", ".msk", ".tfw"])
-def test_gtiff_stale_sidecar_refuses_overwrite(
+def test_gtiff_stale_sidecar_is_removed_transactionally(
     qapp, gdal_rt, tmp_path, sidecar: str
 ) -> None:
     target = _make_raster(gdal_rt, tmp_path / "existing.tif", 111.0)
@@ -246,10 +246,9 @@ def test_gtiff_stale_sidecar_refuses_overwrite(
     b = _make_raster(gdal_rt, tmp_path / "b.tif", 7.0, 202.0)
 
     result = _run_task(qapp, "gdal:merge", {"format": "GTiff"}, [a, b], target)
-    assert result.status is TaskStatus.failed
-    assert result.error and result.error.get("code") == "stale_sidecar_conflict"
-    assert marker.read_bytes() == b"OLD SIDECAR MARKER"
-    assert _inspect(gdal_rt, target)["value"] == 111.0
+    assert result.status is TaskStatus.succeeded, result.error
+    assert not marker.exists(), f"旧 sidecar 未随事务删除：{marker.name}"
+    assert _inspect(gdal_rt, target)["value"] == 5.0
 
 
 def test_envi_overwrite_without_stale_sidecar_succeeds(qapp, gdal_rt, tmp_path) -> None:
@@ -264,28 +263,27 @@ def test_envi_overwrite_without_stale_sidecar_succeeds(qapp, gdal_rt, tmp_path) 
     assert _inspect(gdal_rt, target)["driver"].upper() == "ENVI"
 
 
-def test_envi_stale_overview_refuses_overwrite(qapp, gdal_rt, tmp_path) -> None:
+def test_envi_stale_overview_is_removed_transactionally(qapp, gdal_rt, tmp_path) -> None:
     target = _make_envi(gdal_rt, tmp_path / "existing.dat", 111.0)
     stale = tmp_path / "existing.dat.ovr"
     stale.write_bytes(b"OLD ENVI OVERVIEW")
     a = _make_raster(gdal_rt, tmp_path / "a.tif", 5.0, 200.0)
     b = _make_raster(gdal_rt, tmp_path / "b.tif", 7.0, 202.0)
     result = _run_task(qapp, "gdal:merge", {"format": "ENVI"}, [a, b], target)
-    assert result.status is TaskStatus.failed
-    assert result.error and result.error.get("code") == "stale_sidecar_conflict"
-    assert stale.read_bytes() == b"OLD ENVI OVERVIEW"
+    assert result.status is TaskStatus.succeeded, result.error
+    assert not stale.exists(), "旧 ENVI .ovr 未随事务删除"
+    assert _inspect(gdal_rt, target)["driver"].upper() == "ENVI"
 
 
-def test_chinese_space_target_with_stale_sidecar_refuses(qapp, gdal_rt, tmp_path) -> None:
+def test_chinese_space_target_with_stale_sidecar_is_removed(qapp, gdal_rt, tmp_path) -> None:
     target = _make_raster(gdal_rt, tmp_path / "成果 数据.tif", 111.0)
     stale = tmp_path / "成果 数据.tif.aux.xml"
     stale.write_bytes(b"OLD")
     a = _make_raster(gdal_rt, tmp_path / "a.tif", 5.0, 200.0)
     b = _make_raster(gdal_rt, tmp_path / "b.tif", 7.0, 202.0)
     result = _run_task(qapp, "gdal:merge", {"format": "GTiff"}, [a, b], target)
-    assert result.status is TaskStatus.failed
-    assert result.error and result.error.get("code") == "stale_sidecar_conflict"
-    assert stale.exists()
+    assert result.status is TaskStatus.succeeded, result.error
+    assert not stale.exists()
 
 
 def test_corrupt_target_without_sidecars_can_be_replaced(qapp, gdal_rt, tmp_path) -> None:

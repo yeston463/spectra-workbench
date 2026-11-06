@@ -63,6 +63,7 @@ class StagingManifest:
     backups: list[dict[str, str]] = field(default_factory=list)  # {"target": ..., "backup": ...}
     file_entries: list[dict[str, Any]] = field(default_factory=list)  # 逐文件 WAL 意图与恢复状态
     committed_files: list[str] = field(default_factory=list)
+    deleted_files: list[str] = field(default_factory=list)
     error: dict[str, Any] | None = None
     recovery_notes: str | None = None
 
@@ -127,6 +128,7 @@ def recover_staging(staging_dir: Path) -> dict[str, Any]:
             "task_id": manifest.task_id,
             "attempt": manifest.attempt,
             "committed_files": manifest.committed_files,
+            "deleted_files": manifest.deleted_files,
         }
 
     if manifest.state == "recovered":
@@ -178,6 +180,11 @@ def recover_staging(staging_dir: Path) -> dict[str, Any]:
                         errors.append(f"Target {target_p} was replaced but backup is missing. Retained to prevent data loss.")
                     else:
                         preserved_originals.append(str(target_p))
+                elif status in {"backed_up", "deleted"}:
+                    # 原目标已被移走，备份却不在：不能假装恢复成功。
+                    errors.append(
+                        f"Target {target_p} was backed up/deleted but backup is missing."
+                    )
             else:
                 # 目标原本不存在（本次任务全新创建）：
                 # 严格校验：仅当目标确实存在，且其哈希与本次事务暂存内容确切吻合时，才允许删除半成品

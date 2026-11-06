@@ -497,3 +497,127 @@ def test_post_commit_cleanup_failure_retains_committed_targets_and_state():
         assert target.read_bytes() == b"NEW COMMITTED OUTPUT"
 
 
+def test_commit_delete_rollback_restores_stale_sidecar():
+    """删除旧 sidecar 的提交在决断点前失败时，旧主文件与旧 sidecar 必须成套恢复。"""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_root = Path(temp_dir)
+        staging = temp_root / "staging"
+        staging.mkdir()
+        staged_main = staging / "new.tif"
+        staged_aux = staging / "new.tif.aux.xml"
+        staged_main.write_bytes(b"NEW MAIN")
+        staged_aux.write_bytes(b"NEW AUX")
+        target_main = temp_root / "out.tif"
+        target_aux = temp_root / "out.tif.aux.xml"
+        stale = temp_root / "out.tif.ovr"
+        target_main.write_bytes(b"OLD MAIN")
+        target_aux.write_bytes(b"OLD AUX")
+        stale.write_bytes(b"OLD OVERVIEW")
+
+        ctx = ExecutionContext(task_id="t-delete-rollback", workspace=temp_root, staging_dir=staging)
+        real_move = __import__("shutil").move
+
+        def flaky_move(src, dst):
+            if Path(src).resolve() == staged_aux.resolve():
+                raise OSError("simulated aux move failure")
+            return real_move(src, dst)
+
+        with (
+            patch("spectra_workbench.providers.base.shutil.move", side_effect=flaky_move),
+            pytest.raises(OSError, match="simulated aux move failure"),
+        ):
+            ctx.commit_files(
+                [(staged_main, target_main), (staged_aux, target_aux)],
+                overwrite=True,
+                delete_paths=[stale],
+            )
+
+        assert target_main.read_bytes() == b"OLD MAIN"
+        assert target_aux.read_bytes() == b"OLD AUX"
+        assert stale.read_bytes() == b"OLD OVERVIEW"
+        assert staged_main.exists() and staged_aux.exists()
+        manifest = load_manifest(staging)
+        assert manifest is not None and manifest.state == "failed"
+        assert manifest.deleted_files == []
+
+
+def test_recovery_restores_stale_sidecar_before_commit_point():
+    """强杀发生在 committed 之前时，删除动作的备份必须恢复旧 sidecar。"""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_root = Path(temp_dir)
+        staging = temp_root / "staging"
+        staging.mkdir()
+        target = temp_root / "out.tif"
+        backup = temp_root / ".out.tif.ovr.bak_test"
+        backup.write_bytes(b"OLD OVERVIEW")
+        # 模拟备份已创建、目标已被移走，尚未到达 committed。
+        manifest = StagingManifest(
+            task_id="t-delete-recovery",
+            attempt=1,
+            state="committing",
+            commit_pairs=[{"staged": None, "target": str(target), "action": "delete"}],
+            backups=[{"target": str(target), "backup": str(backup)}],
+            file_entries=[
+                {
+                    "staged_path": None,
+                    "target_path": str(target),
+                    "action": "delete",
+                    "initial_exists": True,
+                    "initial_size": len(b"OLD OVERVIEW"),
+                    "initial_sha256": None,
+                    "backup_path": str(backup),
+                    "staged_size": None,
+                    "staged_sha256": None,
+                    "status": "deleted",
+                }
+            ],
+        )
+        save_manifest(staging, manifest)
+        report = recover_staging(staging)
+        assert report["recovered"] is True
+        assert report["action"] == "reverted_uncommitted_state"
+        assert target.read_bytes() == b"OLD OVERVIEW"
+        assert not backup.exists()
+        recovered = load_manifest(staging)
+        assert recovered is not None and recovered.state == "recovered"
+
+
+def test_committed_delete_is_not_restored_by_recovery():
+    """committed 之后恢复不能把已删除的旧 sidecar 反向恢复。"""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_root = Path(temp_dir)
+        staging = temp_root / "staging"
+        staging.mkdir()
+        target = temp_root / "out.tif"
+        backup = temp_root / ".out.tif.ovr.bak_test"
+        backup.write_bytes(b"OLD OVERVIEW")
+        manifest = StagingManifest(
+            task_id="t-delete-committed",
+            attempt=1,
+            state="committed",
+            commit_pairs=[{"staged": None, "target": str(target), "action": "delete"}],
+            backups=[{"target": str(target), "backup": str(backup)}],
+            file_entries=[
+                {
+                    "staged_path": None,
+                    "target_path": str(target),
+                    "action": "delete",
+                    "initial_exists": True,
+                    "initial_size": len(b"OLD OVERVIEW"),
+                    "initial_sha256": None,
+                    "backup_path": str(backup),
+                    "staged_size": None,
+                    "staged_sha256": None,
+                    "status": "deleted",
+                }
+            ],
+            deleted_files=[str(target)],
+        )
+        save_manifest(staging, manifest)
+        report = recover_staging(staging)
+        assert report["recovered"] is True
+        assert report["action"] == "already_committed"
+        assert not target.exists(), "committed 删除不得被恢复"
+        assert not backup.exists()
+
+
