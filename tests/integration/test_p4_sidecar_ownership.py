@@ -7,6 +7,7 @@ VRT input dependencies must never be treated as target sidecars.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
@@ -72,16 +73,24 @@ ds = None
     return path
 
 
-def _make_envi(gdal_rt: dict, path: Path, value: float = 111.0) -> Path:
+def _make_envi(
+    gdal_rt: dict,
+    path: Path,
+    value: float = 111.0,
+    *,
+    width: int = 4,
+    height: int = 4,
+    gt_x: float = 100.0,
+) -> Path:
     script = f"""
 import numpy as np
 from osgeo import gdal, osr
 gdal.UseExceptions()
-ds = gdal.GetDriverByName("ENVI").Create(r"{path}", 4, 4, 1, gdal.GDT_Float32)
+ds = gdal.GetDriverByName("ENVI").Create(r"{path}", {width}, {height}, 1, gdal.GDT_Float32)
 srs = osr.SpatialReference(); srs.ImportFromEPSG(4326)
-ds.SetGeoTransform((100.0, 1.0, 0.0, 30.0, 0.0, -1.0))
+ds.SetGeoTransform(({gt_x!r}, 1.0, 0.0, 30.0, 0.0, -1.0))
 ds.SetProjection(srs.ExportToWkt())
-ds.GetRasterBand(1).WriteArray(np.full((4, 4), {value!r}, dtype=np.float32))
+ds.GetRasterBand(1).WriteArray(np.full(({height}, {width}), {value!r}, dtype=np.float32))
 ds = None
 """
     proc = subprocess.run(
@@ -148,6 +157,58 @@ def _run_task(
         client.stop(timeout=5.0)
 
 
+def _run_single_task(
+    qapp: QApplication,
+    capability_id: str,
+    parameters: dict,
+    input_path: Path,
+    out_path: Path,
+    *,
+    timeout: float = 40.0,
+) -> object:
+    spec = TaskSpec(
+        task_id=f"s3-single-{uuid.uuid4().hex[:10]}",
+        attempt=1,
+        capability_id=capability_id,
+        descriptor_revision="1.0",
+        engine=EngineConstraint(provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"),
+        project_root=str(ROOT),
+        workspace=str(out_path.parent),
+        inputs={
+            "input": DatasetRef(
+                dataset_id="src", kind=DatasetKind.raster, uri=input_path.resolve().as_uri()
+            )
+        },
+        outputs=[
+            OutputPlan(
+                key="output",
+                kind=DatasetKind.raster,
+                uri=out_path.resolve().as_uri(),
+                driver="GTiff",
+                overwrite=True,
+            )
+        ],
+        parameters=parameters,
+    )
+    client = QtWorkerClient(provider_id="gdal", worker_id="s3-single-worker", project_root=str(ROOT))
+    results = []
+    errors: list[tuple[str, str]] = []
+    client.sig_result.connect(results.append)
+    client.sig_error.connect(lambda c, m: errors.append((c, m)))
+    try:
+        client.start(timeout=20.0)
+        client.submit_task_async(spec, timeout=timeout)
+        deadline = time.monotonic() + timeout
+        while not results and not errors and time.monotonic() < deadline:
+            qapp.processEvents()
+            time.sleep(0.02)
+        assert not errors, errors
+        assert results, f"任务在 {timeout}s 内未产生结果"
+        return results[0]
+    finally:
+        client.stop(timeout=5.0)
+
+
 def _inspect(gdal_rt: dict, path: Path) -> dict:
     script = f"""
 import json
@@ -156,7 +217,8 @@ gdal.UseExceptions()
 ds = gdal.Open(r"{path}")
 assert ds is not None
 print(json.dumps({{"driver": ds.GetDriver().ShortName, "w": ds.RasterXSize,
-                  "h": ds.RasterYSize, "value": float(ds.GetRasterBand(1).ReadAsArray()[0][0])}}))
+                  "h": ds.RasterYSize, "value": float(ds.GetRasterBand(1).ReadAsArray()[0][0]),
+                  "nodata": ds.GetRasterBand(1).GetNoDataValue()}}))
 """
     proc = subprocess.run(
         [str(gdal_rt["python"]), "-c", script],
@@ -237,14 +299,66 @@ def test_corrupt_target_without_sidecars_can_be_replaced(qapp, gdal_rt, tmp_path
     assert _inspect(gdal_rt, target)["value"] == 5.0
 
 
+def _sha(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+@pytest.mark.parametrize("capability", ["gdal:merge", "gdal:stack"])
+def test_output_shared_envi_header_is_rejected(
+    qapp, gdal_rt, tmp_path, capability: str
+) -> None:
+    """source.dat 输入、source.img 输出共享 source.hdr：必须拒绝且不改输入。"""
+    source = _make_envi(gdal_rt, tmp_path / "source.dat", 5.0)
+    other = _make_envi(gdal_rt, tmp_path / "other.dat", 7.0, gt_x=104.0)
+    header = tmp_path / "source.hdr"
+    before_header = _sha(header)
+    before_source = _sha(source)
+    target = tmp_path / "source.img"
+
+    result = _run_task(qapp, capability, {"format": "ENVI"}, [source, other], target)
+    assert result.status is TaskStatus.failed
+    assert result.error and result.error.get("code") == "input_sidecar_collision"
+    assert not target.exists()
+    assert _sha(header) == before_header, "输入 source.hdr 被输出覆盖"
+    assert _sha(source) == before_source
+    assert _inspect(gdal_rt, source)["w"] == 4
+    assert _inspect(gdal_rt, other)["w"] == 4
+
+
+def test_translate_output_shared_header_is_rejected(qapp, gdal_rt, tmp_path) -> None:
+    """通用 Translate 同样不能覆盖另一输入的 ENVI header。"""
+    source = _make_envi(gdal_rt, tmp_path / "source.dat", 5.0)
+    header = tmp_path / "source.hdr"
+    before = _sha(header)
+    target = tmp_path / "source.img"
+    result = _run_single_task(qapp, "gdal:translate", {"format": "ENVI"}, source, target)
+    assert result.status is TaskStatus.failed
+    assert result.error and result.error.get("code") == "input_sidecar_collision"
+    assert not target.exists()
+    assert _sha(header) == before
+    assert _inspect(gdal_rt, source)["w"] == 4
+
+
+def test_explicit_inplace_edit_is_still_allowed(qapp, gdal_rt, tmp_path) -> None:
+    """显式 in-place 元数据编辑是授权范围，不应被输入保护一律禁止。"""
+    source = _make_envi(gdal_rt, tmp_path / "edit.dat", 5.0)
+    result = _run_task(qapp, "gdal:editmeta", {"srcNodata": 0.0}, [source], source)
+    assert result.status is TaskStatus.succeeded, result.error
+    info = _inspect(gdal_rt, source)
+    assert info["w"] == 4 and info["h"] == 4
+    assert info["nodata"] == 0.0
+
+
 def test_vrt_sources_are_not_deleted_or_treated_as_sidecars(qapp, gdal_rt, tmp_path) -> None:
-    source_a = _make_raster(gdal_rt, tmp_path / "a.tif", 5.0, 100.0)
+    source_a = _make_raster(gdal_rt, tmp_path / "mosaic.vrt.source.tif", 5.0, 100.0)
     source_b = _make_raster(gdal_rt, tmp_path / "b.tif", 7.0, 102.0)
     target = tmp_path / "mosaic.vrt"
     first = _run_task(qapp, "gdal:buildvrt", {}, [source_a, source_b], target)
     assert first.status is TaskStatus.succeeded, first.error
+    before = _sha(source_a)
     second = _run_task(qapp, "gdal:buildvrt", {}, [source_a, source_b], target)
     assert second.status is TaskStatus.succeeded, second.error
     assert source_a.exists() and source_b.exists()
+    assert _sha(source_a) == before, "VRT 源文件被重建过程修改"
     assert _inspect(gdal_rt, source_a)["value"] == 5.0
     assert _inspect(gdal_rt, source_b)["value"] == 7.0

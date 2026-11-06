@@ -1,6 +1,6 @@
 # 执行状态
 
-更新：2026-11-06（第 41 轮 · S3 阶段一 sidecar 所有权预检：old/new/stale 三集合、VRT 源依赖不误删、旧 sidecar 保守拒绝；Clean 全量 609 项 / 0 失败 / rc=0 / clean_exit_verified=true。第 40 轮为 S2 Worker 生命周期状态机）
+更新：2026-11-06（第 41 轮 · S3 阶段一 sidecar 所有权预检与输入保护：protected_inputs、old/new/stale 三集合、输入 header 碰撞拒绝、VRT 源依赖不误判、旧 sidecar 保守拒绝；Clean 全量 613 项 / 0 失败 / rc=0 / clean_exit_verified=true。第 40 轮为 S2 Worker 生命周期状态机）
 
 ## 当前里程碑
 
@@ -231,25 +231,27 @@ CRT 检测到栈状态异常后立即终止进程，这正是 `STATUS_STACK_BUFF
 
 ### 第 41 轮：S3 通用 sidecar 所有权预检（阶段一）
 
-**一、三集合语义**
+**一、保护集与三集合语义**
 
+- `protected_inputs`：所有输入主文件及真实读取依赖（ENVI header、mask、VRT 源依赖等），默认只读。提交前检查 `new_targets` 与 `protected_inputs` 是否相交；相交明确拒绝，即使输出主文件不存在或 `overwrite=true`。
 - `old_owned`：既有目标驱动的 `GetFileList()` 与目标命名规则共同确认的文件；覆盖 ENVI `.hdr`、PAM `.aux.xml`、外部 `.ovr`、`.msk`、world file（`.tfw/.tifw/.jgw/.pgw/.wld`）等。
 - `new_owned`：本次 staging 中真实生成的完整成果集合，按最终目标名映射。
 - `stale_owned = old_owned - new_owned`：本次不生成的旧 sidecar。
-- VRT 的 `GetFileList()` 输入依赖按目标名/stem 过滤；源文件绝不是目标 sidecar，不参与删除。非 VRT 同目录但无法分类的文件记 `unknown`，同样拒绝覆盖。
+- VRT 的 `GetFileList()` 输入依赖先于命名候选被识别为 protected；源文件绝不是目标 sidecar，不参与删除。非 VRT 同目录但无法分类的文件记 `unknown`，同样拒绝覆盖。
+- 命名规则只产生候选：去掉了“任意 `target.name + '.'` 前缀即 owned”的宽泛判断，`mosaic.vrt.source.tif` 不再被误判为 `mosaic.vrt` 的 sidecar。显式 in-place 能力（editmeta/overview）按单独授权允许目标自身数据集文件，不放宽其他输入。
 
 **二、保守拒绝（阶段一）**
 
 - 新增 `providers/gdal_provider/sidecars.py`；P4-02 与通用 Translate/Warp 在 `commit_files` 前调用 `ensure_no_stale_sidecars`。
-- 发现 stale/unknown 时返回 `stale_sidecar_conflict`，附带文件列表，旧目标与旧 sidecar 保持原样；不执行任何 `basename*` 通配删除。
+- 输出集合与 protected inputs 相交返回 `input_sidecar_collision`；发现 stale/unknown 返回 `stale_sidecar_conflict`。两者都附带文件列表，旧目标、旧 sidecar 和输入文件保持原样；不执行任何 `basename*` 通配删除。
 - 目标不可读但不存在任何可识别 sidecar 时，仍允许正常 `overwrite` 替换主文件（保留既有“覆盖损坏目标”能力）。
 - 不做“提交后反向回滚”；阶段二的事务删除（旧集合备份、删除记录、崩溃恢复）尚未实现。
 
 **三、验证**
 
-- 新增 `tests/integration/test_p4_sidecar_ownership.py`（9 项）：GTiff 旧 `.aux.xml/.ovr/.msk/.tfw` 拒绝覆盖、ENVI 正常覆盖成功、ENVI 旧 `.ovr` 拒绝、中文空格目标、损坏目标无 sidecar 可替换、VRT 源依赖在重复覆盖后仍存在且可读。
-- P4 定向组合：**72 passed**（64.33s）。
-- Clean 全量：**609 passed / 0 failed / rc=0 / clean_exit_verified=true**（336.94s，`process_observation=job`、`residual=0`、`cleanup_complete=true`）。
+- 新增 `tests/integration/test_p4_sidecar_ownership.py`（13 项）：GTiff 旧 `.aux.xml/.ovr/.msk/.tfw` 拒绝覆盖、ENVI 正常覆盖成功、ENVI 旧 `.ovr` 拒绝、中文空格目标、损坏目标无 sidecar 可替换、VRT 源 `mosaic.vrt.source.tif` 重复构建不误拒且源哈希不变、merge/stack 输出 `source.img` 与输入 `source.hdr` 碰撞拒绝且输入尺寸/哈希不变、通用 Translate 同类碰撞拒绝、显式 in-place editmeta 仍允许。
+- P4 定向组合（含 sidecar 专项）：**85 passed**（78.39s）。
+- Clean 全量：**613 passed / 0 failed / rc=0 / clean_exit_verified=true**（350.74s，`process_observation=job`、`residual=0`、`cleanup_complete=true`）。
 - 21:18 轮曾出现 **607 passed / 1 failed**：初次实现把“目标不可读且无任何 sidecar”误判为所有权未知，拒绝覆盖损坏主文件；修正为仅在 stale/unknown 存在时拒绝后通过。该失败轮保留在 `work/test_runs/test_all.log`。
 
 **四、边界**

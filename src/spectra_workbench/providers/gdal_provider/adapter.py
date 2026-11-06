@@ -72,6 +72,7 @@ from spectra_workbench.providers.gdal_provider.mosaic_ops import (
 )
 from spectra_workbench.providers.gdal_provider.sidecars import (
     SidecarOwnershipError,
+    collect_protected_inputs,
     ensure_no_stale_sidecars,
 )
 from spectra_workbench.providers.gdal_provider.statistics_ops import (
@@ -830,7 +831,11 @@ class GDALProviderAdapter(ProviderAdapter):
 
         # 7.5 sidecar 所有权预检：旧成果中本次不生成的 sidecar 拒绝覆盖
         try:
-            ensure_no_stale_sidecars(target_path, [tf for _, tf in commit_pairs])
+            ensure_no_stale_sidecars(
+                target_path,
+                [tf for _, tf in commit_pairs],
+                protected_inputs=collect_protected_inputs([in_path]) if in_path else set(),
+            )
         except SidecarOwnershipError as sidecar_err:
             context.log("ERROR", f"sidecar 所有权预检失败: {sidecar_err}")
             return TaskResult(
@@ -838,11 +843,12 @@ class GDALProviderAdapter(ProviderAdapter):
                 attempt=spec.attempt,
                 status=TaskStatus.failed,
                 error={
-                    "code": "stale_sidecar_conflict",
+                    "code": sidecar_err.code,
                     "message": str(sidecar_err),
                     "details": {
                         "stale": [str(p) for p in sidecar_err.stale],
                         "unknown": [str(p) for p in sidecar_err.unknown],
+                        "protected": [str(p) for p in sidecar_err.protected],
                     },
                 },
                 duration_seconds=round(time.monotonic() - start_time, 4),
@@ -1103,6 +1109,7 @@ class GDALProviderAdapter(ProviderAdapter):
             )
 
         is_inplace = cid in INPLACE_CAPABILITIES
+        protected_inputs = collect_protected_inputs(sources)
         inplace_info: dict[str, Any] = {}
         calc_info: dict[str, Any] = {}
         if is_inplace:
@@ -1470,7 +1477,12 @@ class GDALProviderAdapter(ProviderAdapter):
 
         # ---- sidecar 所有权预检：旧成果中存在本次不生成的 sidecar 则拒绝覆盖 ----
         try:
-            ensure_no_stale_sidecars(target_path, [tf for _, tf in commit_pairs])
+            ensure_no_stale_sidecars(
+                target_path,
+                [tf for _, tf in commit_pairs],
+                protected_inputs=protected_inputs,
+                allow_inplace=is_inplace,
+            )
         except SidecarOwnershipError as sidecar_err:
             context.log("ERROR", f"sidecar 所有权预检失败: {sidecar_err}")
             self._cleanup_staged_bundle(staged_path)
@@ -1479,11 +1491,12 @@ class GDALProviderAdapter(ProviderAdapter):
                 attempt=spec.attempt,
                 status=TaskStatus.failed,
                 error={
-                    "code": "stale_sidecar_conflict",
+                    "code": sidecar_err.code,
                     "message": str(sidecar_err),
                     "details": {
                         "stale": [str(p) for p in sidecar_err.stale],
                         "unknown": [str(p) for p in sidecar_err.unknown],
+                        "protected": [str(p) for p in sidecar_err.protected],
                     },
                 },
                 duration_seconds=round(time.monotonic() - start_time, 4),

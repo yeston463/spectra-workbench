@@ -24,6 +24,7 @@ from pathlib import Path
 __all__ = [
     "SidecarOwnershipError",
     "SidecarReport",
+    "collect_protected_inputs",
     "discover_sidecars",
     "ensure_no_stale_sidecars",
     "known_sidecar_candidates",
@@ -55,10 +56,14 @@ class SidecarOwnershipError(RuntimeError):
         *,
         stale: list[Path] | None = None,
         unknown: list[Path] | None = None,
+        protected: list[Path] | None = None,
+        code: str = "stale_sidecar_conflict",
     ):
         super().__init__(message)
         self.stale = stale or []
         self.unknown = unknown or []
+        self.protected = protected or []
+        self.code = code
 
 
 @dataclass
@@ -103,30 +108,73 @@ def _is_owned_name(target: Path, candidate: Path) -> bool:
         return False
     if candidate.parent.resolve() != target.parent.resolve():
         return False
-    if candidate.name.startswith(target.name + "."):
-        return True
+    lower_name = candidate.name.lower()
+    target_name = target.name.lower()
+    # 只接受“目标名 + 已知 sidecar 后缀”或“同 stem + 已知后缀”。
+    # 不再接受任意 target.name + "." 前缀（会把 mosaic.vrt.source.tif 误判）。
+    for suffix in _SIDECAR_SUFFIXES:
+        if lower_name == target_name + suffix.lower():
+            return True
     return candidate.stem == target.stem and candidate.suffix.lower() in _SIDECAR_SUFFIXES
 
 
-def discover_sidecars(target: Path) -> SidecarReport:
+def collect_protected_inputs(sources: list[Path]) -> set[Path]:
+    """Collect input main files and their real read dependencies.
+
+    ENVI .dat/.img and its .hdr share a stem; VRT dependencies are reported by
+    GetFileList. These files are read-only for the duration of an unrelated
+    output and must never be overwritten by sidecar naming rules.
+    """
+    protected: set[Path] = set()
+    for source in sources:
+        src = source.resolve()
+        protected.add(src)
+        for candidate in known_sidecar_candidates(src):
+            protected.add(candidate.resolve())
+        try:
+            from osgeo import gdal  # type: ignore[import-not-found]
+
+            gdal.UseExceptions()
+            ds = gdal.Open(str(src), gdal.GA_ReadOnly)
+        except Exception:
+            ds = None
+        if ds is not None:
+            try:
+                for raw in ds.GetFileList() or []:
+                    p = Path(str(raw))
+                    if p.is_file():
+                        protected.add(p.resolve())
+            finally:
+                ds = None
+    return protected
+
+
+def discover_sidecars(
+    target: Path, *, protected_inputs: set[Path] | None = None
+) -> SidecarReport:
     """Discover the existing target's owned sidecars without wildcard deletion."""
     target = target.resolve()
+    protected = {p.resolve() for p in (protected_inputs or set())}
     report = SidecarReport(
         target=target,
         main_exists=target.exists(),
         driver=None,
     )
 
-    # Known naming rules always count as owned candidates.
+    # Known naming rules always count as owned candidates, unless they are
+    # proved to be an input dependency (e.g. source.dat/source.hdr).
     for candidate in known_sidecar_candidates(target):
-        report.owned.append(candidate.resolve())
+        resolved = candidate.resolve()
+        if resolved in protected:
+            continue
+        report.owned.append(resolved)
 
     if not target.exists():
         report.owned = sorted(set(report.owned))
         return report
 
     try:
-        from osgeo import gdal  # type: ignore[import-not-found]
+        from osgeo import gdal
 
         gdal.UseExceptions()
         ds = gdal.Open(str(target), gdal.GA_ReadOnly)
@@ -158,6 +206,10 @@ def discover_sidecars(target: Path) -> SidecarReport:
         candidate = Path(str(raw)).resolve()
         if candidate == target:
             continue
+        if candidate in protected:
+            # Input dependencies are never old target sidecars, even if their
+            # names happen to resemble target sidecars.
+            continue
         if _is_owned_name(target, candidate):
             report.owned.append(candidate)
             continue
@@ -172,14 +224,31 @@ def discover_sidecars(target: Path) -> SidecarReport:
     return report
 
 
-def ensure_no_stale_sidecars(target: Path, new_targets: list[Path]) -> SidecarReport:
-    """Refuse overwrite when the old target owns files this run will not produce.
+def ensure_no_stale_sidecars(
+    target: Path,
+    new_targets: list[Path],
+    *,
+    protected_inputs: set[Path] | None = None,
+    allow_inplace: bool = False,
+) -> SidecarReport:
+    """Refuse overwrite when output collides with inputs or leaves stale files.
 
-    This is the phase-1 conservative policy: no deletion is attempted. A later
-    phase can extend the transaction to back up and delete stale files.
+    Phase 1 is conservative: no deletion is attempted. A later phase can extend
+    the transaction to back up and delete stale files.
     """
-    report = discover_sidecars(target)
+    target = target.resolve()
+    protected = {p.resolve() for p in (protected_inputs or set())}
+    report = discover_sidecars(target, protected_inputs=protected)
     new_set = {p.resolve() for p in new_targets}
+    protected_collisions = sorted(new_set & protected)
+    if protected_collisions and not (allow_inplace and target in protected):
+        raise SidecarOwnershipError(
+            "输出文件集合与受保护输入依赖冲突，拒绝写入："
+            + ", ".join(p.name for p in protected_collisions),
+            protected=protected_collisions,
+            code="input_sidecar_collision",
+        )
+
     stale = [p for p in report.owned if p not in new_set]
     unknown = [p for p in report.unknown if p not in new_set]
     if not report.ownership_complete and (stale or unknown):
