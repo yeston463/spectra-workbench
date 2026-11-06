@@ -145,6 +145,12 @@ _PARAM_ALIASES: dict[str, tuple[str, ...]] = {
     # --- P4-03 元数据 / 概览 ---
     "levels": ("levels", "overview_levels", "decimations"),
     "overviewCompress": ("overview_compress", "ovr_compress"),
+    # --- P4-04 表达式 / 直方图与基础统计 ---
+    "calc": ("calc_expr", "expression", "formula"),
+    "statisticsMode": ("mode", "stats_mode", "statistics_mode"),
+    "histogramBins": ("bins", "histogram_bins", "n_bins"),
+    "maxSamples": ("max_samples", "sample_budget"),
+    "fullLimit": ("full_limit", "full_pixel_limit"),
 }
 
 #: 重叠区的取值来源优先级。
@@ -281,6 +287,18 @@ _CAPABILITY_SUPPORT: dict[str, frozenset[str]] = {
     # --- P4-03：元数据编辑 / 概览构建（均为 in-place 更新）---
     "gdal:editmeta": frozenset({"srcNodata"}),
     "gdal:overview": frozenset({"resampleAlg", "levels", "overviewCompress"}),
+    # --- P4-04：受限表达式计算 / 直方图与基础统计 ---
+    "gdal:calc": frozenset({"calc", "srcNodata", "dstNodata", "outputType"}),
+    "gdal:statistics": frozenset(
+        {
+            "statisticsMode",
+            "histogramBins",
+            "maxSamples",
+            "fullLimit",
+            "bandList",
+            "srcNodata",
+        }
+    ),
 }
 
 #: 能力别名 -> canonical capability_id。
@@ -309,6 +327,12 @@ _CAPABILITY_ALIASES: dict[str, str] = {
     "gdal_edit.py": "gdal:editmeta",
     "gdaladdo": "gdal:overview",
     "gdaladdo.py": "gdal:overview",
+    # --- P4-04 能力别名 ---
+    "gdal_calc": "gdal:calc",
+    "gdal_calc.py": "gdal:calc",
+    "gdal raster calc": "gdal:calc",
+    "gdal:histogram": "gdal:statistics",
+    "gdalinfo -stats": "gdal:statistics",
     # 保留 rio_convert / rio:convert 等 CLI 风格别名
     "rio:convert": "rasterio:convert",
 }
@@ -623,6 +647,41 @@ def normalize_raster_params(
             )
         if key != "NONE":
             out["overviewCompress"] = key
+
+    # 11.6) P4-04：表达式与统计模式
+    # 契约层只做类型/取值校验；表达式语法树的白名单校验在 worker 侧
+    # （expression_ops 依赖 numpy，契约模块刻意保持纯 Python 以便 GUI 导入）。
+    if "calc" in collected:
+        _, value = collected["calc"]
+        if not isinstance(value, str) or not value.strip():
+            raise ParameterError(f"参数 calc 必须是非空表达式字符串，实际 {value!r}")
+        expr = value.strip()
+        if len(expr) > 512:
+            raise ParameterError(f"参数 calc 过长（>{512} 字符），请化简表达式")
+        out["calc"] = expr
+
+    if "statisticsMode" in collected:
+        _, value = collected["statisticsMode"]
+        key = str(value).strip().lower()
+        if key not in ("sampled", "full"):
+            raise ParameterError(
+                f"未知的统计模式 {value!r}；可用：sampled, full（full 超像元上限会被拒绝）"
+            )
+        out["statisticsMode"] = key
+
+    for stat_key in ("maxSamples", "fullLimit"):
+        if stat_key in collected:
+            _, value = collected[stat_key]
+            out[stat_key] = _require_positive_int(value, stat_key)
+
+    if "histogramBins" in collected:
+        _, value = collected["histogramBins"]
+        n_bins = _require_positive_int(value, "histogramBins")
+        if not 2 <= n_bins <= 4096:
+            raise ParameterError(
+                f"参数 histogramBins 必须在 2..4096 之间，实际 {n_bins}"
+            )
+        out["histogramBins"] = n_bins
 
     # 12) 互斥组合：分辨率与输出尺寸不能同时指定
     # （GDAL 侧表现为 "-outsize 与 -tr 冲突"，但那是在引擎里才发现；

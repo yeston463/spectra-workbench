@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QScrollArea,
+    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
@@ -238,6 +239,38 @@ class CapabilityFormWidget(QWidget):
         self.lbl_ovr_compress = QLabel("概览压缩 (overviewCompress):")
         self.params_form.addRow(self.lbl_ovr_compress, self.cmb_ovr_compress)
 
+        # --- P4-04 表达式计算 / 统计报告 ---
+        self.txt_calc = QLineEdit()
+        self.txt_calc.setPlaceholderText(
+            "例：(A-B)/(A+B)；波段按输入顺序 A/B/C…，支持 + - * / // % ** 与白名单函数"
+        )
+        self.lbl_calc = QLabel("受限表达式 (calc):")
+        self.params_form.addRow(self.lbl_calc, self.txt_calc)
+
+        self.cmb_stats_mode = QComboBox()
+        self.cmb_stats_mode.addItem("抽样（sampled，标注为估计）", "sampled")
+        self.cmb_stats_mode.addItem("全量（full，超限拒绝）", "full")
+        self.lbl_stats_mode = QLabel("统计模式 (statisticsMode):")
+        self.params_form.addRow(self.lbl_stats_mode, self.cmb_stats_mode)
+
+        self.spin_hist_bins = QSpinBox()
+        self.spin_hist_bins.setRange(2, 4096)
+        self.spin_hist_bins.setValue(256)
+        self.lbl_hist_bins = QLabel("直方图分箱数 (histogramBins):")
+        self.params_form.addRow(self.lbl_hist_bins, self.spin_hist_bins)
+
+        self.spin_max_samples = QSpinBox()
+        self.spin_max_samples.setRange(1, 1_000_000_000)
+        self.spin_max_samples.setValue(1_000_000)
+        self.lbl_max_samples = QLabel("抽样预算 (maxSamples):")
+        self.params_form.addRow(self.lbl_max_samples, self.spin_max_samples)
+
+        self.spin_full_limit = QSpinBox()
+        self.spin_full_limit.setRange(1, 1_000_000_000)
+        self.spin_full_limit.setValue(50_000_000)
+        self.lbl_full_limit = QLabel("全量像元上限 (fullLimit):")
+        self.params_form.addRow(self.lbl_full_limit, self.spin_full_limit)
+
         # --- P4-01 裁剪（像元窗口 xoff,yoff,xsize,ysize）---
         self.txt_clip = QLineEdit()
         self.txt_clip.setPlaceholderText("留空表示不裁剪；例：10,20,100,80")
@@ -376,13 +409,16 @@ class CapabilityFormWidget(QWidget):
         is_warp = "warp" in cid
         is_translate = "translate" in cid
         is_rasterio = "rasterio" in cid
+        sup = supported_params_for(cid) or frozenset()
 
-        # 显示或隐藏相应字段
-        self.lbl_format.setVisible(is_translate or is_warp or is_rasterio)
-        self.cmb_format.setVisible(is_translate or is_warp or is_rasterio)
+        # 显示或隐藏相应字段（统计报告输出 JSON artifact，不显示栅格格式选项）
+        show_format = is_translate or is_warp or is_rasterio or "calc" in sup
+        self.lbl_format.setVisible(show_format)
+        self.cmb_format.setVisible(show_format)
 
-        self.lbl_out_type.setVisible(is_translate)
-        self.cmb_out_type.setVisible(is_translate)
+        show_out_type = is_translate or "outputType" in sup
+        self.lbl_out_type.setVisible(show_out_type)
+        self.cmb_out_type.setVisible(show_out_type)
 
         self.lbl_co.setVisible(is_translate)
         self.txt_co.setVisible(is_translate)
@@ -399,8 +435,7 @@ class CapabilityFormWidget(QWidget):
         self.btn_browse_in.setVisible(not multi)
         self.grp_inputs.setVisible(multi)
 
-        # P4-02 专属参数：按共享契约的支持矩阵显隐
-        sup = supported_params_for(cid) or frozenset()
+        # P4-02 / P4-04 专属参数：按共享契约的支持矩阵显隐
         self._set_row_visible(
             self.lbl_overlap_priority, self.cmb_overlap_priority, "overlapPriority" in sup
         )
@@ -415,6 +450,12 @@ class CapabilityFormWidget(QWidget):
         self._set_row_visible(self.lbl_band_list, self.txt_band_list, "bandList" in sup)
         self._set_row_visible(self.lbl_levels, self.txt_levels, "levels" in sup)
         self._set_row_visible(self.lbl_ovr_compress, self.cmb_ovr_compress, "overviewCompress" in sup)
+        # P4-04
+        self._set_row_visible(self.lbl_calc, self.txt_calc, "calc" in sup)
+        self._set_row_visible(self.lbl_stats_mode, self.cmb_stats_mode, "statisticsMode" in sup)
+        self._set_row_visible(self.lbl_hist_bins, self.spin_hist_bins, "histogramBins" in sup)
+        self._set_row_visible(self.lbl_max_samples, self.spin_max_samples, "maxSamples" in sup)
+        self._set_row_visible(self.lbl_full_limit, self.spin_full_limit, "fullLimit" in sup)
 
         # P4-01：裁剪 / 重采样 / 输出网格
         self._set_row_visible(self.lbl_clip, self.txt_clip, is_translate or is_warp)
@@ -501,6 +542,14 @@ class CapabilityFormWidget(QWidget):
             self.txt_levels.clear()
         if "overviewCompress" not in supported:
             self.cmb_ovr_compress.setCurrentIndex(0)
+        # P4-04 控件的状态隔离
+        if "calc" not in supported:
+            self.txt_calc.clear()
+        if "statisticsMode" not in supported:
+            self.cmb_stats_mode.setCurrentIndex(0)
+            self.spin_hist_bins.setValue(256)
+            self.spin_max_samples.setValue(1_000_000)
+            self.spin_full_limit.setValue(50_000_000)
 
     @staticmethod
     def _set_row_visible(label: QLabel, widget: QWidget, visible: bool) -> None:
@@ -581,6 +630,24 @@ class CapabilityFormWidget(QWidget):
                 if not bands:
                     return params, "波段顺序不能为空列表（留空表示保留全部）"
                 params["bandList"] = bands
+
+        # P4-04：表达式计算
+        if "calc" in supported:
+            raw_expr = self.txt_calc.text().strip()
+            if not raw_expr:
+                return params, "受限表达式 calc 必填（例：(A-B)/(A+B)）"
+            params["calc"] = raw_expr
+            if capability_id == "gdal:calc":
+                raw_type = self.cmb_out_type.currentText()
+                if "Default" not in raw_type:
+                    params["outputType"] = raw_type.split()[0]
+
+        # P4-04：统计报告（模式/分箱/抽样预算/全量上限）
+        if "statisticsMode" in supported:
+            params["statisticsMode"] = self.cmb_stats_mode.currentData()
+            params["histogramBins"] = self.spin_hist_bins.value()
+            params["maxSamples"] = self.spin_max_samples.value()
+            params["fullLimit"] = self.spin_full_limit.value()
 
         return params, None
 
@@ -689,12 +756,19 @@ class CapabilityFormWidget(QWidget):
         # 输入：多输入能力用列表（顺序即重叠优先级依据），单输入能力用单文件行
         if multi:
             raw_inputs = [str(x) for x in self.input_paths()]
-            if len(raw_inputs) < 2:
+            # 表达式计算允许单源（如 A*2）；拼接类仍要求 ≥2 源。
+            min_inputs = 1 if cid == "gdal:calc" else 2
+            if len(raw_inputs) < min_inputs:
+                hint = (
+                    "输入顺序依次对应表达式里的 A/B/C… 波段名。"
+                    if cid == "gdal:calc"
+                    else "顺序决定重叠优先级。"
+                )
                 QMessageBox.warning(
                     self,
                     "输入不足",
-                    f"能力 {cid} 需要至少 2 个输入源，当前 {len(raw_inputs)} 个。\n"
-                    "请在「多输入源」列表中继续添加（顺序决定重叠优先级）。",
+                    f"能力 {cid} 需要至少 {min_inputs} 个输入源，当前 {len(raw_inputs)} 个。\n"
+                    f"请在「多输入源」列表中继续添加（{hint}）。",
                 )
                 return
         else:
@@ -752,6 +826,16 @@ class CapabilityFormWidget(QWidget):
 
         elif "rasterio" in cid:
             params["driver"] = out_fmt
+        elif cid == "gdal:calc":
+            # 表达式成果是真实栅格，格式选项必须下发给 worker（默认 GTiff）
+            params["format"] = out_fmt
+        elif cid == "gdal:statistics" and out_p.suffix.lower() != ".json":
+            QMessageBox.warning(
+                self,
+                "输出格式",
+                "统计报告是 JSON artifact，输出文件名请以 .json 结尾。",
+            )
+            return
 
         # P4-01：裁剪 / 重采样 / 输出网格
         grid_params, grid_error = self._collect_grid_params(
@@ -818,7 +902,11 @@ class CapabilityFormWidget(QWidget):
             outputs=[
                 OutputPlan(
                     key="output",
-                    kind=DatasetKind.raster,
+                    kind=(
+                        DatasetKind.artifact
+                        if cid == "gdal:statistics"
+                        else DatasetKind.raster
+                    ),
                     uri=out_p.as_uri(),
                     overwrite=overwrite,
                 )

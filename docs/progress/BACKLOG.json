@@ -544,9 +544,17 @@
       "depends_on": [
         "P4-01"
       ],
-      "status": "todo",
+      "status": "implemented",
       "release_requirement": "core",
-      "evidence": [],
+      "evidence": [
+        "实测依据 work/_probe_p404.py（GDAL 3.13.3）：ComputeStatistics(True) 均值≈49.829 而 (False)≈50.006，抽样≠精确；GetHistogram 在本版本只接受位置参数；float 除零产生 NaN/Inf；int16 30000+30000 回绕。故求值前统一提升 float32，并把 GDAL 原生近似/精确统计一并写进报告作对照。",
+        "expression_ops.py：AST 白名单解析与 numpy 求值，禁用 eval；只放行白名单运算符/函数与 A/B/C… 波段名。无效像元（各自 NoData / NaN / Inf）先排除再回填输出 NoData 实现 mask 传播；除零等数学无效转 NoData 并计数 n_math_invalid；有效结果恰好等于输出 NoData、或整型输出溢出/截断小数时明确拒绝。解析错误、除零、整数溢出、mask 四类语义各有单测证据。",
+        "calc_ops.py：gdal:calc 的 GDAL 读写通道，逐输入核对尺寸 / 仿射 / 投影，不一致直接拒绝（沿用第 29 轮静默跳源防线）；输出继承首个输入 GeoTransform 与投影，落盘后设 NoData 标签，保证标签 / 无效区 / 像元值三者一致。",
+        "statistics_ops.py：sampled 抽规则网格并标注 source=sampled_grid、stride 与 sampled_is_estimate=True；full 读全幅且超过 fullLimit 明确拒绝而非静默降级；报告含直方图、分位数与 GDAL 原生对照。**只读副作用修复**：首轮 GUI 验收实测生成 stats_full_src.tif.aux.xml，内容含 HistMin=0/HistMax=14/BucketCount=4 的 Histograms 及 STATISTICS_* 元数据，确证由 ComputeStatistics/GetHistogram 写入；根因是 PAM 状态在 Open() 时已固定、调用统计函数前才设 GDAL_PAM_ENABLED=NO 无效；改为 Open 之前禁用、dataset 销毁后恢复，修复后用例全绿且源目录无 sidecar。",
+        "接线：adapter 新增 gdal:calc（栅格成果）与 gdal:statistics（JSON artifact，staging → 成套提交 → 读回 JSON 核验）分支；共享参数契约补 calc / outputType / statisticsMode / histogramBins / maxSamples / fullLimit；registry 补编目、wiring 单一来源集合 +2；表单按支持矩阵显隐并做跨能力状态隔离（gdal:calc 允许恰好 1 个源，拼接类仍 ≥2）；统计输出非 .json 在 GUI 侧拒绝；main_window 不把 JSON 报告当栅格加载，只在状态栏提示落盘位置。基线审计实测：总 448 / 已发现 443 / 可调用 235，GDAL 基准 407，结构化算法 23。",
+        "验收：tests/unit/test_p4_expression_ops.py（32 项）、tests/unit/test_p4_param_contract.py（16 项）、tests/integration/test_p4_calc_statistics.py（9 项）、tests/integration/test_p4_gui_p404.py（12 项，含真实 MainWindow 提交→worker→成果加载→关窗 worker 停止），共新增 69 项。修复 Mypy 9 个类型错误（expression_ops AST 节点收窄、calc_ops Optional[dict] 改标量字段）后 scripts/test.ps1 -All 三项 ALL CHECKS PASSED：Ruff 干净、Mypy 64 个源文件 0 错误、全量 536 项收集 / 0 失败 / 子进程 rc=0（369.0s）。pytest 文本 summary 被 os._exit 截断，已在 STATUS 第 35 轮如实说明。",
+        "状态边界：P4-04 为 implemented 而非 done——里程碑退出条件尚未整体验收；P4-05 首个完整用户流程仍待启动。产品侧 0xC0000409 在 Python finalization 的 C++ 清理中仍只在测试侧止血，未根治（日志末尾仍有 QThreadStorage 警告）。"
+      ],
       "blocking_reason": null
     },
     {
@@ -1069,5 +1077,5 @@
       "blocking_reason": null
     }
   ],
-  "updated_at": "2026-11-04"
+  "updated_at": "2026-11-06"
 }

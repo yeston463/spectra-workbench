@@ -41,6 +41,9 @@ CONNECTED_CAPABILITIES: frozenset[str] = frozenset(
         # P4-03：元数据编辑 / 概览构建（in-place）
         "gdal:editmeta",
         "gdal:overview",
+        # P4-04：受限表达式计算 / 直方图与基础统计（后者输出 JSON artifact）
+        "gdal:calc",
+        "gdal:statistics",
     }
 )
 
@@ -53,10 +56,12 @@ MULTI_INPUT_CAPABILITIES: frozenset[str] = frozenset(
         "gdal:merge",
         "gdal_merge",
         "gdal:stack",
+        # gdal:calc 用列表形式表达 A/B/C… 映射（允许只给 1 个输入）
+        "gdal:calc",
     }
 )
 
 
 def is_multi_input(capability_id: str) -> bool:
-    """该能力是否需要多输入（P4-02 的拼接/VRT/堆叠）。"""
+    """该能力是否使用可排序多输入列表（P4-02 拼接/VRT/堆叠、P4-04 表达式）。"""
     return capability_id in MULTI_INPUT_CAPABILITIES

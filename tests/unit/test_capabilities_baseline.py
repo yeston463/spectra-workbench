@@ -158,13 +158,14 @@ def test_random_sampling_matches_official_catalog():
 
 
 def test_gdal_algorithms_count_and_structure():
-    """GDAL 结构化算法规格完整（20 项 = 18 项原生 + 2 项平台组合）。
+    """GDAL 结构化算法规格完整（23 项 = 18 项原生 + 5 项平台组合/受限实现）。
 
-    其中 `gdal:stack` / `gdal:bandmanage` 是平台基于原生 API 的组合实现，
+    其中 `gdal:stack` / `gdal:bandmanage` / `gdal:statistics` 是平台基于
+    原生 API 的组合实现，`gdal:calc` 是平台受限 AST 求值器，
     性质与 18 项原生工具不同，已在 registry 文档串中标注。
     """
     algorithms = build_gdal_algorithms()
-    assert len(algorithms) == 22
+    assert len(algorithms) == 23
 
     algo_ids = {a.capability_id for a in algorithms}
     expected_ids = {
@@ -192,6 +193,8 @@ def test_gdal_algorithms_count_and_structure():
         # P4-03：元数据编辑 / 概览构建（有原生 CLI 工具 gdal_edit.py / gdaladdo）
         "gdal:editmeta",
         "gdal:overview",
+        # P4-04：直方图与基础统计（平台组合能力）
+        "gdal:statistics",
     }
     assert algo_ids == expected_ids
 
@@ -344,9 +347,11 @@ def test_four_dimensional_state_independence_and_audit():
     #   基线总数 443 -> 445；已发现 438 -> 440；
     #   可调用 229 -> 232（buildvrt/stack/bandmanage 各 +1，merge 恢复 cli 不变）；
     #   平台可执行 3 -> 5。
-    assert report["total_baseline_count"] == 447
-    assert report["discovered"]["count"] == 442
-    assert report["callable"]["count"] == 234
+    # 第 35 轮（P4-04）：新增 gdal:statistics 编目，并把 gdal:calc 补上 form 入口
+    # （原条目已计入基线，故只 +1 个新条目）：447 -> 448、442 -> 443、234 -> 235。
+    assert report["total_baseline_count"] == 448
+    assert report["discovered"]["count"] == 443
+    assert report["callable"]["count"] == 235
     assert report["platform_executable"]["count"] == 5
     assert report["verified"]["count"] == 5
     # 第 32 轮：gdal:buildvrt 由 blocked 改为 ready（平台已接入），
@@ -363,11 +368,11 @@ def test_four_dimensional_state_independence_and_audit():
     assert "rasterio" in by_provider
 
     gdal_rep = by_provider["gdal"]
-    # 第 32 轮新增 stack/bandmanage；第 34 轮新增 editmeta/overview：
-    # 基线总数 402 -> 406，已发现 400 -> 404。
+    # 第 32 轮新增 stack/bandmanage；第 34 轮新增 editmeta/overview；
+    # 第 35 轮新增 statistics：基线总数 402 -> 407，已发现 400 -> 405。
     # gdal:buildvrt 由 blocked 改为 ready（平台已接入），故 GDAL 缺失项 6 -> 5。
-    assert gdal_rep["total_baseline_count"] == 406
-    assert gdal_rep["discovered"]["count"] == 404
+    assert gdal_rep["total_baseline_count"] == 407
+    assert gdal_rep["discovered"]["count"] == 405
     assert gdal_rep["missing"]["count"] == 5
 
     rio_rep = by_provider["rasterio"]
@@ -380,8 +385,8 @@ def test_provider_adapters_discover_baseline():
     """GDAL 与 Rasterio 适配器在各自 worker 内均可发现基准能力。"""
     gdal_adapter = GDALProviderAdapter()
     gdal_caps = gdal_adapter.discover()
-    # 第 32/34 轮新增编目
-    assert len(gdal_caps) == 406
+    # 第 32/34/35 轮新增编目
+    assert len(gdal_caps) == 407
 
     rio_adapter = RasterioProviderAdapter()
     rio_caps = rio_adapter.discover()

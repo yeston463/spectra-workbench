@@ -1,6 +1,6 @@
 # 执行状态
 
-更新：2026-11-05（第 22 轮 · P3-02 基础矢量与子数据集元数据：Worker 侧 probe_vector / list_subdatasets / probe_subdataset、GUI「数据源元数据」面板、矢量文件可作为图层打开与保存重开；同期修复 stop() 回调-锁自我死锁；并按复核意见修正退出异常表述与测试数）
+更新：2026-11-06（第 35 轮 · P4-04 受限表达式、直方图与基础统计：AST 白名单求值、GDAL 读写通道、sampled/full 统计报告、GUI 表单与真实主窗口端到端验收；修复只读统计写 .aux.xml 的副作用；补齐 Mypy/GUI 验收缺口，全量 536 项 0 失败 / rc=0）
 
 ## 当前里程碑
 
@@ -228,6 +228,63 @@ CRT 检测到栈状态异常后立即终止进程，这正是 `STATUS_STACK_BUFF
 |---|---|---|
 | 用合成影像完成同类验收 | 已满足 | 合成 ENVI/GTiff/GeoJSON/netCDF 样例覆盖多波段、像元数值、ROI 与对比 |
 | 保留真实数据待验状态 | **待验** | 课程原始数据位于 `C:\Users\赵航\Desktop\studio\_chaoxing_rs`（**只读**，不得运行其中的抓取/下载/OCR 脚本）；本轮全部用合成影像验收，未对课程原始 ENVI 栅格与 lena.tif 做真实打开验证 |
+
+### 第 35 轮：P4-04 受限表达式、直方图与基础统计（含 GUI 接入与只读副作用修复）
+
+原验收标准：「解析错误、除零、整数溢出、mask、抽样/全量统计模式有证据」。
+上一轮结束时本项只落盘了核心模块，**未静态检查、未跑全量、未同步台账、未提交**，
+且 `python -m mypy` 有 9 个错误、`scripts/test.ps1 -All` 不可能全绿。
+
+**一、实现与语义红线**
+
+| 模块 | 职责与关键约束 |
+|---|---|
+| `providers/gdal_provider/expression_ops.py` | AST 白名单解析与 numpy 求值，**禁用 eval**；只允许白名单运算符/函数与 A/B/C… 波段名。输入统一提升 float32（实测 int16 `30000+30000` 会回绕），无效像元（各自 NoData / NaN / Inf）先排除再回填输出 NoData，实现 mask 传播；除零等数学无效转 NoData 并计数 `n_math_invalid`；有效结果恰等于输出 NoData、或整型输出会溢出/截断小数时**明确拒绝**，不产出无法区分的成果。 |
+| `providers/gdal_provider/calc_ops.py` | `gdal:calc` 的 GDAL 读写通道：逐输入核对尺寸 / 仿射 / 投影，不一致直接拒绝（沿用第 29 轮「GDAL 静默跳源」的防线）；输出继承首个输入的 GeoTransform 与投影，落盘后设 NoData 标签。 |
+| `providers/gdal_provider/statistics_ops.py` | `sampled` 抽规则网格并标注 `source=sampled_grid` / `stride` / `sampled_is_estimate=True`；`full` 读全幅且超过 `full_limit` **拒绝而不是偷偷降级**；报告含直方图、分位数与 GDAL 原生近似/精确统计对照（实测 `ComputeStatistics(True)` 与 `(False)` 均值不同）。 |
+| `adapter.py` / `processing/raster_params.py` | 新增 `gdal:calc`（栅格成果）与 `gdal:statistics`（JSON artifact）分支；统计报告走 staging → 成套提交 → **读回 JSON 核验**，不做 GDAL 重开；参数经与 Worker 相同的共享契约归一化。 |
+| `registry/gdal_index.py` / `domain/capability_wiring.py` | 补编目并加入已接通集合；`gdal:calc` 用可排序多输入列表但**允许恰好 1 个源**（A\*2），拼接类仍要求 ≥2 源。 |
+| `ui/forms/param_form.py` / `ui/main_window.py` | 表达式、统计模式、分箱、抽样预算、全量上限控件按支持矩阵显隐与状态隔离；统计输出非 `.json` 在 GUI 侧拒绝；JSON 报告**不进图层树**，只在状态栏提示落盘位置，栅格成果仍正常加载。 |
+
+**二、本轮实测发现并修复的真实缺陷：只读统计写 `.aux.xml`**
+
+`tests/integration/test_p4_gui_p404.py::test_gui_statistics_full_report_excludes_nodata` 首次运行失败：
+`stats_full_src.tif.aux.xml` 被生成，内容含 `HistMin=0 / HistMax=14 / BucketCount=4` 的
+`Histograms` 与 `STATISTICS_MINIMUM/MAXIMUM/MEAN/STDDEV/VALID_PERCENT` 元数据，
+与本次统计参数逐项吻合，确证由 `ComputeStatistics` / `GetHistogram` 写入，**不是**造源时产生。
+
+根因：PAM 状态在 `gdal.Open()` 时就固定，原代码只在 `_gdal_reference()` **调用统计函数前**
+临时设 `GDAL_PAM_ENABLED=NO`，对已打开的 dataset 无效。修复为在 **Open 之前**禁用、
+dataset 销毁后再恢复全局配置（外层 `finally`），保证「统计」这一只读操作不改动用户数据。
+修复后该用例与整个 GUI 文件全绿。
+
+**三、补齐的工程缺口**
+
+- Mypy 9 个错误全部修掉：`expression_ops.py` 把 `n.func` 收窄为局部变量后二次判断
+  （重复属性访问无法收窄）；`calc_ops.py` 把循环内赋值的 `Optional[dict]` 空间参考
+  改为明确的标量字段（`ref_w/ref_h/ref_gt/ref_proj/ref_ready`），消除 8 处不可下标。
+  `python -m mypy` → **64 个源文件 0 错误**，Ruff 全量干净。
+- GUI 端到端验收 `tests/integration/test_p4_gui_p404.py`（12 项）：除零 / 输入 NoData
+  传播 / **有效零值 mask 保持有效** / 语法错误不产出文件 / 整型溢出拒绝 / full 与
+  sampled 两种报告 / 超限拒绝 / 非 JSON 拒绝不加模态弹窗，以及**真实 `MainWindow`**
+  从表单提交 → worker 执行 → 栅格成果自动加载、JSON 报告不加载、关窗后 worker 停止；
+  另补能力接通、显隐切换、单源表达式、空表达式提前拒绝、跨能力参数不泄漏。
+- `tests/unit/test_p4_expression_ops.py`（32 项）、`tests/unit/test_p4_param_contract.py`、
+  `tests/integration/test_p4_calc_statistics.py` 与基线断言同步；注册表审计实测：
+  总基准 **448**、已发现 **443**、可调用 **235**、GDAL 基准 **407**、结构化算法 **23**。
+
+**四、验证结果与状态**
+
+`scripts/test.ps1 -All` → Ruff / Mypy / Pytest 三项 **ALL CHECKS PASSED**，
+`work/test_runs/test_all.log` 记录子进程 `rc=0`、耗时 369.0s；`pytest --collect-only -q`
+为 **536 tests collected**，日志中无 FAILED / ERROR。如实说明：`pytest_unconfigure` 的
+`os._exit` 止血会截断 pytest 的末行文本 summary，故本轮以「子进程 rc + 收集数 + 无失败标记」
+三者为准，**不把截断后的输出伪写成一行 `536 passed`**。日志末尾仍出现
+`QThreadStorage: entry ... destroyed before end of thread` 警告，与第 33 轮结论一致：
+产品侧 finalization 根治仍待独立工作，测试侧仅为止血。
+
+P4-04 状态为 **implemented**（不是 done）：里程碑退出条件尚未整体验收。
+P4-05「首个完整用户流程」仍为 todo，依赖 P4-02/P4-03/P4-04/P2-05。
 
 ### 第 34 轮：P4-03 元数据/ENVI 头文件、概览与格式选项 + work/ 清理
 
@@ -1150,7 +1207,7 @@ Thread 0x0000d064 (most recent call first):
 | P0-01 仓库与文档结构 | done | git init（2.50.1）；docs/plan/ 输入基线、contracts/、src/、tests/；AGENTS.md、README.md、pyproject.toml；docs/progress/WORKPACKAGES.md |
 | P0-02 四环境 | implemented | scripts/bootstrap_pip.ps1 -VerifyOnly → RESULT ALL OK；docs/progress/runs/env_report.json；environments/locks/*.lock.txt |
 | P0-03 自检与小型 Fixture | implemented | src/spectra_workbench/app/doctor.py + scripts/doctor.ps1 → docs/progress/runs/doctor_report.json。GTiff 往返成功、坐标转换成功、205 驱动、5 CLI 就绪；单测全绿 |
-| P0-04 自动化检查流水线 | done | scripts/test.ps1，串联 Ruff、Mypy 与 Pytest。Mypy 57 个源文件 0 错误；全量自动化测试通过：**460 passed / 0 失败**（仅退出码异常，见下），全量 467 passed / 0 失败 / **rc=0**（2026-11-06 第 34 轮，P4-03 元数据/概览 + work 清理）；第 23 轮为 318 passed in 110.47s、rc=0；第 22 轮为 308 passed in 116.50s、rc=0；第 21 轮为 297 passed in 105.12s、rc=0；如实记录 07:48:47 历史退出异常轮次（286 passed，0xC0000409）与后续 07:54:31、07:56:16（286 passed，rc=0）及本轮（297 passed，rc=0），全面加固 Qt 对象生命周期有序销毁 |
+| P0-04 自动化检查流水线 | done | scripts/test.ps1，串联 Ruff、Mypy 与 Pytest。Mypy 57 个源文件 0 错误；全量自动化测试通过：**460 passed / 0 失败**（仅退出码异常，见下），全量 467 passed / 0 失败 / **rc=0**（2026-11-06 第 34 轮，P4-03 元数据/概览 + work 清理）；**全量 536 项收集 / 0 失败 / rc=0**（2026-11-06 第 35 轮，P4-04 表达式/统计；Mypy 64 个源文件 0 错误）；第 23 轮为 318 passed in 110.47s、rc=0；第 22 轮为 308 passed in 116.50s、rc=0；第 21 轮为 297 passed in 105.12s、rc=0；如实记录 07:48:47 历史退出异常轮次（286 passed，0xC0000409）与后续 07:54:31、07:56:16（286 passed，rc=0）及本轮（297 passed，rc=0），全面加固 Qt 对象生命周期有序销毁 |
 | P0-05 打包重定位可行性验证 | implemented | docs/adr/0002-relocation-and-packaging.md；tests/integration/test_relocation.py 验证 UI 与 Rasterio、GDAL 引擎在独立临时路径正常初始化并导入 |
 | P1-01 领域模型与契约对账 | done | src/spectra_workbench/domain/models.py；tests/unit/test_domain_models.py；tests/unit/test_contracts_schema.py（50 项全绿） |
 | P1-02 JSONL 客户端与 Worker 启动 | done | src/spectra_workbench/protocol/messages.py；src/spectra_workbench/workers/process.py；src/spectra_workbench/workers/entrypoint.py；tests/integration/test_worker_process.py（8 项真实跨进程测试全绿） |
@@ -1169,8 +1226,8 @@ Thread 0x0000d064 (most recent call first):
 | P3-05 view CRS、重投影、查询与 ROI | implemented | 旋转 Affine 与无 GT 栅格支持；地图坐标 ↔ 像元中心/角点约定；ROI 模型与点包含判定；跨 CRS 视图重投影网格读取；真实鼠标事件多边形 ROI 绘制/闭合/选中/手柄拖拽/删除/保存重开全流程；矩形展开 4 角点经 Worker 转换并精确保持 425 平方单位面积与 4 个角点；坐标转换失败异常隔离隐藏并保全权威模型；五类故障注入矩阵覆盖（向地图/回像元/项目重开/拖动反算/旧响应迟到），跨坐标空间数据混用缺陷已修复（tests/integration/test_p3_interactive_polygon_roi.py 9 项全绿） |
 
 实测命令与结果：
-- powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test.ps1 -All → **Ruff 干净、Mypy 干净（61 个源文件 0 错误）、467 passed / 0 失败、rc=0**（退出异常已在测试侧止血，见第 33 轮）
-  - 第 34 轮（P4-03 元数据/ENVI/概览）：新增 7 项；第 33 轮（退出异常机制定位 + 止血）：诊断与止血，无新增用例；第 32 轮（P4-02 GUI 接入）：新增 19 项（GUI 端到端 13 项 + 能力一致性 6 项）；第 31 轮（worker 生命周期诊断与兜底）：新增 5 项（兜底 4 项 + 握手耗时观测 1 项）；第 30 轮（P4-02 成果完整性与数据语义）：新增 12 项；第 29 轮（P4-02 拼接/VRT/堆叠/波段管理）：新增 14 项；第 28 轮（Rasterio worker 参数契约）：新增 14 项；第 27 轮（能力边界 + 有界预裁剪）：新增 15 项（能力边界与有界裁剪）；第 26 轮（参数一致性修正）：新增 25 项（参数一致性端到端 18 项 + GUI 隔离运行时 3 项 + adapter 模块级隔离 3 项 + 高 DPI 表述订正 1 项）；第 25 轮（P3 验收清单 + P4-01）：新增 30 项（P3 验收缺口 5 项 + P4-01 裁剪重采样 14 项 + P4-01 表单 11 项）；**全量跑须前台运行**（需 110–122 秒，后台任务约 2 分钟上限会中途终止，见下方说明）；第 23 轮为 318 passed in 110.47s、rc=0
+- powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test.ps1 -All → **Ruff 干净、Mypy 干净（64 个源文件 0 错误）、536 项收集 / 0 失败、rc=0**（2026-11-06 第 35 轮，`ALL CHECKS PASSED`，耗时 369.0s；退出异常已在测试侧止血，见第 33 轮）。上一轮（第 34 轮）为 467 passed / 0 失败 / rc=0、Mypy 61 个源文件 0 错误
+  - 第 35 轮（P4-04 受限表达式/直方图统计 + GUI 接入）：新增 69 项（表达式语义 32 项、参数契约与后端集成 25 项、GUI 端到端 12 项）；修复 Mypy 9 处类型错误与「只读统计写 .aux.xml」副作用；全量 536 项 / 0 失败 / rc=0（369.0s，pytest 文本 summary 被 `os._exit` 截断，以子进程 rc + 收集数为准，见第 35 轮说明）；第 34 轮（P4-03 元数据/ENVI/概览）：新增 7 项；第 33 轮（退出异常机制定位 + 止血）：诊断与止血，无新增用例；第 32 轮（P4-02 GUI 接入）：新增 19 项（GUI 端到端 13 项 + 能力一致性 6 项）；第 31 轮（worker 生命周期诊断与兜底）：新增 5 项（兜底 4 项 + 握手耗时观测 1 项）；第 30 轮（P4-02 成果完整性与数据语义）：新增 12 项；第 29 轮（P4-02 拼接/VRT/堆叠/波段管理）：新增 14 项；第 28 轮（Rasterio worker 参数契约）：新增 14 项；第 27 轮（能力边界 + 有界预裁剪）：新增 15 项（能力边界与有界裁剪）；第 26 轮（参数一致性修正）：新增 25 项（参数一致性端到端 18 项 + GUI 隔离运行时 3 项 + adapter 模块级隔离 3 项 + 高 DPI 表述订正 1 项）；第 25 轮（P3 验收清单 + P4-01）：新增 30 项（P3 验收缺口 5 项 + P4-01 裁剪重采样 14 项 + P4-01 表单 11 项）；**全量跑须前台运行**（近两轮需 256–369 秒，后台任务约 2 分钟上限会中途终止，见下方说明）；第 23 轮为 318 passed in 110.47s、rc=0
   - 第 23 轮（P3-02 元数据实现边界修正）：新增 10 项元数据边界回归（要素数 force=0、图层类型路由、请求上下文、仿射四角范围）；本轮 pytest 临时根目录使用全新路径（见上方「运行方式的要求」）；第 22 轮为 308 passed in 116.50s、rc=0
   - 第 22 轮（P3-02 矢量与子数据集元数据）：新增 11 项（矢量与子数据集集成 10 项 + stop() 回调死锁回归 1 项）；本轮使用位于本轮工作目录内的独立临时根目录（pytest 的 basetemp 选项），避开环境删除守卫对全局旧临时目录的批量删除拦截；第 21 轮为 297 passed in 105.12s、rc=0
   - 如实记录全量回归历程：

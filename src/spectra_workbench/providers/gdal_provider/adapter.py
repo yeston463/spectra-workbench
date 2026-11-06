@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import contextlib
+import json
 import math
 import time
 from pathlib import Path
@@ -45,6 +46,8 @@ from spectra_workbench.providers.base import (
     ProviderAdapter,
     resolve_dataset_path,
 )
+from spectra_workbench.providers.gdal_provider.calc_ops import run_calc
+from spectra_workbench.providers.gdal_provider.expression_ops import ExpressionError
 from spectra_workbench.providers.gdal_provider.metadata_ops import (
     apply_nodata,
     build_overviews,
@@ -58,6 +61,10 @@ from spectra_workbench.providers.gdal_provider.mosaic_ops import (
     merge_sources,
     set_vrt_source_paths,
     stack_sources,
+)
+from spectra_workbench.providers.gdal_provider.statistics_ops import (
+    compute_statistics,
+    write_statistics_report,
 )
 from spectra_workbench.registry.gdal_index import (
     GDAL_VERSION,
@@ -87,11 +94,16 @@ P402_CAPABILITIES: frozenset[str] = frozenset(
         # --- P4-03（同为列表形式输入；in-place 语义见 INPLACE_CAPABILITIES）---
         "gdal:editmeta",
         "gdal:overview",
+        # --- P4-04（同为列表形式输入；表达式计算输出栅格）---
+        "gdal:calc",
     }
 )
 
 #: P4-03 in-place 能力：直接更新源文件（输出=输入），staging 走「复制-改-提交」。
 INPLACE_CAPABILITIES: frozenset[str] = frozenset({"gdal:editmeta", "gdal:overview"})
+
+#: P4-04 统计报告能力：输出 JSON artifact（不是栅格图层），单输入。
+P404_STATISTICS_CAPABILITY = "gdal:statistics"
 
 
 def _extract_raster_inputs(spec: Any) -> list[Path]:
@@ -231,9 +243,14 @@ class GDALProviderAdapter(ProviderAdapter):
         # --- P4-03：元数据编辑 / 概览构建（in-place）---
         "gdal:editmeta",
         "gdal:overview",
+        # --- P4-04：受限表达式计算 / 直方图与基础统计 ---
+        "gdal:calc",
+        P404_STATISTICS_CAPABILITY,
     }
 
     #: 需要多个输入源的能力（至少 2 个）。
+    #: gdal:calc 允许**恰好 1 个**输入（如 A*2），故不列入此集合，
+    #: 但仍走 inputs["inputs"] 列表形式（见 P402_CAPABILITIES 与 validate 专属分支）。
     MULTI_INPUT_CAPABILITIES = {
         "gdal:buildvrt",
         "gdalbuildvrt",
@@ -293,6 +310,20 @@ class GDALProviderAdapter(ProviderAdapter):
                     if not in_path.exists():
                         errors.append(f"输入文件不存在: {in_path}")
                         code = "input_not_found"
+        elif spec.capability_id == "gdal:calc":
+            # 表达式计算：1..N 个输入（A/B/C…），允许单源表达式（如 A*2）
+            srcs = _extract_raster_inputs(spec)
+            if not srcs:
+                errors.append("能力 gdal:calc 至少需要 1 个输入源")
+                code = "input_not_found"
+            elif len(srcs) > 26:
+                errors.append(f"能力 gdal:calc 最多支持 26 个输入源，实际 {len(srcs)} 个")
+                code = "input_not_found"
+            else:
+                for in_path in srcs:
+                    if not in_path.exists():
+                        errors.append(f"输入文件不存在: {in_path}")
+                        code = "input_not_found"
         elif is_multi:
             # 多输入能力：inputs["inputs"] 为列表（兼容 inputs["input"] 为列表）
             srcs = _extract_raster_inputs(spec)
@@ -326,7 +357,7 @@ class GDALProviderAdapter(ProviderAdapter):
             target_path = resolve_dataset_path(out_plan.uri, spec.project_root)
             if spec.capability_id in INPLACE_CAPABILITIES:
                 pass  # in-place：输出=输入是意图本身，同源检查已在专属分支完成
-            elif is_multi or spec.capability_id == "gdal:bandmanage":
+            elif is_multi or spec.capability_id in ("gdal:bandmanage", "gdal:calc"):
                 for in_p in _extract_raster_inputs(spec):
                     if in_p.resolve() == target_path.resolve():
                         errors.append(f"输入与输出目标指向同一文件: {target_path}")
@@ -480,6 +511,18 @@ class GDALProviderAdapter(ProviderAdapter):
         )
         if p402_result is not None:
             return p402_result
+
+        # P4-04 统计：产出 JSON 报告（artifact），不写栅格、不需要 GDAL 重开校验。
+        if spec.capability_id == P404_STATISTICS_CAPABILITY:
+            return self._execute_p404_statistics(
+                spec,
+                context,
+                norm=norm,
+                in_path=in_path,
+                target_path=target_path,
+                staged_path=staged_path,
+                start_time=start_time,
+            )
 
         is_warp = spec.capability_id in ("gdal:warp", "gdalwarp")
 
@@ -850,6 +893,7 @@ class GDALProviderAdapter(ProviderAdapter):
 
         is_inplace = cid in INPLACE_CAPABILITIES
         inplace_info: dict[str, Any] = {}
+        calc_info: dict[str, Any] = {}
         if is_inplace:
             # in-place 前置校验：输出必须是输入自身；原地改必须显式允许覆盖。
             src = sources[0]
@@ -910,9 +954,9 @@ class GDALProviderAdapter(ProviderAdapter):
         overwrite = out_plan.overwrite
         context.log(
             "INFO",
-            f"P4-02 能力 {cid}：{len(sources)} 个输入源 → {target_path.name}",
+            f"能力 {cid}：{len(sources)} 个输入源 → {target_path.name}",
         )
-        context.progress(0.10, "processing", "执行拼接 / VRT / 堆叠 / 波段管理")
+        context.progress(0.10, "processing", "执行拼接 / VRT / 堆叠 / 波段管理 / 表达式计算")
 
         # 取消/进度回调：长计算阶段必须可取消（此前只在计算结束后检查）
         def _progress_cb(ratio: float, message: str, _data: Any = None) -> int:
@@ -1003,6 +1047,30 @@ class GDALProviderAdapter(ProviderAdapter):
                     out_format=out_format,
                     callback=_progress_cb,
                 )
+            elif cid == "gdal:calc":
+                expression = str(norm.get("calc") or "").strip()
+                if not expression:
+                    raise ValueError(
+                        "gdal:calc 需要 calc 表达式参数（如 '(A-B)/(A+B)'）；"
+                        "仅支持白名单运算符/函数与 A/B/C… 波段名"
+                    )
+                calc_info.update(
+                    run_calc(
+                        staged_path,
+                        sources,
+                        expression=expression,
+                        src_nodata=norm.get("srcNodata"),
+                        dst_nodata=float(norm.get("dstNodata", -9999.0)),
+                        output_type=str(norm.get("outputType", "Float32")),
+                        out_format=out_format,
+                        callback=_progress_cb,
+                    )
+                )
+                context.log(
+                    "INFO",
+                    f"表达式计算完成：输入无效 {calc_info.get('n_input_invalid')} 像元、"
+                    f"数学无效（除零等）{calc_info.get('n_math_invalid')} 像元→输出 NoData",
+                )
             else:  # gdal:bandmanage
                 manage_bands(
                     staged_path,
@@ -1012,6 +1080,16 @@ class GDALProviderAdapter(ProviderAdapter):
                     out_format=out_format,
                     callback=_progress_cb,
                 )
+        except ExpressionError as exc:
+            # 表达式解析/白名单/输出语义错误：与引擎故障区分，便于用户直接改表达式
+            context.log("ERROR", f"表达式被拒绝: {exc}")
+            return TaskResult(
+                task_id=spec.task_id,
+                attempt=spec.attempt,
+                status=TaskStatus.failed,
+                error={"code": "invalid_expression", "message": str(exc)},
+                duration_seconds=round(time.monotonic() - start_time, 4),
+            )
         except Exception as exc:
             context.log("ERROR", f"P4-02 处理失败: {exc}")
             return TaskResult(
@@ -1155,11 +1233,177 @@ class GDALProviderAdapter(ProviderAdapter):
             "height": final_h,
             "bands": final_bands,
         }
+        if calc_info:
+            # 表达式语义证据随成果返回（除零/无效区计数），供验收与日志核对
+            output_record["calc"] = {
+                "expression": calc_info.get("expression"),
+                "band_names": calc_info.get("band_names"),
+                "n_input_invalid": calc_info.get("n_input_invalid"),
+                "n_math_invalid": calc_info.get("n_math_invalid"),
+                "n_output_invalid": calc_info.get("n_output_invalid"),
+                "dst_nodata": calc_info.get("out_nodata"),
+                "dtype": calc_info.get("dtype"),
+            }
         return TaskResult(
             task_id=spec.task_id,
             attempt=spec.attempt,
             status=TaskStatus.succeeded,
             outputs=[output_record],
+            duration_seconds=duration,
+        )
+
+    def _execute_p404_statistics(
+        self,
+        spec: Any,
+        context: Any,
+        *,
+        norm: dict[str, Any],
+        in_path: Path | None,
+        target_path: Path,
+        staged_path: Path,
+        start_time: float,
+    ) -> Any:
+        """P4-04 统计报告分支：写 JSON artifact，事务提交后**读回校验**。
+
+        与栅格能力不同，报告不是数据集，因此不做 GDAL 重开；
+        但同样走 staging → 目标存在性/覆盖检查 → 成套提交 → 最终读回，
+        避免「报成功却没落盘」或「提交了半截文件」。
+        """
+        out_plan = spec.outputs[0]
+        if in_path is None:
+            return TaskResult(
+                task_id=spec.task_id,
+                attempt=spec.attempt,
+                status=TaskStatus.failed,
+                error={"code": "input_not_found", "message": "统计能力缺少输入栅格"},
+                duration_seconds=round(time.monotonic() - start_time, 4),
+            )
+        context.log(
+            "INFO",
+            f"统计模式={norm.get('statisticsMode', 'sampled')}、"
+            f"直方图分箱={norm.get('histogramBins', 256)}、输入={in_path.name}",
+        )
+        context.progress(0.10, "processing", "计算直方图与基础统计")
+        try:
+            report = compute_statistics(
+                in_path,
+                mode=str(norm.get("statisticsMode", "sampled")),
+                bins=int(norm.get("histogramBins", 256)),
+                max_samples=int(norm.get("maxSamples", 1_000_000)),
+                full_limit=int(norm.get("fullLimit", 50_000_000)),
+                band_list=norm.get("bandList"),
+                nodata=norm.get("srcNodata"),
+            )
+        except ValueError as exc:
+            return TaskResult(
+                task_id=spec.task_id,
+                attempt=spec.attempt,
+                status=TaskStatus.failed,
+                error={"code": "invalid_parameters", "message": str(exc)},
+                duration_seconds=round(time.monotonic() - start_time, 4),
+            )
+        except Exception as exc:
+            context.log("ERROR", f"统计计算失败: {exc}")
+            return TaskResult(
+                task_id=spec.task_id,
+                attempt=spec.attempt,
+                status=TaskStatus.failed,
+                error={"code": "p404_statistics_error", "message": str(exc)},
+                duration_seconds=round(time.monotonic() - start_time, 4),
+            )
+
+        if context.is_cancelled.is_set():
+            return TaskResult(
+                task_id=spec.task_id,
+                attempt=spec.attempt,
+                status=TaskStatus.cancelled,
+                error={"code": "task_cancelled", "message": "用户取消任务"},
+                duration_seconds=round(time.monotonic() - start_time, 4),
+            )
+
+        try:
+            write_statistics_report(report, staged_path)
+        except Exception as exc:
+            return TaskResult(
+                task_id=spec.task_id,
+                attempt=spec.attempt,
+                status=TaskStatus.failed,
+                error={"code": "staging_invalid", "message": f"统计报告写入失败: {exc}"},
+                duration_seconds=round(time.monotonic() - start_time, 4),
+            )
+        if not staged_path.exists() or staged_path.stat().st_size == 0:
+            return TaskResult(
+                task_id=spec.task_id,
+                attempt=spec.attempt,
+                status=TaskStatus.failed,
+                error={"code": "staging_invalid", "message": "staging 统计报告缺失或为空"},
+                duration_seconds=round(time.monotonic() - start_time, 4),
+            )
+
+        context.progress(0.92, "committing", "提交统计报告")
+        try:
+            context.commit_files([(staged_path, target_path)], overwrite=out_plan.overwrite)
+        except OutputConflictError as exc:
+            return TaskResult(
+                task_id=spec.task_id,
+                attempt=spec.attempt,
+                status=TaskStatus.failed,
+                error={"code": "output_already_exists", "message": str(exc)},
+                duration_seconds=round(time.monotonic() - start_time, 4),
+            )
+        except Exception as exc:
+            context.log("ERROR", f"统计报告提交失败: {exc}")
+            return TaskResult(
+                task_id=spec.task_id,
+                attempt=spec.attempt,
+                status=TaskStatus.failed,
+                error={"code": "commit_failed", "message": str(exc)},
+                duration_seconds=round(time.monotonic() - start_time, 4),
+            )
+
+        # 最终核验：读回 JSON，确认模式与波段数没有被写坏
+        context.progress(0.97, "verifying_final", "读回统计报告")
+        try:
+            loaded = json.loads(target_path.read_text(encoding="utf-8"))
+            if loaded.get("mode") != report["mode"] or len(loaded.get("bands", [])) != len(
+                report["bands"]
+            ):
+                raise RuntimeError("提交后的报告内容与计算结果不一致")
+        except Exception as exc:
+            return TaskResult(
+                task_id=spec.task_id,
+                attempt=spec.attempt,
+                status=TaskStatus.failed,
+                error={"code": "final_reopen_failed", "message": str(exc)},
+                duration_seconds=round(time.monotonic() - start_time, 4),
+            )
+
+        duration = round(time.monotonic() - start_time, 4)
+        context.progress(1.0, "completed", "统计报告生成完成")
+        context.log(
+            "INFO",
+            f"统计报告已提交: {target_path} "
+            f"(mode={report['mode']}, source={report['source']}, stride={report['stride']}, "
+            f"bands={len(report['bands'])})",
+        )
+        return TaskResult(
+            task_id=spec.task_id,
+            attempt=spec.attempt,
+            status=TaskStatus.succeeded,
+            outputs=[
+                {
+                    "key": out_plan.key,
+                    "uri": target_path.as_uri(),
+                    "driver": "JSON",
+                    "kind": "artifact",
+                    "width": report["width"],
+                    "height": report["height"],
+                    "bands": len(report["bands"]),
+                    "statistics_mode": report["mode"],
+                    "statistics_source": report["source"],
+                    "histogram_bins": report["histogram_bins"],
+                }
+            ],
             duration_seconds=duration,
         )
 
@@ -2046,65 +2290,35 @@ class GDALProviderAdapter(ProviderAdapter):
         max_samples: int = 1_000_000,
         full_limit: int = 50_000_000,
     ) -> dict[str, Any]:
-        """统计。sampled 用步长抽样并明确标注；full 超过像素上限时拒绝而不是偷偷降级。"""
-        import numpy as np
+        """P3 显示拉伸用的按需统计（协议通道）。
 
+        P4-04 起与任务式统计报告共用 ``statistics_ops.compute_statistics``
+        这一份实现（抽样/全量语义、NoData 排除、超上限拒绝保持一致），
+        这里只裁出协议原有的键，避免双份逻辑漂移；
+        同时关闭 GDAL 原生精确统计对照，防止大图预览被全量扫描拖慢。
+        """
         if not GDAL_AVAILABLE or gdal is None:
             raise RuntimeError("GDAL 运行时不可用")
-        in_path = _resolve_raster_input(Path(path))
-        ds = gdal.Open(str(in_path), gdal.GA_ReadOnly)
-        if ds is None:
-            raise RuntimeError(f"无法打开数据集: {in_path}")
-        try:
-            w, h, count = int(ds.RasterXSize), int(ds.RasterYSize), int(ds.RasterCount)
-            total = w * h
-            if mode == "full" and total > full_limit:
-                raise ValueError(
-                    f"全量统计被拒绝：{total} 像素超过上限 {full_limit}；请改用 sampled 或分块统计"
-                )
-            stride = 1
-            if mode == "sampled":
-                stride = max(1, int(math.ceil(math.sqrt(total / max(1, max_samples)))))
-            target = bands or list(range(1, count + 1))
-            out_bands = []
-            for b_idx in target:
-                if b_idx < 1 or b_idx > count:
-                    continue
-                band = ds.GetRasterBand(b_idx)
-                read_w = max(1, (w + stride - 1) // stride)
-                read_h = max(1, (h + stride - 1) // stride)
-                arr = band.ReadAsArray(0, 0, w, h, buf_xsize=read_w, buf_ysize=read_h)
-                if arr is None:
-                    continue
-                arr = arr.astype(np.float64)
-                nd = band.GetNoDataValue()
-                valid = np.isfinite(arr)
-                if nd is not None:
-                    valid &= arr != float(nd)
-                vals = arr[valid]
-                entry = {
-                    "band": b_idx,
-                    "valid_count": int(vals.size),
-                    "total_count": int(arr.size),
-                    "min": float(vals.min()) if vals.size else None,
-                    "max": float(vals.max()) if vals.size else None,
-                    "mean": float(vals.mean()) if vals.size else None,
-                    "std": float(vals.std()) if vals.size else None,
-                    "p2": float(np.percentile(vals, 2)) if vals.size else None,
-                    "p98": float(np.percentile(vals, 98)) if vals.size else None,
-                }
-                out_bands.append(entry)
-            return {
-                "path": str(in_path),
-                "mode": mode,
-                "stride": stride,
-                "source": "full_raster" if (mode == "full" and stride == 1) else "sampled_grid",
-                "width": w,
-                "height": h,
-                "bands": out_bands,
-            }
-        finally:
-            del ds
+        report = compute_statistics(
+            _resolve_raster_input(Path(path)),
+            mode=mode,
+            band_list=bands,
+            max_samples=max_samples,
+            full_limit=full_limit,
+            include_gdal_reference=False,
+        )
+        keys = (
+            "band", "valid_count", "total_count", "min", "max", "mean", "std", "p2", "p98",
+        )
+        return {
+            "path": report["path"],
+            "mode": report["mode"],
+            "stride": report["stride"],
+            "source": report["source"],
+            "width": report["width"],
+            "height": report["height"],
+            "bands": [{k: b[k] for k in keys} for b in report["bands"]],
+        }
 
     def transform_point(
         self, x: float, y: float, src_wkt: str, dst_wkt: str, z: float = 0.0

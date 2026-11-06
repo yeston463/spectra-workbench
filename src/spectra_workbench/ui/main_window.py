@@ -1474,8 +1474,14 @@ class MainWindow(QMainWindow):
     def load_result_to_layer(self, result: TaskResult) -> None:
         if not result.outputs:
             return
-        uri = result.outputs[0].get("uri", "")
+        first = result.outputs[0]
+        uri = first.get("uri", "")
         if not uri:
+            return
+        # P4-04：JSON 统计报告等非栅格成果不进图层树（尝试打开只会报错），
+        # 明确告知落盘位置，用户可在任务面板/资源管理器里查看。
+        if first.get("kind") == "artifact" or first.get("driver") == "JSON":
+            self.status_bar.showMessage(f"报告已生成（非栅格图层）：{_uri_to_path(uri)}")
             return
         self.open_dataset(_uri_to_path(uri))
         self.tab_left.setCurrentIndex(0)

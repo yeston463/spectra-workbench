@@ -129,13 +129,15 @@ def _source_spec(doc_path: str) -> CapabilitySource:
 
 
 def build_gdal_algorithms() -> list[CapabilityDescriptor]:
-    """GDAL 结构化算法清单（22 项）。
+    """GDAL 结构化算法清单（23 项）。
 
     其中前 18 项是 GDAL **原生独立工具/算法**；
-    `gdal:stack` 与 `gdal:bandmanage` 是**平台基于原生 API 的组合实现**
-    （分别由 `BuildVRT(separate=True)` 与 `Translate(bandList=...)` 组合而来），
-    并非 GDAL 的独立命令行工具。两者性质不同，此处在清单中并列但语义已标注，
-    以免基线对账时把「平台组合能力」误当作原生算法。
+    `gdal:stack`、`gdal:bandmanage`、`gdal:statistics` 是**平台基于原生 API
+    的组合实现**（分别由 `BuildVRT(separate=True)`、`Translate(bandList=...)`
+    与 numpy 统计/GDAL 原生统计对照组合而来）；`gdal:calc` 是**平台受限 AST
+    求值器**（不调用上游 `gdal_calc.py` 的 eval 语义）。这些能力与原生工具性质
+    不同，此处在清单中并列但语义已标注，以免基线对账时把「平台组合能力」
+    误当作原生算法。
     """
     return [
         CapabilityDescriptor(
@@ -722,28 +724,36 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
         ),
         CapabilityDescriptor(
             capability_id="gdal:calc",
-            descriptor_revision="1.0",
+            descriptor_revision="1.1",
             kind=CapabilityKind.algorithm,
-            name="GDAL 栅格代数计算器 (gdal_calc)",
-            native_name="gdal_calc.py",
+            name="栅格表达式计算器 (受限 AST)",
+            native_name="gdal_calc.py / 平台受限求值器",
             category=["calc", "algebra", "raster"],
-            description="利用 NumPy 数组表达式对多幅影像进行像素级代数计算（如波段比值、NDVI、阈值分割）。",
+            description=(
+                "对 1..26 幅影像按 A/B/C… 顺序做像元级代数计算。"
+                "平台不用 eval：表达式经 AST 白名单解析后由 numpy 求值，"
+                "统一 float32 提升防整数回绕，除零等数学无效像元计入输出 NoData。"
+            ),
             engine=_engine_spec(),
             source=_source_spec("programs/gdal_calc.html"),
             parameters=[
-                ParameterSpec(key="calc", native_name="calc", label="NumPy 代数运算表达式", type="expression", required=True, help="例如: (A.astype(float)-B)/(A+B)"),
-                ParameterSpec(key="NoDataValue", native_name="NoDataValue", label="输出 NoData 替代值", type="number", required=False),
+                ParameterSpec(key="calc", native_name="calc", label="受限表达式", type="expression", required=True, help="例如: (A-B)/(A+B)；支持 + - * / // % ** 与 abs/min/max/sqrt/exp/log/log10"),
+                ParameterSpec(key="srcNodata", native_name="srcNodata", label="输入 NoData（留空取各源标签）", type="number", required=False),
+                ParameterSpec(key="dstNodata", native_name="dstNodata", label="输出 NoData（默认 -9999）", type="number", required=False),
+                ParameterSpec(key="outputType", native_name="outputType", label="输出数据类型", type="string", required=False, default="Float32"),
             ],
             inputs=[
-                PortSpec(key="input_a", data_type=DatasetKind.raster, required=True, description="波段/栅格 A"),
-                PortSpec(key="input_b", data_type=DatasetKind.raster, required=False, description="波段/栅格 B"),
+                PortSpec(key="inputs", data_type=DatasetKind.raster, required=True, multiple=True, description="按顺序对应 A/B/C… 的输入栅格列表（允许 1 个）"),
             ],
-            outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="代数运算成果图")],
+            outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="单波段表达式成果图")],
             requirements=[
-                Requirement(kind="package", name="GDAL", reason="需 gdal_calc 脚本"),
+                Requirement(kind="package", name="GDAL", reason="需 GDAL 读写栅格"),
                 Requirement(kind="package", name="numpy", reason="需 numpy 向量计算库"),
             ],
-            entrypoints=[Entrypoint(kind="cli", target="gdal_calc.exe", available=True)],
+            entrypoints=[
+                Entrypoint(kind="form", target="gdal:calc", available=True, notes="平台适配器已接入（P4-04）"),
+                Entrypoint(kind="cli", target="gdal_calc.exe", available=True),
+            ],
             state=CapabilityState(
                 presence=Presence.present,
                 binding=Binding.cli,
@@ -751,8 +761,60 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
                 availability=Availability.ready,
             ),
             effects="new_dataset",
-            cancellation="process_termination",
-            limitations=[],
+            cancellation="cooperative",
+            limitations=[
+                "安全边界：AST 白名单，不接受属性访问/下标/lambda/任意调用，不执行用户代码",
+                "每个输入只取第 1 波段；多波段源请先用波段管理抽取",
+                "输入尺寸/仿射/投影不一致时明确拒绝，不做静默重采样",
+                "整型输出若结果越界或含小数会被拒绝（防二次回绕与静默截断）",
+            ],
+            validation_evidence=[],
+        ),
+        CapabilityDescriptor(
+            capability_id="gdal:statistics",
+            descriptor_revision="1.0",
+            kind=CapabilityKind.algorithm,
+            name="直方图与基础统计报告",
+            native_name="gdal.Band.ComputeStatistics / GetHistogram",
+            category=["statistics", "histogram", "raster"],
+            description=(
+                "按 sampled（步长网格，明确标注估计）或 full（全量）模式统计各波段，"
+                "排除 NoData/NaN/Inf，输出含直方图与 GDAL 原生近似/精确对照的 JSON 报告。"
+            ),
+            engine=_engine_spec(),
+            source=_source_spec("programs/gdalinfo.html"),
+            parameters=[
+                ParameterSpec(key="statisticsMode", native_name="mode", label="统计模式", type="string", required=False, default="sampled", choices=["sampled", "full"]),
+                ParameterSpec(key="histogramBins", native_name="bins", label="直方图分箱数", type="integer", required=False, default=256),
+                ParameterSpec(key="maxSamples", native_name="max_samples", label="抽样预算（像元）", type="integer", required=False, default=1000000),
+                ParameterSpec(key="fullLimit", native_name="full_limit", label="全量模式像元上限", type="integer", required=False, default=50000000),
+                ParameterSpec(key="bandList", native_name="bandList", label="统计波段（1-based，留空=全部）", type="list", required=False),
+                ParameterSpec(key="srcNodata", native_name="srcNodata", label="NoData 覆盖值（留空取波段标签）", type="number", required=False),
+            ],
+            inputs=[PortSpec(key="input", data_type=DatasetKind.raster, required=True, multiple=False, description="待统计的栅格")],
+            outputs=[PortSpec(key="output", data_type=DatasetKind.artifact, required=True, description="JSON 统计报告（不加载为栅格图层）")],
+            requirements=[
+                Requirement(kind="package", name="GDAL", reason="需 GDAL 读取波段与原生统计"),
+                Requirement(kind="package", name="numpy", reason="需 numpy 计算分位数与直方图"),
+            ],
+            entrypoints=[
+                Entrypoint(kind="form", target="gdal:statistics", available=True, notes="平台适配器已接入（P4-04）"),
+                Entrypoint(kind="cli", target="gdalinfo.exe -stats", available=True),
+            ],
+            state=CapabilityState(
+                presence=Presence.present,
+                binding=Binding.cli,
+                validation=Validation.not_run,
+                availability=Availability.ready,
+            ),
+            effects="new_dataset",
+            cancellation="cooperative",
+            limitations=[
+                "full 模式超过 fullLimit 时明确拒绝，不静默降级为抽样",
+                "报告为 JSON artifact，不作为栅格图层加载到地图视图",
+                "为避免写 .aux.xml 副作用，原生统计对照期间临时禁用 PAM",
+                "超 2000 万像元时跳过 GDAL 原生精确统计对照并在报告中注明",
+            ],
             validation_evidence=[],
         ),
         CapabilityDescriptor(
