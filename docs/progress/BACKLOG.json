@@ -570,9 +570,17 @@
         "P4-04",
         "P2-05"
       ],
-      "status": "todo",
+      "status": "implemented",
       "release_requirement": "core",
-      "evidence": [],
+      "evidence": [
+        "逐环只读盘点：打开/选择工具/配置/执行/加载/保存项目/重开已有真实实现（工具箱 select_capability → 表单 → sig_task_submitted → QtWorkerClient → worker → _on_res → load_result_to_layer；.spectra.json 原子保存与 open_project 恢复图层/视图/布局）；取消已有面板按钮到 worker 协作取消的精简链路但 GUI 不走 TaskScheduler（无 cancelling 中间态/超时强杀/attempt 历史）；**重试与导出两环在桌面路径完全缺失**：无按钮/信号/API，表单每次生成新 task_id 且 attempt=1 恒定，主窗口无任何 export 动作（仅有 CLI --screenshot 与语义不同的算法成果另存）。",
+        "重试：ui/panels/task_panel.py 新增 sig_retry_requested 与「重试任务」按钮（仅终态非 succeeded / 提交出错时启用，运行时与成功后禁用，显示 attempt）；MainWindow 保存 _last_task_spec，_on_retry_task() 用 TaskSpec.next_attempt() 重发同一 task_id、attempt+1，不改 overwrite/输出路径等用户已确认语义，有活跃任务或 task_id 不匹配时明确拒绝；新增「任务」菜单（取消/重试，Ctrl+R）。未把未接入 GUI 的 TaskScheduler 自动重试能力冒充为桌面功能。",
+        "导出通道 A（所见即所得）：ImageCanvas.capture_view_image() 用 QGraphicsScene.render 导出绘图区（2× 超采样，不依赖窗口句柄/可见状态）；export_view_image() 写 PNG/JPEG + 同名 .json sidecar（视图状态、图层、显示参数、图层清单、导出时间、rendered、contains_georeference=false），明确标注截图不含地理参考；后缀不合法或无图层时拒绝。",
+        "导出通道 B（带坐标的数据）：export_layer_raster() 复用 gdal:translate 的参数契约、表单校验与真实 worker（按后缀选 GTiff/ENVI/PNG/JPEG），登记为 export 任务，成果只落盘、不加入图层树；目标等于当前数据源或任一已加载图层路径时一律拒绝，避免带 overwrite 的提交破坏正在使用的数据。submit_task 的 _cleanup() 改为幂等，消除重复 disconnect 的 PySide6 RuntimeWarning。",
+        "端到端验收 tests/integration/test_p4_full_user_flow.py（3 项）主流程：真实 MainWindow + 真实 GDAL worker + 真实栅格，串起打开（等探测与画布渲染）→ 工具箱树选中 gdal:translate（输入自动填入）→ 表单配置 → 提交 → GDAL 独立重开成果 → 成果自动进图层树 → 视图截图（QImage 可开、rendered=true、sidecar 字段齐全）→ 数据导出（GTiff 保留 CRS、图层数不变、同源/占用路径被拒）→ 保存 .spectra.json（2 图层）→ 新窗口重开按 layer_id 对账、无缺失源，且重开后再次导出仍产出可重开成果。",
+        "端到端验收取消/重试：用可控时长的 dummy 慢任务（面板按钮、信号、QtWorkerClient、worker 子进程与取消令牌均为真实链路），真实点击「取消任务」得到 cancelled（error.code=task_cancelled、attempt=1），再真实点击「重试任务」得到同一 task_id、attempt=2、succeeded 且参数不变；真实 GDAL 计算中取消由既有 test_scheduler_lifecycle.py 覆盖，不重复冒充。边界用例验证四个菜单动作接线、无任务时取消/重试明确提示、无图层时两条导出通道拒绝且不写空文件。诊断确认 sig_error 混入的 probe_vector_failed 来自 P3-02 元数据面板对栅格无条件发起的矢量探测（全客户端广播），属既有日志噪声而非本轮回归，测试仅过滤查询类错误码、未改产品行为。",
+        "验证：scripts/test.ps1 -All → Ruff / Mypy / Pytest 三项 ALL CHECKS PASSED；python -m mypy 64 个源文件 0 错误；pytest --collect-only -q = 539 tests collected，work/test_runs/test_all.log 记录子进程 rc=0、耗时 245.9s、无 FAILED/ERROR（os._exit 止血截断末行文本 summary，以 rc + 收集数 + 无失败标记为准，不伪写 539 passed；日志末尾仍有 QThreadStorage 警告）。状态边界：P4-05 为 implemented 而非 done，P4 五项至此全部 implemented，但里程碑整体验收、课程原始数据真实打开、物理高 DPI、worker 握手时序与产品侧 0xC0000409 根治仍未闭环。"
+      ],
       "blocking_reason": null
     },
     {

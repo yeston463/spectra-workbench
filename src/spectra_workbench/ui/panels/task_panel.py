@@ -1,4 +1,4 @@
-"""任务进度、日志监控与取消面板（P1-04 / P3-01）。
+"""任务进度、日志监控、取消与重试面板（P1-04 / P3-01 / P4-05）。
 
 特性：
 1. 任务生命周期追踪与动态状态徽标（等待、运行中、已完成、失败、已取消）。
@@ -6,6 +6,7 @@
 3. 实时多级别彩色日志流监控。
 4. 协作取消操作触发。
 5. 任务成果快速加载按钮触发。
+6. 终态为失败/取消/中断时允许重试同一任务（由主窗口按 next_attempt 重新提交）。
 """
 
 from __future__ import annotations
@@ -33,6 +34,7 @@ class TaskPanel(QWidget):
     """任务监控面板。"""
 
     sig_cancel_requested = Signal(str)  # task_id
+    sig_retry_requested = Signal(str)  # task_id
     sig_load_result_requested = Signal(object)  # TaskResult
 
     def __init__(self, parent: QWidget | None = None) -> None:
@@ -63,6 +65,17 @@ class TaskPanel(QWidget):
         self.btn_cancel.setEnabled(False)
         self.btn_cancel.clicked.connect(self._on_cancel_clicked)
         top_row.addWidget(self.btn_cancel)
+
+        self.btn_retry = QPushButton("🔁 重试任务")
+        self.btn_retry.setStyleSheet(
+            "QPushButton { background-color: #8e44ad; color: white; font-weight: bold; padding: 4px 10px; border-radius: 3px; }"
+            "QPushButton:hover { background-color: #9b59b6; }"
+            "QPushButton:disabled { background-color: #bdc3c7; color: #7f8c8d; }"
+        )
+        self.btn_retry.setEnabled(False)
+        self.btn_retry.setToolTip("以同一 task_id、attempt+1 重新提交上一次任务")
+        self.btn_retry.clicked.connect(self._on_retry_clicked)
+        top_row.addWidget(self.btn_retry)
 
         self.btn_load_result = QPushButton("📂 加载成果图层")
         self.btn_load_result.setStyleSheet(
@@ -99,17 +112,29 @@ class TaskPanel(QWidget):
         )
         layout.addWidget(self.txt_logs, stretch=1)
 
+    @property
+    def current_task_id(self) -> str | None:
+        return self._current_task_id
+
     def on_task_started(self, spec: TaskSpec) -> None:
         """任务开始执行初始化。"""
         self._current_task_id = spec.task_id
         self._last_result = None
-        self.lbl_task_info.setText(f"执行中: {spec.capability_id} [{spec.task_id}]")
+        attempt_hint = f" 第 {spec.attempt} 次尝试" if spec.attempt > 1 else ""
+        self.lbl_task_info.setText(
+            f"执行中: {spec.capability_id} [{spec.task_id}]{attempt_hint}"
+        )
         self.progress_bar.setValue(0)
         self.progress_bar.setFormat("准备中 (0%)...")
         self.btn_cancel.setEnabled(True)
+        self.btn_retry.setEnabled(False)
         self.btn_load_result.setEnabled(False)
 
-        self.append_log("INFO", f"任务已提交: {spec.capability_id} (ID: {spec.task_id})", "scheduler")
+        self.append_log(
+            "INFO",
+            f"任务已提交: {spec.capability_id} (ID: {spec.task_id}, attempt={spec.attempt})",
+            "scheduler",
+        )
 
     def on_progress(self, ratio: float, phase: str, message: str) -> None:
         """接收进度更新。"""
@@ -130,6 +155,8 @@ class TaskPanel(QWidget):
         """任务终态回调。"""
         self._last_result = result
         self.btn_cancel.setEnabled(False)
+        # 终态失败 / 取消 / 中断可由用户主动重试；成功任务不需要重试。
+        self.btn_retry.setEnabled(result.status.value != "succeeded")
 
         status_val = result.status.value
         dur = result.duration_seconds
@@ -166,6 +193,7 @@ class TaskPanel(QWidget):
     def on_task_error(self, code: str, message: str) -> None:
         """任务提交或通信错误。"""
         self.btn_cancel.setEnabled(False)
+        self.btn_retry.setEnabled(self._current_task_id is not None)
         self.lbl_task_info.setText(f"❌ 错误: {code}")
         self.append_log("ERROR", f"[{code}] {message}", "scheduler")
 
@@ -198,6 +226,15 @@ class TaskPanel(QWidget):
             self.btn_cancel.setEnabled(False)
             self.append_log("WARNING", f"正在请求协作取消任务: {self._current_task_id}...", "scheduler")
             self.sig_cancel_requested.emit(self._current_task_id)
+
+    def _on_retry_clicked(self) -> None:
+        if not self._current_task_id:
+            return
+        self.btn_retry.setEnabled(False)
+        self.append_log(
+            "WARNING", f"正在请求重试任务: {self._current_task_id}...", "scheduler"
+        )
+        self.sig_retry_requested.emit(self._current_task_id)
 
     def _on_load_result_clicked(self) -> None:
         if self._last_result:

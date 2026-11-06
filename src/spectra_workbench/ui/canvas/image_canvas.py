@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any
 
 import pyqtgraph as pg
 from PySide6.QtCore import QRectF, Qt, QTimer, Signal
+from PySide6.QtGui import QColor, QImage, QPainter
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -287,6 +288,33 @@ class ImageCanvas(QWidget):
             "scale": (span_x / base) if base else 1.0,
             "view_crs_wkt": self.view_crs_wkt,
         }
+
+    def capture_view_image(self, scale_factor: float = 2.0) -> QImage:
+        """把当前绘图区的真实渲染结果（影像 + 网格 + ROI）导出为 QImage。
+
+        用 ``QGraphicsScene.render`` 而不是 ``QWidget.grab``：后者依赖原生窗口句柄与
+        可见状态，在离屏或未显示时可能得到空白图；场景渲染不依赖这些，且可超采样。
+        产物是**屏幕渲染截图**，不含地理参考；需要带坐标的数据请走栅格导出通道。
+        """
+        scene = self.plot_item.scene()
+        if scene is None:
+            raise RuntimeError("画布场景尚未初始化，无法导出视图")
+        rect = QRectF(self.plot_item.getViewBox().sceneBoundingRect())
+        if rect.width() < 2 or rect.height() < 2:
+            size = self.gl_widget.size()
+            rect = QRectF(0, 0, max(1, size.width()), max(1, size.height()))
+        factor = max(1.0, float(scale_factor))
+        width = max(1, int(round(rect.width() * factor)))
+        height = max(1, int(round(rect.height() * factor)))
+        image = QImage(width, height, QImage.Format.Format_ARGB32)
+        image.fill(QColor("#ffffff"))
+        painter = QPainter(image)
+        try:
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+            scene.render(painter, QRectF(0, 0, width, height), rect)
+        finally:
+            painter.end()
+        return image
 
     def apply_view_state(self, state: dict[str, Any]) -> None:
         """联动：套用另一视图的中心与比例；_sync_guard 防止信号回环。"""

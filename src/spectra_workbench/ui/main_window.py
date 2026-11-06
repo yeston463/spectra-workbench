@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import base64
 import contextlib
+import datetime
+import json
 from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
@@ -248,6 +250,10 @@ class MainWindow(QMainWindow):
         self._clients: dict[str, QtWorkerClient] = {}
         self._active_task_client: QtWorkerClient | None = None
         self._task_subscriptions: dict[str, Callable[[], None]] = {}
+        # P4-05：保留最近一次提交的 TaskSpec，重试时按 next_attempt() 重发同一 task_id。
+        self._last_task_spec: TaskSpec | None = None
+        # 导出任务不自动加入图层树（导出不应改变当前工作流）。
+        self._export_task_ids: set[str] = set()
         self._cache = TileCache(budget_bytes=cache_budget_bytes) if cache_budget_bytes else TileCache()
         self.project_path: Path | None = None
         self.missing_sources: list[MissingSource] = []
@@ -406,9 +412,28 @@ class MainWindow(QMainWindow):
         m_file.addAction(self.act_relink)
         m_file.addSeparator()
 
+        # P4-05 导出：视图截图（所见即所得）与带地理参考的数据集另存，两条独立通道。
+        self.act_export_view = QAction("导出当前视图为图片… (&E)", self)
+        self.act_export_view.triggered.connect(self.export_view_dialog)
+        m_file.addAction(self.act_export_view)
+
+        self.act_export_layer = QAction("导出当前图层为栅格… (&G)", self)
+        self.act_export_layer.triggered.connect(self.export_layer_dialog)
+        m_file.addAction(self.act_export_layer)
+        m_file.addSeparator()
+
         act_exit = QAction("退出 (&X)", self)
         act_exit.triggered.connect(self.close)
         m_file.addAction(act_exit)
+
+        m_task = mb.addMenu("任务 (&T)")
+        self.act_cancel_task = QAction("取消当前任务 (&C)", self)
+        self.act_cancel_task.triggered.connect(lambda: self._on_cancel_task())
+        m_task.addAction(self.act_cancel_task)
+        self.act_retry_task = QAction("重试上次任务 (&R)", self)
+        self.act_retry_task.setShortcut(QKeySequence("Ctrl+R"))
+        self.act_retry_task.triggered.connect(lambda: self._on_retry_task())
+        m_task.addAction(self.act_retry_task)
 
         m_view = mb.addMenu("视图 (&V)")
         act_fit = QAction("适应全图", self)
@@ -478,6 +503,7 @@ class MainWindow(QMainWindow):
 
         self.form_widget.sig_task_submitted.connect(self.submit_task)
         self.task_panel.sig_cancel_requested.connect(self._on_cancel_task)
+        self.task_panel.sig_retry_requested.connect(self._on_retry_task)
         self.task_panel.sig_load_result_requested.connect(self.load_result_to_layer)
 
         # 悬停查询（P3-05）
@@ -1409,6 +1435,7 @@ class MainWindow(QMainWindow):
         is_rasterio = "rasterio" in spec.capability_id or "rio" in spec.capability_id
         client = self.rasterio_client if is_rasterio else self.gdal_client
         self._active_task_client = client
+        self._last_task_spec = spec
         task_id = spec.task_id
 
         old_cleanup = self._task_subscriptions.pop(task_id, None)
@@ -1418,7 +1445,15 @@ class MainWindow(QMainWindow):
         self.task_panel.on_task_started(spec)
         self.status_bar.showMessage(f"正在执行任务: {spec.capability_id} [{task_id}]…")
 
+        cleaned = False
+
         def _cleanup() -> None:
+            # 幂等：结果回调、重试前的 old_cleanup、关窗清理可能指向同一组闭包，
+            # 重复 disconnect 会让 PySide6 抛 RuntimeWarning。
+            nonlocal cleaned
+            if cleaned:
+                return
+            cleaned = True
             for sig, slot in (
                 (client.sig_progress, _on_prog),
                 (client.sig_log, _on_log),
@@ -1441,6 +1476,8 @@ class MainWindow(QMainWindow):
             _cleanup()
             self.task_panel.on_task_completed(result)
             self._active_task_client = None
+            is_export = task_id in self._export_task_ids
+            self._export_task_ids.discard(task_id)
             if result.status.value == "succeeded":
                 self.status_bar.showMessage(f"任务成功: {result.task_id}")
                 # 输出变化 -> 失效相关缓存
@@ -1448,7 +1485,14 @@ class MainWindow(QMainWindow):
                     uri = out.get("uri", "")
                     if uri:
                         self._cache.invalidate_source(_uri_to_path(uri))
-                self.load_result_to_layer(result)
+                if is_export:
+                    # 导出只落盘，不改写当前图层树与视图。
+                    target = result.outputs[0].get("uri", "") if result.outputs else ""
+                    self.status_bar.showMessage(
+                        f"导出完成：{_uri_to_path(target) if target else result.task_id}"
+                    )
+                else:
+                    self.load_result_to_layer(result)
             elif result.status.value == "cancelled":
                 self.status_bar.showMessage(f"任务已取消: {result.task_id}")
             else:
@@ -1467,9 +1511,39 @@ class MainWindow(QMainWindow):
         client.sig_error.connect(_on_err)
         client.submit_task_async(spec)
 
-    def _on_cancel_task(self, task_id: str) -> None:
+    def _on_cancel_task(self, task_id: str | None = None) -> None:
+        tid = task_id or (self._last_task_spec.task_id if self._last_task_spec else None)
+        if self._active_task_client is None or not tid:
+            self.status_bar.showMessage("当前没有可取消的任务")
+            return
+        self._active_task_client.cancel_task(tid)
+
+    def _on_retry_task(self, task_id: str | None = None) -> None:
+        """用户主动重试：同一 task_id、attempt+1、原 TaskSpec 其余字段不变。
+
+        不新建 task_id，也不改 overwrite / 输出路径等用户已确认的语义；
+        底层 ``TaskSpec.next_attempt()`` 是唯一来源，避免 GUI 自己拼装重试契约。
+        """
+        spec = self._last_task_spec
+        if spec is None:
+            self.status_bar.showMessage("没有可重试的任务")
+            return
+        if task_id and task_id != spec.task_id:
+            self.status_bar.showMessage(f"任务 {task_id} 不是最近一次提交的任务，拒绝重试")
+            return
         if self._active_task_client is not None:
-            self._active_task_client.cancel_task(task_id)
+            self.status_bar.showMessage("任务仍在执行，请先取消或等待完成")
+            return
+        next_spec = spec.next_attempt()
+        self.task_panel.append_log(
+            "WARNING",
+            f"重试任务 {spec.task_id}：attempt {spec.attempt} → {next_spec.attempt}（同一 task_id）",
+            "scheduler",
+        )
+        self.status_bar.showMessage(
+            f"重试任务 {spec.task_id}：第 {next_spec.attempt} 次尝试"
+        )
+        self.submit_task(next_spec)
 
     def load_result_to_layer(self, result: TaskResult) -> None:
         if not result.outputs:
@@ -1485,6 +1559,146 @@ class MainWindow(QMainWindow):
             return
         self.open_dataset(_uri_to_path(uri))
         self.tab_left.setCurrentIndex(0)
+
+    # ------------------------------------------------------- 导出（P4-05）
+    def export_view_dialog(self) -> None:
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "导出当前视图为图片",
+            str(self.project_dir / "view_capture.png"),
+            "PNG 图片 (*.png);;JPEG 图片 (*.jpg *.jpeg)",
+        )
+        if path:
+            self.export_view_image(path)
+
+    def export_view_image(self, path: Path | str | None = None) -> Path | None:
+        """导出当前视图的屏幕渲染结果，并写一份可复现的视图元数据 sidecar。
+
+        图片本身**不含地理参考**（它是显示变换后的 RGBA 截图）；需要带坐标的
+        数据请用 :meth:`export_layer_raster`。两条通道在元数据里明确区分。
+        """
+        if path is None:
+            self.export_view_dialog()
+            return None
+        layer = self.canvas.current_layer or self._selected_layer()
+        if layer is None:
+            self._notify(QMessageBox.Icon.Warning, "无法导出视图", "当前没有已加载的图层。")
+            return None
+        target = Path(path).resolve()
+        if target.suffix.lower() not in {".png", ".jpg", ".jpeg"}:
+            self._notify(
+                QMessageBox.Icon.Warning, "无法导出视图", "视图图片只支持 .png / .jpg / .jpeg。"
+            )
+            return None
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            image = self.canvas.capture_view_image()
+            if not image.save(str(target)):
+                raise OSError(f"图片写入失败：{target}")
+        except Exception as exc:
+            self._notify(QMessageBox.Icon.Critical, "导出失败", f"视图无法导出：{exc}")
+            return None
+
+        metadata_snapshot = layer.metadata if isinstance(layer.metadata, dict) else {}
+        meta = {
+            "type": "spectra_view_capture",
+            "schema_version": "1.0",
+            "image": target.name,
+            "exported_at": datetime.datetime.now(datetime.UTC).isoformat(),
+            "contains_georeference": False,
+            "note": "屏幕渲染截图，不含地理参考；像元值与坐标请导出栅格数据集。",
+            "image_size": [image.width(), image.height()],
+            "supersampling": 2.0,
+            "rendered": getattr(self.canvas.img_item, "image", None) is not None,
+            "view": self.canvas.view_state(),
+            "layer": {
+                "name": layer.name,
+                "source": str(layer.file_path),
+                "width": metadata_snapshot.get("width"),
+                "height": metadata_snapshot.get("height"),
+                "band_count": getattr(layer, "band_count", None),
+                "display": layer.display.to_dict(),
+            },
+            "layer_names": [ly.name for ly in self.layer_panel.layers],
+        }
+        sidecar = target.with_name(target.name + ".json")
+        sidecar.write_text(
+            json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        self.status_bar.showMessage(f"视图已导出：{target}（元数据：{sidecar.name}）")
+        return target
+
+    def export_layer_dialog(self) -> None:
+        path, selected = QFileDialog.getSaveFileName(
+            self,
+            "导出当前图层为栅格",
+            str(self.project_dir / "export.tif"),
+            "GeoTIFF (*.tif *.tiff);;ENVI (*.dat);;PNG (*.png);;JPEG (*.jpg *.jpeg)",
+        )
+        if not path:
+            return
+        preferred = "COG" if "云优化" in selected else None
+        self.export_layer_raster(path, driver=_export_driver(Path(path), preferred))
+
+    def export_layer_raster(
+        self, path: Path | str, driver: str | None = None
+    ) -> bool:
+        """把当前图层另存为带地理参考的数据集，走与工具箱相同的真实 worker 通道。
+
+        复用 ``gdal:translate`` 的参数契约与校验，不另造一套导出执行链路；
+        成果只落盘、不自动加入图层树（提交前登记为 export 任务）。
+        """
+        layer = self._selected_layer() or self.canvas.current_layer
+        if layer is None:
+            self._notify(QMessageBox.Icon.Warning, "无法导出栅格", "当前没有选中的图层。")
+            return False
+        target = Path(path).resolve()
+        source = Path(layer.file_path).resolve()
+        # 目标若指向任一已加载图层（含本图层自身），带 overwrite 的提交会改写
+        # 正在使用的数据源，必须明确拒绝，而不是等 GDAL 报错或静默覆盖。
+        occupied = {ly.file_path for ly in self.layer_panel.layers}
+        if target == source or target in occupied:
+            used = "当前图层的数据源" if target == source else "其他已加载图层的数据源"
+            self._notify(
+                QMessageBox.Icon.Critical,
+                "同源冲突",
+                f"导出路径指向{used}，覆盖将破坏现有图层，操作已拒绝。",
+            )
+            return False
+        fmt = driver or _export_driver(target)
+        from spectra_workbench.registry.catalog import get_default_registry
+
+        cap = get_default_registry().get("gdal:translate")
+        if cap is None:
+            self._notify(QMessageBox.Icon.Critical, "无法导出栅格", "注册表缺少 gdal:translate。")
+            return False
+
+        form = self.form_widget
+        form.load_capability(cap)
+        form.set_input_path(source)
+        form.txt_output.setText(str(target))
+        idx = form.cmb_format.findText(fmt, Qt.MatchFlag.MatchStartsWith)
+        form.cmb_format.setCurrentIndex(idx if idx >= 0 else 0)
+        form.chk_overwrite.setChecked(True)
+
+        captured: list[TaskSpec] = []
+
+        def _mark_export(spec: TaskSpec) -> None:
+            captured.append(spec)
+            self._export_task_ids.add(spec.task_id)
+
+        form.sig_task_submitted.connect(_mark_export)
+        try:
+            form._on_submit_clicked()
+        finally:
+            with contextlib.suppress(RuntimeError, TypeError):
+                form.sig_task_submitted.disconnect(_mark_export)
+        if not captured:
+            # 表单校验拒绝了导出（输入缺失 / 参数非法等），不要留下悬挂的 export 标记。
+            self.status_bar.showMessage("导出未提交：表单校验未通过")
+            return False
+        self.status_bar.showMessage(f"正在导出栅格：{target}")
+        return True
 
     # ------------------------------------------------------------------ 其它
     def _on_capability_selected(self, cap: Any) -> None:
@@ -1526,3 +1740,16 @@ def _uri_to_path(uri: str) -> str:
     if uri.startswith("file:"):
         return str(Path(url2pathname(urlparse(uri).path)).resolve())
     return str(Path(uri).resolve())
+
+
+def _export_driver(path: Path, preferred: str | None = None) -> str:
+    if preferred:
+        return preferred
+    return {
+        ".dat": "ENVI",
+        ".png": "PNG",
+        ".jpg": "JPEG",
+        ".jpeg": "JPEG",
+        ".tif": "GTiff",
+        ".tiff": "GTiff",
+    }.get(path.suffix.lower(), "GTiff")
