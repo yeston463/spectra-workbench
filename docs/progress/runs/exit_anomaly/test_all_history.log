@@ -1200,3 +1200,33 @@ FAILED tests/unit/test_capabilities_baseline.py::test_provider_adapters_discover
 460 passed in 196.13s (0:03:16)
 
 === child exited rc=3221226505 elapsed=203.0s ===
+
+=== run_with_timeout start 2026-11-06T08:16:27.811955 timeout=1200.0s cmd=C:\Users\赵航\Desktop\studio\spectra-workbench\.venv\Scripts\python.exe -m pytest -q -o faulthandler_timeout=60 ===
+........................................................................ [ 15%]
+........................................................................ [ 31%]
+........................................................................ [ 46%]
+........................................................................ [ 62%]
+........................................................................ [ 78%]
+........................................................................ [ 93%]
+............................                                             [100%]
+460 passed in 239.75s (0:03:59)
+[skip-finalization] os._exit 绕过 Python 最终化
+QThreadStorage: entry 1 destroyed before end of thread 0x2e0985a8ec0
+QThreadStorage: entry 0 destroyed before end of thread 0x2e0985a8ec0
+
+=== child exited rc=0 elapsed=240.3s ===
+
+=== run_with_timeout start 2026-11-06T08:21:55.141720 timeout=1200.0s cmd=C:\Users\赵航\Desktop\studio\spectra-workbench\.venv\Scripts\python.exe -m pytest -q -o faulthandler_timeout=60 ===
+........................................................................ [ 15%]
+........................................................................ [ 31%]
+........................................................................ [ 46%]
+........................................................................ [ 62%]
+........................................................................ [ 78%]
+........................................................................ [ 93%]
+............................                                             [100%]
+460 passed in 213.71s (0:03:33)
+[skip-finalization] os._exit(0) 绕过 Python 最终化
+QThreadStorage: entry 1 destroyed before end of thread 0x2432b22b8a0
+QThreadStorage: entry 0 destroyed before end of thread 0x2432b22b8a0
+
+=== child exited rc=0 elapsed=214.2s ===

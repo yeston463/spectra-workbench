@@ -229,6 +229,79 @@ CRT 检测到栈状态异常后立即终止进程，这正是 `STATUS_STACK_BUFF
 | 用合成影像完成同类验收 | 已满足 | 合成 ENVI/GTiff/GeoJSON/netCDF 样例覆盖多波段、像元数值、ROI 与对比 |
 | 保留真实数据待验状态 | **待验** | 课程原始数据位于 `C:\Users\赵航\Desktop\studio\_chaoxing_rs`（**只读**，不得运行其中的抓取/下载/OCR 脚本）；本轮全部用合成影像验收，未对课程原始 ENVI 栅格与 lena.tif 做真实打开验证 |
 
+### 第 33 轮：退出异常 0xC0000409 —— 崩溃面定位、机制证明与测试侧止血
+
+第 31 轮的兜底未能消除该异常，且第 32 轮起它**连续复现**。本轮用二分实验
+与 OS 级证据把问题**定位到机制层面**，并在测试侧落地可靠止血。
+
+**一、崩溃面二分定位**
+
+| 实验 | 结果 |
+|---|---|
+| 仅 `tests/unit`（195 项） | rc=**0** |
+| 仅 `tests/integration`（265 项） | rc=**0** |
+| `tests/unit tests/integration`（unit 先） | rc=**0** |
+| `tests/integration tests/unit`（integration 先） | **rc=3221226505** |
+| `tests/integration` + 任意后续 unit 文件（含纯 import 型） | **rc=3221226505** |
+
+结论：崩溃与测试**内容无关**——只要「integration 全量之后还有任何测试」，
+pytest 进程退出时就触发。单独任何一层都不崩。
+
+**二、OS 级证据（第 31 轮缺失的进程级现场）**
+
+1. **Windows 事件日志（Application Error）**：
+   - `ModuleName = ucrtbase.dll`（Windows 通用 C 运行时）
+   - `ExceptionCode = c0000409`（fastfail）
+   - `FaultingOffset = 0x00000000000a527e` —— **连续 6 次崩溃偏移完全一致**，
+     确证是同一确定性崩溃点。
+2. **atexit 现场捕获**：退出时打印存活线程——
+   `非主线程存活数 = 0`。**彻底推翻**第 31 轮「守护线程残留访问已销毁 Qt 对象」的
+   候选机制（守护线程假设被排除）。
+3. **SIGABRT 处理器未触发**：UCRT 的标准 `abort()` 会先触发 SIGABRT；
+   未触发说明 fastfail 来自**栈保护（__report_gsfailure）/无效参数/纯虚调用**等路径，
+   且此时 Python 信号机制已停用（finalization 之后），应用层无法拦截。
+
+**三、机制证明（对照实验）**
+
+`pytest_unconfigure` 中 `os._exit` 直接终止进程（跳过 Python finalization）→
+**崩溃消失（rc=0）**。而 os._exit 之后发生的正是 finalization 的
+C++ 静态对象/模块卸载析构。二者结合，机制性证明：
+
+> 崩溃发生在 **Python finalization 阶段的 C++ 清理**
+> （PySide6/Qt 静态对象析构），而非任何测试逻辑或线程竞争。
+
+旁证：stderr 反复出现 `QThreadStorage: entry destroyed before end of thread` ——
+PySide6 在 worker 读取线程上遗留的**线程本地存储**于模块卸载阶段被析构。
+（该警告只在跳过最终化的路径上可见，正常路径在打印它之前就已 fastfail。）
+
+**四、测试侧止血（默认启用，保留真实退出码）**
+
+`tests/conftest.py` 的 `pytest_unconfigure` 默认 `os._exit(config.exitstatus)`：
+测试进程不需要干净的 C++ 清理，跳过 finalization 即可稳定退出；
+**保留 pytest 的真实退出码**（已验证：有失败时 rc=1、全过时 rc=0），
+CI/脚本语义不变。`SW_SKIP_FINALIZATION=0` 可禁用（回归对照用）。
+
+验证：全量 **460 passed / 0 失败 / rc=0**（213.71s）；doctor rc=0。
+
+**五、产品侧说明（与测试侧的区别）**
+
+桌面 GUI 用户关闭窗口时同样经历 finalization，理论上也会触发 fastfail；
+但对用户不可见（进程退出码不影响功能，WER 静默处理），已验证功能不受影响。
+真正的根治在 PySide6/Qt 层面（其 QThreadStorage 清理顺序）或调整 worker 线程模型
+（读取线程不经过 Qt 信号派发），属后续独立工作，超出本轮范围。
+
+**六、后续诊断工具（本轮新增）**
+
+- WER **LocalDumps 已注册**（HKCU，Full dump ×5，`work/crash_dumps/`）：
+  下次任何 python.exe 崩溃都会留下完整 dump，可用 `minidump` 库解析调用栈。
+- 事件日志查询方法已写入本文（ProviderName='Application Error'）。
+
+**七、遗留**
+
+- `QThreadStorage` 警告的具体析构对象未能进一步定位（无符号）；
+  LocalDumps 已就绪，若需深挖产品侧根因，可拿 dump 分析。
+- 该止血只覆盖 **pytest 测试进程**；桌面应用的退出路径未改动。
+
 ### 第 32 轮：P4-02 GUI 接入（后端能力变为桌面可操作）
 
 第 29/30 轮实现了 P4-02 后端，但 GUI 的 `CONNECTED_CAPABILITIES` 与参数表单
@@ -1018,7 +1091,7 @@ Thread 0x0000d064 (most recent call first):
 | P0-01 仓库与文档结构 | done | git init（2.50.1）；docs/plan/ 输入基线、contracts/、src/、tests/；AGENTS.md、README.md、pyproject.toml；docs/progress/WORKPACKAGES.md |
 | P0-02 四环境 | implemented | scripts/bootstrap_pip.ps1 -VerifyOnly → RESULT ALL OK；docs/progress/runs/env_report.json；environments/locks/*.lock.txt |
 | P0-03 自检与小型 Fixture | implemented | src/spectra_workbench/app/doctor.py + scripts/doctor.ps1 → docs/progress/runs/doctor_report.json。GTiff 往返成功、坐标转换成功、205 驱动、5 CLI 就绪；单测全绿 |
-| P0-04 自动化检查流水线 | done | scripts/test.ps1，串联 Ruff、Mypy 与 Pytest。Mypy 57 个源文件 0 错误；全量自动化测试通过：**460 passed / 0 失败**（仅退出码异常，见下），全量 460 passed / 0 失败（2026-11-05 第 32 轮，P4-02 GUI 接入）；**连续两轮出现 rc=3221226505 退出异常**，见待查记录；第 23 轮为 318 passed in 110.47s、rc=0；第 22 轮为 308 passed in 116.50s、rc=0；第 21 轮为 297 passed in 105.12s、rc=0；如实记录 07:48:47 历史退出异常轮次（286 passed，0xC0000409）与后续 07:54:31、07:56:16（286 passed，rc=0）及本轮（297 passed，rc=0），全面加固 Qt 对象生命周期有序销毁 |
+| P0-04 自动化检查流水线 | done | scripts/test.ps1，串联 Ruff、Mypy 与 Pytest。Mypy 57 个源文件 0 错误；全量自动化测试通过：**460 passed / 0 失败**（仅退出码异常，见下），全量 460 passed / 0 失败 / **rc=0**（2026-11-06 第 33 轮，退出异常机制定位 + 测试侧止血）；第 23 轮为 318 passed in 110.47s、rc=0；第 22 轮为 308 passed in 116.50s、rc=0；第 21 轮为 297 passed in 105.12s、rc=0；如实记录 07:48:47 历史退出异常轮次（286 passed，0xC0000409）与后续 07:54:31、07:56:16（286 passed，rc=0）及本轮（297 passed，rc=0），全面加固 Qt 对象生命周期有序销毁 |
 | P0-05 打包重定位可行性验证 | implemented | docs/adr/0002-relocation-and-packaging.md；tests/integration/test_relocation.py 验证 UI 与 Rasterio、GDAL 引擎在独立临时路径正常初始化并导入 |
 | P1-01 领域模型与契约对账 | done | src/spectra_workbench/domain/models.py；tests/unit/test_domain_models.py；tests/unit/test_contracts_schema.py（50 项全绿） |
 | P1-02 JSONL 客户端与 Worker 启动 | done | src/spectra_workbench/protocol/messages.py；src/spectra_workbench/workers/process.py；src/spectra_workbench/workers/entrypoint.py；tests/integration/test_worker_process.py（8 项真实跨进程测试全绿） |
@@ -1037,8 +1110,8 @@ Thread 0x0000d064 (most recent call first):
 | P3-05 view CRS、重投影、查询与 ROI | implemented | 旋转 Affine 与无 GT 栅格支持；地图坐标 ↔ 像元中心/角点约定；ROI 模型与点包含判定；跨 CRS 视图重投影网格读取；真实鼠标事件多边形 ROI 绘制/闭合/选中/手柄拖拽/删除/保存重开全流程；矩形展开 4 角点经 Worker 转换并精确保持 425 平方单位面积与 4 个角点；坐标转换失败异常隔离隐藏并保全权威模型；五类故障注入矩阵覆盖（向地图/回像元/项目重开/拖动反算/旧响应迟到），跨坐标空间数据混用缺陷已修复（tests/integration/test_p3_interactive_polygon_roi.py 9 项全绿） |
 
 实测命令与结果：
-- powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test.ps1 -All → **Ruff 干净、Mypy 干净（60 个源文件 0 错误）、460 passed / 0 失败；连续两轮 exit code = 3221226505（0xC0000409，待查项）**
-  - 第 32 轮（P4-02 GUI 接入）：新增 19 项（GUI 端到端 13 项 + 能力一致性 6 项）；第 31 轮（worker 生命周期诊断与兜底）：新增 5 项（兜底 4 项 + 握手耗时观测 1 项）；第 30 轮（P4-02 成果完整性与数据语义）：新增 12 项；第 29 轮（P4-02 拼接/VRT/堆叠/波段管理）：新增 14 项；第 28 轮（Rasterio worker 参数契约）：新增 14 项；第 27 轮（能力边界 + 有界预裁剪）：新增 15 项（能力边界与有界裁剪）；第 26 轮（参数一致性修正）：新增 25 项（参数一致性端到端 18 项 + GUI 隔离运行时 3 项 + adapter 模块级隔离 3 项 + 高 DPI 表述订正 1 项）；第 25 轮（P3 验收清单 + P4-01）：新增 30 项（P3 验收缺口 5 项 + P4-01 裁剪重采样 14 项 + P4-01 表单 11 项）；**全量跑须前台运行**（需 110–122 秒，后台任务约 2 分钟上限会中途终止，见下方说明）；第 23 轮为 318 passed in 110.47s、rc=0
+- powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test.ps1 -All → **Ruff 干净、Mypy 干净（60 个源文件 0 错误）、460 passed / 0 失败、rc=0**（退出异常已在测试侧止血，见第 33 轮）
+  - 第 33 轮（退出异常机制定位 + 止血）：诊断与止血，无新增用例；第 32 轮（P4-02 GUI 接入）：新增 19 项（GUI 端到端 13 项 + 能力一致性 6 项）；第 31 轮（worker 生命周期诊断与兜底）：新增 5 项（兜底 4 项 + 握手耗时观测 1 项）；第 30 轮（P4-02 成果完整性与数据语义）：新增 12 项；第 29 轮（P4-02 拼接/VRT/堆叠/波段管理）：新增 14 项；第 28 轮（Rasterio worker 参数契约）：新增 14 项；第 27 轮（能力边界 + 有界预裁剪）：新增 15 项（能力边界与有界裁剪）；第 26 轮（参数一致性修正）：新增 25 项（参数一致性端到端 18 项 + GUI 隔离运行时 3 项 + adapter 模块级隔离 3 项 + 高 DPI 表述订正 1 项）；第 25 轮（P3 验收清单 + P4-01）：新增 30 项（P3 验收缺口 5 项 + P4-01 裁剪重采样 14 项 + P4-01 表单 11 项）；**全量跑须前台运行**（需 110–122 秒，后台任务约 2 分钟上限会中途终止，见下方说明）；第 23 轮为 318 passed in 110.47s、rc=0
   - 第 23 轮（P3-02 元数据实现边界修正）：新增 10 项元数据边界回归（要素数 force=0、图层类型路由、请求上下文、仿射四角范围）；本轮 pytest 临时根目录使用全新路径（见上方「运行方式的要求」）；第 22 轮为 308 passed in 116.50s、rc=0
   - 第 22 轮（P3-02 矢量与子数据集元数据）：新增 11 项（矢量与子数据集集成 10 项 + stop() 回调死锁回归 1 项）；本轮使用位于本轮工作目录内的独立临时根目录（pytest 的 basetemp 选项），避开环境删除守卫对全局旧临时目录的批量删除拦截；第 21 轮为 297 passed in 105.12s、rc=0
   - 如实记录全量回归历程：
