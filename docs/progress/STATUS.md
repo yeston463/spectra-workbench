@@ -263,7 +263,7 @@ CRT 检测到栈状态异常后立即终止进程，这正是 `STATUS_STACK_BUFF
   1. `pytest_runtest_teardown` 在用例边界 `gc.collect()`，避免循环垃圾在无关 Qt 构造中途回收（测试隔离，不宣称根因修复）；
   2. `pytest_sessionfinish` 中对 QApplication 使用 `deleteLater()` + DeferredDelete，在 finalization 前显式销毁单例；此前直接调用 `app.shutdown()` 会在该处 fastfail，已移除。
 - 修复后早期 **两次连续 Clean 全量**：578 passed / 0 failed / rc=0 / `clean_exit_verified=true`（285.62s、307.71s）；监督器加固后 **592 passed / 0 failed / rc=0 / clean_exit_verified=true**（309.17s，`process_observation=job`、`residual=0`、`cleanup_complete=true`）。期间 20:17 轮 590 passed / 1 failed 是新增 resume 失败测试期望未同步（产品代码已返回 92），修正测试期望后通过；失败轮保留在日志中。
-- 监督器负向独立复现（`work/runs/S1-hardened-negative.json`）：旧结果 + 普通命令 → rc=92/clean=false；真实 Bypass + 外层 Clean → rc=92/actual=bypass/clean=false；父进程退出但后代存活 → `residual_processes=[7700,39752]`、clean=false；未跟踪嵌套文件内容变化 → snapshot 改变。临时进程已按 Job Object 清理并二次查询为空。
+- 监督器负向独立复现（`work/runs/S1-hardened-negative.json`）：旧结果 + 普通命令 → rc=92/clean=false；真实 Bypass + 外层 Clean → rc=92/actual=bypass/clean=false；父进程退出但后代存活 → `residual_processes=[7700,39752]`、clean=false；未跟踪嵌套文件内容变化 → snapshot 改变。临时进程已按 Job Object 清理并二次查询为空。Job 接管竞态专项证据 `work/runs/S1-job-race.json`：assign/resume 回调时 child 用户代码尚未执行（`child_code_ran=false`），resume 后标记文件才出现；立即派生后代的残留被记录并清理。
 - 历史失败轮与诊断日志保留：`work/test_runs/test_all.log`、`work/runs/S1-exit-20261106-190842`；WER 事件确认 `ucrtbase.dll` / c0000409 / offset 0xa527e，但当前无 native dump（非管理员、LocalDumps 未配置），**不根据 DLL 名宣称根因**，也不宣称所有 Qt 关闭路径永久根治。
 
 **四、当前边界**
