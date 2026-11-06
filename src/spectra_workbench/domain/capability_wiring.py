@@ -38,6 +38,9 @@ CONNECTED_CAPABILITIES: frozenset[str] = frozenset(
         "gdal_merge",
         "gdal:stack",
         "gdal:bandmanage",
+        # P4-03：元数据编辑 / 概览构建（in-place）
+        "gdal:editmeta",
+        "gdal:overview",
     }
 )
 

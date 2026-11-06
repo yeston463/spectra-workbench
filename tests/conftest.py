@@ -153,6 +153,10 @@ def pytest_unconfigure(config: Any) -> None:  # noqa: ARG001
     if os.environ.get("SW_SKIP_FINALIZATION") == "0":
         return
     exitstatus = int(getattr(config, "exitstatus", 0) or 0)
+    # os._exit 不经过解释器最终化，缓冲必须手动刷：否则 pytest 的终端报告
+    #（含 FAILURES 详情）会因 stdout 块缓冲未落盘而丢失。
+    sys.stdout.flush()
+
     sys.stderr.write(f"[skip-finalization] os._exit({exitstatus}) 绕过 Python 最终化\n")
     sys.stderr.flush()
     os._exit(exitstatus)

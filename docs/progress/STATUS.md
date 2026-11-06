@@ -229,6 +229,65 @@ CRT 检测到栈状态异常后立即终止进程，这正是 `STATUS_STACK_BUFF
 | 用合成影像完成同类验收 | 已满足 | 合成 ENVI/GTiff/GeoJSON/netCDF 样例覆盖多波段、像元数值、ROI 与对比 |
 | 保留真实数据待验状态 | **待验** | 课程原始数据位于 `C:\Users\赵航\Desktop\studio\_chaoxing_rs`（**只读**，不得运行其中的抓取/下载/OCR 脚本）；本轮全部用合成影像验收，未对课程原始 ENVI 栅格与 lena.tif 做真实打开验证 |
 
+### 第 34 轮：P4-03 元数据/ENVI 头文件、概览与格式选项 + work/ 清理
+
+原验收标准：「不覆盖未知字段；不改原始数据尺寸契约；多文件提交可恢复」。
+依赖 P4-01 与 P1-05 均已满足；复用任务协议、参数契约、事务提交与
+P4-02 建立的 sidecar 成套提交机制。
+
+**一、实测结论（实现依据）**
+
+| 实测项 | 结论 |
+|---|---|
+| GDAL 重写 ENVI .hdr | **未知字段全部丢失**（custom_field_a 等自定义字段消失）→ 平台必须读-合并-写 |
+| GTiff 概览 | 内嵌主文件（无 .ovr），主影像 8×8 不变 |
+| ENVI 概览 | 产生外部 `<dat>.ovr`（GTiff 格式）→ sidecar 成套提交 |
+| .hdr 编码 | 含非 ASCII 字节 → latin-1 保字节读写 |
+
+**二、两个新能力（in-place 更新）**
+
+- `gdal:editmeta`：更新 NoData。ENVI 流程 = 快照头文件 → GDAL 应用 →
+  按快照补回缺失的未知字段（restore_missing_hdr_fields，只补 GDAL 未写出的）。
+- `gdal:overview`：BuildOverviews + 主影像尺寸契约断言（红线：尺寸变化即失败）；
+  resampleAlg/levels/overviewCompress 参数；概览级数与各级尺寸进入成果记录。
+
+**in-place 事务语义**：输出=输入。先把源文件集合（主文件 + sidecar）
+复制进 staging，在副本上操作，成套提交覆盖源——失败不影响源
+（多文件提交可恢复的验收落点）。overwrite=false 被拒绝且源不被破坏。
+
+**三、sidecar 命名的实测教训**
+
+ENVI 的 sidecar 是 `legacy.hdr`——**不以源主文件名 `legacy.dat` 开头**。
+初版命名规则只处理「同主名扩展」（.dat.aux.xml/.dat.ovr），.hdr 按原名落
+staging → GDAL 打开 staged 主文件报 "not recognized as being in a supported
+file format"。修复：**同 stem 不同后缀**的 sidecar 后缀对齐 staged 主名。
+
+**四、registry / wiring / 表单**
+
+- registry 新增 editmeta/overview 条目（均有原生 CLI 工具 gdal_edit.py /
+  gdaladdo.exe → binding=cli + form 双入口，availability=ready）；
+- wiring 单一来源集合 +2；表单新增 levels / overviewCompress 控件，
+  显隐与状态隔离沿用支持矩阵驱动；in-place 能力 GUI 校验「输出=输入」。
+
+**五、验收测试**（tests/integration/test_p4_metadata_overview.py，7 项）
+
+- ENVI 未知字段存活 + NoData 写入（读-合并-写端到端）；
+- GTiff editmeta；ENVI 概览 .ovr sidecar 成套提交 + 独立重开 + 尺寸契约；
+- GTiff 内嵌概览 + 尺寸契约；overwrite=false 拒绝且源不被破坏；
+- 契约校验（levels 严格递增 ≥2、支持矩阵）。
+
+**六、本轮事故与恢复（如实记录）**
+
+多文件编辑脚本因变量复用错误，把 adapter 全文**覆盖**进了当时未提交的
+metadata_ops.py（写盘目标用了旧变量）。该文件靠完整重建恢复（内容均在
+本轮对话中产生，无外部损失）。此后编辑脚本一律独立读写、落盘目标显式。
+
+**七、验证**
+
+全量 **467 passed / 0 失败 / rc=0**（256.04s）；doctor rc=0；基线审计
+（445→447 总数、440→442 已发现、232→234 可调用）已同步；
+一致性守护（正向/反向）通过。work/ 清理：删除 pt_*/pytest_* 临时目录
+共 2000+ 文件，一次性脚本归档至 scripts_archive/，证据目录全保留。
 ### 第 33 轮：退出异常 0xC0000409 —— 崩溃面定位、机制证明与测试侧止血
 
 第 31 轮的兜底未能消除该异常，且第 32 轮起它**连续复现**。本轮用二分实验
@@ -1091,7 +1150,7 @@ Thread 0x0000d064 (most recent call first):
 | P0-01 仓库与文档结构 | done | git init（2.50.1）；docs/plan/ 输入基线、contracts/、src/、tests/；AGENTS.md、README.md、pyproject.toml；docs/progress/WORKPACKAGES.md |
 | P0-02 四环境 | implemented | scripts/bootstrap_pip.ps1 -VerifyOnly → RESULT ALL OK；docs/progress/runs/env_report.json；environments/locks/*.lock.txt |
 | P0-03 自检与小型 Fixture | implemented | src/spectra_workbench/app/doctor.py + scripts/doctor.ps1 → docs/progress/runs/doctor_report.json。GTiff 往返成功、坐标转换成功、205 驱动、5 CLI 就绪；单测全绿 |
-| P0-04 自动化检查流水线 | done | scripts/test.ps1，串联 Ruff、Mypy 与 Pytest。Mypy 57 个源文件 0 错误；全量自动化测试通过：**460 passed / 0 失败**（仅退出码异常，见下），全量 460 passed / 0 失败 / **rc=0**（2026-11-06 第 33 轮，退出异常机制定位 + 测试侧止血）；第 23 轮为 318 passed in 110.47s、rc=0；第 22 轮为 308 passed in 116.50s、rc=0；第 21 轮为 297 passed in 105.12s、rc=0；如实记录 07:48:47 历史退出异常轮次（286 passed，0xC0000409）与后续 07:54:31、07:56:16（286 passed，rc=0）及本轮（297 passed，rc=0），全面加固 Qt 对象生命周期有序销毁 |
+| P0-04 自动化检查流水线 | done | scripts/test.ps1，串联 Ruff、Mypy 与 Pytest。Mypy 57 个源文件 0 错误；全量自动化测试通过：**460 passed / 0 失败**（仅退出码异常，见下），全量 467 passed / 0 失败 / **rc=0**（2026-11-06 第 34 轮，P4-03 元数据/概览 + work 清理）；第 23 轮为 318 passed in 110.47s、rc=0；第 22 轮为 308 passed in 116.50s、rc=0；第 21 轮为 297 passed in 105.12s、rc=0；如实记录 07:48:47 历史退出异常轮次（286 passed，0xC0000409）与后续 07:54:31、07:56:16（286 passed，rc=0）及本轮（297 passed，rc=0），全面加固 Qt 对象生命周期有序销毁 |
 | P0-05 打包重定位可行性验证 | implemented | docs/adr/0002-relocation-and-packaging.md；tests/integration/test_relocation.py 验证 UI 与 Rasterio、GDAL 引擎在独立临时路径正常初始化并导入 |
 | P1-01 领域模型与契约对账 | done | src/spectra_workbench/domain/models.py；tests/unit/test_domain_models.py；tests/unit/test_contracts_schema.py（50 项全绿） |
 | P1-02 JSONL 客户端与 Worker 启动 | done | src/spectra_workbench/protocol/messages.py；src/spectra_workbench/workers/process.py；src/spectra_workbench/workers/entrypoint.py；tests/integration/test_worker_process.py（8 项真实跨进程测试全绿） |
@@ -1110,8 +1169,8 @@ Thread 0x0000d064 (most recent call first):
 | P3-05 view CRS、重投影、查询与 ROI | implemented | 旋转 Affine 与无 GT 栅格支持；地图坐标 ↔ 像元中心/角点约定；ROI 模型与点包含判定；跨 CRS 视图重投影网格读取；真实鼠标事件多边形 ROI 绘制/闭合/选中/手柄拖拽/删除/保存重开全流程；矩形展开 4 角点经 Worker 转换并精确保持 425 平方单位面积与 4 个角点；坐标转换失败异常隔离隐藏并保全权威模型；五类故障注入矩阵覆盖（向地图/回像元/项目重开/拖动反算/旧响应迟到），跨坐标空间数据混用缺陷已修复（tests/integration/test_p3_interactive_polygon_roi.py 9 项全绿） |
 
 实测命令与结果：
-- powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test.ps1 -All → **Ruff 干净、Mypy 干净（60 个源文件 0 错误）、460 passed / 0 失败、rc=0**（退出异常已在测试侧止血，见第 33 轮）
-  - 第 33 轮（退出异常机制定位 + 止血）：诊断与止血，无新增用例；第 32 轮（P4-02 GUI 接入）：新增 19 项（GUI 端到端 13 项 + 能力一致性 6 项）；第 31 轮（worker 生命周期诊断与兜底）：新增 5 项（兜底 4 项 + 握手耗时观测 1 项）；第 30 轮（P4-02 成果完整性与数据语义）：新增 12 项；第 29 轮（P4-02 拼接/VRT/堆叠/波段管理）：新增 14 项；第 28 轮（Rasterio worker 参数契约）：新增 14 项；第 27 轮（能力边界 + 有界预裁剪）：新增 15 项（能力边界与有界裁剪）；第 26 轮（参数一致性修正）：新增 25 项（参数一致性端到端 18 项 + GUI 隔离运行时 3 项 + adapter 模块级隔离 3 项 + 高 DPI 表述订正 1 项）；第 25 轮（P3 验收清单 + P4-01）：新增 30 项（P3 验收缺口 5 项 + P4-01 裁剪重采样 14 项 + P4-01 表单 11 项）；**全量跑须前台运行**（需 110–122 秒，后台任务约 2 分钟上限会中途终止，见下方说明）；第 23 轮为 318 passed in 110.47s、rc=0
+- powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test.ps1 -All → **Ruff 干净、Mypy 干净（61 个源文件 0 错误）、467 passed / 0 失败、rc=0**（退出异常已在测试侧止血，见第 33 轮）
+  - 第 34 轮（P4-03 元数据/ENVI/概览）：新增 7 项；第 33 轮（退出异常机制定位 + 止血）：诊断与止血，无新增用例；第 32 轮（P4-02 GUI 接入）：新增 19 项（GUI 端到端 13 项 + 能力一致性 6 项）；第 31 轮（worker 生命周期诊断与兜底）：新增 5 项（兜底 4 项 + 握手耗时观测 1 项）；第 30 轮（P4-02 成果完整性与数据语义）：新增 12 项；第 29 轮（P4-02 拼接/VRT/堆叠/波段管理）：新增 14 项；第 28 轮（Rasterio worker 参数契约）：新增 14 项；第 27 轮（能力边界 + 有界预裁剪）：新增 15 项（能力边界与有界裁剪）；第 26 轮（参数一致性修正）：新增 25 项（参数一致性端到端 18 项 + GUI 隔离运行时 3 项 + adapter 模块级隔离 3 项 + 高 DPI 表述订正 1 项）；第 25 轮（P3 验收清单 + P4-01）：新增 30 项（P3 验收缺口 5 项 + P4-01 裁剪重采样 14 项 + P4-01 表单 11 项）；**全量跑须前台运行**（需 110–122 秒，后台任务约 2 分钟上限会中途终止，见下方说明）；第 23 轮为 318 passed in 110.47s、rc=0
   - 第 23 轮（P3-02 元数据实现边界修正）：新增 10 项元数据边界回归（要素数 force=0、图层类型路由、请求上下文、仿射四角范围）；本轮 pytest 临时根目录使用全新路径（见上方「运行方式的要求」）；第 22 轮为 308 passed in 116.50s、rc=0
   - 第 22 轮（P3-02 矢量与子数据集元数据）：新增 11 项（矢量与子数据集集成 10 项 + stop() 回调死锁回归 1 项）；本轮使用位于本轮工作目录内的独立临时根目录（pytest 的 basetemp 选项），避开环境删除守卫对全局旧临时目录的批量删除拦截；第 21 轮为 297 passed in 105.12s、rc=0
   - 如实记录全量回归历程：

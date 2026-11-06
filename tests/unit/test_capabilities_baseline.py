@@ -164,7 +164,7 @@ def test_gdal_algorithms_count_and_structure():
     性质与 18 项原生工具不同，已在 registry 文档串中标注。
     """
     algorithms = build_gdal_algorithms()
-    assert len(algorithms) == 20
+    assert len(algorithms) == 22
 
     algo_ids = {a.capability_id for a in algorithms}
     expected_ids = {
@@ -189,6 +189,9 @@ def test_gdal_algorithms_count_and_structure():
         # 平台组合能力（非 GDAL 原生独立工具）
         "gdal:stack",
         "gdal:bandmanage",
+        # P4-03：元数据编辑 / 概览构建（有原生 CLI 工具 gdal_edit.py / gdaladdo）
+        "gdal:editmeta",
+        "gdal:overview",
     }
     assert algo_ids == expected_ids
 
@@ -341,9 +344,9 @@ def test_four_dimensional_state_independence_and_audit():
     #   基线总数 443 -> 445；已发现 438 -> 440；
     #   可调用 229 -> 232（buildvrt/stack/bandmanage 各 +1，merge 恢复 cli 不变）；
     #   平台可执行 3 -> 5。
-    assert report["total_baseline_count"] == 445
-    assert report["discovered"]["count"] == 440
-    assert report["callable"]["count"] == 232
+    assert report["total_baseline_count"] == 447
+    assert report["discovered"]["count"] == 442
+    assert report["callable"]["count"] == 234
     assert report["platform_executable"]["count"] == 5
     assert report["verified"]["count"] == 5
     # 第 32 轮：gdal:buildvrt 由 blocked 改为 ready（平台已接入），
@@ -360,11 +363,11 @@ def test_four_dimensional_state_independence_and_audit():
     assert "rasterio" in by_provider
 
     gdal_rep = by_provider["gdal"]
-    # 第 32 轮新增 gdal:stack / gdal:bandmanage 两个平台组合能力编目：
-    # 基线总数 402 -> 404，已发现 400 -> 402。
+    # 第 32 轮新增 stack/bandmanage；第 34 轮新增 editmeta/overview：
+    # 基线总数 402 -> 406，已发现 400 -> 404。
     # gdal:buildvrt 由 blocked 改为 ready（平台已接入），故 GDAL 缺失项 6 -> 5。
-    assert gdal_rep["total_baseline_count"] == 404
-    assert gdal_rep["discovered"]["count"] == 402
+    assert gdal_rep["total_baseline_count"] == 406
+    assert gdal_rep["discovered"]["count"] == 404
     assert gdal_rep["missing"]["count"] == 5
 
     rio_rep = by_provider["rasterio"]
@@ -377,8 +380,8 @@ def test_provider_adapters_discover_baseline():
     """GDAL 与 Rasterio 适配器在各自 worker 内均可发现基准能力。"""
     gdal_adapter = GDALProviderAdapter()
     gdal_caps = gdal_adapter.discover()
-    # 第 32 轮新增两个平台组合能力编目
-    assert len(gdal_caps) == 404
+    # 第 32/34 轮新增编目
+    assert len(gdal_caps) == 406
 
     rio_adapter = RasterioProviderAdapter()
     rio_caps = rio_adapter.discover()

@@ -521,9 +521,17 @@
         "P4-01",
         "P1-05"
       ],
-      "status": "todo",
+      "status": "implemented",
       "release_requirement": "core",
-      "evidence": [],
+      "evidence": [
+        "实测结论（GDAL 3.13.3）：GDAL 重写 ENVI .hdr 会丢失全部未知字段（自定义字段经 SetNoDataValue 写回后消失）→ 平台元数据编辑用读-合并-写（snapshot_hdr_lines 快照 + GDAL 应用 + restore_missing_hdr_fields 补回GDAL 未写出的字段）；GTiff 概览内嵌主文件、ENVI 概览产生外部 .dat.ovr（GTiff 格式，属 sidecar）；BuildOverviews 天然不改主影像尺寸（仍以ops 层红线断言 + 端到端复证守护）；.hdr 含非 ASCII 字节，latin-1 保字节读写。",
+        "两个新能力（in-place 更新，输出=输入）：gdal:editmeta（NoData 更新，ENVI 读-合并-写）与 gdal:overview（BuildOverviews，resampleAlg/levels/overviewCompress，概览级数与各级尺寸进成果记录）。in-place 事务语义：先把源文件集合（主文件+sidecar）复制进 staging（_stage_source_bundle），在副本上操作，成套提交覆盖源——失败不影响源（多文件提交可恢复落点）；overwrite=false 被拒绝且源不被破坏。",
+        "sidecar 命名实测教训：ENVI sidecar 是 legacy.hdr——不以源主文件名 legacy.dat 开头；初版只处理同主名扩展形态，.hdr 按原名落 staging 导致 GDAL 打开 staged 主文件报 not recognized；修复为同 stem 不同后缀的 sidecar 后缀对齐 staged 主名。",
+        "registry 新增 editmeta/overview 条目（均有原生 CLI 工具 gdal_edit.py/ gdaladdo.exe → binding=cli + form 双入口，ready）；wiring 单一来源集合 +2；表单新增 levels/overviewCompress 控件，显隐与状态隔离沿用支持矩阵驱动；in-place 能力 GUI 校验输出=输入。基线审计同步（总数 445→447、已发现 440→442、可调用 232→234）。",
+        "验收测试 tests/integration/test_p4_metadata_overview.py（7 项）：ENVI 未知字段存活（对照 GDAL 原生会丢失）、GTiff editmeta、ENVI 概览 .ovr sidecar 成套提交+独立重开+尺寸契约、GTiff 内嵌概览、overwrite=false 拒绝且源不破坏、契约校验（levels 严格递增≥2、支持矩阵）。",
+        "本轮事故与恢复（如实记录）：多文件编辑脚本因变量复用错误把 adapter 全文覆盖进当时未提交的 metadata_ops.py；靠完整重建恢复（内容均在本轮产生）。此后编辑脚本一律独立读写、落盘目标显式。",
+        "work/ 清理：删除 pt_*/pytest_* 临时目录共 2000+ 文件（分批 <50 规避批量删除保护），一次性脚本归档至 work/scripts_archive/，证据目录（test_runs/crash_dumps/exit_diag/p3_*）全保留。"
+      ],
       "blocking_reason": null
     },
     {

@@ -142,6 +142,9 @@ _PARAM_ALIASES: dict[str, tuple[str, ...]] = {
     "separate": ("separate_sources",),
     "relativePaths": ("relative_paths", "use_relative_paths"),
     "bandList": ("band_list", "band_order", "bands"),
+    # --- P4-03 元数据 / 概览 ---
+    "levels": ("levels", "overview_levels", "decimations"),
+    "overviewCompress": ("overview_compress", "ovr_compress"),
 }
 
 #: 重叠区的取值来源优先级。
@@ -158,6 +161,18 @@ VRT_RESOLUTIONS: tuple[str, ...] = (
     "lowest",
     "same",
 )
+
+#: 概览重采样方式（GDAL BuildOverviews 支持的常用子集）。
+OVERVIEW_RESAMPLINGS: tuple[str, ...] = (
+    "NEAREST",
+    "AVERAGE",
+    "GAUSS",
+    "CUBIC",
+    "MODE",
+)
+
+#: 概览压缩方式（作用于内嵌概览或外部 .ovr——两者本质都是 GTiff）。
+OVERVIEW_COMPRESSIONS: tuple[str, ...] = ("NONE", "DEFLATE", "LZW")
 
 #: 允许出现在 parameters 里、但不属于上述栅格几何参数的非几何键。
 _OTHER_ALLOWED_KEYS: frozenset[str] = frozenset(
@@ -263,6 +278,9 @@ _CAPABILITY_SUPPORT: dict[str, frozenset[str]] = {
         }
     ),
     "gdal:bandmanage": frozenset({"bandList", "outputType"}),
+    # --- P4-03：元数据编辑 / 概览构建（均为 in-place 更新）---
+    "gdal:editmeta": frozenset({"srcNodata"}),
+    "gdal:overview": frozenset({"resampleAlg", "levels", "overviewCompress"}),
 }
 
 #: 能力别名 -> canonical capability_id。
@@ -286,6 +304,11 @@ _CAPABILITY_ALIASES: dict[str, str] = {
     "gdal_merge": "gdal:merge",
     "gdal_merge.py": "gdal:merge",
     "gdal mosaic": "gdal:merge",
+    # --- P4-03 能力别名 ---
+    "gdal_edit": "gdal:editmeta",
+    "gdal_edit.py": "gdal:editmeta",
+    "gdaladdo": "gdal:overview",
+    "gdaladdo.py": "gdal:overview",
     # 保留 rio_convert / rio:convert 等 CLI 风格别名
     "rio:convert": "rasterio:convert",
 }
@@ -568,6 +591,38 @@ def normalize_raster_params(
         if not isinstance(value, bool):
             raise ParameterError(f"relativePaths 必须是布尔值，实际 {value!r}")
         out["relativePaths"] = value
+
+    if "levels" in collected:
+        _, value = collected["levels"]
+        if not isinstance(value, (list, tuple)) or not value:
+            raise ParameterError("参数 levels 必须是非空的整数列表")
+        lv: list[int] = []
+        prev = 0
+        for v in value:
+            if not _is_int_like(v):
+                raise ParameterError(f"参数 levels 的元素必须是整数，实际含 {v!r}")
+            iv = int(v)
+            if iv < 2:
+                raise ParameterError(
+                    f"参数 levels 的各级倍率必须 ≥ 2（1 等于原图无意义），实际 {iv}"
+                )
+            if iv <= prev:
+                raise ParameterError(
+                    f"参数 levels 必须严格递增（GDAL 要求），实际 {iv} 不大于前值 {prev}"
+                )
+            lv.append(iv)
+            prev = iv
+        out["levels"] = lv
+
+    if "overviewCompress" in collected:
+        _, value = collected["overviewCompress"]
+        key = str(value).strip().upper()
+        if key not in OVERVIEW_COMPRESSIONS:
+            raise ParameterError(
+                f"未知的概览压缩方式 {value!r}；可用：{', '.join(OVERVIEW_COMPRESSIONS)}"
+            )
+        if key != "NONE":
+            out["overviewCompress"] = key
 
     # 12) 互斥组合：分辨率与输出尺寸不能同时指定
     # （GDAL 侧表现为 "-outsize 与 -tr 冲突"，但那是在引擎里才发现；

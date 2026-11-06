@@ -225,6 +225,19 @@ class CapabilityFormWidget(QWidget):
         self.lbl_band_list = QLabel("波段顺序 (bandList):")
         self.params_form.addRow(self.lbl_band_list, self.txt_band_list)
 
+        # --- P4-03 概览构建 ---
+        self.txt_levels = QLineEdit()
+        self.txt_levels.setPlaceholderText("严格递增、每个≥2；例：2,4,8")
+        self.lbl_levels = QLabel("概览倍率 (levels):")
+        self.params_form.addRow(self.lbl_levels, self.txt_levels)
+
+        self.cmb_ovr_compress = QComboBox()
+        self.cmb_ovr_compress.addItem("不压缩 (NONE)", "")
+        self.cmb_ovr_compress.addItem("DEFLATE", "DEFLATE")
+        self.cmb_ovr_compress.addItem("LZW", "LZW")
+        self.lbl_ovr_compress = QLabel("概览压缩 (overviewCompress):")
+        self.params_form.addRow(self.lbl_ovr_compress, self.cmb_ovr_compress)
+
         # --- P4-01 裁剪（像元窗口 xoff,yoff,xsize,ysize）---
         self.txt_clip = QLineEdit()
         self.txt_clip.setPlaceholderText("留空表示不裁剪；例：10,20,100,80")
@@ -400,6 +413,8 @@ class CapabilityFormWidget(QWidget):
             self.lbl_relative_paths, self.chk_relative_paths, "relativePaths" in sup
         )
         self._set_row_visible(self.lbl_band_list, self.txt_band_list, "bandList" in sup)
+        self._set_row_visible(self.lbl_levels, self.txt_levels, "levels" in sup)
+        self._set_row_visible(self.lbl_ovr_compress, self.cmb_ovr_compress, "overviewCompress" in sup)
 
         # P4-01：裁剪 / 重采样 / 输出网格
         self._set_row_visible(self.lbl_clip, self.txt_clip, is_translate or is_warp)
@@ -482,6 +497,10 @@ class CapabilityFormWidget(QWidget):
             self.chk_relative_paths.setChecked(True)
         if "bandList" not in supported:
             self.txt_band_list.clear()
+        if "levels" not in supported:
+            self.txt_levels.clear()
+        if "overviewCompress" not in supported:
+            self.cmb_ovr_compress.setCurrentIndex(0)
 
     @staticmethod
     def _set_row_visible(label: QLabel, widget: QWidget, visible: bool) -> None:
@@ -530,6 +549,24 @@ class CapabilityFormWidget(QWidget):
 
         if "relativePaths" in supported:
             params["relativePaths"] = self.chk_relative_paths.isChecked()
+
+        if "levels" in supported:
+            raw_levels = self.txt_levels.text().strip()
+            if not raw_levels:
+                return params, "概览倍率 levels 必填（逗号分隔、严格递增、每个≥2，例：2,4,8）"
+            parts_lv = [x.strip() for x in raw_levels.replace(";", ",").split(",") if x.strip()]
+            lv_out: list[int] = []
+            for part in parts_lv:
+                try:
+                    lv_out.append(int(part))
+                except ValueError:
+                    return params, f"概览倍率需要逗号分隔的整数，当前为：{raw_levels}"
+            params["levels"] = lv_out
+
+        if "overviewCompress" in supported:
+            comp = self.cmb_ovr_compress.currentData()
+            if comp:
+                params["overviewCompress"] = comp
 
         if "bandList" in supported:
             raw_bands = self.txt_band_list.text().strip()
@@ -647,6 +684,8 @@ class CapabilityFormWidget(QWidget):
             QMessageBox.warning(self, "参数不全", "请指定输出成果路径！")
             return
 
+        in_place = cid in ("gdal:editmeta", "gdal:overview")
+
         # 输入：多输入能力用列表（顺序即重叠优先级依据），单输入能力用单文件行
         if multi:
             raw_inputs = [str(x) for x in self.input_paths()]
@@ -667,6 +706,14 @@ class CapabilityFormWidget(QWidget):
 
         in_paths = [Path(x).resolve() for x in raw_inputs]
         out_p = Path(out_str).resolve()
+
+        if in_place and (len(in_paths) != 1 or in_paths[0] != out_p):
+                QMessageBox.warning(
+                    self,
+                    "in-place 校验",
+                    "元数据编辑/概览构建为就地更新：输出路径必须与输入路径完全相同。",
+                )
+                return
 
         for in_p in in_paths:
             if not in_p.exists():
@@ -758,7 +805,7 @@ class CapabilityFormWidget(QWidget):
                         for i, p in enumerate(in_paths)
                     ]
                 }
-                if multi
+                if (multi or in_place)
                 else {
                     "input": DatasetRef(
                         dataset_id=f"in-{uuid.uuid4().hex[:6]}",

@@ -45,6 +45,12 @@ from spectra_workbench.providers.base import (
     ProviderAdapter,
     resolve_dataset_path,
 )
+from spectra_workbench.providers.gdal_provider.metadata_ops import (
+    apply_nodata,
+    build_overviews,
+    restore_missing_hdr_fields,
+    snapshot_hdr_lines,
+)
 from spectra_workbench.providers.gdal_provider.mosaic_ops import (
     build_vrt,
     check_source_compatibility,
@@ -78,8 +84,14 @@ P402_CAPABILITIES: frozenset[str] = frozenset(
         "gdal_merge",
         "gdal:stack",
         "gdal:bandmanage",
+        # --- P4-03（同为列表形式输入；in-place 语义见 INPLACE_CAPABILITIES）---
+        "gdal:editmeta",
+        "gdal:overview",
     }
 )
+
+#: P4-03 in-place 能力：直接更新源文件（输出=输入），staging 走「复制-改-提交」。
+INPLACE_CAPABILITIES: frozenset[str] = frozenset({"gdal:editmeta", "gdal:overview"})
 
 
 def _extract_raster_inputs(spec: Any) -> list[Path]:
@@ -216,6 +228,9 @@ class GDALProviderAdapter(ProviderAdapter):
         "gdal_merge",
         "gdal:stack",
         "gdal:bandmanage",
+        # --- P4-03：元数据编辑 / 概览构建（in-place）---
+        "gdal:editmeta",
+        "gdal:overview",
     }
 
     #: 需要多个输入源的能力（至少 2 个）。
@@ -238,7 +253,34 @@ class GDALProviderAdapter(ProviderAdapter):
             }
 
         is_multi = spec.capability_id in self.MULTI_INPUT_CAPABILITIES
-        if spec.capability_id == "gdal:bandmanage":
+        if spec.capability_id in INPLACE_CAPABILITIES:
+            # P4-03 in-place：恰好 1 个输入，且输出=输入是意图本身（同源豁免）。
+            # target 在本分支内自行解析（此处先于 validate 后段的 target 定义）。
+            srcs = _extract_raster_inputs(spec)
+            inplace_target = (
+                resolve_dataset_path(spec.outputs[0].uri, spec.project_root)
+                if spec.outputs
+                else None
+            )
+            if len(srcs) != 1:
+                errors.append(
+                    f"能力 {spec.capability_id} 需要恰好 1 个输入源，实际 {len(srcs)} 个"
+                )
+                code = "input_not_found"
+            elif inplace_target is None:
+                errors.append("TaskSpec outputs 必须声明至少一个输出计划")
+                code = "invalid_output_plan"
+            else:
+                if not srcs[0].exists():
+                    errors.append(f"输入文件不存在: {srcs[0]}")
+                    code = "input_not_found"
+                if srcs[0].resolve() != inplace_target.resolve():
+                    errors.append(
+                        f"in-place 能力要求输出与输入为同一文件："
+                        f"输入 {srcs[0]}，输出 {inplace_target}"
+                    )
+                    code = "invalid_output_plan"
+        elif spec.capability_id == "gdal:bandmanage":
             # 波段管理：恰好 1 个输入源，但同样用 inputs["inputs"] 列表形式
             srcs = _extract_raster_inputs(spec)
             if len(srcs) != 1:
@@ -282,7 +324,9 @@ class GDALProviderAdapter(ProviderAdapter):
         else:
             out_plan = spec.outputs[0]
             target_path = resolve_dataset_path(out_plan.uri, spec.project_root)
-            if is_multi or spec.capability_id == "gdal:bandmanage":
+            if spec.capability_id in INPLACE_CAPABILITIES:
+                pass  # in-place：输出=输入是意图本身，同源检查已在专属分支完成
+            elif is_multi or spec.capability_id == "gdal:bandmanage":
                 for in_p in _extract_raster_inputs(spec):
                     if in_p.resolve() == target_path.resolve():
                         errors.append(f"输入与输出目标指向同一文件: {target_path}")
@@ -804,9 +848,48 @@ class GDALProviderAdapter(ProviderAdapter):
                 duration_seconds=round(time.monotonic() - start_time, 4),
             )
 
+        is_inplace = cid in INPLACE_CAPABILITIES
+        inplace_info: dict[str, Any] = {}
+        if is_inplace:
+            # in-place 前置校验：输出必须是输入自身；原地改必须显式允许覆盖。
+            src = sources[0]
+            if src.resolve() != target_path.resolve():
+                context.log("ERROR", f"in-place 能力要求输出与输入为同一文件: {src} vs {target_path}")
+                return TaskResult(
+                    task_id=spec.task_id,
+                    attempt=spec.attempt,
+                    status=TaskStatus.failed,
+                    error={"code": "invalid_output_plan",
+                           "message": f"in-place 能力要求输出与输入为同一文件：{src} vs {target_path}"},
+                    duration_seconds=round(time.monotonic() - start_time, 4),
+                )
+            overwrite = bool(spec.outputs[0].overwrite)
+            if not overwrite:
+                context.log("ERROR", "in-place 更新会覆盖源文件，必须显式 overwrite=true")
+                return TaskResult(
+                    task_id=spec.task_id,
+                    attempt=spec.attempt,
+                    status=TaskStatus.failed,
+                    error={"code": "output_already_exists",
+                           "message": "in-place 更新会覆盖源文件，必须显式 overwrite=true"},
+                    duration_seconds=round(time.monotonic() - start_time, 4),
+                )
+            # 复制源文件集合（主文件 + sidecar）到 staging：改副本、成套提交，
+            # 失败不影响源（多文件提交可恢复的验收落点）。
+            err = self._stage_source_bundle(src, staged_path, context)
+            if err is not None:
+                return TaskResult(
+                    task_id=spec.task_id,
+                    attempt=spec.attempt,
+                    status=TaskStatus.failed,
+                    error={"code": "staging_invalid", "message": err},
+                    duration_seconds=round(time.monotonic() - start_time, 4),
+                )
+            context.log("INFO", f"in-place：源文件集合已复制到 staging（{staged_path.name}）")
+
         # 输入兼容性预检：GDAL 对不兼容输入会**静默跳过**（混合 CRS 丢源、
         # 非 separate 截断多波段），必须先核对并明确拒绝。
-        if cid in ("gdal:merge", "gdal_merge"):
+        if not is_inplace and cid in ("gdal:merge", "gdal_merge"):
             compat = check_source_compatibility(sources, require_same_bands=True)
         elif cid == "gdal:stack":
             # separate=True 时每个源的所有波段依次进入，波段数可以不同
@@ -838,7 +921,37 @@ class GDALProviderAdapter(ProviderAdapter):
             return 0 if context.is_cancelled.is_set() else 1
 
         try:
-            if cid in ("gdal:buildvrt", "gdalbuildvrt"):
+            if is_inplace:
+                if cid == "gdal:editmeta":
+                    nodata = norm.get("srcNodata")
+                    if nodata is None:
+                        raise ValueError("editmeta 需要 srcNodata 参数（要写入的 NoData 值）")
+                    hdr = staged_path.with_suffix(".hdr")
+                    snap = snapshot_hdr_lines(hdr)
+                    inplace_info.update(apply_nodata(staged_path, nodata))
+                    # 读-合并-写：GDAL 重写 .hdr 会丢未知字段（实测），按快照补回
+                    restored = restore_missing_hdr_fields(hdr, snap)
+                    inplace_info["unknown_fields_restored"] = restored
+                    context.log("INFO", f"NoData 已写入（未知字段补回 {restored} 条）")
+                else:  # gdal:overview
+                    levels = norm.get("levels")
+                    if not levels:
+                        raise ValueError("overview 需要 levels 参数（如 [2, 4, 8]）")
+                    inplace_info.update(
+                        build_overviews(
+                            staged_path,
+                            resampling=str(norm.get("resampleAlg", "NEAREST")),
+                            levels=list(levels),
+                            compress=norm.get("overviewCompress"),
+                            callback=_progress_cb,
+                        )
+                    )
+                    context.log(
+                        "INFO",
+                        f"概览已构建：{inplace_info.get('overview_count')} 级 "
+                        f"（主影像尺寸契约保持 {inplace_info.get('width')}x{inplace_info.get('height')}）",
+                    )
+            elif cid in ("gdal:buildvrt", "gdalbuildvrt"):
                 build_vrt(
                     staged_path,
                     sources,
@@ -1049,6 +1162,54 @@ class GDALProviderAdapter(ProviderAdapter):
             outputs=[output_record],
             duration_seconds=duration,
         )
+
+    def _stage_source_bundle(self, source: Path, staged_path: Path, context: Any) -> str | None:
+        """把源文件及其 sidecar 复制进 staging（in-place 更新的事务副本）。
+
+        主文件复制为 staged_path；sidecar 按「staged 主文件名 + 相对后缀」命名，
+        使既有 commit 映射规则（.hdr / .aux.xml / tail）无需修改即可工作。
+        返回 None 表示成功，否则返回错误消息。
+        """
+        import shutil as _shutil
+
+        if gdal is None:
+            return "GDAL 不可用，无法收集源文件集合"
+        try:
+            ds = gdal.Open(str(source), gdal.GA_ReadOnly)
+            raw = ds.GetFileList() if ds is not None else []
+            del ds
+        except Exception as exc:
+            return f"收集源文件集合失败：{exc}"
+
+        files: list[Path] = [Path(f).resolve() for f in raw]
+        if source.resolve() not in files:
+            files.insert(0, source.resolve())
+        files = [f for f in files if f.exists()]
+
+        src_name = source.name
+        for f in files:
+            if f == source.resolve():
+                dst = staged_path
+            else:
+                if f.name.startswith(src_name):
+                    # 同主名扩展形态（如 .dat.aux.xml、.dat.ovr）：保留 tail
+                    tail = f.name[len(src_name):]
+                    dst = staged_path.parent / f"{staged_path.name}{tail}"
+                elif f.stem == source.stem and f.suffix:
+                    # 同 stem 不同后缀（ENVI 的 .dat 对 .hdr）：后缀对齐 staged 主名。
+                    # 实测教训：ENVI sidecar 是 legacy.hdr（不以 legacy.dat 开头），
+                    # 若按原名落到 staging，GDAL 打开 staged 主文件时找不到同名 .hdr
+                    # 会报 not recognized as being in a supported file format。
+                    dst = staged_path.with_suffix(f.suffix)
+                else:
+                    dst = staged_path.parent / f.name
+            try:
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                _shutil.copy2(f, dst)
+            except Exception as exc:
+                return f"复制 {f.name} 到 staging 失败：{exc}"
+        context.log("INFO", f"staging 副本就绪：{len(files)} 个文件")
+        return None
 
     def probe_dataset(self, path: Path | str) -> dict[str, Any]:
         """探测并返回数据集详细元数据（零全量内存加载）。"""

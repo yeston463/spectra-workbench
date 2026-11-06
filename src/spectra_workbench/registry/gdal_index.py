@@ -129,7 +129,7 @@ def _source_spec(doc_path: str) -> CapabilitySource:
 
 
 def build_gdal_algorithms() -> list[CapabilityDescriptor]:
-    """GDAL 结构化算法清单（20 项）。
+    """GDAL 结构化算法清单（22 项）。
 
     其中前 18 项是 GDAL **原生独立工具/算法**；
     `gdal:stack` 与 `gdal:bandmanage` 是**平台基于原生 API 的组合实现**
@@ -423,6 +423,73 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
             effects="new_dataset",
             cancellation="cooperative",
             limitations=["波段号从 1 开始；输出顺序严格按给定列表"],
+            validation_evidence=[],
+        ),
+        CapabilityDescriptor(
+            capability_id="gdal:editmeta",
+            descriptor_revision="1.0",
+            kind=CapabilityKind.algorithm,
+            name="GDAL 元数据编辑 (Metadata Edit)",
+            native_name="gdal.SetNoDataValue",
+            category=["metadata", "raster"],
+            description="就地更新数据集的 NoData 元数据；ENVI 头文件按「读-合并-写」保留未知字段。",
+            engine=_engine_spec(),
+            source=_source_spec("programs/gdal_edit.html"),
+            parameters=[
+                ParameterSpec(key="srcNodata", native_name="srcNodata", label="NoData 值", type="number", required=True),
+            ],
+            inputs=[PortSpec(key="inputs", data_type=DatasetKind.raster, required=True, multiple=False, description="待更新的数据集（输出=输入，in-place）")],
+            outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="更新后的同一数据集")],
+            requirements=[Requirement(kind="package", name="GDAL", reason="需更新模式打开")],
+            entrypoints=[
+                Entrypoint(kind="form", target="gdal:editmeta", available=True, notes="平台适配器已接入（P4-03）"),
+                Entrypoint(kind="cli", target="gdal_edit.py", available=True),
+            ],
+            state=CapabilityState(
+                presence=Presence.present,
+                binding=Binding.cli,
+                validation=Validation.not_run,
+                availability=Availability.ready,
+            ),
+            effects="modifies_dataset",
+            cancellation="cooperative",
+            limitations=[
+                "in-place 更新会覆盖源文件（须显式允许覆盖）",
+                "GDAL 重写 ENVI 头会丢未知字段；平台用读-合并-写保留",
+            ],
+            validation_evidence=[],
+        ),
+        CapabilityDescriptor(
+            capability_id="gdal:overview",
+            descriptor_revision="1.0",
+            kind=CapabilityKind.algorithm,
+            name="GDAL 概览构建 (Build Overviews)",
+            native_name="gdal.BuildOverviews",
+            category=["overview", "raster"],
+            description="按给定倍率构建金字塔概览；不改主影像尺寸契约，ENVI 产生外部 .ovr sidecar。",
+            engine=_engine_spec(),
+            source=_source_spec("programs/gdaladdo.html"),
+            parameters=[
+                ParameterSpec(key="resampleAlg", native_name="resampleAlg", label="重采样方式", type="string", required=False, default="NEAREST"),
+                ParameterSpec(key="levels", native_name="levels", label="倍率列表（严格递增，每个≥2）", type="list", required=True),
+                ParameterSpec(key="overviewCompress", native_name="COMPRESS_OVERVIEW", label="概览压缩", type="string", required=False),
+            ],
+            inputs=[PortSpec(key="inputs", data_type=DatasetKind.raster, required=True, multiple=False, description="待构建概览的数据集（输出=输入，in-place）")],
+            outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="构建概览后的同一数据集")],
+            requirements=[Requirement(kind="package", name="GDAL", reason="需 BuildOverviews 支持")],
+            entrypoints=[
+                Entrypoint(kind="form", target="gdal:overview", available=True, notes="平台适配器已接入（P4-03）"),
+                Entrypoint(kind="cli", target="gdaladdo.exe", available=True),
+            ],
+            state=CapabilityState(
+                presence=Presence.present,
+                binding=Binding.cli,
+                validation=Validation.not_run,
+                availability=Availability.ready,
+            ),
+            effects="modifies_dataset",
+            cancellation="cooperative",
+            limitations=["in-place 更新会覆盖源文件（须显式允许覆盖）"],
             validation_evidence=[],
         ),
         CapabilityDescriptor(
