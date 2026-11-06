@@ -78,7 +78,15 @@ if (-not $Quick -and -not $NoTypeCheck) {
 $Guard = Join-Path $PSScriptRoot 'run_with_timeout.py'
 $logName = if ($targetMarker) { "test_$targetMarker" } else { 'test_all' }
 $RunLog = Join-Path $ProjectRoot ("work\test_runs\$logName.log")
-$pytestArgs = @('-m', 'pytest', '-q', '-o', 'faulthandler_timeout=60')
+# 使用项目内独立 basetemp：系统临时目录（%TEMP%\pytest-of-*）里历史残留的
+# pytest-current 断链会让 pytest_sessionfinish 的 cleanup_dead_symlinks 抛
+# WinError 5，表现为「全部测试通过但 rc=1」。这与测试内容无关，属于环境问题；
+# 每次用一个全新的项目内目录即可稳定规避（work/ 已被 .gitignore 忽略）。
+$runStamp = (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + [guid]::NewGuid().ToString('N').Substring(0, 6)
+$baseTemp = Join-Path $ProjectRoot ("work\test_runs\pytest_tmp\run-$runStamp")
+# pytest 用 os.mkdir(basetemp)（parents=False），父目录必须先存在
+New-Item -ItemType Directory -Force -Path (Split-Path -Parent $baseTemp) | Out-Null
+$pytestArgs = @('-m', 'pytest', '-q', '-o', 'faulthandler_timeout=60', '--basetemp', $baseTemp)
 if ($targetMarker -ne '') {
     $pytestArgs += @('-m', $targetMarker)
 }
