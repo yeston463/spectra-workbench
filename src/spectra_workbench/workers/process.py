@@ -22,6 +22,7 @@ import threading
 import time
 import uuid
 from collections.abc import Callable
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlparse
@@ -49,6 +50,16 @@ class WorkerTimeoutError(WorkerProcessError):
 
 class WorkerProtocolViolationError(WorkerProcessError):
     """Worker 违反协议契约。"""
+
+
+class WorkerState(StrEnum):
+    """Worker 生命周期状态。"""
+
+    STOPPED = "stopped"
+    STARTING = "starting"
+    READY = "ready"
+    STOPPING = "stopping"
+    FAILED = "failed"
 
 
 def resolve_worker_command(
@@ -130,6 +141,19 @@ class WorkerProcess:
         self._hello_envelope: Envelope | None = None
         self._ready_envelope: Envelope | None = None
 
+        # S2：显式生命周期状态机。并发 start 共享同一次启动结果。
+        self._state = WorkerState.STOPPED
+        self._state_lock = threading.RLock()
+        self._state_cv = threading.Condition(self._state_lock)
+        self._cleanup_lock = threading.Lock()
+        self._start_result: Envelope | None = None
+        self._start_error: BaseException | None = None
+        self._start_owner: int | None = None
+        self._start_cancel = threading.Event()
+        self._startup_timings: dict[str, Any] = {}
+        self._generation_started = False
+        self._active_generation: int | None = None
+
         # 配置大控制消息落盘溢出目录
         try:
             spill_root = Path(tempfile.gettempdir()) / "spectra_workbench_spill"
@@ -149,18 +173,104 @@ class WorkerProcess:
     def is_alive(self) -> bool:
         return self._proc is not None and self._proc.poll() is None
 
+    @property
+    def state(self) -> WorkerState:
+        with self._state_lock:
+            return self._state
+
+    @property
+    def startup_timings(self) -> dict[str, Any]:
+        with self._state_lock:
+            return dict(self._startup_timings)
+
     def add_listener(self, listener: Callable[[Envelope], None]) -> None:
         """添加消息监听器（每收到一条有效协议消息均回调）。"""
         self._listeners.append(listener)
 
     def start(self, timeout: float = 15.0) -> Envelope:
-        """启动 Worker 进程并阻塞等待握手完成（hello -> ready）。"""
-        # 每次拉起新进程前清空上一代握手状态。超时 / 崩溃后若复用本对象，
-        # 残留的 _ready_envelope 会让新的 start() 立刻返回**过期**握手，
-        # 表现为请求发往一个根本不存在的进程（第 31 轮疑点之一）。
-        self._hello_envelope = None
-        self._ready_envelope = None
-        self.received_envelopes.clear()
+        """启动 Worker 并共享同一次握手结果（STOPPED→STARTING→READY）。
+
+        并发调用者不会各自拉起进程；第一个调用者成为 owner，其余在条件变量上
+        等待同一个 ready/异常。每次真正启动绑定新的 generation、进程和管道。
+        """
+        with self._state_cv:
+            if (
+                self._state is WorkerState.READY
+                and self.is_alive
+                and self._ready_envelope is not None
+            ):
+                return self._ready_envelope
+
+            if self._state is WorkerState.STARTING:
+                deadline = time.monotonic() + timeout
+                while self._state is WorkerState.STARTING:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        raise WorkerTimeoutError(
+                            f"等待其他线程完成 Worker 启动超时 ({timeout}s)"
+                        )
+                    self._state_cv.wait(remaining)
+                if self._state is WorkerState.READY and self._ready_envelope is not None:
+                    return self._ready_envelope
+                if self._start_error is not None:
+                    raise self._start_error
+                if self._state is WorkerState.STOPPED:
+                    raise WorkerProcessError("Worker 在启动过程中被停止")
+                raise WorkerProcessError(
+                    f"Worker 启动未完成，当前状态 {self._state.value}"
+                )
+
+            if self._state is WorkerState.STOPPING:
+                deadline = time.monotonic() + timeout
+                while self._state is WorkerState.STOPPING:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        raise WorkerTimeoutError("等待 Worker 停止超时")
+                    self._state_cv.wait(remaining)
+
+            if self._state is WorkerState.READY and not self.is_alive:
+                self._state = WorkerState.STOPPED
+
+            # 成为本次启动的 owner。
+            self._state = WorkerState.STARTING
+            self._start_result = None
+            self._start_error = None
+            self._start_owner = threading.get_ident()
+            self._start_cancel = threading.Event()
+            if self._generation_started:
+                self.generation = self._guard.restart()
+            else:
+                self._generation_started = True
+                self._guard.current_generation = self.generation
+            generation = self.generation
+            self._active_generation = generation
+            self._hello_envelope = None
+            self._ready_envelope = None
+            self.received_envelopes.clear()
+            self._startup_timings = {
+                "generation": generation,
+                "spawn_start": time.monotonic(),
+            }
+            deadline = time.monotonic() + timeout
+
+        try:
+            proc, stop_event = self._spawn_generation(generation, deadline)
+            ready = self._wait_ready(proc, generation, stop_event, deadline, timeout)
+        except BaseException as exc:
+            self._fail_start(exc)
+            raise
+
+        with self._state_cv:
+            self._startup_timings["ready"] = time.monotonic()
+            self._state = WorkerState.READY
+            self._start_result = ready
+            self._start_error = None
+            self._state_cv.notify_all()
+        return ready
+
+    def _spawn_generation(
+        self, generation: int, deadline: float
+    ) -> tuple[subprocess.Popen[bytes], threading.Event]:
         cmd = [
             str(self._python_exe),
             "-m",
@@ -169,11 +279,10 @@ class WorkerProcess:
             "--worker-id",
             self.worker_id,
             "--generation",
-            str(self.generation),
+            str(generation),
         ]
-
         try:
-            self._proc = subprocess.Popen(
+            proc = subprocess.Popen(
                 cmd,
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
@@ -184,60 +293,118 @@ class WorkerProcess:
         except Exception as exc:
             raise WorkerProcessError(f"启动 Worker 进程失败: {exc} (cmd={cmd})") from exc
 
-        # 启动 stdout 与 stderr 读取线程
-        self._stop_event.clear()
-        self._stdout_thread = threading.Thread(
-            target=self._read_stdout_loop,
-            name=f"worker-{self.worker_id}-stdout",
-            daemon=True,
-        )
-        self._stderr_thread = threading.Thread(
-            target=self._read_stderr_loop,
-            name=f"worker-{self.worker_id}-stderr",
-            daemon=True,
-        )
-        self._stdout_thread.start()
-        self._stderr_thread.start()
+        stop_event = threading.Event()
+        with self._state_cv:
+            if (
+                self._state is not WorkerState.STARTING
+                or self._start_cancel.is_set()
+            ):
+                with contextlib.suppress(Exception):
+                    proc.kill()
+                    proc.wait(timeout=2.0)
+                raise WorkerProcessError("Worker 在进程创建后、握手前被停止")
+            self._proc = proc
+            self._active_generation = generation
+            self._stop_event = stop_event
+            self._stdout_thread = threading.Thread(
+                target=self._read_stdout_loop,
+                args=(proc, stop_event, generation),
+                name=f"worker-{self.worker_id}-g{generation}-stdout",
+                daemon=True,
+            )
+            self._stderr_thread = threading.Thread(
+                target=self._read_stderr_loop,
+                args=(proc, stop_event),
+                name=f"worker-{self.worker_id}-g{generation}-stderr",
+                daemon=True,
+            )
+            self._startup_timings["spawn_done"] = time.monotonic()
+            self._stdout_thread.start()
+            self._stderr_thread.start()
+        return proc, stop_event
 
-        # 等待 ready 消息
-        start_t = time.monotonic()
-        while time.monotonic() - start_t < timeout:
-            if not self.is_alive:
-                stderr_preview = "".join(self.stderr_lines[-20:])
+    def _wait_ready(
+        self,
+        proc: subprocess.Popen[bytes],
+        generation: int,
+        stop_event: threading.Event,
+        deadline: float,
+        timeout: float,
+    ) -> Envelope:
+        while time.monotonic() < deadline:
+            with self._state_cv:
+                if (
+                    self._state is not WorkerState.STARTING
+                    or self._start_cancel.is_set()
+                    or stop_event.is_set()
+                ):
+                    raise WorkerProcessError("Worker 在启动过程中被停止")
+                if self._active_generation == generation and self._ready_envelope is not None:
+                    return self._ready_envelope
+            rc = proc.poll()
+            if rc is not None:
+                stderr_preview = "".join(self.stderr_lines[-20:])[-600:]
                 raise WorkerProcessError(
-                    f"Worker 进程在握手期间异常退出 (code={self._proc.poll()}):\n{stderr_preview}"
+                    f"Worker 进程在握手期间提前退出 (code={rc}):\n{stderr_preview}"
                 )
-            if self._ready_envelope is not None:
-                return self._ready_envelope
-            time.sleep(0.05)
+            time.sleep(0.02)
 
-        elapsed = time.monotonic() - start_t
+        elapsed = time.monotonic() - float(self._startup_timings.get("spawn_start", 0))
         hello_seen = self._hello_envelope is not None
         proc_alive = self.is_alive
         stderr_preview = "".join(self.stderr_lines[-20:])[-600:]
-        self.kill()
-        # kill() 之后也清空，保证下次 start() 不会误认这次的半截握手
-        self._hello_envelope = None
-        self._ready_envelope = None
         raise WorkerTimeoutError(
             f"Worker 启动握手超时 ({timeout}s，实测 {elapsed:.2f}s): "
             f"hello_received={hello_seen}, ready_received=False, "
-            f"proc_alive_at_timeout={proc_alive}, stderr_tail={stderr_preview!r}"
+            f"proc_alive_at_timeout={proc_alive}, "
+            f"timings={self.startup_timings}, stderr_tail={stderr_preview!r}"
         )
 
-    def _read_stdout_loop(self) -> None:
-        """后台分帧读取 stdout 二进制流。"""
-        parser = JsonlStreamParser()
-        assert self._proc is not None and self._proc.stdout is not None
-        stdout = self._proc.stdout
+    def _fail_start(self, exc: BaseException) -> None:
+        with self._cleanup_lock:
+            stop_event = self._stop_event
+            stop_event.set()
+            proc = self._proc
+            if proc is not None and proc.poll() is None:
+                with contextlib.suppress(Exception):
+                    proc.kill()
+                with contextlib.suppress(Exception):
+                    proc.wait(timeout=2.0)
+            self._join_readers(timeout=2.0)
+        with self._state_cv:
+            if self._state is WorkerState.STOPPING or self._start_cancel.is_set():
+                self._state = WorkerState.STOPPED
+            else:
+                self._state = WorkerState.FAILED
+            self._start_error = exc
+            self._startup_timings["failed"] = time.monotonic()
+            self._state_cv.notify_all()
 
-        while not self._stop_event.is_set():
+    def _read_stdout_loop(
+        self,
+        proc: subprocess.Popen[bytes] | None = None,
+        stop_event: threading.Event | None = None,
+        generation: int | None = None,
+    ) -> None:
+        """后台分帧读取 stdout；绑定不可变的本次进程/管道/代际。"""
+        parser = JsonlStreamParser()
+        proc = proc or self._proc
+        stop_event = stop_event or self._stop_event
+        generation = self._active_generation if generation is None else generation
+        if proc is None or proc.stdout is None:
+            return
+        stdout = proc.stdout
+
+        while not stop_event.is_set():
             try:
                 line = stdout.readline()
                 if not line:
                     break
                 envelopes = parser.feed(line)
                 for env in envelopes:
+                    if generation is not None and env.generation != generation:
+                        self._guard.rejected_stale += 1
+                        continue
                     if not self._guard.accept(env):
                         continue
                     self._on_envelope_received(env)
@@ -247,16 +414,26 @@ class WorkerProcess:
         # 刷新最后遗留
         try:
             for env in parser.close():
+                if generation is not None and env.generation != generation:
+                    self._guard.rejected_stale += 1
+                    continue
                 if self._guard.accept(env):
                     self._on_envelope_received(env)
         except Exception:
             pass
 
-    def _read_stderr_loop(self) -> None:
+    def _read_stderr_loop(
+        self,
+        proc: subprocess.Popen[bytes] | None = None,
+        stop_event: threading.Event | None = None,
+    ) -> None:
         """后台读取 stderr 并记录，防止管道填满造成子进程死锁。"""
-        assert self._proc is not None and self._proc.stderr is not None
-        stderr = self._proc.stderr
-        while not self._stop_event.is_set():
+        proc = proc or self._proc
+        stop_event = stop_event or self._stop_event
+        if proc is None or proc.stderr is None:
+            return
+        stderr = proc.stderr
+        while not stop_event.is_set():
             try:
                 line = stderr.readline()
                 if not line:
@@ -268,6 +445,9 @@ class WorkerProcess:
 
     def _on_envelope_received(self, env: Envelope) -> None:
         """接收并分发协议消息。若收到落盘溢出的 artifact 消息，自动解包还原。"""
+        if env.generation != self._guard.current_generation:
+            self._guard.rejected_stale += 1
+            return
         if env.kind is Kind.artifact and env.payload.get("kind") == "inline_payload_spill":
             uri = env.payload.get("uri")
             if uri:
@@ -288,8 +468,12 @@ class WorkerProcess:
 
         if env.kind is Kind.hello:
             self._hello_envelope = env
+            with self._state_lock:
+                self._startup_timings.setdefault("hello", time.monotonic())
         elif env.kind is Kind.ready and self._ready_envelope is None:
             self._ready_envelope = env
+            with self._state_lock:
+                self._startup_timings.setdefault("ready", time.monotonic())
 
         # 唤醒等待该 request_id 的调用方
         if env.request_id:
@@ -713,43 +897,68 @@ class WorkerProcess:
             pass
 
     def stop(self, timeout: float = 5.0) -> int:
-        """向 Worker 发送 shutdown 命令并等待进程退出。"""
-        if not self.is_alive or self._proc is None:
-            # 进程已退出或未存活：仍需确保子进程被回收
-            # （is_alive 判断与真实状态可能不一致，残留子进程会持续占内存）。
+        """停止 Worker：READY 走 shutdown，STARTING 直接终止本次挂起/启动进程。"""
+        with self._state_cv:
+            if self._state is WorkerState.STOPPED and (
+                self._proc is None or self._proc.poll() is not None
+            ):
+                return 0
+            previous = self._state
+            self._state = WorkerState.STOPPING
+            self._start_cancel.set()
             self._stop_event.set()
-            try:
-                if self._proc is not None and self._proc.poll() is None:
-                    self._proc.kill()
-                    self._proc.wait(timeout=2.0)
-            except Exception:
-                pass
-            self._join_readers()
-            return 0
+            proc = self._proc
+            self._state_cv.notify_all()
 
-        try:
-            env = new_message(
-                Kind.request,
-                self.worker_id,
-                {"action": "shutdown", "arguments": {}},
-                generation=self.generation,
-            )
-            self.send_envelope(env)
-            self._proc.wait(timeout=timeout)
-        except Exception:
-            self.kill()
+        rc = 0
+        if proc is not None:
+            if proc.poll() is None:
+                if previous is WorkerState.READY:
+                    with contextlib.suppress(Exception):
+                        env = new_message(
+                            Kind.request,
+                            self.worker_id,
+                            {"action": "shutdown", "arguments": {}},
+                            generation=self.generation,
+                        )
+                        self.send_envelope(env)
+                    try:
+                        proc.wait(timeout=timeout)
+                    except Exception:
+                        with contextlib.suppress(Exception):
+                            proc.kill()
+                            proc.wait(timeout=2.0)
+                else:
+                    with contextlib.suppress(Exception):
+                        proc.kill()
+                        proc.wait(timeout=2.0)
+            rc = int(proc.returncode or 0)
 
-        self._stop_event.set()
-        self._join_readers()
-        return self._proc.returncode if self._proc else 0
+        with self._cleanup_lock:
+            self._stop_event.set()
+            self._join_readers(timeout=timeout)
+
+        with self._state_cv:
+            self._state = WorkerState.STOPPED
+            self._state_cv.notify_all()
+        return rc
 
     def kill(self) -> None:
-        """强制终止 Worker 进程。"""
-        self._stop_event.set()
-        if self._proc is not None:
-            try:
-                self._proc.kill()
-                self._proc.wait(timeout=2.0)
-            except Exception:
-                pass
-        self._join_readers()
+        """强制终止 Worker 进程并收敛到 STOPPED。"""
+        with self._state_cv:
+            self._start_cancel.set()
+            self._state = WorkerState.STOPPING
+            self._stop_event.set()
+            proc = self._proc
+            self._state_cv.notify_all()
+        if proc is not None:
+            with contextlib.suppress(Exception):
+                if proc.poll() is None:
+                    proc.kill()
+                    proc.wait(timeout=2.0)
+        with self._cleanup_lock:
+            self._stop_event.set()
+            self._join_readers(timeout=2.0)
+        with self._state_cv:
+            self._state = WorkerState.STOPPED
+            self._state_cv.notify_all()

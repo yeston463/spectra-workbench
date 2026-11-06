@@ -161,7 +161,8 @@
         "复核缺陷修复：Envelope 严格实现 contracts/message.schema.json 的全部约束，11 种 kind 的 payload 强制强类型校验；6 个可选字段（ready.features, progress.message, log.stream, result.warnings, error.details, cancel.reason）精确拒绝显式 null 并允许缺省。",
         "src/spectra_workbench/workers/process.py：实现跨进程 Worker 客户端 WorkerProcess，子进程标准输入输出管道管理、后台分帧异步读 stdout，独立后台线程排空 stderr 避免死锁并杜绝 stdout 协议流污染，支持超限保护与 GenerationGuard 守卫。",
         "src/spectra_workbench/workers/entrypoint.py：实现 Worker 子进程 CLI 入口，握手 hello->ready，主线程事件循环快速响应 Kind.cancel 与 Kind.heartbeat，专用工作线程执行任务，print 自动重定向至 stderr 保证协议流纯净。",
-        "tests/integration/test_worker_process.py：8 项真实跨进程自动化集成测试全绿，严格验证握手生命周期、分包/粘包、UTF-8 中文往返、stderr 隔离、非法未知动作错误处理、任务执行增量进度、协作式取消响应、世代守卫与超时异常捕获。"
+        "tests/integration/test_worker_process.py：8 项真实跨进程自动化集成测试全绿，严格验证握手生命周期、分包/粘包、UTF-8 中文往返、stderr 隔离、非法未知动作错误处理、任务执行增量进度、协作式取消响应、世代守卫与超时异常捕获。",
+        "第 40 轮 S2 Worker 生命周期状态机：WorkerProcess 显式 STOPPED→STARTING→READY→STOPPING（失败 FAILED），并发 start 由条件变量共享同一次握手；每次真正启动分配独立 generation、Popen、stdin/stdout/stderr、stop_event 和两个读取线程，旧 generation 的迟到 ready 被 GenerationGuard 与 _on_envelope_received 双重拒绝。启动中 stop 会取消并终止本次进程；握手超时进入 FAILED 后再次 start 自动推进 generation；提前退出携带退出码与 stderr。记录 spawn_start/spawn_done/hello/ready timings；QtWorkerClient.is_alive 仅在 READY 且进程存活时为 true。新增 tests/integration/test_worker_state_machine.py（8 项）；Worker 定向 41 passed / rc=0（18.55s）；Clean 全量 600 passed / 0 failed / rc=0 / clean_exit_verified=true（307.80s，process_observation=job、residual=0、cleanup_complete=true）。未增加自动重试或扩大握手超时。"
       ],
       "blocking_reason": null
     },

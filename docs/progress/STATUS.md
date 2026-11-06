@@ -1,6 +1,6 @@
 # 执行状态
 
-更新：2026-11-06（第 39 轮 · S0 冻结 + S1 可信退出（含监督器与 Job 接管加固）：默认 Clean finalization、Bypass 返回 91、运行身份/模式一致性/挂起创建→Job→恢复/真实 cleanup report/未跟踪目录快照；Clean 全量 592 项 / 0 失败 / rc=0 / clean_exit_verified=true。第 38 轮为 P4-02 复核补强）
+更新：2026-11-06（第 40 轮 · S2 Worker 生命周期状态机：STOPPED/STARTING/READY/STOPPING、并发启动共享握手、独立 generation/进程/管道/读取线程、迟到 ready 拒绝、启动中停止/超时重启/提前退出；Clean 全量 600 项 / 0 失败 / rc=0 / clean_exit_verified=true。第 39 轮为 S0/S1 可信退出）
 
 ## 当前里程碑
 
@@ -228,6 +228,38 @@ CRT 检测到栈状态异常后立即终止进程，这正是 `STATUS_STACK_BUFF
 |---|---|---|
 | 用合成影像完成同类验收 | 已满足 | 合成 ENVI/GTiff/GeoJSON/netCDF 样例覆盖多波段、像元数值、ROI 与对比 |
 | 保留真实数据待验状态 | **待验** | 课程原始数据位于 `C:\Users\赵航\Desktop\studio\_chaoxing_rs`（**只读**，不得运行其中的抓取/下载/OCR 脚本）；本轮全部用合成影像验收，未对课程原始 ENVI 栅格与 lena.tif 做真实打开验证 |
+
+### 第 40 轮：S2 Worker 生命周期状态机
+
+**一、状态与并发启动**
+
+- `WorkerProcess` 新增显式 `WorkerState`：`STOPPED → STARTING → READY → STOPPING`，启动失败进入 `FAILED`。
+- 并发 `start()` 由条件变量共享同一次启动：第一个调用者成为 owner，其余等待同一个 ready/异常，不再各自拉起进程。
+- `QtWorkerClient.is_alive` 只表示 `READY` 且进程存活；原先 `if not is_alive: start()` 的请求路径在 STARTING 也会等待共享握手，不会提前发请求。
+
+**二、代际与管道绑定**
+
+- 每次真正启动分配独立 generation，并更新 `GenerationGuard`；每次启动绑定独立 `Popen`、stdin/stdout/stderr、`stop_event` 和两个读取线程（线程名含 generation）。
+- 读取线程使用不可变的本次进程/管道/代际，不再通过可变的 `self._proc` 读取下一代；旧 generation 的迟到 ready 在 `_guard` 与 `_on_envelope_received` 双重拒绝。
+- 启动阶段记录 `spawn_start`、`spawn_done`、`hello`、`ready` 时间；超时错误携带 timings、PID/存活状态和有限 stderr 尾部。
+
+**三、故障边界**
+
+- 启动中 `stop()`：设置 STOPPING/cancel，终止本次进程，等待 owner 收敛；`start()` 返回失败而不是 ready。
+- 握手超时：进入 FAILED，清理进程/读取线程；再次 `start()` 自动推进 generation，复用对象不会拿到旧 ready。
+- 提前退出：在握手期间检测进程退出码并携带 stderr 摘要报错。
+- `start/stop` 4 轮循环与 4 Worker × 3 轮并发循环验证线程名收敛、进程逐代不同、句柄增长有界。
+
+**四、验证**
+
+- 新增 `tests/integration/test_worker_state_machine.py`（8 项）：并发 start 共享、启动中 stop、超时后重启、提前退出、迟到旧 ready、4 轮收敛、4×3 并发循环、QtWorkerClient 并发 start。
+- Worker 相关定向：`test_worker_state_machine.py + test_worker_process.py + test_worker_lifecycle_guard.py + test_scheduler_lifecycle.py + test_p4_worker_dispatch_hardening.py + test_p3_exit_lifecycle.py` **41 passed / rc=0**（18.55s）。
+- Clean 全量：**600 passed / 0 failed / rc=0 / clean_exit_verified=true**（307.80s，`process_observation=job`、`residual=0`、`cleanup_complete=true`）。
+
+**五、边界**
+
+- S3 sidecar 所有权/事务删除、S4 格式矩阵、S5 桌面端到端仍未开始。
+- 未增加自动重试或扩大握手超时；失败仍按 FAILED 暴露，由调用方显式重启。
 
 ### 第 39 轮：S0 冻结 / S1 可信退出验收
 

@@ -21,7 +21,7 @@ from PySide6.QtCore import QCoreApplication, QObject, QThread, QTimer, Signal
 
 from spectra_workbench.domain.models import TaskResult, TaskSpec
 from spectra_workbench.protocol.messages import Envelope, Kind
-from spectra_workbench.workers.process import WorkerProcess, WorkerTimeoutError
+from spectra_workbench.workers.process import WorkerProcess, WorkerState
 
 
 class QtWorkerClient(QObject):
@@ -147,24 +147,13 @@ class QtWorkerClient(QObject):
 
     @property
     def is_alive(self) -> bool:
-        return self._worker.is_alive
+        # 只有 READY 才能接收请求；STARTING 时调用 start() 会共享同一次握手。
+        return self._worker.state is WorkerState.READY and self._worker.is_alive
 
     def start(self, timeout: float = 15.0) -> Envelope:
-        """同步启动 Worker 并建立握手（通常在后台初始化或快速启动）。
-
-        必须串行化：多个请求线程可能同时发现 worker 尚未启动而并发调用 start()，
-        后一次会覆盖前一次的子进程句柄，导致前一个 worker 泄漏、其请求永远收不到响应。
-        """
+        """同步启动 Worker；并发调用由 WorkerProcess 状态机共享同一次握手。"""
         self._ensure_dispatcher()
         with self._start_lock:
-            if self._worker.is_alive:
-                # 另一个线程已完成启动：复用现有 worker，不重复拉起子进程
-                env = self._worker._ready_envelope
-                if env is None:
-                    raise WorkerTimeoutError(
-                        f"Worker 已启动但缺少 ready 握手消息 (timeout={timeout}s)"
-                    )
-                return env
             return self._worker.start(timeout=timeout)
 
     def _spawn_thread(self, target: Callable[[], None], name: str) -> None:
