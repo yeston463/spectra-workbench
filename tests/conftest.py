@@ -131,7 +131,13 @@ def teardown_qt_application() -> None:
 
 
 def pytest_sessionfinish(session: Any, exitstatus: int) -> None:  # noqa: ARG001
-    """所有测试与会话级夹具收尾之后，再做 Qt 有序销毁。"""
+    """所有测试与会话级夹具收尾之后，再做 Qt 有序销毁。
+
+    同时把 pytest 的真实退出码存到 config：``pytest_unconfigure`` 阶段
+    ``config.exitstatus`` 可能仍是 None/0，直接读取会把失败轮错误地
+    ``os._exit(0)``，从而掩盖失败。
+    """
+    session.config._sw_exitstatus = int(exitstatus)
     teardown_qt_application()
 
 
@@ -152,7 +158,9 @@ def pytest_unconfigure(config: Any) -> None:  # noqa: ARG001
     """
     if os.environ.get("SW_SKIP_FINALIZATION") == "0":
         return
-    exitstatus = int(getattr(config, "exitstatus", 0) or 0)
+    exitstatus = int(
+        getattr(config, "_sw_exitstatus", getattr(config, "exitstatus", 0)) or 0
+    )
     # os._exit 不经过解释器最终化，缓冲必须手动刷：否则 pytest 的终端报告
     #（含 FAILURES 详情）会因 stdout 块缓冲未落盘而丢失。
     sys.stdout.flush()
