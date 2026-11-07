@@ -1,27 +1,22 @@
 # 执行状态
 
-更新：2026-11-07（第 56 轮 · P5-05 驱动读写能力矩阵与高级选项：describe_driver 暴露 DCAP 四模式声明与 DMD_CREATIONOPTIONLIST 高级选项；ENVI/GPKG/GTiff/COG+扩展驱动四模式分开实测，声明 vs 实况错位六项白名单化（ENVI CreateCopy 等），COG 在 3.13 已支持 Create；**P5-05 转 done，P5 里程碑全部完成**。Clean 全量 688 项 / 0 失败 / rc=0 / clean_exit_verified=true。第 55 轮为 P5-04）
+更新：2026-11-07（第 57 轮 · implemented 收官：逐项审计 20 项 implemented 的验收与既有证据，19 项转 done（P0-03/05、P1-01/04/05、P2-01~05、P3-01~05、P4-01/03/04/05），P0-02 维持 implemented（证据明示打包依赖不得据此标 done）；账本 done 29 / implemented 1 / todo 25。当日回归 Clean 全量 688 项 / 0 失败 / rc=0 / clean_exit_verified=true。第 56 轮 P5-05 转 done、P5 收官）
 
 ## 当前里程碑
 
-- **P0 基础设施与自动化验证闭环**：P0-01、P0-04 为 done；P0-02、P0-03、P0-05 为 implemented。
-- **P1 核心作业生命周期全面闭环**：P1-01、P1-02、P1-03 为 done；P1-04、P1-05 为 implemented。
-- **P2 能力基准、注册表与动态表单**：
-  - **P2-01 建立目标版本上游基准**：implemented。锁定 GDAL 3.13.3 与 Rasterio 1.5.2，全量 443 项条目通过模式校验。
-  - **P2-02 接入 GDAL 结构化算法、传统命令与驱动探测**：implemented。205 运行时驱动 + 1 缺失 HDF5 驱动（缺口为 0）；119 个 gdal --json-usage 叶子命令；接入真实 gdal.Warp 重投影。
-  - **P2-03 接入 Rasterio API/rio 与索引**：implemented。接入 rasterio worker，分块窗口读写转换与未接入能力拦截。
-  - **P2-04 建立可搜索工具箱与自动表单**：implemented。从注册表动态构建参数表单控件 `CapabilityFormWidget`，完整接通 GDAL 格式转换、GDAL Warp 重投影、Rasterio 格式转换；未接入能力严格展示状态徽标与限制说明，禁用提交按钮；实现输入输出路径选择器、同源冲突校验与规范 TaskSpec 组装。
-  - **P2-05 建立覆盖审计与版本差异**：implemented。实现 `ToolboxPanel` 可搜索工具箱，收录全部 443 项基准能力，支持实时模糊搜索与引擎筛选；优先高亮平台已接通核心算法；`scripts/audit-capabilities.ps1` 持续提供四维状态审计。
-- **P3 主窗口、数据与影像查看**（全部保持 implemented）：
-  - **P3-01 主窗口、Dock、项目树、图层模型**：implemented。实现主窗口与 Dock 布局、图层顺序保序；显式设置 Dock 与工具栏 objectName，实测验证浮动（isFloating）、显隐（isVisible）与停靠区域重排跨会话无损保存与重开恢复；分离运行时根与用户项目目录，新项目显式记录 `path_anchor='project_dir'`；保存事务边界加固；旧版 1.0 格式且缺少路径基准标记的项目进入明确的待确认流程，程序化打开返回 checkable 状态，用户确认前不自动派发同名文件、未确认前禁止保存，用户确认后按真实路径派发并迁移持久化，取消确认原文件保持不变；无论确认的物理目标是否存在均保留用户确认选择（存在性仅决定是否请求加载，不影响路径更新），重开后严格保持目标一致，杜绝劫持同名文件；自定义空路径提供校验阻断；旧绝对引用直接按确定语义解析；缺失源状态指示与显式移除；移除图层与关窗彻底释放文件句柄与缓存。
-  - **P3-02 栅格元数据读取**：implemented。通过 Worker 提取尺寸、波段数、驱动、数据类型、CRS、GeoTransform（含旋转 Affine 系数）、地理范围与 NoData；统一异常隔离与 `retryable` 标准错误 Schema，坏文件探测不中断执行线程。
-  - **P3-02 基础矢量与子数据集元数据**（第 22 轮补齐原缺口）：implemented。Worker 新增 `probe_vector`（图层名称、几何类型、CRS、范围、字段名称/类型/可空性；要素数与范围不可得时以 `feature_count_expensive` / `extent_available` 如实标注，不返回编造数值）、`list_subdatasets`（原样保留引擎返回的数据源引用）与 `probe_subdataset`（尺寸、dtype、NoData、波段、GeoTransform、CRS）。GUI 新增「数据源元数据」面板展示矢量结构与可选子数据集；栅格探测失败时回退矢量探测，使矢量文件可作为图层打开、可保存重开；**矢量渲染与多维分析尚未实现，明确标注而不提供假入口**。
-  - **P3-03 瓦片请求、概览、缓存、过期请求处理**：implemented。仅按可见窗口向 Worker 索取数据；实现 `TileCache`（LRU 淘汰与字节预算限制）；请求代际（`_active_request_id`）与图层 ID 校验彻底丢弃过期旧图响应；支持四种概览采样策略（auto/nearest/average/gauss）；在真实交互式 GUI 下以 6144x6144 多级概览大影像完成缩放、平移、切波段与切层全流程实测，验证 LRU 淘汰真实触发（9 次逐出），缓存严格受限在预算内，图层移除后缓存彻底清零。
-  - **P3-04 灰度/RGB/伪彩、拉伸、透明度与分屏**：implemented。支持灰度、RGB 与 6 种伪彩色（terrain/viridis/plasma/inferno/magma/jet）；min-max 与 2%~98% 分位数拉伸；原始像元值与显示拉伸值严格物理分离；实现双视图联动同步模式（`test_dual_canvas_link_mode`）。
-  - **P3-05 view CRS、重投影、查询与 ROI**：implemented。支持旋转 Affine 栅格与无 GT 栅格加载；地图坐标 ↔ 像元行列支持中心 (center) 与角点 (corner) 两种坐标约定（`test_map_to_pixel_center_vs_corner`）；实现 PointROI / RectROI / PolygonROI 模型与点在多边形判定；跨 CRS 视图重投影网格索取；通过真实 Qt 鼠标事件（QTest）完成多边形 ROI 逐点绘制、右键/起点闭合、选中、顶点手柄真实拖拽形变、删除与保存重开恢复；多图层切换下 ROI 所属图层严格隔离与保全；旋转 Affine 栅格与视图 CRS 切换（像元 vs EPSG:4326）下坐标空间与点位无损保持；矩形 ROI 权威几何与显示轮廓物理分离，在旋转 Affine 栅格下展开 4 角点经 Worker 转换并渲染实际轮廓，实测断言 4 个真实地图角点与 425.0 平方地图单位覆盖面积（彻底杜绝错误轴对齐面积 375.0），变换视图下手柄隐藏禁用，防止扭曲矩形；坐标转换失败时绝不伪装恒等变换，严格隐藏图形项（`item.isVisible() is False`）并清空 `display_points`（为 None），保全权威模型，切回有效视图自动恢复；拖动反算 Worker 报错时安全回退，不崩溃不污染。本轮补齐五类故障注入矩阵（向地图失败 / 回像元失败 / 项目重开失败 / 拖动反算失败 / 旧响应迟到），每类均验证图形状态、权威几何与保存结果；修复跨坐标空间数据混用缺陷（state 显式记录显示点所属空间与 CRS），拖动反算失败时显示图形恢复原轮廓、权威几何保持不变。
+- **P0 基础设施与自动化验证闭环**：P0-01、P0-03、P0-04、P0-05 为 done（第 57 轮收官）；P0-02 为 implemented——环境锁与隔离导入已满足，但 GDAL 运行时依赖本机 QGIS，自带可重定位运行时归 P10-01/P10-02 后方可转 done。
+- **P1 核心作业生命周期全面闭环**：P1-01~05 全部 done（第 57 轮收官；P1-02/03 此前已 done）。
+- **P2 能力基准、注册表与动态表单**：P2-01~05 全部 done（第 57 轮收官）。锁定 GDAL 3.13.3 与 Rasterio 1.5.2 基准（443 项条目）、205 驱动 + 119 CLI + API 索引编目、可搜索工具箱与动态表单、四维覆盖审计。
+- **P3 主窗口、数据与影像查看**：P3-01~05 全部 done（第 57 轮收官）。主窗口/Dock/项目持久化/高 DPI；栅格/矢量/子数据集元数据（含请求上下文隔离与廉价计数）；可见窗口分块与 LRU 缓存预算；灰度/RGB/伪彩/拉伸/分屏（原值与显示严格分离）；view CRS/重投影/ROI（含故障注入矩阵）。
+  - **P3-01 主窗口、Dock、项目树、图层模型**：done（第 57 轮收官）。实现主窗口与 Dock 布局、图层顺序保序；显式设置 Dock 与工具栏 objectName，实测验证浮动（isFloating）、显隐（isVisible）与停靠区域重排跨会话无损保存与重开恢复；分离运行时根与用户项目目录，新项目显式记录 `path_anchor='project_dir'`；保存事务边界加固；旧版 1.0 格式且缺少路径基准标记的项目进入明确的待确认流程，程序化打开返回 checkable 状态，用户确认前不自动派发同名文件、未确认前禁止保存，用户确认后按真实路径派发并迁移持久化，取消确认原文件保持不变；无论确认的物理目标是否存在均保留用户确认选择（存在性仅决定是否请求加载，不影响路径更新），重开后严格保持目标一致，杜绝劫持同名文件；自定义空路径提供校验阻断；旧绝对引用直接按确定语义解析；缺失源状态指示与显式移除；移除图层与关窗彻底释放文件句柄与缓存。
+  - **P3-02 栅格元数据读取**：done（第 57 轮收官）。通过 Worker 提取尺寸、波段数、驱动、数据类型、CRS、GeoTransform（含旋转 Affine 系数）、地理范围与 NoData；统一异常隔离与 `retryable` 标准错误 Schema，坏文件探测不中断执行线程。
+  - **P3-02 基础矢量与子数据集元数据**（第 22 轮补齐原缺口）：done（第 57 轮收官）。Worker 新增 `probe_vector`（图层名称、几何类型、CRS、范围、字段名称/类型/可空性；要素数与范围不可得时以 `feature_count_expensive` / `extent_available` 如实标注，不返回编造数值）、`list_subdatasets`（原样保留引擎返回的数据源引用）与 `probe_subdataset`（尺寸、dtype、NoData、波段、GeoTransform、CRS）。GUI 新增「数据源元数据」面板展示矢量结构与可选子数据集；栅格探测失败时回退矢量探测，使矢量文件可作为图层打开、可保存重开；**矢量渲染与多维分析尚未实现，明确标注而不提供假入口**。
+  - **P3-03 瓦片请求、概览、缓存、过期请求处理**：done（第 57 轮收官）。仅按可见窗口向 Worker 索取数据；实现 `TileCache`（LRU 淘汰与字节预算限制）；请求代际（`_active_request_id`）与图层 ID 校验彻底丢弃过期旧图响应；支持四种概览采样策略（auto/nearest/average/gauss）；在真实交互式 GUI 下以 6144x6144 多级概览大影像完成缩放、平移、切波段与切层全流程实测，验证 LRU 淘汰真实触发（9 次逐出），缓存严格受限在预算内，图层移除后缓存彻底清零。
+  - **P3-04 灰度/RGB/伪彩、拉伸、透明度与分屏**：done（第 57 轮收官）。支持灰度、RGB 与 6 种伪彩色（terrain/viridis/plasma/inferno/magma/jet）；min-max 与 2%~98% 分位数拉伸；原始像元值与显示拉伸值严格物理分离；实现双视图联动同步模式（`test_dual_canvas_link_mode`）。
+  - **P3-05 view CRS、重投影、查询与 ROI**：done（第 57 轮收官）。支持旋转 Affine 栅格与无 GT 栅格加载；地图坐标 ↔ 像元行列支持中心 (center) 与角点 (corner) 两种坐标约定（`test_map_to_pixel_center_vs_corner`）；实现 PointROI / RectROI / PolygonROI 模型与点在多边形判定；跨 CRS 视图重投影网格索取；通过真实 Qt 鼠标事件（QTest）完成多边形 ROI 逐点绘制、右键/起点闭合、选中、顶点手柄真实拖拽形变、删除与保存重开恢复；多图层切换下 ROI 所属图层严格隔离与保全；旋转 Affine 栅格与视图 CRS 切换（像元 vs EPSG:4326）下坐标空间与点位无损保持；矩形 ROI 权威几何与显示轮廓物理分离，在旋转 Affine 栅格下展开 4 角点经 Worker 转换并渲染实际轮廓，实测断言 4 个真实地图角点与 425.0 平方地图单位覆盖面积（彻底杜绝错误轴对齐面积 375.0），变换视图下手柄隐藏禁用，防止扭曲矩形；坐标转换失败时绝不伪装恒等变换，严格隐藏图形项（`item.isVisible() is False`）并清空 `display_points`（为 None），保全权威模型，切回有效视图自动恢复；拖动反算 Worker 报错时安全回退，不崩溃不污染。本轮补齐五类故障注入矩阵（向地图失败 / 回像元失败 / 项目重开失败 / 拖动反算失败 / 旧响应迟到），每类均验证图形状态、权威几何与保存结果；修复跨坐标空间数据混用缺陷（state 显式记录显示点所属空间与 CRS），拖动反算失败时显示图形恢复原轮廓、权威几何保持不变。
 - **P4 能力应用与完整用户流程**：
   - **P4-02 拼接、VRT、堆叠与波段管理**：**done**（第 45 轮 S5 桌面端到端验收）。真实 `MainWindow` + 真实 GDAL Worker + QTest 按钮/任务面板交互，验证输入顺序即重叠优先级（first/last 双向）、混合 CRS 明确拒绝且旧成果字节不变、ENVI 新建与覆盖、PNG alpha 保留、JPEG/ENVI alpha 与 PNG Float32 在提交前拦截、真实 4096×4096 计算中取消并重试、成果自动加载与项目保存重开、VRT 相对源失效时明确报错并在项目重开时进入缺失源列表。
-  - **P4-01 / P4-03 / P4-04 / P4-05**：implemented。P4-05 的完整用户流程验收以第 36 轮 P4-05 专项为准；P4-02 转为 done 不改变其余任务的证据边界。
+  - **P4-01 / P4-03 / P4-04 / P4-05**：done（第 57 轮收官）。P4-05 的完整用户流程验收以第 36 轮专项与 test_p4_full_user_flow.py 端到端为准；P4-02 转为 done 不改变其余任务的证据边界。
 - **P5 全量栅格、矢量、地形与坐标能力**：
   - **P5-01 补齐栅格算法/传统工具入口**：**done**（第 47 轮基准逐项对账）。契约基准 443 条全部在注册表；注册表 448 条，多出的 5 条为平台组合/受限实现；8 条运行期缺口（3 条 blocked、5 条 missing）均有具体原因，未解释缺口 0。
   - **P5-02 栅格化、多边形化、等值线及地形工具**：**done**（第 48–52 轮逐项接入并验收，第 53 轮边界完善）。`gdal:dem` 地形分析（解析平面坡度/坡向/山体阴影数值验证）、`gdal:rasterize` 矢量栅格化（已知矩形烧录值/属性字段）、`gdal:grid` 散点插值（linear 逐像元解析值）、`gdal:polygonize` 栅格矢量化（标签图多边形 DN/面积、4/8 连通差异）与 `gdal:contour` 等值线（解析平面逐顶点验证、offset 对齐语义）共 5 项全部接入 Worker + GUI；第 51 轮建立**矢量成果输出通道**（GPKG/GeoJSON 单文件矩阵、`inspect_vector` OGR 重开校验、`kind=vector` 输出计划与矢量图层登记），提交校验不复用仅栅格路径；第 53 轮补齐 Shapefile 多文件 bundle 输出、contour fixedLevels 与 band 参数。审计 `platform_executable` 8 → 10（polygonize/contour 接入），运行期缺口维持 5 且均有具体原因。
@@ -237,6 +232,30 @@ CRT 检测到栈状态异常后立即终止进程，这正是 `STATUS_STACK_BUFF
 |---|---|---|
 | 用合成影像完成同类验收 | 已满足 | 合成 ENVI/GTiff/GeoJSON/netCDF 样例覆盖多波段、像元数值、ROI 与对比 |
 | 保留真实数据待验状态 | **待验** | 课程原始数据位于 `C:\Users\赵航\Desktop\studio\_chaoxing_rs`（**只读**，不得运行其中的抓取/下载/OCR 脚本）；本轮全部用合成影像验收，未对课程原始 ENVI 栅格与 lena.tif 做真实打开验证 |
+
+### 第 57 轮：implemented 收官——19 项转 done（P0-02 维持 implemented）
+
+**一、审计方法**
+
+- 逐项提取 20 项 implemented 的验收标准与全部既有证据，核对「验收逐项 ↔ 真实命令/结果/报告」；引用的测试文件全部实存核对（含 test_contracts_schema.py 43 项、test_scheduler_lifecycle.py 6 项、test_staging_manifest.py 9 项、test_p3_persistence_regression.py 19 项、test_p4_full_user_flow.py 3 项端到端、test_dual_view_sync_and_release 等）。
+- 当日最新回归：Clean 全量 **688 passed / 0 failed / rc=0 / clean_exit_verified=true**（392.20s）——各条目引用的回归套件均在本次全量中真实通过。
+
+**二、转 done 的 19 项**
+
+- **P0**：P0-03（doctor 分项报告 + 7 项单测）、P0-05（隔离目录启动 3 项 + ADR 0002）。
+- **P1**：P1-01（契约 schema 43 项双向对齐）、P1-04（调度生命周期 6 项：协作取消/强杀降级/崩溃重试/严格 FIFO）、P1-05（staging 事务 9 项：真实强杀保护、committed 不可逆、恢复失败不吞）。
+- **P2**：P2-01（基准双哈希 + schema 100%）、P2-02（205 驱动 + 119 CLI + 缺失保留 + 真实 Warp）、P2-03（rasterio worker + API 索引分类）、P2-04（表单全量参数 + 第 26–28 轮契约回归 42 项）、P2-05（审计脚本 + 工具箱分色）。
+- **P3**：P3-01（持久化 19 项 + Dock 布局 + 零地理导入 + 高 DPI）、P3-02（矢量/子数据集 10 项 + 第 23/24 轮上下文隔离回归 8 项）、P3-03（6144² 真实 GUI 内存 LRU 实测）、P3-04（原值/显示分离 + 双视图同步）、P3-05（19+17 项 + 交互 ROI + 故障注入矩阵）。
+- **P4**：P4-01（14+11+16+15 项参数与边界）、P4-03（7 项 ENVI 未知字段/概览/尺寸契约）、P4-04（69 项表达式/统计）、P4-05（3 项端到端全流程含取消/重试/导出/重开）。
+
+**三、维持 implemented（1 项）**
+
+- **P0-02**：验收字面要求已满足，但证据明示「GDAL 运行时依赖本机 QGIS 安装，不得据此标 done」——维持 implemented，前置条件为 P10-01/P10-02 自带可重定位运行时并在干净机验证。
+
+**四、结论**
+
+- 任务账本现为：**done 29 / implemented 1（P0-02，打包依赖）/ todo 25**。
+- 后续主线：P5 收官后的 P6（光谱/FFT/PCA/配准/分类/辐射）→ P7（迁移/会话/批处理/DAG/历史）→ P8~P10。
 
 ### 第 56 轮：P5-05 驱动读写能力矩阵与高级选项（P5-05 → done，P5 收官）
 

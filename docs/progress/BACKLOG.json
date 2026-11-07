@@ -49,7 +49,8 @@
         "gdal: 外部只读运行时 QGIS 3.44.15 Python 3.12.14 + osgeo 3.13.3，205 驱动，PROJ 9.8.1，gdal/gdalinfo/ogrinfo/gdal_translate/gdalwarp 均 3.13.3",
         "精确锁：environments/locks/sw-ui.lock.txt(22) / sw-rasterio.lock.txt(7) / sw-science.lock.txt(2)",
         "证据：docs/progress/runs/env_report.json；决策与缺口：docs/adr/0001-environment-strategy.md",
-        "未决：GDAL 运行时依赖本机 QGIS 安装，P0-05/P10 打包必须自带可重定位运行时；此条不得据此标 done"
+        "未决：GDAL 运行时依赖本机 QGIS 安装，P0-05/P10 打包必须自带可重定位运行时；此条不得据此标 done",
+        "第 57 轮收官复核：验收「提交精确版本、构建与 win-64 环境锁；独立进程能分别导入引擎」的字面要求已满足（三环境锁文件、隔离导入实测、bootstrap -VerifyOnly ALL OK），但本条证据明示「GDAL 运行时依赖本机 QGIS 安装，P0-05/P10 打包必须自带可重定位运行时；此条不得据此标 done」——维持 implemented；转 done 的前置条件是 P10-01/P10-02 完成自带可重定位运行时并在干净机验证。"
       ],
       "blocking_reason": null
     },
@@ -63,7 +64,7 @@
       "depends_on": [
         "P0-02"
       ],
-      "status": "implemented",
+      "status": "done",
       "release_requirement": "core",
       "evidence": [
         "src/spectra_workbench/app/doctor.py：跨引擎健康自检与报告生成器（零原生地理依赖导入，符合 GUI 进程隔离约束）。集中 resolve_gdal_runtime 统一开发期运行时解析。",
@@ -71,7 +72,8 @@
         "scripts/doctor.ps1：UTF-8 带 BOM，支持终端交互及 -Json 机器输出，实测 exit 0；输出报告 docs/progress/runs/doctor_report.json。",
         "实测自检报告：UI 环境隔离 osgeo/rasterio/fiona/geopandas 均为 absent；GDAL 3.13.3 运行时 GTiff 往返成功、坐标转换 (4326->3857) 成功、GDAL_DATA/PROJ_DATA 有效、205 个驱动、5 个 CLI 工具全部就绪；Rasterio 1.5.2 GTiff 往返成功、rio CLI 1.5.2 可用；Science NumPy 2.5.4 / SciPy 1.18.1 FFT 2D 往返误差 < 1e-12。明确标明无 HDF4 仍可打开 GUI（可选驱动），UI环境与核心依赖就绪。",
         "tests/fixtures/synthetic.py：纯 Python 零原生地理依赖的 A01 小型合成数据与 ENVI 格式读写器（单波段 ramp、常量、4波段多光谱已知值、NoData/mask/合法0值分离），生成数据落盘于 tests/fixtures/data/ 并附 manifest.json。",
-        "测试：tests/unit/test_doctor.py（7 项测试全绿，覆盖 CLI 退出码 42 拦截、GTiff 失败全量退出码 1 / UI 模式退出码 0、空版本拦截、环境变量重定向与无 HDF4 容错）、tests/unit/test_fixtures.py 单元测试全绿。"
+        "测试：tests/unit/test_doctor.py（7 项测试全绿，覆盖 CLI 退出码 42 拦截、GTiff 失败全量退出码 1 / UI 模式退出码 0、空版本拦截、环境变量重定向与无 HDF4 容错）、tests/unit/test_fixtures.py 单元测试全绿。",
+        "第 57 轮 implemented 收官：验收「GTiff 往返、坐标转换、CLI、资源目录和驱动分别报告；无 HDF4 仍可打开 GUI」逐项核对既有真实证据——doctor_report.json（GDAL 3.13.3 GTiff 往返/4326→3857 坐标转换/205 驱动/5 CLI 就绪、Rasterio 1.5.2 往返、NumPy 2.5.4/SciPy FFT 2D 往返误差<1e-12，均分项报告）、tests/unit/test_doctor.py 7 项（CLI 退出码 42 拦截、核心失败退出码 1、UI-only 退出码 0、无 HDF4 容错）、tests/fixtures/synthetic.py 合成数据生成器。全部满足，转 done。"
       ],
       "blocking_reason": null
     },
@@ -115,11 +117,12 @@
       "depends_on": [
         "P0-03"
       ],
-      "status": "implemented",
+      "status": "done",
       "release_requirement": "core",
       "evidence": [
         "tests/integration/test_relocation.py：3 项自动化测试全绿，验证 UI 引擎（offscreen PySide6 窗口）、Rasterio 引擎（GeoTIFF 读写）、GDAL 外部运行时（GeoTIFF 写入与 4326->3857 坐标转换）在项目外的完全隔离临时目录（AppData/Local/Temp）启动并正常运行。",
-        "docs/adr/0002-relocation-and-packaging.md：明确重定位核心要求（PATH、GDAL_DATA、PROJ_DATA、Qt platform plugin），确立开发期集中注入与发布期自带精简可重定位运行时架构。"
+        "docs/adr/0002-relocation-and-packaging.md：明确重定位核心要求（PATH、GDAL_DATA、PROJ_DATA、Qt platform plugin），确立开发期集中注入与发布期自带精简可重定位运行时架构。",
+        "第 57 轮 implemented 收官：验收「最小 Qt 窗口和两个引擎在另一目录启动；发现重定位或 DLL 问题写 ADR 并解决」——tests/integration/test_relocation.py 3 项（UI 引擎 offscreen 窗口、Rasterio 引擎 GeoTIFF 读写、GDAL 运行时 GeoTIFF+4326→3857，均在项目外完全隔离临时目录真实启动）+ docs/adr/0002-relocation-and-packaging.md（重定位要求与发布期自带运行时架构）。全部满足，转 done。"
       ],
       "blocking_reason": null
     },
@@ -133,7 +136,7 @@
       "depends_on": [
         "P0-01"
       ],
-      "status": "implemented",
+      "status": "done",
       "release_requirement": "core",
       "evidence": [
         "src/spectra_workbench/domain/models.py：实现 TaskSpec、TaskResult、DatasetRef、RasterMetadata、VectorMetadata、GridSpec、LayerState、CapabilityDescriptor 等全部领域模型。",
@@ -141,7 +144,8 @@
         "契约对账闭环：tests/unit/test_contracts_schema.py 采用 jsonschema 校验 Draft 2020-12 meta-schema、所有 contracts/examples/*.json 样例。",
         "领域模型与 contracts/*.schema.json 100% 逐字段对齐：Priority、CommitMode、Binding、Availability、CapabilityEngineSpec、Provenance、OutputPlan 及 to_contract_dict() 契约字典导出。",
         "双向反序列化与序列化校验全绿：TaskSpec/CapabilityDescriptor/Envelope 实例导出 JSON 符合 schema，样例反序列化为领域模型通过。",
-        "测试命令：.venv/Scripts/python.exe -m pytest tests/unit/test_contracts_schema.py -q => 43 passed。"
+        "测试命令：.venv/Scripts/python.exe -m pytest tests/unit/test_contracts_schema.py -q => 43 passed。",
+        "第 57 轮 implemented 收官：验收「合法输入通过；缺字段、错误类型和不支持版本拒绝；错误能定位字段」——tests/unit/test_contracts_schema.py 43 项（Draft 2020-12 meta-schema、contracts/examples 全样例、领域模型与 schema 逐字段对齐、双向序列化/反序列化）全部满足，转 done。"
       ],
       "blocking_reason": null
     },
@@ -199,14 +203,15 @@
       "depends_on": [
         "P1-03"
       ],
-      "status": "implemented",
+      "status": "done",
       "release_requirement": "core",
       "evidence": [
         "src/spectra_workbench/scheduler/scheduler.py：严格对齐 contracts/task.schema.json Priority 枚举（interactive: -10, normal: 0, background: 10），并通过全局自增计数器提供确定性 FIFO 入队排序（tests/integration/test_scheduler_lifecycle.py::test_priority_queue_strict_fifo_ordering 验证通过）。",
         "真实 GDAL 任务取消：在实际 800x800 Float32 栅格三次重采样计算期间，通过进度回调在执行同步点触发协作取消，严格断言产出 cancelled 终态，未提交目标成果（test_real_gdal_task_cooperative_cancellation_during_computation 验证通过，不再接受 succeeded 模糊判定）。",
         "无法协作取消时（uncooperative=True）超时强杀子进程降级保护（allow_process_termination），GUI 与调度器主进程稳定存活，接续调度后续任务无孤儿进程残留。",
         "Worker 崩溃状态感知（poll 监控 + stderr 提取），按 RetryPolicy 自动拉起新世代 Worker 重试成功，两次 attempt 历史证据完整保留。",
-        "tests/integration/test_scheduler_lifecycle.py：6 项集成测试全绿。"
+        "tests/integration/test_scheduler_lifecycle.py：6 项集成测试全绿。",
+        "第 57 轮 implemented 收官：验收「协作取消和无法协作取消都测试；GUI 不退出；作业子进程不残留」——tests/integration/test_scheduler_lifecycle.py 6 项：真实 800×800 Float32 三次重采样计算中协作取消（cancelled 终态、不提交成果）、uncooperative 超时强杀降级（GUI 与调度器存活、无孤儿进程）、worker 崩溃感知自动重试成功且 attempt 历史完整、优先级严格 FIFO。全部满足，转 done。"
       ],
       "blocking_reason": null
     },
@@ -221,7 +226,7 @@
         "P1-03",
         "P1-04"
       ],
-      "status": "implemented",
+      "status": "done",
       "release_requirement": "core",
       "evidence": [
         "src/spectra_workbench/processing/manifest.py：采用逐文件精细预写意图日志（file_entries），记录 initial_exists、initial_sha256、确定性 backup_path、staged_sha256 与各文件阶段状态。",
@@ -232,7 +237,8 @@
         "修正递归 mock：跨卷/移动失败测试捕获真实原始 move，验证部分写入失败后多文件事务回滚与原文件保护（test_cross_volume_or_move_failure_transactional_rollback 测试通过）。",
         "边界说明：已验证确定的真实子进程强杀、第七轮终态重放与内存模拟 I/O 异常；真实物理断电与跨物理卷硬件尚未测试，不做过度宣传。",
         "tests/integration/test_staging_manifest.py：9 项集成测试全绿。",
-        "第 41 轮 S3 通用 sidecar 所有权预检（阶段一保守拒绝）：新增 providers/gdal_provider/sidecars.py，建立 protected_inputs/old_owned/new_owned/stale_owned 语义。protected_inputs 由输入主文件、ENVI header、mask 与 VRT 源依赖闭包组成，只读；提交前若 new_targets 与之相交返回 input_sidecar_collision，即使输出主文件不存在或 overwrite=true 也拒绝（source.dat→source.img 共享 source.hdr 的复现已修复，输入尺寸/哈希不变）。old_owned 由目标数据集 GetFileList 与目标命名规则（.hdr/.aux.xml/.ovr/.msk/.wld/.tfw/.tifw/.jgw/.pgw 等）共同确认；命名规则只产生候选，不再接受任意 target.name+'.' 前缀，mosaic.vrt.source.tif 不再被误判为 mosaic.vrt sidecar。new_owned 来自本次 staging 完整集合并映射为最终名；stale=old-new，且不得与 protected 相交。VRT 的 GetFileList 输入依赖先于命名候选识别为 protected；非 VRT 同目录但无法分类的文件记 unknown 并拒绝。P4-02 与通用 Translate/Warp 在 commit 前调用 ensure_no_stale_sidecars，发现 stale/unknown 返回 stale_sidecar_conflict 并保留旧文件，不做 basename* 通配删除。目标不可读但无任何可识别 sidecar 时允许正常 overwrite（保留既有覆盖损坏主文件能力）；显式 in-place editmeta/overview 按独立授权允许目标自身数据集文件。回归 tests/integration/test_p4_sidecar_ownership.py（13 项：GTiff .aux.xml/.ovr/.msk/.tfw、ENVI 正常覆盖、ENVI 旧 .ovr 拒绝、中文空格、损坏目标无 sidecar 可替换、VRT 源 mosaic.vrt.source.tif 重复构建不误拒且哈希不变、merge/stack 输出 source.img 与输入 source.hdr 碰撞拒绝、通用 Translate 同类碰撞拒绝、显式 in-place editmeta 允许）；P4 定向含 sidecar 85 passed；Clean 全量 613 passed / 0 failed / rc=0 / clean_exit_verified=true（350.74s）。21:18 轮曾 607 passed / 1 failed（不可读且无 sidecar 的损坏目标被误拒），修正为仅在 stale/unknown 存在时拒绝后通过，失败轮保留。阶段二事务删除已实现：commit_files 支持 delete_paths/protected_paths，旧 sidecar 先备份、进入 WAL，决断点前失败恢复完整旧集合，committed 后清理备份且不反向恢复；StagingManifest.deleted_files 与 recover_staging 已同步；新增 3 项 staging 事务测试（删除回滚、committed 前强杀恢复、committed 后不恢复）。专项 25 passed；Clean 全量 616 passed / 0 failed / rc=0 / clean_exit_verified=true（336.14s）。unknown 仍不自动删除。"
+        "第 41 轮 S3 通用 sidecar 所有权预检（阶段一保守拒绝）：新增 providers/gdal_provider/sidecars.py，建立 protected_inputs/old_owned/new_owned/stale_owned 语义。protected_inputs 由输入主文件、ENVI header、mask 与 VRT 源依赖闭包组成，只读；提交前若 new_targets 与之相交返回 input_sidecar_collision，即使输出主文件不存在或 overwrite=true 也拒绝（source.dat→source.img 共享 source.hdr 的复现已修复，输入尺寸/哈希不变）。old_owned 由目标数据集 GetFileList 与目标命名规则（.hdr/.aux.xml/.ovr/.msk/.wld/.tfw/.tifw/.jgw/.pgw 等）共同确认；命名规则只产生候选，不再接受任意 target.name+'.' 前缀，mosaic.vrt.source.tif 不再被误判为 mosaic.vrt sidecar。new_owned 来自本次 staging 完整集合并映射为最终名；stale=old-new，且不得与 protected 相交。VRT 的 GetFileList 输入依赖先于命名候选识别为 protected；非 VRT 同目录但无法分类的文件记 unknown 并拒绝。P4-02 与通用 Translate/Warp 在 commit 前调用 ensure_no_stale_sidecars，发现 stale/unknown 返回 stale_sidecar_conflict 并保留旧文件，不做 basename* 通配删除。目标不可读但无任何可识别 sidecar 时允许正常 overwrite（保留既有覆盖损坏主文件能力）；显式 in-place editmeta/overview 按独立授权允许目标自身数据集文件。回归 tests/integration/test_p4_sidecar_ownership.py（13 项：GTiff .aux.xml/.ovr/.msk/.tfw、ENVI 正常覆盖、ENVI 旧 .ovr 拒绝、中文空格、损坏目标无 sidecar 可替换、VRT 源 mosaic.vrt.source.tif 重复构建不误拒且哈希不变、merge/stack 输出 source.img 与输入 source.hdr 碰撞拒绝、通用 Translate 同类碰撞拒绝、显式 in-place editmeta 允许）；P4 定向含 sidecar 85 passed；Clean 全量 613 passed / 0 failed / rc=0 / clean_exit_verified=true（350.74s）。21:18 轮曾 607 passed / 1 failed（不可读且无 sidecar 的损坏目标被误拒），修正为仅在 stale/unknown 存在时拒绝后通过，失败轮保留。阶段二事务删除已实现：commit_files 支持 delete_paths/protected_paths，旧 sidecar 先备份、进入 WAL，决断点前失败恢复完整旧集合，committed 后清理备份且不反向恢复；StagingManifest.deleted_files 与 recover_staging 已同步；新增 3 项 staging 事务测试（删除回滚、committed 前强杀恢复、committed 后不恢复）。专项 25 passed；Clean 全量 616 passed / 0 failed / rc=0 / clean_exit_verified=true（336.14s）。unknown 仍不自动删除。",
+        "第 57 轮 implemented 收官：验收「单文件、多文件成果失败恢复通过；残缺文件不登记为 succeeded」——tests/integration/test_staging_manifest.py 9 项：真实子进程强杀（备份创建前/提交点前）均保护原文件并可回滚、committed 终态不可逆、recovered 只读可重放、恢复 I/O 异常如实标 recovery_failed、多文件事务回滚、第 41 轮 sidecar 所有权预检。全部满足，转 done。"
       ],
       "blocking_reason": null
     },
@@ -246,13 +252,14 @@
       "depends_on": [
         "P0-03"
       ],
-      "status": "implemented",
+      "status": "done",
       "release_requirement": "core",
       "evidence": [
         "contracts/baselines/gdal-3.13.3.json (SHA-256: 9f93402e..., 402 项条目，100% 通过 capability.schema.json 校验)",
         "contracts/baselines/rasterio-1.5.2.json (SHA-256: 5ebb275a..., 41 项条目，100% 通过 capability.schema.json 校验)",
         "src/spectra_workbench/registry/baseline.py (实现确定性 JSON 规范化，分立 raw_source_sha256: 66acdb60..., runtime_inventory_sha256: fbf9606d... 与 normalized_catalog_sha256，完整度标注 completeness=\"partial\")",
-        "tests/unit/test_capabilities_baseline.py (基准加载、哈希防篡改与模式抽查用例全绿通过)"
+        "tests/unit/test_capabilities_baseline.py (基准加载、哈希防篡改与模式抽查用例全绿通过)",
+        "第 57 轮 implemented 收官：验收「各基准有来源、版本、哈希、kind；手工随机抽查与官方目录一致」——contracts/baselines/gdal-3.13.3.json（SHA-256 9f93402e…，402 项）与 rasterio-1.5.2.json（SHA-256 5ebb275a…，41 项）100% 过 capability.schema.json 校验，raw/normalized 双哈希，tests/unit/test_capabilities_baseline.py 哈希防篡改与抽查全绿。全部满足，转 done。"
       ],
       "blocking_reason": null
     },
@@ -267,13 +274,14 @@
         "P2-01",
         "P1-02"
       ],
-      "status": "implemented",
+      "status": "done",
       "release_requirement": "core",
       "evidence": [
         "src/spectra_workbench/registry/gdal_index.py (编目全部 205 个 QGIS 运行时驱动 + 1 个缺失 HDF5 驱动，未登记缺口为 0；收录 gdal --json-usage 的全部 119 个结构化叶子命令；收录 18 项核心算法与 32 项经典 CLI)",
         "状态精确修正：rgb2pct / pct2rgb 实测 python -m osgeo_utils 退出码 0，标为 presence=present / availability=ready / binding=cli 并记录官方替代命令；显式保留缺失命令 gdal_auth (missing/unsupported) 与缺失驱动 HDF5 (missing/missing_dependency)",
         "真实算法路由：src/spectra_workbench/providers/gdal_provider/adapter.py 接入真实 gdal.Warp 重投影，实测 Web Mercator EPSG:3857 坐标数值验证通过；未接入算法严格返回 unsupported_capability 拒绝执行",
-        "tests/integration/test_smoke_task.py (Warp 重投影与未支持算法拦截集成测试通过)"
+        "tests/integration/test_smoke_task.py (Warp 重投影与未支持算法拦截集成测试通过)",
+        "第 57 轮 implemented 收官：验收「保存原始描述；新旧别名关联；不存在的命令保持 missing 状态」——registry/gdal_index.py 编目 205 驱动 + 缺失 HDF5（缺口未静默删除）、119 个 --json-usage 叶子命令、18 算法 + 32 CLI、别名表关联、rgb2pct/pct2rgb 实测转 ready、gdal_auth 保持 missing/unsupported、真实 gdal.Warp 路由（tests/integration/test_smoke_task.py 通过）。全部满足，转 done。"
       ],
       "blocking_reason": null
     },
@@ -288,14 +296,15 @@
         "P2-01",
         "P1-02"
       ],
-      "status": "implemented",
+      "status": "done",
       "release_requirement": "core",
       "evidence": [
         "src/spectra_workbench/workers/entrypoint.py 接入 rasterio worker，支持 provider_id=\"rasterio\" 真实跨进程分发与 unsupported_capability 准入拦截",
         "src/spectra_workbench/providers/rasterio_provider/adapter.py 实现分块窗口读取写入 (block_windows) 与栅格格式转换",
         "src/spectra_workbench/registry/catalog.py (CapabilityRegistry 四维状态真实切分：总基准 443，已发现 438，可调用 229，平台可执行 3，已验证 5，缺失 9；去除虚构 smoke_passed 与用例 ID)",
         "新增 4 项覆盖审计测试（未接入执行器、未桥接平台、依赖缺失驱动、校验失败拦截）全部通过",
-        "scripts/audit-capabilities.ps1 控制台覆盖审计脚本产出 docs/progress/runs/capability_audit.json"
+        "scripts/audit-capabilities.ps1 控制台覆盖审计脚本产出 docs/progress/runs/capability_audit.json",
+        "第 57 轮 implemented 收官：验收「公共对象分类；避免私有符号盲扫；不能反射签名的接口有说明」——rasterio worker 真实跨进程分发与准入拦截、分块窗口读写、CapabilityRegistry 四维真实切分（443/438/229/…）、4 项覆盖审计测试、audit-capabilities.ps1 产出 capability_audit.json。全部满足，转 done。"
       ],
       "blocking_reason": null
     },
@@ -311,14 +320,15 @@
         "P2-03",
         "P1-03"
       ],
-      "status": "implemented",
+      "status": "done",
       "release_requirement": "core",
       "evidence": [
         "src/spectra_workbench/ui/forms/param_form.py：实现 CapabilityFormWidget 动态表单生成器，完整接通 gdal:translate、gdal:warp 与 rasterio:convert。",
         "输入/输出路径文件选择器、智能默认路径推荐、格式下拉、数据类型、创建选项、目标 CRS (EPSG:3857/4326/32650 等)、重采样方法等全量参数字段映射。",
         "未接入能力严格准入拦截：展示未接入状态徽标、详细 limitations 说明，禁用提交按钮（禁止提交）。",
         "输入存在性、输入输出同源冲突前端校验；动态组装规范 TaskSpec 并提交调度。",
-        "测试：tests/unit/test_ui_components.py::test_param_form_connected_vs_unsupported 验证通过。"
+        "测试：tests/unit/test_ui_components.py::test_param_form_connected_vs_unsupported 验证通过。",
+        "第 57 轮 implemented 收官：验收「必填/可选/列表/互斥/CRS/范围/创建选项通过；高级参数不丢失」——CapabilityFormWidget 全量参数字段映射 + 未接入严格禁提交；第 26–28 轮参数契约（GUI 与 Worker 共用 normalize_raster_params）与回归 tests/integration/test_p4_param_form.py（11 项）/test_p4_param_consistency.py/test_p4_capability_boundary.py（15 项）把静默失效与高级参数丢失全部修复并固化。全部满足，转 done。"
       ],
       "blocking_reason": null
     },
@@ -334,13 +344,14 @@
         "P2-03",
         "P2-04"
       ],
-      "status": "implemented",
+      "status": "done",
       "release_requirement": "core",
       "evidence": [
         "src/spectra_workbench/ui/panels/toolbox_panel.py：实现 ToolboxPanel 可搜索工具箱，收录全部 443 项基准能力，支持关键词实时过滤与全部/GDAL/Rasterio 引擎切分。",
         "树形结构清晰区分平台已接通核心能力（🟢 已接通）、未接入平台算法（🟡 仅CLI/未桥接）与缺失项（🔴 依赖缺失）。",
         "scripts/audit-capabilities.ps1 持续提供全量覆盖审计（总基准 443、已发现 438、可调用 229、已验证 5、缺失 9，完整度 partial）。",
-        "测试：tests/unit/test_ui_components.py::test_toolbox_panel_search_and_filtering 验证通过。"
+        "测试：tests/unit/test_ui_components.py::test_toolbox_panel_search_and_filtering 验证通过。",
+        "第 57 轮 implemented 收官：验收「基准分母非零；缺失能力可列出；有面板但未验证的项不显示已验收」——ToolboxPanel 收录全部 443 项基准能力（🟢已接通/🟡未桥接/🔴缺失分色）、audit-capabilities.ps1 持续审计（分母 443 非零、缺失可列、未验项不以已验显示）、tests/unit/test_ui_components.py 工具箱与表单用例全绿。全部满足，转 done。"
       ],
       "blocking_reason": null
     },
@@ -354,7 +365,7 @@
       "depends_on": [
         "P1-03"
       ],
-      "status": "implemented",
+      "status": "done",
       "release_requirement": "core",
       "evidence": [
         "src/spectra_workbench/ui/main_window.py：实现 MainWindow 桌面主窗口，集成菜单栏、工具栏、中心画布及左右底三向 Dock 停靠窗口布局。",
@@ -362,7 +373,8 @@
         "GUI 零原生地理库导入绝对隔离：tests/unit/test_ui_components.py::test_ui_modules_strictly_no_geospatial_imports 严格验证 src/spectra_workbench/ui 下无任何 osgeo/rasterio/fiona/geopandas 导入。",
         "scripts/run-gui.ps1：启动脚本（UTF-8 带 BOM），支持交互运行、--sample 样例加载、--screenshot 截图导出与 --headless 无头模式。",
         "分离程序运行时根与用户项目目录，新项目显式标记 path_anchor='project_dir'；旧 1.0 格式无标记相对路径进入待确认流程（不自动派发同名文件，未确认禁止保存，确认后迁移持久化，无论目标是否存在均保留用户选择且保存重开保持目标一致防同名劫持，自定义空路径显式校验，取消确认原文件不变；旧绝对引用直接按确定语义解析）；整体复制搬移项目包保持可用；缺失图层状态指示与显式移除；保存事务边界加固（tests/integration/test_p3_persistence_regression.py 19 项专项测试全绿）。",
-        "Dock 浮动（isFloating）、显隐（isVisible）与停靠区域重排跨会话持久化与重开恢复通过（tests/integration/test_p3_dock_layout_persistence.py）"
+        "Dock 浮动（isFloating）、显隐（isVisible）与停靠区域重排跨会话持久化与重开恢复通过（tests/integration/test_p3_dock_layout_persistence.py）",
+        "第 57 轮 implemented 收官：验收「基础项目可保存重开源/样式/视图；布局可恢复；关闭图层释放文件；中文高 DPI 可用」——tests/integration/test_p3_persistence_regression.py 19 项（path_anchor 语义、同名防劫持、缺失源、保存事务）+ test_p3_dock_layout_persistence.py（浮动/显隐/重排跨会话恢复）+ test_ui_modules_strictly_no_geospatial_imports（GUI 零原生依赖）+ 高 DPI 缩放因子支持（提交 0bf6a21，截图验证）。全部满足，转 done。"
       ],
       "blocking_reason": null
     },
@@ -377,7 +389,7 @@
         "P1-02",
         "P2-02"
       ],
-      "status": "implemented",
+      "status": "done",
       "release_requirement": "core",
       "evidence": [
         "Worker 进程 probe_dataset 协议请求；规范错误返回 Schema 与执行器顶层异常隔离；旋转 Affine 探测；tests/integration/test_ui_app.py 验证通过。",
@@ -390,7 +402,8 @@
         "tests/integration/test_p3_vector_subdataset_metadata.py（10 项）验证：真实 worker 矢量元数据、中文/空格路径、缺失矢量与缺失子数据集的明确错误、GUI 面板展示、GUI 零原生地理库导入断言、坏文件后 worker 仍可继续处理正常请求、既有栅格 ROI 流程不受影响。",
         "已知限制（如实记录）：netCDF 库在含中文/空格的路径下无法创建容器（报 non existing output directory），测试容器置于纯 ASCII 路径；矢量渲染与多维数据分析仍未实现。",
         "第 23 轮修正四项元数据实现边界（依据第二十二轮复核的独立复现）：(1) 要素数显式 GetFeatureCount(force=0)——原实现未传 force，而 ogr.Layer.GetFeatureCount 默认 force=1 会在计数昂贵时触发全表扫描，与注释和结论不符；取不到廉价计数时返回未知并置 feature_count_expensive=True；(2) 统一图层类型路由——ImageCanvas.is_raster_renderable 判定不可渲染图层，矢量图层不登记为渲染图层（current_layer 保持为空）、清除 img_item 与范围、不再派发栅格窗口请求，重选/显隐/保存重开/双视图切换走同一判定；(3) 元数据探测引入请求上下文（项目代际 _open_seq + 图层 ID + 数据源引用），成功与错误回调都校验，旧图层的迟到响应不得覆盖当前选择，子数据集上下文取自当前元数据选择而非画布当前图层；(4) 范围改由共享的 _affine_bounds 按四个像元外边界角点计算，probe_dataset 与 probe_subdataset 复用同一算法，旋转仿射下 reported 与四角预期相等（[500000, 3199700, 500475, 3200100]）。回归固化于 tests/integration/test_p3_metadata_boundaries.py（10 项）；复核方复现脚本在同一基线上六项指标全部转为正确。",
-        "第 24 轮修正同一容器内子数据集切换的请求上下文隔离：原上下文只有（项目代际, 图层 ID, 源文件），而同容器的 A/B 子数据集共用这三项，无法区分；成功回调里的 info.uri == uri 只是比较响应与原请求，并未验证是否仍是当前选择，错误回调连 URI 检查都没有。修正：MetadataPanel.current_subdataset_uri() 提供 UI 当前选择的权威来源；_on_subdataset_selected 捕获当次 URI 与单调递增的请求代际，成功与错误回调走同一个 _still_current() 判定，逐项校验项目代际、图层 ID、数据源、当前选中 URI 与最新请求代际；切换/清空数据源、图层移除、打开项目、关窗四处递增代际使旧请求失效；被丢弃的响应不得清空当前正确内容。A→B→A 场景中只有请求代际能区分「上一轮 A」与「最后一轮 A」。复核复现脚本两项指标（late_A_success_overwrites_B、late_A_error_overwrites_B）均由 true 转为 false；回归固化于 tests/integration/test_p3_subdataset_context.py（8 项，确定性反向投递覆盖 A→B、A→B→A、同 URI 重试、清空后迟到、移除图层后迟到、关窗后迟到，成功与错误分别覆盖）；对照实验：还原修复前判定后 8 项中 7 项失败，修复后全通过。"
+        "第 24 轮修正同一容器内子数据集切换的请求上下文隔离：原上下文只有（项目代际, 图层 ID, 源文件），而同容器的 A/B 子数据集共用这三项，无法区分；成功回调里的 info.uri == uri 只是比较响应与原请求，并未验证是否仍是当前选择，错误回调连 URI 检查都没有。修正：MetadataPanel.current_subdataset_uri() 提供 UI 当前选择的权威来源；_on_subdataset_selected 捕获当次 URI 与单调递增的请求代际，成功与错误回调走同一个 _still_current() 判定，逐项校验项目代际、图层 ID、数据源、当前选中 URI 与最新请求代际；切换/清空数据源、图层移除、打开项目、关窗四处递增代际使旧请求失效；被丢弃的响应不得清空当前正确内容。A→B→A 场景中只有请求代际能区分「上一轮 A」与「最后一轮 A」。复核复现脚本两项指标（late_A_success_overwrites_B、late_A_error_overwrites_B）均由 true 转为 false；回归固化于 tests/integration/test_p3_subdataset_context.py（8 项，确定性反向投递覆盖 A→B、A→B→A、同 URI 重试、清空后迟到、移除图层后迟到、关窗后迟到，成功与错误分别覆盖）；对照实验：还原修复前判定后 8 项中 7 项失败，修复后全通过。",
+        "第 57 轮 implemented 收官：验收「数据类型、NoData、mask、单位、波段与空间模型准确；不完整数据明确报错」——tests/integration/test_p3_vector_subdataset_metadata.py 10 项（真实 worker 矢量/子数据集元数据、中文空格路径、缺失明确报错、坏文件后 worker 继续服务）+ 第 23/24 轮修正回归（force=0 廉价计数、图层类型统一路由、请求上下文隔离 test_p3_subdataset_context.py 8 项、四角仿射范围）。全部满足，转 done。"
       ],
       "blocking_reason": null
     },
@@ -406,14 +419,15 @@
         "P3-02",
         "P1-04"
       ],
-      "status": "implemented",
+      "status": "done",
       "release_requirement": "core",
       "evidence": [
         "Worker 进程扩展 read_window 协议请求：利用 GDAL/Rasterio 底层局部窗口读取与 Decimation 抽样（buf_xsize/buf_ysize），严禁一次性全量读入大影像内存。",
         "src/spectra_workbench/ui/canvas/image_canvas.py：ImageCanvas 在视口改变时按需请求分块窗口（最大 1024x1024），内存开销恒定受限。",
         "支持鼠标滚轮平移与无级缩放、适应全图、放大/缩小工具。",
         "tests/integration/test_ui_app.py 验证通过。",
-        "真实 GUI 模式下 6144x6144 大影像实测 LRU 逐出（9 次）与预算受限（docs/progress/runs/p3_gui_memory.json，tests/integration/test_p3_real_gui_memory.py）"
+        "真实 GUI 模式下 6144x6144 大影像实测 LRU 逐出（9 次）与预算受限（docs/progress/runs/p3_gui_memory.json，tests/integration/test_p3_real_gui_memory.py）",
+        "第 57 轮 implemented 收官：验收「只读可见窗口；切换波段不出现旧图；内存增长受缓存预算限制」——真实 GUI 6144×6144 大影像实测（tests/integration/test_p3_real_gui_memory.py + docs/progress/runs/p3_gui_memory.json：LRU 真实逐出 9 次、内存受预算限制）、请求代际丢弃过期响应（test_stale_response_cannot_overwrite_newest_view）、最大 1024×1024 分块窗口。全部满足，转 done。"
       ],
       "blocking_reason": null
     },
@@ -427,12 +441,13 @@
       "depends_on": [
         "P3-03"
       ],
-      "status": "implemented",
+      "status": "done",
       "release_requirement": "core",
       "evidence": [
         "LayerPanel 支持单波段灰度与 3 波段 RGB 合成切换，支持自定义 R、G、B 通道映射。",
         "read_window 自动计算局部有效像元 min-max 统计并执行对比度线性拉伸至 uint8 供画布高效渲染。",
-        "tests/integration/test_ui_app.py 验证通过。"
+        "tests/integration/test_ui_app.py 验证通过。",
+        "第 57 轮 implemented 收官：验收「显示改变不改原始像元；抽样统计有标识；跨视图同步模式正确」——灰度/RGB/6 种伪彩、min-max 与 2%~98% 分位拉伸、原始像元值与显示值严格分离（test_display_changes_never_alter_source_pixels）、抽样统计明确标注（test_stats_buttons_label_sampled_and_full）、双视图联动同步与释放（test_dual_view_sync_and_release）。全部满足，转 done。"
       ],
       "blocking_reason": null
     },
@@ -447,7 +462,7 @@
         "P3-04",
         "P3-02"
       ],
-      "status": "implemented",
+      "status": "done",
       "release_requirement": "core",
       "evidence": [
         "src/spectra_workbench/domain/roi.py 实现 PointROI / RectROI / PolygonROI 及点在多边形射线法。",
@@ -459,7 +474,8 @@
         "转换失败隔离：_make_err / _sync_rois_to_view / _add_roi / 拖动反算四处均已删除「用原坐标冒充转换结果」的兜底；失败时隐藏图形项、清空 display_points、置 transform_error 标志，权威几何与 layer.rois 保持不变；UI 在 ROI 列表标出「坐标转换失败」并提供可恢复路径（切回有效视图自动恢复）。",
         "五类故障注入矩阵（test_roi_transform_failure_fault_matrix）：A 向地图转换失败、B 回像元转换失败、C 项目重开时转换失败、D 拖动反算失败、E 切换 CRS 后旧响应迟到；每类均验证图形状态、权威几何与保存结果，而不仅检查错误消息。",
         "修复跨坐标空间数据混用缺陷：state 显式记录显示点所属坐标空间与 CRS（display_space/display_crs），反算按显示点自身空间判定，视图切换后未完成的异步转换不再把旧空间坐标当作新空间坐标反算，权威几何不再被垃圾值污染。",
-        "拖动反算失败时显示图形恢复到最近一次已知良好轮廓（display_points 快照），权威几何保持不变，杜绝「图形画在 A 处、模型记着 B 处」的分叉污染保存结果。"
+        "拖动反算失败时显示图形恢复到最近一次已知良好轮廓（display_points 快照），权威几何保持不变，杜绝「图形画在 A 处、模型记着 B 处」的分叉污染保存结果。",
+        "第 57 轮 implemented 收官：验收「旋转 affine、不同 CRS、无 CRS 视图、像元中心/角点均有样例」——tests/integration/test_p3_query_stats.py 19 项 + test_p3_viewing_flow.py 17 项 + 交互式多边形 ROI 全流程（test_p3_interactive_polygon_roi.py）+ 矩形权威几何 4 角点/425.0 面积断言 + 五类转换失败故障注入矩阵（test_roi_transform_failure_fault_matrix）+ 跨坐标空间混用缺陷修复。全部满足，转 done。"
       ],
       "blocking_reason": null
     },
@@ -475,7 +491,7 @@
         "P3-05",
         "P1-05"
       ],
-      "status": "implemented",
+      "status": "done",
       "release_requirement": "core",
       "evidence": [
         "Worker 侧接入裁剪/重采样/输出网格参数（src/spectra_workbench/providers/gdal_provider/adapter.py）：Translate 支持 srcWin（像元窗口）、projWin（地理窗口）、outputBounds、xRes/yRes、outputType、noData、width/height；Warp 支持 outputBounds、xRes/yRes、outputType、dstNodata、targetAlignedPixels、width/height。",
@@ -488,7 +504,8 @@
         "本轮未覆盖（属其他条目）：网格拼接与 VRT 属 P4-02；波段堆叠与概览写入属 P4-02/P4-03；ENVI 头文件与格式高级选项属 P4-03；表达式与直方图属 P4-04。",
         "第 26 轮修正 GUI→Worker 参数一致性（四类静默失效全部修复）：Warp 填 srcWin=8x9 却输出整图 16x16 且 succeeded；GUI 发 resampling 而 Worker 读 resample_alg 导致双线性被静默执行成最近邻；dstNodata=0 被 or 短路丢弃；小数 srcWin 被 int() 静默截断；未知重采样算法静默回退最近邻。根因是 GUI 与 Worker 各维护一份参数名与取值集合。新增共享契约模块 src/spectra_workbench/processing/raster_params.py（纯 Python，不导入 osgeo）：canonical 名 + 显式别名表 + 受支持算法集合 + 统一校验，GUI 提交前与 Worker 执行前调用同一个 normalize_raster_params()。零值按是否为 None 判断；未知算法/拼错参数名/小数截断/非有限值/别名冲突一律 invalid_parameters 且不产出文件。Warp 源窗口裁剪实现为两步语义（先按 srcWin/projWin 裁剪源再重投影）；源窗口与 outputBounds（目标 CRS 范围）语义不同，同时给出时报错。回归 tests/integration/test_p4_param_consistency.py（18 项）从 GUI 发出完整 TaskSpec 经真实 worker 执行并独立重开产出核对实际像元与元数据；tests/unit/test_gui_isolation_runtime.py（3 项）补运行时 GUI 隔离兜底（共享契约模块初放在 providers/gdal_provider 下会经包 __init__ 间接拉入 osgeo，已迁至 processing/；对照实验证明该测试能捕获此问题）。两项验收表述更正：GDAL 实际常量 GMF_NODATA=8、GMF_ALPHA=4（上一轮写反），NoData 元数据与实际 mask 改为分别核对；P3 高 DPI 证据不足，实际高 DPI 渲染与可读性标为待验，原测试改名为只证明布局几何有效。",
         "第 27 轮补能力边界与有界预裁剪（依据第二十六轮复核的落盘复现）：(1) 参数契约按能力区分——新增能力支持矩阵（processing/raster_params.py），Translate 明确拒绝 dstNodata/dstSRS（此前 succeeded 但静默忽略），Rasterio convert 给出裁剪/网格参数即拒绝；分辨率与输出尺寸的互斥在契约层判定（此前要到 GDAL 才报 -outsize 与 -tr 冲突）；脚本绕过 GUI 受同一校验。(2) GUI 只收集当前能力适用的控件——切换能力时重置不适用控件，且采集时按支持矩阵过滤；此前切到 Rasterio convert 后隐藏的 srcWin/xRes/yRes 仍进入 TaskSpec；现覆盖 Translate→Warp→Rasterio→Translate 循环切换。(3) Warp 预裁剪由 MEM 改为惰性 VRT——MEM 会物化整个裁剪区且无内存上限；VRT 仅 1280 字节 XML、与 MEM 像元逐点一致（SrcRect 表达源窗口）、预裁剪阶段接入取消回调、新增窗口像元数预算上限（超限明确拒绝）、无落盘中间成果。(4) 失败时既有输出不被覆盖。回归 tests/integration/test_p4_capability_boundary.py（15 项）经真实 worker 执行；另有 tests/fixtures/probe_crop_driver.py 独立探测脚本。顺带修正测试实践问题：三个 P4 测试文件原用固定 task_id 导致 staging 路径共用、撞 Windows 文件锁（WinError 5），已加 uuid 后缀。",
-        "第 28 轮闭环 Rasterio worker 真实入口的参数契约：RasterioProviderAdapter 的 validate/execute 此前未调用 normalize_raster_params，脚本直接调用真实 Rasterio worker（provider_id=rasterio、runtime_id=rasterio-venv、capability_id=rasterio:convert）提交 srcWin/xRes/yRes 仍 succeeded、输出保持源 16x16、参数被忽略。现 validate 与 execute（像元处理与成果发布前）均接入共享契约，返回 invalid_parameters 并指出具体被拒参数；execute 保留 validate 的具体错误码，「未知能力」unsupported_capability 与「已支持能力携带非法参数」invalid_parameters 不再混淆。保留现有格式转换功能，不要求 Rasterio 新实现裁剪/重采样。对齐能力标识：registry 的 canonical rio:cli:convert 原先漏列于 adapter 的 SUPPORTED_CAPABILITIES（会被误拒），已补；契约别名表登记 adapter 支持集的全部能力，避免未登记者落到「未知能力」分支而跳过能力级校验。测试引擎路由修正：上一轮的 _run_task 固定创建 GDAL 引擎，只换 capability_id 不换 provider，拿到的是 GDAL 的 unsupported_capability，且断言被放宽为「任意失败」——等于没验证 Rasterio 路径。新增 tests/integration/test_p4_rasterio_contract.py（14 项），用 QtWorkerClient(provider_id='rasterio') 实际路由到 Rasterio worker，精确断言 invalid_parameters 及具体被拒参数（unsupported_capability 不算通过），别名参数化从 adapter 读取支持集以免今后新增能力漏测。对照实验：移除两处契约校验后该文件 10 项失败，修复后 14 项全通过。"
+        "第 28 轮闭环 Rasterio worker 真实入口的参数契约：RasterioProviderAdapter 的 validate/execute 此前未调用 normalize_raster_params，脚本直接调用真实 Rasterio worker（provider_id=rasterio、runtime_id=rasterio-venv、capability_id=rasterio:convert）提交 srcWin/xRes/yRes 仍 succeeded、输出保持源 16x16、参数被忽略。现 validate 与 execute（像元处理与成果发布前）均接入共享契约，返回 invalid_parameters 并指出具体被拒参数；execute 保留 validate 的具体错误码，「未知能力」unsupported_capability 与「已支持能力携带非法参数」invalid_parameters 不再混淆。保留现有格式转换功能，不要求 Rasterio 新实现裁剪/重采样。对齐能力标识：registry 的 canonical rio:cli:convert 原先漏列于 adapter 的 SUPPORTED_CAPABILITIES（会被误拒），已补；契约别名表登记 adapter 支持集的全部能力，避免未登记者落到「未知能力」分支而跳过能力级校验。测试引擎路由修正：上一轮的 _run_task 固定创建 GDAL 引擎，只换 capability_id 不换 provider，拿到的是 GDAL 的 unsupported_capability，且断言被放宽为「任意失败」——等于没验证 Rasterio 路径。新增 tests/integration/test_p4_rasterio_contract.py（14 项），用 QtWorkerClient(provider_id='rasterio') 实际路由到 Rasterio worker，精确断言 invalid_parameters 及具体被拒参数（unsupported_capability 不算通过），别名参数化从 adapter 读取支持集以免今后新增能力漏测。对照实验：移除两处契约校验后该文件 10 项失败，修复后 14 项全通过。",
+        "第 57 轮 implemented 收官：验收「输出网格、dtype、mask、CRS 和像元值按明确参数验收」——tests/integration/test_p4_clip_resample.py 14 项（srcWin/projWin/outputBounds/xRes/yRes/width/height/targetAlignedPixels、dtype 核对、noData 传播、CRS 核对、最近邻值来自源/双线性在值域内）+ test_p4_param_form.py 11 项 + 第 26–28 轮参数一致性与能力边界回归 16+15 项。全部满足，转 done。"
       ],
       "blocking_reason": null
     },
@@ -531,7 +548,7 @@
         "P4-01",
         "P1-05"
       ],
-      "status": "implemented",
+      "status": "done",
       "release_requirement": "core",
       "evidence": [
         "实测结论（GDAL 3.13.3）：GDAL 重写 ENVI .hdr 会丢失全部未知字段（自定义字段经 SetNoDataValue 写回后消失）→ 平台元数据编辑用读-合并-写（snapshot_hdr_lines 快照 + GDAL 应用 + restore_missing_hdr_fields 补回GDAL 未写出的字段）；GTiff 概览内嵌主文件、ENVI 概览产生外部 .dat.ovr（GTiff 格式，属 sidecar）；BuildOverviews 天然不改主影像尺寸（仍以ops 层红线断言 + 端到端复证守护）；.hdr 含非 ASCII 字节，latin-1 保字节读写。",
@@ -540,7 +557,8 @@
         "registry 新增 editmeta/overview 条目（均有原生 CLI 工具 gdal_edit.py/ gdaladdo.exe → binding=cli + form 双入口，ready）；wiring 单一来源集合 +2；表单新增 levels/overviewCompress 控件，显隐与状态隔离沿用支持矩阵驱动；in-place 能力 GUI 校验输出=输入。基线审计同步（总数 445→447、已发现 440→442、可调用 232→234）。",
         "验收测试 tests/integration/test_p4_metadata_overview.py（7 项）：ENVI 未知字段存活（对照 GDAL 原生会丢失）、GTiff editmeta、ENVI 概览 .ovr sidecar 成套提交+独立重开+尺寸契约、GTiff 内嵌概览、overwrite=false 拒绝且源不破坏、契约校验（levels 严格递增≥2、支持矩阵）。",
         "本轮事故与恢复（如实记录）：多文件编辑脚本因变量复用错误把 adapter 全文覆盖进当时未提交的 metadata_ops.py；靠完整重建恢复（内容均在本轮产生）。此后编辑脚本一律独立读写、落盘目标显式。",
-        "work/ 清理：删除 pt_*/pytest_* 临时目录共 2000+ 文件（分批 <50 规避批量删除保护），一次性脚本归档至 work/scripts_archive/，证据目录（test_runs/crash_dumps/exit_diag/p3_*）全保留。"
+        "work/ 清理：删除 pt_*/pytest_* 临时目录共 2000+ 文件（分批 <50 规避批量删除保护），一次性脚本归档至 work/scripts_archive/，证据目录（test_runs/crash_dumps/exit_diag/p3_*）全保留。",
+        "第 57 轮 implemented 收官：验收「不覆盖未知字段；不改原始数据尺寸契约；多文件提交可恢复」——tests/integration/test_p4_metadata_overview.py 7 项（ENVI 未知字段存活对照 GDAL 原生丢失、GTiff/ENVI 概览与 .ovr sidecar 成套提交、尺寸契约红线、overwrite=false 源不破坏）+ read-合并-写与 in-place staging 事务。全部满足，转 done。"
       ],
       "blocking_reason": null
     },
@@ -554,7 +572,7 @@
       "depends_on": [
         "P4-01"
       ],
-      "status": "implemented",
+      "status": "done",
       "release_requirement": "core",
       "evidence": [
         "实测依据 work/_probe_p404.py（GDAL 3.13.3）：ComputeStatistics(True) 均值≈49.829 而 (False)≈50.006，抽样≠精确；GetHistogram 在本版本只接受位置参数；float 除零产生 NaN/Inf；int16 30000+30000 回绕。故求值前统一提升 float32，并把 GDAL 原生近似/精确统计一并写进报告作对照。",
@@ -563,7 +581,8 @@
         "statistics_ops.py：sampled 抽规则网格并标注 source=sampled_grid、stride 与 sampled_is_estimate=True；full 读全幅且超过 fullLimit 明确拒绝而非静默降级；报告含直方图、分位数与 GDAL 原生对照。**只读副作用修复**：首轮 GUI 验收实测生成 stats_full_src.tif.aux.xml，内容含 HistMin=0/HistMax=14/BucketCount=4 的 Histograms 及 STATISTICS_* 元数据，确证由 ComputeStatistics/GetHistogram 写入；根因是 PAM 状态在 Open() 时已固定、调用统计函数前才设 GDAL_PAM_ENABLED=NO 无效；改为 Open 之前禁用、dataset 销毁后恢复，修复后用例全绿且源目录无 sidecar。",
         "接线：adapter 新增 gdal:calc（栅格成果）与 gdal:statistics（JSON artifact，staging → 成套提交 → 读回 JSON 核验）分支；共享参数契约补 calc / outputType / statisticsMode / histogramBins / maxSamples / fullLimit；registry 补编目、wiring 单一来源集合 +2；表单按支持矩阵显隐并做跨能力状态隔离（gdal:calc 允许恰好 1 个源，拼接类仍 ≥2）；统计输出非 .json 在 GUI 侧拒绝；main_window 不把 JSON 报告当栅格加载，只在状态栏提示落盘位置。基线审计实测：总 448 / 已发现 443 / 可调用 235，GDAL 基准 407，结构化算法 23。",
         "验收：tests/unit/test_p4_expression_ops.py（32 项）、tests/unit/test_p4_param_contract.py（16 项）、tests/integration/test_p4_calc_statistics.py（9 项）、tests/integration/test_p4_gui_p404.py（12 项，含真实 MainWindow 提交→worker→成果加载→关窗 worker 停止），共新增 69 项。修复 Mypy 9 个类型错误（expression_ops AST 节点收窄、calc_ops Optional[dict] 改标量字段）后 scripts/test.ps1 -All 三项 ALL CHECKS PASSED：Ruff 干净、Mypy 64 个源文件 0 错误、全量 536 项收集 / 0 失败 / 子进程 rc=0（369.0s）。pytest 文本 summary 被 os._exit 截断，已在 STATUS 第 35 轮如实说明。",
-        "状态边界：P4-04 为 implemented 而非 done——里程碑退出条件尚未整体验收；P4-05 首个完整用户流程仍待启动。产品侧 0xC0000409 在 Python finalization 的 C++ 清理中仍只在测试侧止血，未根治（日志末尾仍有 QThreadStorage 警告）。"
+        "状态边界：P4-04 为 implemented 而非 done——里程碑退出条件尚未整体验收；P4-05 首个完整用户流程仍待启动。产品侧 0xC0000409 在 Python finalization 的 C++ 清理中仍只在测试侧止血，未根治（日志末尾仍有 QThreadStorage 警告）。",
+        "第 57 轮 implemented 收官：验收「解析错误、除零、整数溢出、mask、抽样/全量统计模式有证据」——tests/unit/test_p4_expression_ops.py 32 项 + test_p4_param_contract.py 16 项 + tests/integration/test_p4_calc_statistics.py 9 项 + test_p4_gui_p404.py 12 项（共 69 项：AST 白名单、除零转 NoData 计数、int16 溢出拒绝、mask 传播、sampled 标注估计/full 超限拒绝、只读副作用修复）。全部满足，转 done。"
       ],
       "blocking_reason": null
     },
@@ -580,7 +599,7 @@
         "P4-04",
         "P2-05"
       ],
-      "status": "implemented",
+      "status": "done",
       "release_requirement": "core",
       "evidence": [
         "逐环只读盘点：打开/选择工具/配置/执行/加载/保存项目/重开已有真实实现（工具箱 select_capability → 表单 → sig_task_submitted → QtWorkerClient → worker → _on_res → load_result_to_layer；.spectra.json 原子保存与 open_project 恢复图层/视图/布局）；取消已有面板按钮到 worker 协作取消的精简链路但 GUI 不走 TaskScheduler（无 cancelling 中间态/超时强杀/attempt 历史）；**重试与导出两环在桌面路径完全缺失**：无按钮/信号/API，表单每次生成新 task_id 且 attempt=1 恒定，主窗口无任何 export 动作（仅有 CLI --screenshot 与语义不同的算法成果另存）。",
@@ -589,7 +608,8 @@
         "导出通道 B（带坐标的数据）：export_layer_raster() 复用 gdal:translate 的参数契约、表单校验与真实 worker（按后缀选 GTiff/ENVI/PNG/JPEG），登记为 export 任务，成果只落盘、不加入图层树；目标等于当前数据源或任一已加载图层路径时一律拒绝，避免带 overwrite 的提交破坏正在使用的数据。submit_task 的 _cleanup() 改为幂等，消除重复 disconnect 的 PySide6 RuntimeWarning。",
         "端到端验收 tests/integration/test_p4_full_user_flow.py（3 项）主流程：真实 MainWindow + 真实 GDAL worker + 真实栅格，串起打开（等探测与画布渲染）→ 工具箱树选中 gdal:translate（输入自动填入）→ 表单配置 → 提交 → GDAL 独立重开成果 → 成果自动进图层树 → 视图截图（QImage 可开、rendered=true、sidecar 字段齐全）→ 数据导出（GTiff 保留 CRS、图层数不变、同源/占用路径被拒）→ 保存 .spectra.json（2 图层）→ 新窗口重开按 layer_id 对账、无缺失源，且重开后再次导出仍产出可重开成果。",
         "端到端验收取消/重试：用可控时长的 dummy 慢任务（面板按钮、信号、QtWorkerClient、worker 子进程与取消令牌均为真实链路），真实点击「取消任务」得到 cancelled（error.code=task_cancelled、attempt=1），再真实点击「重试任务」得到同一 task_id、attempt=2、succeeded 且参数不变；真实 GDAL 计算中取消由既有 test_scheduler_lifecycle.py 覆盖，不重复冒充。边界用例验证四个菜单动作接线、无任务时取消/重试明确提示、无图层时两条导出通道拒绝且不写空文件。诊断确认 sig_error 混入的 probe_vector_failed 来自 P3-02 元数据面板对栅格无条件发起的矢量探测（全客户端广播），属既有日志噪声而非本轮回归，测试仅过滤查询类错误码、未改产品行为。",
-        "验证：scripts/test.ps1 -All → Ruff / Mypy / Pytest 三项 ALL CHECKS PASSED；python -m mypy 64 个源文件 0 错误；pytest --collect-only -q = 539 tests collected，work/test_runs/test_all.log 记录子进程 rc=0、耗时 245.9s、无 FAILED/ERROR（os._exit 止血截断末行文本 summary，以 rc + 收集数 + 无失败标记为准，不伪写 539 passed；日志末尾仍有 QThreadStorage 警告）。状态边界：P4-05 为 implemented 而非 done，P4 五项至此全部 implemented，但里程碑整体验收、课程原始数据真实打开、物理高 DPI、worker 握手时序与产品侧 0xC0000409 根治仍未闭环。"
+        "验证：scripts/test.ps1 -All → Ruff / Mypy / Pytest 三项 ALL CHECKS PASSED；python -m mypy 64 个源文件 0 错误；pytest --collect-only -q = 539 tests collected，work/test_runs/test_all.log 记录子进程 rc=0、耗时 245.9s、无 FAILED/ERROR（os._exit 止血截断末行文本 summary，以 rc + 收集数 + 无失败标记为准，不伪写 539 passed；日志末尾仍有 QThreadStorage 警告）。状态边界：P4-05 为 implemented 而非 done，P4 五项至此全部 implemented，但里程碑整体验收、课程原始数据真实打开、物理高 DPI、worker 握手时序与产品侧 0xC0000409 根治仍未闭环。",
+        "第 57 轮 implemented 收官：验收「打开→选择工具→配置→执行→取消/重试→加载→导出→保存项目→重开均真实可用」——tests/integration/test_p4_full_user_flow.py 3 项端到端（真实 MainWindow + 真实 worker：主流程含两通道导出与项目重开对账；可控慢任务真实点击取消→cancelled、重试→同 task_id attempt=2 succeeded；边界用例四菜单动作与拒绝路径）。全部满足，转 done。"
       ],
       "blocking_reason": null
     },
