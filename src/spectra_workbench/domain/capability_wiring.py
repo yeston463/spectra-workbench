@@ -16,7 +16,13 @@ GUI 进程不得导入原生地理依赖（AGENTS.md 硬约束），而 provider
 
 from __future__ import annotations
 
-__all__ = ["CONNECTED_CAPABILITIES", "MULTI_INPUT_CAPABILITIES", "is_multi_input"]
+__all__ = [
+    "CONNECTED_CAPABILITIES",
+    "FORMAT_CAPABILITIES",
+    "MULTI_INPUT_CAPABILITIES",
+    "is_multi_input",
+    "supports_output_format",
+]
 
 
 #: GUI 已接通（可提交执行）的能力。必须与各 provider adapter 的
@@ -65,3 +71,26 @@ MULTI_INPUT_CAPABILITIES: frozenset[str] = frozenset(
 def is_multi_input(capability_id: str) -> bool:
     """该能力是否使用可排序多输入列表（P4-02 拼接/VRT/堆叠、P4-04 表达式）。"""
     return capability_id in MULTI_INPUT_CAPABILITIES
+
+
+#: 输出格式由用户选择、且适配器真实消费 ``format`` 参数的能力。
+#: ``gdal:buildvrt`` 只产出 VRT，不接受其它格式；统计报告固定 JSON artifact。
+FORMAT_CAPABILITIES: frozenset[str] = frozenset(
+    {
+        "gdal:translate",
+        "gdal_translate",
+        "gdal:warp",
+        "gdalwarp",
+        "rasterio:convert",
+        "gdal:merge",
+        "gdal_merge",
+        "gdal:stack",
+        "gdal:bandmanage",
+        "gdal:calc",
+    }
+)
+
+
+def supports_output_format(capability_id: str) -> bool:
+    """该能力的表单是否应展示输出格式选择。"""
+    return capability_id in FORMAT_CAPABILITIES

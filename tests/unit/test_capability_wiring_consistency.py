@@ -118,3 +118,22 @@ def test_p402_capabilities_have_parameter_matrices() -> None:
 
     for cid in ("gdal:buildvrt", "gdal:merge", "gdal:stack", "gdal:bandmanage"):
         assert supported_params_for(cid) is not None, f"{cid} 缺少参数支持矩阵"
+
+
+def test_output_format_control_scope_matches_adapter_contract() -> None:
+    """输出格式选择器只出现在真实消费 ``format`` 的能力上。
+
+    - buildvrt 只写 VRT，不能提供 GTiff/ENVI 等其它格式；
+    - statistics 固定输出 JSON artifact；
+    - merge/stack/bandmanage 由适配器消费 ``format``，必须可选择。
+    """
+    from spectra_workbench.domain.capability_wiring import (
+        FORMAT_CAPABILITIES,
+        supports_output_format,
+    )
+
+    assert not supports_output_format("gdal:buildvrt")
+    assert not supports_output_format("gdal:statistics")
+    for cid in ("gdal:merge", "gdal:stack", "gdal:bandmanage"):
+        assert supports_output_format(cid), f"{cid} 应允许选择输出格式"
+    assert set(FORMAT_CAPABILITIES) <= set(CONNECTED_CAPABILITIES)

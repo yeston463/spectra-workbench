@@ -36,6 +36,7 @@ from PySide6.QtWidgets import (
 from spectra_workbench.domain.capability_wiring import (
     CONNECTED_CAPABILITIES,
     is_multi_input,
+    supports_output_format,
 )
 from spectra_workbench.domain.models import (
     DatasetKind,
@@ -421,7 +422,13 @@ class CapabilityFormWidget(QWidget):
         sup = supported_params_for(cid) or frozenset()
 
         # 显示或隐藏相应字段（统计报告输出 JSON artifact，不显示栅格格式选项）
-        show_format = is_translate or is_warp or is_rasterio or "calc" in sup
+        show_format = (
+            is_translate
+            or is_warp
+            or is_rasterio
+            or "calc" in sup
+            or supports_output_format(cid)
+        )
         self.lbl_format.setVisible(show_format)
         self.cmb_format.setVisible(show_format)
 
@@ -922,6 +929,10 @@ class CapabilityFormWidget(QWidget):
 
         elif "rasterio" in cid:
             params["driver"] = out_fmt
+        elif cid in {"gdal:merge", "gdal_merge", "gdal:stack", "gdal:bandmanage"}:
+            # P4-02 组合能力的输出容器由用户选择；Worker 消费 format 参数，
+            # 并在写盘前按 S4 矩阵拒绝不支持的组合。
+            params["format"] = out_fmt
         elif cid == "gdal:calc":
             # 表达式成果是真实栅格，格式选项必须下发给 worker（默认 GTiff）
             params["format"] = out_fmt

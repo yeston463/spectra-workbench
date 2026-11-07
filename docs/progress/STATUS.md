@@ -1,6 +1,6 @@
 # 执行状态
 
-更新：2026-11-07（第 44 轮 · S4 GUI 格式预检与注册表限制同步：提交 TaskSpec 前按共享矩阵拦截，元数据经 Worker 探测注入；Clean 全量 637 项 / 0 失败 / rc=0 / clean_exit_verified=true。第 43 轮为 S4 后端矩阵，第 42 轮为 S3 事务删除）
+更新：2026-11-07（第 45 轮 · S5 P4-02 桌面端到端验收：真实 MainWindow + 真实 Worker + QTest 交互，覆盖优先级顺序、混合 CRS 保留旧成果、ENVI 新建/覆盖、alpha/NoData 格式矩阵、真实计算取消/重试、成果加载与项目保存重开、VRT 失效源明确报错；Clean 全量 644 项 / 0 失败 / rc=0 / clean_exit_verified=true。P4-02 据此转为 done。第 44 轮为 S4 GUI 格式预检，第 43 轮为 S4 后端矩阵）
 
 ## 当前里程碑
 
@@ -19,6 +19,9 @@
   - **P3-03 瓦片请求、概览、缓存、过期请求处理**：implemented。仅按可见窗口向 Worker 索取数据；实现 `TileCache`（LRU 淘汰与字节预算限制）；请求代际（`_active_request_id`）与图层 ID 校验彻底丢弃过期旧图响应；支持四种概览采样策略（auto/nearest/average/gauss）；在真实交互式 GUI 下以 6144x6144 多级概览大影像完成缩放、平移、切波段与切层全流程实测，验证 LRU 淘汰真实触发（9 次逐出），缓存严格受限在预算内，图层移除后缓存彻底清零。
   - **P3-04 灰度/RGB/伪彩、拉伸、透明度与分屏**：implemented。支持灰度、RGB 与 6 种伪彩色（terrain/viridis/plasma/inferno/magma/jet）；min-max 与 2%~98% 分位数拉伸；原始像元值与显示拉伸值严格物理分离；实现双视图联动同步模式（`test_dual_canvas_link_mode`）。
   - **P3-05 view CRS、重投影、查询与 ROI**：implemented。支持旋转 Affine 栅格与无 GT 栅格加载；地图坐标 ↔ 像元行列支持中心 (center) 与角点 (corner) 两种坐标约定（`test_map_to_pixel_center_vs_corner`）；实现 PointROI / RectROI / PolygonROI 模型与点在多边形判定；跨 CRS 视图重投影网格索取；通过真实 Qt 鼠标事件（QTest）完成多边形 ROI 逐点绘制、右键/起点闭合、选中、顶点手柄真实拖拽形变、删除与保存重开恢复；多图层切换下 ROI 所属图层严格隔离与保全；旋转 Affine 栅格与视图 CRS 切换（像元 vs EPSG:4326）下坐标空间与点位无损保持；矩形 ROI 权威几何与显示轮廓物理分离，在旋转 Affine 栅格下展开 4 角点经 Worker 转换并渲染实际轮廓，实测断言 4 个真实地图角点与 425.0 平方地图单位覆盖面积（彻底杜绝错误轴对齐面积 375.0），变换视图下手柄隐藏禁用，防止扭曲矩形；坐标转换失败时绝不伪装恒等变换，严格隐藏图形项（`item.isVisible() is False`）并清空 `display_points`（为 None），保全权威模型，切回有效视图自动恢复；拖动反算 Worker 报错时安全回退，不崩溃不污染。本轮补齐五类故障注入矩阵（向地图失败 / 回像元失败 / 项目重开失败 / 拖动反算失败 / 旧响应迟到），每类均验证图形状态、权威几何与保存结果；修复跨坐标空间数据混用缺陷（state 显式记录显示点所属空间与 CRS），拖动反算失败时显示图形恢复原轮廓、权威几何保持不变。
+- **P4 能力应用与完整用户流程**：
+  - **P4-02 拼接、VRT、堆叠与波段管理**：**done**（第 45 轮 S5 桌面端到端验收）。真实 `MainWindow` + 真实 GDAL Worker + QTest 按钮/任务面板交互，验证输入顺序即重叠优先级（first/last 双向）、混合 CRS 明确拒绝且旧成果字节不变、ENVI 新建与覆盖、PNG alpha 保留、JPEG/ENVI alpha 与 PNG Float32 在提交前拦截、真实 4096×4096 计算中取消并重试、成果自动加载与项目保存重开、VRT 相对源失效时明确报错并在项目重开时进入缺失源列表。
+  - **P4-01 / P4-03 / P4-04 / P4-05**：implemented。P4-05 的完整用户流程验收以第 36 轮 P4-05 专项为准；P4-02 转为 done 不改变其余任务的证据边界。
 
 ## 原 P3 验收标准逐项对账与剩余缺口
 
@@ -228,6 +231,34 @@ CRT 检测到栈状态异常后立即终止进程，这正是 `STATUS_STACK_BUFF
 |---|---|---|
 | 用合成影像完成同类验收 | 已满足 | 合成 ENVI/GTiff/GeoJSON/netCDF 样例覆盖多波段、像元数值、ROI 与对比 |
 | 保留真实数据待验状态 | **待验** | 课程原始数据位于 `C:\Users\赵航\Desktop\studio\_chaoxing_rs`（**只读**，不得运行其中的抓取/下载/OCR 脚本）；本轮全部用合成影像验收，未对课程原始 ENVI 栅格与 lena.tif 做真实打开验证 |
+
+### 第 45 轮：S5 P4-02 桌面端到端验收
+
+**一、桌面路径补强**
+
+- 输出格式选择器扩展为「适配器真实消费 `format` 的能力」：merge / stack / bandmanage 现在可在表单选择 GTiff/ENVI/COG/PNG/JPEG 并写入 TaskSpec；buildvrt 仍只产出 VRT，统计仍固定 JSON artifact。该范围由 `domain/capability_wiring.py` 的 `supports_output_format` 单一声明，并新增一致性测试守护。
+- `probe_dataset` 对 VRT 增加失效源预检：读取 `GetFileList()`，对本地源逐个检查存在性（跳过 `/vsi*` 与远程 URI）。VRT 元数据可能脱离源打开，但像元读取必然失败；桌面打开现在明确报错，不再登记一个看似正常却无法读取的空图层。
+- 保留既有的 GUI 格式矩阵预检与 Worker 权威校验；S5 不引入新的绕过路径。
+
+**二、真实桌面端到端用例（`tests/integration/test_p4_desktop_e2e.py`，6 项）**
+
+1. **输入顺序即重叠优先级**：真实打开源 A、在工具箱选中 `gdal:merge`、向多输入列表加入 A/B，通过真实按钮提交。默认 `last` 重叠区取 B，切到 `first` 后取 A；两个成果均自动进入图层树。保存 `.spectra.json` 后在新窗口重开，3 个图层路径与顺序一致、无缺失源。
+2. **混合 CRS 拒绝且旧成果不变**：目标文件预置为 99 值。提交 EPSG:4326 + EPSG:3857 拼接，Worker 返回 `incompatible_sources`；目标文件字节完全不变、独立重开仍为 4×4/99，失败成果不进入图层树。
+3. **ENVI 新建与覆盖**：`gdal:bandmanage` 选择 ENVI、`bandList=2,1` 提交，`.dat/.hdr` 成套落盘并按 2,1 重排；同目标改为 `bandList=1,2` 覆盖，重开后顺序正确，无旧头文件语义残留。
+4. **alpha / 格式矩阵**：Byte RGBA 源输出 PNG 成功，4 波段且 alpha color interpretation 保留；JPEG+alpha、ENVI+alpha、PNG+Float32 均在提交前被 GUI 拦截，未写出文件、未发出 TaskSpec。元数据来自真实 Worker 探测，不是测试注入的假字典。
+5. **真实计算取消与重试**：4096×4096 Float32 源经 `gdal:translate` 真实计算，在 GDAL progress ≥2% 时点击任务面板「取消」，得到 `cancelled` / `task_cancelled`，目标文件不存在；随后点击「重试任务」，同一 `task_id`、`attempt=2`、`succeeded`，成果可独立重开为 4096×4096。
+6. **VRT 源失效与项目缺失源**：GUI 构建 VRT（相对源引用），保存项目后仅把 VRT 移到更深目录，`open_dataset` 明确提示「数据打开失败」且不新增图层；原项目重开时 VRT 进入缺失源列表，状态栏显示「待重新关联 1」，其余源正常加载。
+
+**三、验证**
+
+- 定向组合（S5 + P4-02 GUI + GUI 格式预检 + wiring 一致性）：**32 passed**（30.22s）。
+- Ruff 干净；Mypy 66 个源文件 0 错误。
+- Clean 全量：**644 passed / 0 failed / rc=0 / clean_exit_verified=true**（354.68s，`process_observation=job`、`residual=0`、`cleanup_complete=true`、`source_snapshot_changed=false`）。
+
+**四、状态与剩余边界**
+
+- P4-02 依据本轮桌面验收转为 **done**；不再以「仅后端可调用」表述。
+- 全局剩余项不变：0xC0000409 根因未确证；物理高 DPI/多显示器切换、长周期 worker/句柄压力仍需真实环境验证；GUI 元数据探测在提交路径内同步执行，本地文件耗时可接受，但远程/慢盘路径可能阻塞 UI；`audit-capabilities.ps1` 仍只审计注册表级状态，当前输入可执行性尚未成为独立审计维度。这些不改变 P4-02 原验收结论。
 
 ### 第 44 轮：S4 GUI 格式预检与注册表限制同步
 

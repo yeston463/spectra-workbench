@@ -2067,6 +2067,30 @@ class GDALProviderAdapter(ProviderAdapter):
             count = int(ds.RasterCount)
             driver_name = ds.GetDriver().ShortName if ds.GetDriver() else "Unknown"
             driver_long = ds.GetDriver().LongName if ds.GetDriver() else ""
+            if driver_name == "VRT":
+                # VRT 元数据可脱离源打开，但像元读取会失败。桌面打开时必须
+                # 明确报告失效的相对引用，而不是登记一个看似正常的空图层。
+                missing: list[str] = []
+                in_resolved = in_path.resolve()
+                for raw_source in ds.GetFileList() or []:
+                    text = str(raw_source)
+                    lowered = text.lower()
+                    if lowered.startswith(
+                        ("/vsi", "http://", "https://", "s3://", "gs://", "az://", "zip://", "tar://")
+                    ):
+                        continue
+                    source_path = Path(text)
+                    try:
+                        if source_path.resolve() == in_resolved:
+                            continue
+                    except OSError:
+                        pass
+                    if not source_path.exists():
+                        missing.append(text)
+                if missing:
+                    raise FileNotFoundError(
+                        "VRT 引用的源文件不存在: " + ", ".join(missing)
+                    )
             gt = ds.GetGeoTransform(can_return_null=True)
             geotransform = [float(x) for x in gt] if gt else None
             # 范围按四个像元外边界角点计算，旋转/倾斜仿射下不会漏角
