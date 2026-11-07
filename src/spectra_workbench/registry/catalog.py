@@ -259,11 +259,130 @@ class CapabilityRegistry:
 
         return report
 
+    def reconcile_baseline(
+        self,
+        baseline_files: Sequence[Path | str] | None = None,
+        provider: str | None = None,
+    ) -> dict[str, Any]:
+        """逐项核对契约基准文件与注册表条目（P5-01）。
+
+        `audit_report` 的分母是**注册表条目**，不能直接证明基准文件中的每一项
+        都已被登记。本方法读取 `contracts/baselines/*.json`，给出：
+
+        - 基准有、注册表无的条目（必须为空）；
+        - 注册表有、基准无的平台组合能力（显式列出，不静默混入基准）；
+        - 所有 missing / blocked 条目及其限制说明（缺口必须有具体原因）。
+
+        `complete` 只表示“基准对账完整且缺口均有说明”，**不表示**所有能力
+        都 ready/verified。运行期缺失（如未安装的插件）仍保留在缺口中。
+        """
+        files = (
+            [Path(p) for p in baseline_files]
+            if baseline_files is not None
+            else default_baseline_files()
+        )
+        errors: list[str] = []
+        baseline_by_provider: dict[str, set[str]] = {}
+        for path in files:
+            try:
+                _, descriptors = load_baseline_from_file(path)
+            except Exception as exc:  # noqa: BLE001 - report, do not hide a broken baseline
+                errors.append(f"{path}: {type(exc).__name__}: {exc}")
+                continue
+            for descriptor in descriptors:
+                if provider and descriptor.engine.provider_id != provider:
+                    continue
+                baseline_by_provider.setdefault(
+                    descriptor.engine.provider_id, set()
+                ).add(descriptor.capability_id)
+
+        registry_caps = self.filter(provider=provider)
+        registry_ids = {c.capability_id for c in registry_caps}
+        baseline_ids: set[str] = set()
+        for ids in baseline_by_provider.values():
+            baseline_ids.update(ids)
+
+        missing_from_registry = sorted(baseline_ids - registry_ids)
+        platform_only = sorted(registry_ids - baseline_ids)
+
+        gap_details: list[dict[str, Any]] = []
+        for cap in registry_caps:
+            if (
+                cap.state.presence != Presence.missing
+                and cap.state.availability == Availability.ready
+            ):
+                continue
+            gap_details.append(
+                {
+                    "capability_id": cap.capability_id,
+                    "name": cap.name,
+                    "provider": cap.engine.provider_id,
+                    "presence": cap.state.presence.value,
+                    "availability": cap.state.availability.value,
+                    "binding": cap.state.binding.value,
+                    "limitations": list(cap.limitations),
+                }
+            )
+        gap_details.sort(key=lambda item: item["capability_id"])
+        unexplained = [item for item in gap_details if not item["limitations"]]
+
+        by_provider: dict[str, Any] = {}
+        provider_names = sorted(
+            set(baseline_by_provider)
+            | {c.engine.provider_id for c in registry_caps}
+        )
+        for name in provider_names:
+            sub_caps = [c for c in registry_caps if c.engine.provider_id == name]
+            sub_registry_ids = {c.capability_id for c in sub_caps}
+            sub_baseline_ids = baseline_by_provider.get(name, set())
+            sub_missing = sorted(sub_baseline_ids - sub_registry_ids)
+            sub_platform = sorted(sub_registry_ids - sub_baseline_ids)
+            sub_gaps = [
+                item for item in gap_details if item["provider"] == name
+            ]
+            sub_unexplained = [
+                item for item in sub_gaps if not item["limitations"]
+            ]
+            by_provider[name] = {
+                "baseline_count": len(sub_baseline_ids),
+                "registry_count": len(sub_registry_ids),
+                "missing_from_registry": sub_missing,
+                "platform_only": sub_platform,
+                "gap_count": len(sub_gaps),
+                "unexplained_gap_count": len(sub_unexplained),
+            }
+
+        return {
+            "provider_filter": provider or "all",
+            "baseline_files": [str(path) for path in files],
+            "baseline_count": len(baseline_ids),
+            "registry_count": len(registry_ids),
+            "missing_from_registry": missing_from_registry,
+            "platform_only": platform_only,
+            "gap_count": len(gap_details),
+            "missing_or_blocked": gap_details,
+            "unexplained_gaps": unexplained,
+            "errors": errors,
+            "by_provider": by_provider,
+            "complete": bool(files)
+            and bool(baseline_ids)
+            and not errors
+            and not missing_from_registry
+            and not unexplained,
+        }
+
     def load_baseline_file(self, path: Path | str) -> None:
         """从 JSON 基准文件中载入并合并能力条目。"""
         _, descriptors = load_baseline_from_file(path)
         for d in descriptors:
             self.register(d)
+
+
+def default_baseline_files() -> list[Path]:
+    """返回仓库 `contracts/baselines/*.json`；打包环境无基准目录时返回空列表。"""
+    root = Path(__file__).resolve().parents[3]
+    folder = root / "contracts" / "baselines"
+    return sorted(folder.glob("*.json")) if folder.is_dir() else []
 
 
 _GLOBAL_REGISTRY: CapabilityRegistry | None = None

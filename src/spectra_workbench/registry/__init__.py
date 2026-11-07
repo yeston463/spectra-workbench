@@ -11,6 +11,7 @@ from spectra_workbench.registry.baseline import (
 )
 from spectra_workbench.registry.catalog import (
     CapabilityRegistry,
+    default_baseline_files,
     export_standard_baselines,
     get_default_registry,
 )
@@ -47,6 +48,7 @@ __all__ = [
     "build_rasterio_python_api",
     "build_rio_cli_commands",
     "compute_capabilities_sha256",
+    "default_baseline_files",
     "export_standard_baselines",
     "get_default_registry",
     "load_baseline_from_dict",

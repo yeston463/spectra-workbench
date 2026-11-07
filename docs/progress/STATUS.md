@@ -1,6 +1,6 @@
 # 执行状态
 
-更新：2026-11-07（第 46 轮 · 长周期 worker 压力与 native dump 证据：200 轮真实 Worker 启动/停止 + 20 个 GDAL 任务，句柄增长 +7、线程收敛 0、私有内存 +96 KB；受控 abort 捕获 1.78 MB minidump，确认历史 0xC0000409 为 ucrtbase+0xa527e / fastfail(7) 的 abort 路径，但不宣称调用方与根因。P4-02 已于第 45 轮转为 done；Clean 全量仍为 644 项 / 0 失败 / rc=0。第 45 轮为 S5 桌面验收）
+更新：2026-11-07（第 47 轮 · P5-01 基准逐项对账：GDAL 3.13.3 + Rasterio 1.5.2 契约基准 443 条全部登记，注册表 448 条（含 5 条平台扩展），8 条运行期缺口均有具体原因；Clean 全量 646 项 / 0 失败 / rc=0 / clean_exit_verified=true。P5-01 转为 done。第 46 轮为长周期压力与 native dump）
 
 ## 当前里程碑
 
@@ -22,6 +22,9 @@
 - **P4 能力应用与完整用户流程**：
   - **P4-02 拼接、VRT、堆叠与波段管理**：**done**（第 45 轮 S5 桌面端到端验收）。真实 `MainWindow` + 真实 GDAL Worker + QTest 按钮/任务面板交互，验证输入顺序即重叠优先级（first/last 双向）、混合 CRS 明确拒绝且旧成果字节不变、ENVI 新建与覆盖、PNG alpha 保留、JPEG/ENVI alpha 与 PNG Float32 在提交前拦截、真实 4096×4096 计算中取消并重试、成果自动加载与项目保存重开、VRT 相对源失效时明确报错并在项目重开时进入缺失源列表。
   - **P4-01 / P4-03 / P4-04 / P4-05**：implemented。P4-05 的完整用户流程验收以第 36 轮 P4-05 专项为准；P4-02 转为 done 不改变其余任务的证据边界。
+- **P5 全量栅格、矢量、地形与坐标能力**：
+  - **P5-01 补齐栅格算法/传统工具入口**：**done**（第 47 轮基准逐项对账）。契约基准 443 条全部在注册表；注册表 448 条，多出的 5 条为平台组合/受限实现；8 条运行期缺口（3 条 blocked、5 条 missing）均有具体原因，未解释缺口 0。
+  - **P5-02 / P5-03 / P5-04 / P5-05**：todo。P5-02 的栅格化/多边形化/等值线/地形实现仍待开始；P5-01 只完成入口与基准对账，不把“已编目”当作“已可执行”。
 
 ## 原 P3 验收标准逐项对账与剩余缺口
 
@@ -231,6 +234,42 @@ CRT 检测到栈状态异常后立即终止进程，这正是 `STATUS_STACK_BUFF
 |---|---|---|
 | 用合成影像完成同类验收 | 已满足 | 合成 ENVI/GTiff/GeoJSON/netCDF 样例覆盖多波段、像元数值、ROI 与对比 |
 | 保留真实数据待验状态 | **待验** | 课程原始数据位于 `C:\Users\赵航\Desktop\studio\_chaoxing_rs`（**只读**，不得运行其中的抓取/下载/OCR 脚本）；本轮全部用合成影像验收，未对课程原始 ENVI 栅格与 lena.tif 做真实打开验证 |
+
+### 第 47 轮：P5-01 基准逐项对账（P5-01 → done）
+
+**一、对账口径**
+
+- 此前的 `audit_report().total_baseline_count` 实际是**注册表条目数**（448），不是契约基准文件条目数（443），容易把“注册表分母”误读为“基准分母”。
+- 新增 `CapabilityRegistry.reconcile_baseline()`：读取 `contracts/baselines/gdal-3.13.3.json` 与 `rasterio-1.5.2.json`，逐项比较 capability_id，并输出：
+  - `missing_from_registry`：基准有、注册表无（必须为空）；
+  - `platform_only`：注册表有、基准无的平台组合/受限实现（显式列出）；
+  - `missing_or_blocked`：所有缺失/受阻条目及其 limitations；
+  - `unexplained_gaps`：没有原因说明的缺口（必须为空）；
+  - `complete`：只表示“基准对账完整且缺口均有说明”，**不表示所有能力 ready/verified**。
+- `scripts/audit-capabilities.ps1` 的 JSON 增加 `baseline_reconciliation` 段，并在控制台输出基准/注册表差异、平台扩展与对账结论。
+
+**二、实测结果**
+
+- 契约基准：**443** 条（GDAL 402 + Rasterio 41），全部在注册表中，`missing_from_registry=[]`。
+- 注册表：**448** 条；`platform_only` 恰为 5 条平台实现：`gdal:bandmanage` / `gdal:editmeta` / `gdal:overview` / `gdal:stack` / `gdal:statistics`。
+- 运行期缺口 **8** 条，均有具体原因：
+  - `gdal:dem` / `gdal:grid` / `gdal:rasterize`：已编目，适配器尚未接线（blocked）；
+  - `gdal:cli:gdal_auth`：Windows QGIS 运行时未编译该命令（unsupported）；
+  - `gdal:driver:HDF5`：运行时未链接 HDF5（missing_dependency）；
+  - `rio:cli:cogeo` / `rio:cli:color` / `rio:cli:mbtiles`：可选插件未安装（missing_dependency）。
+- 目标版本（GDAL 3.13.3）新增/组合工具均包含在基准与注册表中；P5-01 只证明入口与基准完整性，不把这些 blocked 能力表述为可执行。
+
+**三、验证**
+
+- 新增 `tests/unit/test_capability_baseline_reconciliation.py`（2 项）：基准无缺失、平台扩展集合明确、目标版本工具已编目、8 条缺口均有原因、`complete=true`。
+- `scripts/audit-capabilities.ps1` 实测退出码 0，报告写入 `docs/progress/runs/capability_audit.json`。
+- Ruff 干净；Mypy 66 个源文件 0 错误。
+- Clean 全量：**646 passed / 0 failed / rc=0 / clean_exit_verified=true**（428.99s，job 观测、residual=0、cleanup_complete=true）。
+
+**四、状态与下一步**
+
+- P5-01 转为 **done**。
+- 下一步 P5-02：栅格化、多边形化、等值线及地形工具。必须用已知矩形/标签图与解析平面做数值验证，不能只检查文件存在；`gdal:rasterize` / `gdal:dem` / `gdal:grid` 的适配器接线属于该任务范围。
 
 ### 第 46 轮：长周期 Worker 压力与 native dump 证据
 

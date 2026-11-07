@@ -37,6 +37,7 @@ out_file = sys.argv[2] if len(sys.argv) > 2 and sys.argv[2] else None
 
 reg = get_default_registry()
 report = reg.audit_report(provider=provider)
+report['baseline_reconciliation'] = reg.reconcile_baseline(provider=provider)
 
 if out_file:
     p = Path(out_file)
@@ -69,6 +70,29 @@ Write-Host ("  1. 已发现 (discovered): {0} ({1:P1})" -f $data.discovered.coun
 Write-Host ("  2. 可调用 (callable):   {0} ({1:P1})" -f $data.callable.count, $data.callable.ratio) -ForegroundColor Green
 Write-Host ("  3. 已验证 (verified):   {0} ({1:P1})" -f $data.verified.count, $data.verified.ratio) -ForegroundColor Cyan
 Write-Host ("  4. 缺失/受阻 (missing):  {0} ({1:P1})" -f $data.missing.count, $data.missing.ratio) -ForegroundColor Magenta
+
+if ($data.baseline_reconciliation) {
+    $rec = $data.baseline_reconciliation
+    Write-Host ""
+    Write-Host ">>> 基准逐项对账（P5-01）：" -ForegroundColor Yellow
+    Write-Host ("  基准条目: {0} | 注册表条目: {1}" -f $rec.baseline_count, $rec.registry_count)
+    Write-Host ("  基准有、注册表无: {0}" -f @($rec.missing_from_registry).Count)
+    Write-Host ("  注册表平台扩展: {0}" -f @($rec.platform_only).Count)
+    Write-Host ("  缺口条目: {0} | 未说明缺口: {1}" -f $rec.gap_count, @($rec.unexplained_gaps).Count)
+    if (@($rec.missing_from_registry).Count -gt 0) {
+        foreach ($missingId in $rec.missing_from_registry) {
+            Write-Host ("    [缺失] {0}" -f $missingId) -ForegroundColor Red
+        }
+    }
+    if (@($rec.platform_only).Count -gt 0) {
+        Write-Host ("    平台扩展: {0}" -f ($rec.platform_only -join ', ')) -ForegroundColor Cyan
+    }
+    if ($rec.complete) {
+        Write-Host "  对账结论: 基准全部登记，缺口均有具体原因" -ForegroundColor Green
+    } else {
+        Write-Host "  对账结论: 不完整，见 JSON 的 errors / unexplained_gaps" -ForegroundColor Red
+    }
+}
 
 if ($data.missing.count -gt 0) {
     Write-Host ""
