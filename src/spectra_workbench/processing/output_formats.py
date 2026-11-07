@@ -157,6 +157,7 @@ VECTOR_OUTPUT_FORMATS: dict[str, str] = {
     "GEOJSON": "GeoJSON",
     "SHAPEFILE": "ESRI Shapefile",
     "ESRI SHAPEFILE": "ESRI Shapefile",
+    "FLATGEOBUF": "FlatGeobuf",
 }
 
 #: Shapefile bundle 在主 .shp 之外可能出现的伴生后缀。
@@ -178,5 +179,6 @@ def validate_vector_output_format(format_name: str) -> list[str]:
     if key in VECTOR_OUTPUT_FORMATS:
         return []
     return [
-        f"矢量成果仅支持 GPKG / GeoJSON / ESRI Shapefile，不支持 {format_name!r}"
+        "矢量成果仅支持 GPKG / GeoJSON / ESRI Shapefile / FlatGeobuf，"
+        f"不支持 {format_name!r}"
     ]

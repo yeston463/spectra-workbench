@@ -56,6 +56,8 @@ CONNECTED_CAPABILITIES: frozenset[str] = frozenset(
         # P5-02：栅格矢量化 / 等值线（成果为矢量，P5-02）
         "gdal:polygonize",
         "gdal:contour",
+        # P5-04：矢量处理 / SQL / 坐标转换（成果为矢量）
+        "ogr:vectortranslate",
         # P4-04：受限表达式计算 / 直方图与基础统计（后者输出 JSON artifact）
         "gdal:calc",
         "gdal:statistics",
@@ -83,11 +85,13 @@ def is_multi_input(capability_id: str) -> bool:
 
 
 #: 成果为**矢量**（OGR 数据集）的能力：输出计划 kind=vector、格式矩阵走
-#: OGR 驱动（GPKG/GeoJSON）、提交校验走 OGR 重开而非栅格重开（P5-02）。
+#: OGR 驱动（GPKG/GeoJSON/Shapefile/FlatGeobuf）、提交校验走 OGR 重开而非栅格重开。
 VECTOR_OUTPUT_CAPABILITIES: frozenset[str] = frozenset(
     {
         "gdal:polygonize",
         "gdal:contour",
+        # P5-04：矢量处理 / SQL / 坐标转换（ogr2ogr 通道）
+        "ogr:vectortranslate",
     }
 )
 
@@ -115,6 +119,7 @@ FORMAT_CAPABILITIES: frozenset[str] = frozenset(
         "gdal:grid",
         "gdal:polygonize",
         "gdal:contour",
+        "ogr:vectortranslate",
         "gdal:calc",
     }
 )

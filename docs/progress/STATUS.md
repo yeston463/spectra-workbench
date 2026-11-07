@@ -1,6 +1,6 @@
 # 执行状态
 
-更新：2026-11-07（第 54 轮 · P5-03 分页属性表端到端：worker `read_vector_page` 按范围读取（单页上限 1000、廉价计数、空几何/多部件/编码逐要素标注）+ 属性表面板（一页 100 条、翻页、请求代际、矢量图层联动）；GBK Shapefile 编码往返、150 点分页边界逐项断言；**P5-03 转 done**。Clean 全量 680 项 / 0 失败 / rc=0 / clean_exit_verified=true。第 53 轮为矢量成果通道边界完善）
+更新：2026-11-07（第 55 轮 · P5-04 ogr:vectortranslate 端到端：矢量格式转换（GPKG/GeoJSON/Shapefile/FlatGeobuf）、SQL、where/select/spat 过滤与 dstSRS 重投影；实测三项 GDAL 语义——dstSRS 需配 reproject=True（否则假重投影）、无 SRS 源预检拒绝、输出轴序为传统 GIS 顺序（X=经度）；已知坐标 (500000,3000000)→(117.0, 27.1224696) 断言；**P5-04 转 done**。Clean 全量 686 项 / 0 失败 / rc=0 / clean_exit_verified=true。第 54 轮为 P5-03 分页属性表）
 
 ## 当前里程碑
 
@@ -26,7 +26,8 @@
   - **P5-01 补齐栅格算法/传统工具入口**：**done**（第 47 轮基准逐项对账）。契约基准 443 条全部在注册表；注册表 448 条，多出的 5 条为平台组合/受限实现；8 条运行期缺口（3 条 blocked、5 条 missing）均有具体原因，未解释缺口 0。
   - **P5-02 栅格化、多边形化、等值线及地形工具**：**done**（第 48–52 轮逐项接入并验收，第 53 轮边界完善）。`gdal:dem` 地形分析（解析平面坡度/坡向/山体阴影数值验证）、`gdal:rasterize` 矢量栅格化（已知矩形烧录值/属性字段）、`gdal:grid` 散点插值（linear 逐像元解析值）、`gdal:polygonize` 栅格矢量化（标签图多边形 DN/面积、4/8 连通差异）与 `gdal:contour` 等值线（解析平面逐顶点验证、offset 对齐语义）共 5 项全部接入 Worker + GUI；第 51 轮建立**矢量成果输出通道**（GPKG/GeoJSON 单文件矩阵、`inspect_vector` OGR 重开校验、`kind=vector` 输出计划与矢量图层登记），提交校验不复用仅栅格路径；第 53 轮补齐 Shapefile 多文件 bundle 输出、contour fixedLevels 与 band 参数。审计 `platform_executable` 8 → 10（polygonize/contour 接入），运行期缺口维持 5 且均有具体原因。
   - **P5-03 矢量图层与分页属性表**：**done**（第 54 轮）。worker `read_vector_page` 按范围读取（单页硬上限 1000、`GetFeatureCount(force=0)` 廉价计数拿不到就如实标注、空几何/多部件/编码逐要素标注）+ 属性表面板（一页 100 条、翻页、请求代际丢弃迟到旧页、多子图层下拉、矢量图层选中联动）；GBK 编码 Shapefile 中文字段名/值往返一致；大图层全程无一次性全读。
-  - **P5-04 / P5-05**：todo。
+  - **P5-04 矢量处理、SQL 与坐标转换**：**done**（第 55 轮）。`ogr:vectortranslate`（ogr2ogr 通道）接入：GPKG/GeoJSON/Shapefile/FlatGeobuf 转换、OGR SQL、where/select 属性过滤、spat 空间过滤（源 CRS 单位）、dstSRS 重投影（恒配 reproject=True + 无 SRS 源预检拒绝，杜绝假重投影）；已知坐标/轴序/空间关系/字段值逐项断言。
+  - **P5-05**：todo。
 
 ## 原 P3 验收标准逐项对账与剩余缺口
 
@@ -236,6 +237,39 @@ CRT 检测到栈状态异常后立即终止进程，这正是 `STATUS_STACK_BUFF
 |---|---|---|
 | 用合成影像完成同类验收 | 已满足 | 合成 ENVI/GTiff/GeoJSON/netCDF 样例覆盖多波段、像元数值、ROI 与对比 |
 | 保留真实数据待验状态 | **待验** | 课程原始数据位于 `C:\Users\赵航\Desktop\studio\_chaoxing_rs`（**只读**，不得运行其中的抓取/下载/OCR 脚本）；本轮全部用合成影像验收，未对课程原始 ENVI 栅格与 lena.tif 做真实打开验证 |
+
+### 第 55 轮：P5-04 ogr:vectortranslate——矢量处理、SQL 与坐标转换（P5-04 → done）
+
+**一、实现**
+
+- worker：`SUPPORTED_CAPABILITIES` 加入 `ogr:vectortranslate`，复用矢量成果通道（`VECTOR_OUTPUT_CAPABILITIES`/CONNECTED/FORMAT_CAPABILITIES 同步）。输入 `gdal.OpenEx(OF_VECTOR)`；支持 `format`（GPKG/GeoJSON/ESRI Shapefile/FlatGeobuf）、`sql`（OGR SQLStatement）、`where`、`select`、`spat`（bbox，源 CRS 单位）、`dstSRS` 重投影；staged `inspect_vector` → 事务提交（Shapefile bundle/stale 删除复用）→ 提交后逐层要素数比对。
+- **运行时实测四项关键语义**（GDAL 3.13.3，写入实现注释与限制声明）：
+  - `dstSRS` 不配 `reproject=True` **只改 SRS 标签、不换算坐标**（假重投影）→ adapter 恒置 `reproject=True`；
+  - 源图层无空间参考时连 `reproject=True` 都不换算 → adapter 写盘前逐图层预检、明确拒绝（`invalid_parameters`，目标不落盘）；
+  - 输出几何轴序为**传统 GIS 顺序**（EPSG:4326 → X=经度，Y=纬度）；
+  - FlatGeobuf 驱动 `DCAP_CREATE` 可用，返回句柄释放后才落盘。
+- 契约：`sql`/`where`/`select`/`spat` 别名与 `ogr:vectortranslate` 支持矩阵（spat 定长 4 浮点、min≤max）；矢量格式矩阵加入 FlatGeobuf。
+- GUI：sql/where/spat/select/dstSRS 五个控件与状态隔离；矢量格式候选四项；`DatasetRef` 对 vectortranslate 标注 `kind=vector`。
+- 注册表 `ogr:vectortranslate` 翻转 ready/form，限制如实声明（轴序、spat 单位、无 SRS 拒绝、OGR SQL 方言）。
+
+**二、数值验收（独立已知坐标 + 独立 OGR 重开）**
+
+- UTM 50N `(500000, 3000000)` → EPSG:4326：输出 **X=117.0（经度，轴序断言）**、**Y=27.1224696415507**（与独立 `osr.TransformPoint` 计算一致，1e-6）。
+- 无 SRS 源 + dstSRS → `invalid_parameters` 不落盘（GeoJSON 驱动自动补 WGS84，fixture 改用 GPKG undefined SRS 构造）。
+- 字段值：`where "v>=20"` 恰 5 值 `[20..24]`；`select ["name"]` 字段子集；`SQL "SELECT name, v FROM grid WHERE v < 5"` 恰 5 行 2 字段。
+- 空间关系：`spat (2,2,3,3)`（源 CRS 单位=米）恰命中 g12/g13/g17/g18；反向 bbox 契约层拒绝。
+- FlatGeobuf 单文件输出往返一致；无 dstSRS 时坐标与 SRS 原样透传。
+
+**三、验证**
+
+- 新增 `tests/integration/test_p5_ogr_translate.py`（5 项）与 `tests/integration/test_p5_ogr_translate_gui.py`（1 项桌面路径）；矢量矩阵/对账/四维审计单测同步。
+- 受影响定向（P5-04 集成/GUI + 全部单测）：**286 passed**；Ruff 干净；Mypy 68 个源文件 0 错误。
+- Clean 全量：**686 passed / 0 failed / rc=0 / clean_exit_verified=true**（402.60s，residual=0、cleanup_complete=true）。
+
+**四、边界与结论**
+
+- 验收「独立已知坐标、空间关系与字段值验证；轴顺序与距离单位明确」逐项满足——**P5-04 转 done**。
+- 遗留边界：几何级处理（clip/dissolve/buffer 等需 GEOS）未接入；距离单位随成果 CRS 明确（投影=米、地理=度）。
 
 ### 第 54 轮：P5-03 分页属性表端到端（P5-03 → done）
 

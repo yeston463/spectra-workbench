@@ -165,6 +165,11 @@ _PARAM_ALIASES: dict[str, tuple[str, ...]] = {
     "interval": ("contour_interval", "level_interval"),
     "offset": ("contour_base", "base_level"),
     "fixedLevels": ("fixed_levels", "fixed_levels_contour"),
+    # --- P5-04 矢量处理 / SQL / 坐标转换（ogr:vectortranslate）---
+    "sql": ("sql", "sql_statement", "sql_query"),
+    "spat": ("spat", "spatial_filter", "spat_bbox"),
+    "where": ("where", "where_clause"),
+    "select": ("select", "select_fields"),
     # --- P4-04 表达式 / 直方图与基础统计 ---
     "calc": ("calc_expr", "expression", "formula"),
     "statisticsMode": ("mode", "stats_mode", "statistics_mode"),
@@ -350,6 +355,9 @@ _CAPABILITY_SUPPORT: dict[str, frozenset[str]] = {
     # --- P5-02：栅格矢量化 / 等值线（成果为矢量）---
     "gdal:polygonize": frozenset({"fieldName", "connectedness", "band"}),
     "gdal:contour": frozenset({"interval", "offset", "fixedLevels", "band"}),
+    # --- P5-04：矢量处理 / SQL / 坐标转换（成果为矢量）---
+    # format 是非几何透传键（_OTHER_ALLOWED_KEYS），不进矩阵
+    "ogr:vectortranslate": frozenset({"sql", "dstSRS", "spat", "where", "select"}),
     # --- P4-04：受限表达式计算 / 直方图与基础统计 ---
     "gdal:calc": frozenset({"calc", "srcNodata", "dstNodata", "outputType"}),
     "gdal:statistics": frozenset(
@@ -399,6 +407,8 @@ _CAPABILITY_ALIASES: dict[str, str] = {
     # --- P5-02 能力别名 ---
     "gdal_polygonize": "gdal:polygonize",
     "gdal_contour": "gdal:contour",
+    # --- P5-04 能力别名 ---
+    "ogr2ogr": "ogr:vectortranslate",
     # 保留 rio_convert / rio:convert 等 CLI 风格别名
     "rio:convert": "rasterio:convert",
 }
@@ -795,6 +805,40 @@ def normalize_raster_params(
     if "band" in collected:
         _, value = collected["band"]
         out["band"] = _require_positive_int(value, "band")
+
+    # 11.12) P5-04：矢量处理 / SQL / 坐标转换
+    if "sql" in collected:
+        _, value = collected["sql"]
+        sql_text = str(value).strip()
+        if not sql_text:
+            raise ParameterError("参数 sql 必须是非空 SQL 语句")
+        out["sql"] = sql_text
+    if "where" in collected:
+        _, value = collected["where"]
+        where_text = str(value).strip()
+        if not where_text:
+            raise ParameterError("参数 where 必须是非空过滤子句")
+        out["where"] = where_text
+    if "select" in collected:
+        _, value = collected["select"]
+        if not isinstance(value, (list, tuple)) or not value:
+            raise ParameterError("参数 select 必须是非空的字段名列表")
+        selected: list[str] = []
+        for v in value:
+            name = str(v).strip()
+            if not name:
+                raise ParameterError("参数 select 不能包含空字段名")
+            selected.append(name)
+        out["select"] = selected
+    if "spat" in collected:
+        _, value = collected["spat"]
+        spat_box = _require_float_list(value, "spat", 4)
+        min_x, min_y, max_x, max_y = spat_box
+        if min_x > max_x or min_y > max_y:
+            raise ParameterError(
+                f"spat 过滤框必须为 minx,miny,maxx,maxy（min ≤ max），实际 {spat_box}"
+            )
+        out["spat"] = spat_box
 
     if "levels" in collected:
         _, value = collected["levels"]

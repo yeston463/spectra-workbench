@@ -300,6 +300,8 @@ class GDALProviderAdapter(ProviderAdapter):
         # --- P5-02：栅格矢量化 / 等值线（成果为矢量）---
         "gdal:polygonize",
         "gdal:contour",
+        # --- P5-04：矢量处理 / SQL / 坐标转换（成果为矢量）---
+        "ogr:vectortranslate",
         # --- P4-04：受限表达式计算 / 直方图与基础统计 ---
         "gdal:calc",
         P404_STATISTICS_CAPABILITY,
@@ -2402,6 +2404,7 @@ class GDALProviderAdapter(ProviderAdapter):
         # 2. 能力级参数门禁（取值合法性已由 normalize_raster_params 保证）
         is_contour = spec.capability_id == "gdal:contour"
         is_polygonize = spec.capability_id == "gdal:polygonize"
+        is_translate = spec.capability_id == "ogr:vectortranslate"
         if is_contour and not norm.get("interval") and not norm.get("fixedLevels"):
             return _fail(
                 "invalid_parameters",
@@ -2409,86 +2412,148 @@ class GDALProviderAdapter(ProviderAdapter):
             )
 
         layer_name = target_path.stem
-        op_name = "ContourGenerate" if is_contour else "Polygonize"
+        op_name = (
+            "VectorTranslate"
+            if is_translate
+            else "ContourGenerate"
+            if is_contour
+            else "Polygonize"
+        )
 
         # 3. 生成矢量成果（staging 内）
         try:
-            src_ds = gdal.OpenEx(str(in_path), gdal.OF_RASTER | gdal.OF_READONLY)
+            # vectortranslate 的输入是矢量，其余两项输入是栅格
+            open_flags = gdal.OF_VECTOR if is_translate else gdal.OF_RASTER
+            src_ds = gdal.OpenEx(str(in_path), open_flags | gdal.OF_READONLY)
             if src_ds is None:
-                raise RuntimeError(f"无法作为栅格打开输入: {in_path}")
+                kind_text = "矢量" if is_translate else "栅格"
+                raise RuntimeError(f"无法作为{kind_text}打开输入: {in_path}")
             try:
-                band_index = int(norm.get("band") or 1)
-                if band_index < 1 or band_index > src_ds.RasterCount:
-                    return _fail(
-                        "invalid_parameters",
-                        f"band 超出范围：{band_index}（数据集共 {src_ds.RasterCount} 个波段）",
-                    )
-                band = src_ds.GetRasterBand(band_index)
                 from osgeo import ogr
 
-                ods = ogr.GetDriverByName(ogr_driver_name).CreateDataSource(
-                    str(staged_path)
-                )
-                if ods is None:
-                    raise RuntimeError(
-                        f"无法创建矢量输出（驱动 {ogr_driver_name}）: {staged_path}"
+                if is_translate:
+                    # 假重投影防护（GDAL 3.13.3 实测）：源图层无空间参考时，
+                    # 即使 dstSRS + reproject=True 也**不会**重投影、只把输出
+                    # SRS 标签写成目标 CRS——产出坐标原样、标签错误的假成果，
+                    # 必须在写盘前明确拒绝。
+                    dst_srs_value = norm.get("dstSRS")
+                    if dst_srs_value:
+                        for layer_idx in range(src_ds.GetLayerCount()):
+                            src_lyr = src_ds.GetLayerByIndex(layer_idx)
+                            if src_lyr is not None and src_lyr.GetSpatialRef() is None:
+                                return _fail(
+                                    "invalid_parameters",
+                                    f"图层 {src_lyr.GetName()} 无空间参考，无法重投影到 "
+                                    f"{dst_srs_value}；请先为源数据指定 CRS "
+                                    "（ogr2ogr 在此场景只改 SRS 标签、不换算坐标）",
+                                )
+                    translate_kwargs: dict[str, Any] = {
+                        "format": ogr_driver_name,
+                    }
+                    if dst_srs_value:
+                        translate_kwargs["dstSRS"] = str(dst_srs_value)
+                        # 实测：dstSRS 不配 reproject=True 只改 SRS 标签（假重投影）
+                        translate_kwargs["reproject"] = True
+                    if norm.get("sql"):
+                        translate_kwargs["SQLStatement"] = str(norm["sql"])
+                    if norm.get("where"):
+                        translate_kwargs["where"] = str(norm["where"])
+                    if norm.get("select"):
+                        translate_kwargs["selectFields"] = [
+                            str(v) for v in norm["select"]
+                        ]
+                    if norm.get("spat"):
+                        # 轴序与单位：spatFilter 按源图层 CRS 解释（投影 CRS 为米）
+                        translate_kwargs["spatFilter"] = tuple(
+                            float(v) for v in norm["spat"]
+                        )
+                    vds = gdal.VectorTranslate(
+                        str(staged_path),
+                        src_ds,
+                        options=gdal.VectorTranslateOptions(**translate_kwargs),
+                        callback=callback,
                     )
-                try:
-                    if is_polygonize:
-                        field_name = str(norm.get("fieldName") or "DN")
-                        layer = ods.CreateLayer(
-                            layer_name, src_ds.GetSpatialRef(), ogr.wkbUnknown
+                    if vds is None:
+                        raise RuntimeError(
+                            gdal.GetLastErrorMsg() or "VectorTranslate 失败"
                         )
-                        layer.CreateField(ogr.FieldDefn(field_name, ogr.OFTInteger))
-                        connectedness = int(norm.get("connectedness") or 4)
-                        options = ["8CONNECTED=YES"] if connectedness == 8 else []
-                        # GDAL 3.13.3 实测：options 必须传列表（None 会被拒绝）
-                        rc = gdal.Polygonize(
-                            band, band.GetMaskBand(), layer, 0, options, callback
+                    # 显式释放句柄刷新到磁盘（FlatGeobuf 等驱动延迟落盘）
+                    vds = None
+                else:
+                    band_index = int(norm.get("band") or 1)
+                    if band_index < 1 or band_index > src_ds.RasterCount:
+                        return _fail(
+                            "invalid_parameters",
+                            f"band 超出范围：{band_index}（数据集共 {src_ds.RasterCount} 个波段）",
                         )
-                        if rc != 0:
-                            raise RuntimeError(
-                                gdal.GetLastErrorMsg()
-                                or f"Polygonize 失败（rc={rc}）"
+                    band = src_ds.GetRasterBand(band_index)
+                    ods = ogr.GetDriverByName(ogr_driver_name).CreateDataSource(
+                        str(staged_path)
+                    )
+                    if ods is None:
+                        raise RuntimeError(
+                            f"无法创建矢量输出（驱动 {ogr_driver_name}）: {staged_path}"
+                        )
+                    try:
+                        if is_polygonize:
+                            field_name = str(norm.get("fieldName") or "DN")
+                            layer = ods.CreateLayer(
+                                layer_name, src_ds.GetSpatialRef(), ogr.wkbUnknown
                             )
-                    else:
-                        layer = ods.CreateLayer(
-                            layer_name,
-                            src_ds.GetSpatialRef(),
-                            ogr.wkbLineString25D,
-                        )
-                        layer.CreateField(ogr.FieldDefn("ID", ogr.OFTInteger64))
-                        layer.CreateField(ogr.FieldDefn("ELEV", ogr.OFTReal))
-                        nodata = band.GetNoDataValue()
-                        use_no_data = nodata is not None
-                        # GDAL 3.13.3 实测：第 4 参是 fixedLevels **序列**
-                        # （docstring 的 fixedLevelCount 已被 typemap 折叠），
-                        # 非空时**完全替代** interval/base 等差序列（interval=0 也可）；
-                        # 传 [] 表示按 interval/base 生成
-                        fixed_levels = [float(v) for v in norm.get("fixedLevels") or []]
-                        interval_value = (
-                            float(norm["interval"]) if norm.get("interval") else 0.0
-                        )
-                        rc = gdal.ContourGenerate(
-                            band,
-                            interval_value,
-                            float(norm.get("offset") or 0.0),
-                            fixed_levels,
-                            bool(use_no_data),
-                            float(nodata) if use_no_data else 0.0,
-                            layer,
-                            0,
-                            1,
-                            callback,
-                        )
-                        if rc != 0:
-                            raise RuntimeError(
-                                gdal.GetLastErrorMsg()
-                                or f"ContourGenerate 失败（rc={rc}）"
+                            layer.CreateField(
+                                ogr.FieldDefn(field_name, ogr.OFTInteger)
                             )
-                finally:
-                    # 显式关闭矢量数据源，Windows 上释放文件锁并刷新到磁盘
-                    ods = None
+                            connectedness = int(norm.get("connectedness") or 4)
+                            options = ["8CONNECTED=YES"] if connectedness == 8 else []
+                            # GDAL 3.13.3 实测：options 必须传列表（None 会被拒绝）
+                            rc = gdal.Polygonize(
+                                band, band.GetMaskBand(), layer, 0, options, callback
+                            )
+                            if rc != 0:
+                                raise RuntimeError(
+                                    gdal.GetLastErrorMsg()
+                                    or f"Polygonize 失败（rc={rc}）"
+                                )
+                        else:
+                            layer = ods.CreateLayer(
+                                layer_name,
+                                src_ds.GetSpatialRef(),
+                                ogr.wkbLineString25D,
+                            )
+                            layer.CreateField(ogr.FieldDefn("ID", ogr.OFTInteger64))
+                            layer.CreateField(ogr.FieldDefn("ELEV", ogr.OFTReal))
+                            nodata = band.GetNoDataValue()
+                            use_no_data = nodata is not None
+                            # GDAL 3.13.3 实测：第 4 参是 fixedLevels **序列**
+                            # （docstring 的 fixedLevelCount 已被 typemap 折叠），
+                            # 非空时**完全替代** interval/base 等差序列（interval=0 也可）；
+                            # 传 [] 表示按 interval/base 生成
+                            fixed_levels = [
+                                float(v) for v in norm.get("fixedLevels") or []
+                            ]
+                            interval_value = (
+                                float(norm["interval"]) if norm.get("interval") else 0.0
+                            )
+                            rc = gdal.ContourGenerate(
+                                band,
+                                interval_value,
+                                float(norm.get("offset") or 0.0),
+                                fixed_levels,
+                                bool(use_no_data),
+                                float(nodata) if use_no_data else 0.0,
+                                layer,
+                                0,
+                                1,
+                                callback,
+                            )
+                            if rc != 0:
+                                raise RuntimeError(
+                                    gdal.GetLastErrorMsg()
+                                    or f"ContourGenerate 失败（rc={rc}）"
+                                )
+                    finally:
+                        # 显式关闭矢量数据源，Windows 上释放文件锁并刷新到磁盘
+                        ods = None
             finally:
                 src_ds = None
         except Exception as exc:

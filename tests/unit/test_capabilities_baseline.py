@@ -355,10 +355,12 @@ def test_four_dimensional_state_independence_and_audit():
     # 第 51 轮（P5-02）：gdal:polygonize 接入 form 执行器（成果为矢量），
     # platform_executable 8 -> 9（原本 binding=cli 已计入 callable，缺口维持 5 不变）。
     # 第 52 轮（P5-02）：gdal:contour 接入 form 执行器，platform_executable 9 -> 10。
+    # 第 55 轮（P5-04）：ogr:vectortranslate 接入 form 执行器，platform_executable 10 -> 11
+    # （原本 binding=cli 已计入 callable）。
     assert report["total_baseline_count"] == 448
     assert report["discovered"]["count"] == 443
     assert report["callable"]["count"] == 238
-    assert report["platform_executable"]["count"] == 10
+    assert report["platform_executable"]["count"] == 11
     assert report["verified"]["count"] == 5
     # 第 32 轮：gdal:buildvrt 由 blocked 改为 ready（平台已接入），
     # 故从缺失清单移出，缺失项 9 -> 8。其余 8 项是运行时确实不可用的

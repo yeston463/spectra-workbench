@@ -97,6 +97,8 @@ def test_vector_matrix_accepts_single_file_and_shapefile_drivers() -> None:
     assert validate_vector_output_format("geojson") == []
     assert validate_vector_output_format("ESRI Shapefile") == []
     assert validate_vector_output_format("Shapefile") == []
+    assert validate_vector_output_format("FlatGeobuf") == []
+    assert validate_vector_output_format("flatgeobuf") == []
 
 
 def test_vector_matrix_rejects_raster_formats() -> None:

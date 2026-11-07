@@ -128,7 +128,12 @@ def test_contour_form_submit(qapp: QApplication, gdal_rt: dict[str, Any], tmp_pa
         assert form.spin_contour_offset.isVisibleTo(form)
         # 矢量成果的格式候选必须是 OGR 驱动：PNG 等栅格格式根本不可选
         formats = [form.cmb_format.itemText(i) for i in range(form.cmb_format.count())]
-        assert formats == ["GPKG (GeoPackage)", "GeoJSON (.geojson)", "Shapefile (.shp)"], formats
+        assert formats == [
+            "GPKG (GeoPackage)",
+            "GeoJSON (.geojson)",
+            "Shapefile (.shp)",
+            "FlatGeobuf (.fgb)",
+        ], formats
 
         form.txt_input.setText(str(src))
         form.spin_contour_interval.setValue(1.0)

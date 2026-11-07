@@ -130,7 +130,12 @@ def test_polygonize_form_submit(qapp: QApplication, gdal_rt: dict[str, Any], tmp
         assert form.cmb_connectedness.isVisibleTo(form)
         # 矢量成果的格式候选必须是 OGR 驱动，而不是栅格驱动
         formats = [form.cmb_format.itemText(i) for i in range(form.cmb_format.count())]
-        assert formats == ["GPKG (GeoPackage)", "GeoJSON (.geojson)", "Shapefile (.shp)"], formats
+        assert formats == [
+            "GPKG (GeoPackage)",
+            "GeoJSON (.geojson)",
+            "Shapefile (.shp)",
+            "FlatGeobuf (.fgb)",
+        ], formats
         assert not any(item.startswith("GTiff") for item in formats)
 
         form.txt_input.setText(str(src))

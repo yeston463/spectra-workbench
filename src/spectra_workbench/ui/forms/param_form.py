@@ -64,7 +64,7 @@ if TYPE_CHECKING:
 #: 输出格式下拉的候选项按能力族切换：
 #: 栅格成果走栅格驱动矩阵，矢量成果（P5-02 polygonize/contour）走 OGR 驱动。
 _RASTER_FORMAT_ITEMS = ["GTiff (GeoTIFF)", "ENVI (.dat/.hdr)", "COG (云优化 GeoTIFF)", "PNG", "JPEG"]
-_VECTOR_FORMAT_ITEMS = ["GPKG (GeoPackage)", "GeoJSON (.geojson)", "Shapefile (.shp)"]
+_VECTOR_FORMAT_ITEMS = ["GPKG (GeoPackage)", "GeoJSON (.geojson)", "Shapefile (.shp)", "FlatGeobuf (.fgb)"]
 
 
 
@@ -346,6 +346,34 @@ class CapabilityFormWidget(QWidget):
         )
         self.lbl_fixed_levels = QLabel("固定等级 (fixedLevels):")
         self.params_form.addRow(self.lbl_fixed_levels, self.txt_fixed_levels)
+
+        # --- P5-04 矢量处理 / SQL / 坐标转换（ogr:vectortranslate）---
+        self.txt_vt_sql = QLineEdit()
+        self.txt_vt_sql.setPlaceholderText(
+            "OGR SQL，例：SELECT name, value FROM points WHERE value >= 50"
+        )
+        self.lbl_vt_sql = QLabel("SQL 查询 (sql):")
+        self.params_form.addRow(self.lbl_vt_sql, self.txt_vt_sql)
+
+        self.txt_vt_where = QLineEdit()
+        self.txt_vt_where.setPlaceholderText("留空=不过滤；例：value >= 50 AND name LIKE 'p1%'")
+        self.lbl_vt_where = QLabel("属性过滤 (where):")
+        self.params_form.addRow(self.lbl_vt_where, self.txt_vt_where)
+
+        self.txt_vt_spat = QLineEdit()
+        self.txt_vt_spat.setPlaceholderText("留空=不过滤；按源 CRS 单位，例：0,0,3,3")
+        self.lbl_vt_spat = QLabel("空间过滤框 (spat):")
+        self.params_form.addRow(self.lbl_vt_spat, self.txt_vt_spat)
+
+        self.txt_vt_select = QLineEdit()
+        self.txt_vt_select.setPlaceholderText("留空=保留全部字段；例：name,value")
+        self.lbl_vt_select = QLabel("保留字段 (select):")
+        self.params_form.addRow(self.lbl_vt_select, self.txt_vt_select)
+
+        self.txt_vt_dst_srs = QLineEdit()
+        self.txt_vt_dst_srs.setPlaceholderText("留空=保持源 CRS；例：EPSG:4326（输出 X=经度, Y=纬度）")
+        self.lbl_vt_dst_srs = QLabel("目标 CRS (dstSRS):")
+        self.params_form.addRow(self.lbl_vt_dst_srs, self.txt_vt_dst_srs)
 
         # --- P4-03 概览构建 ---
         self.txt_levels = QLineEdit()
@@ -640,6 +668,15 @@ class CapabilityFormWidget(QWidget):
         self._set_row_visible(
             self.lbl_fixed_levels, self.txt_fixed_levels, "fixedLevels" in sup
         )
+        # P5-04 矢量处理 / SQL / 坐标转换
+        for label, widget, key in (
+            (self.lbl_vt_sql, self.txt_vt_sql, "sql"),
+            (self.lbl_vt_where, self.txt_vt_where, "where"),
+            (self.lbl_vt_spat, self.txt_vt_spat, "spat"),
+            (self.lbl_vt_select, self.txt_vt_select, "select"),
+            (self.lbl_vt_dst_srs, self.txt_vt_dst_srs, "dstSRS"),
+        ):
+            self._set_row_visible(label, widget, key in sup)
         self._set_row_visible(self.lbl_levels, self.txt_levels, "levels" in sup)
         self._set_row_visible(self.lbl_ovr_compress, self.cmb_ovr_compress, "overviewCompress" in sup)
         # P4-04
@@ -758,6 +795,15 @@ class CapabilityFormWidget(QWidget):
             self.spin_contour_offset.setValue(0.0)
         if "fixedLevels" not in supported:
             self.txt_fixed_levels.clear()
+        for key, widget in (
+            ("sql", self.txt_vt_sql),
+            ("where", self.txt_vt_where),
+            ("spat", self.txt_vt_spat),
+            ("select", self.txt_vt_select),
+            ("dstSRS", self.txt_vt_dst_srs),
+        ):
+            if key not in supported:
+                widget.clear()
         if "levels" not in supported:
             self.txt_levels.clear()
         if "overviewCompress" not in supported:
@@ -927,6 +973,40 @@ class CapabilityFormWidget(QWidget):
                         return params, f"fixedLevels 需要逗号分隔的高程数值，当前为：{raw_fixed}"
                 if fixed_out:
                     params["fixedLevels"] = fixed_out
+
+        # P5-04：矢量处理 / SQL / 坐标转换
+        if "sql" in supported:
+            sql_text = self.txt_vt_sql.text().strip()
+            if sql_text:
+                params["sql"] = sql_text
+        if "where" in supported:
+            where_text = self.txt_vt_where.text().strip()
+            if where_text:
+                params["where"] = where_text
+        if "spat" in supported:
+            raw_spat = self.txt_vt_spat.text().strip()
+            if raw_spat:
+                parts_spat = [
+                    x.strip() for x in raw_spat.replace(";", ",").split(",") if x.strip()
+                ]
+                if len(parts_spat) != 4:
+                    return params, f"spat 需要逗号分隔的 minx,miny,maxx,maxy，当前为：{raw_spat}"
+                try:
+                    params["spat"] = [float(p) for p in parts_spat]
+                except ValueError:
+                    return params, f"spat 需要数值，当前为：{raw_spat}"
+        if "select" in supported:
+            raw_select = self.txt_vt_select.text().strip()
+            if raw_select:
+                fields_out = [
+                    x.strip() for x in raw_select.replace(";", ",").split(",") if x.strip()
+                ]
+                if fields_out:
+                    params["select"] = fields_out
+        if "dstSRS" in supported:
+            dst_srs_text = self.txt_vt_dst_srs.text().strip()
+            if dst_srs_text:
+                params["dstSRS"] = dst_srs_text
 
         # P4-04：表达式计算
         if "calc" in supported:
@@ -1228,6 +1308,7 @@ class CapabilityFormWidget(QWidget):
             "GPKG": "GPKG",
             "GeoJSON": "GeoJSON",
             "Shapefile": "ESRI Shapefile",
+            "FlatGeobuf": "FlatGeobuf",
         }
         out_fmt = fmt_map.get(raw_fmt, "GTiff")
 
@@ -1336,7 +1417,13 @@ class CapabilityFormWidget(QWidget):
                 else {
                     "input": DatasetRef(
                         dataset_id=f"in-{uuid.uuid4().hex[:6]}",
-                        kind=DatasetKind.raster,
+                        kind=(
+                            DatasetKind.vector
+                            # 仅 ogr:vectortranslate 以矢量为输入；
+                            # polygonize/contour 的输入是栅格
+                            if cid == "ogr:vectortranslate"
+                            else DatasetKind.raster
+                        ),
                         uri=in_paths[0].as_uri(),
                     )
                 }
