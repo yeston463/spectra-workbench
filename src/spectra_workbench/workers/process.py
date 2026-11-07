@@ -772,6 +772,26 @@ class WorkerProcess:
         """探测矢量数据集的基础元数据（P3-02）。"""
         return self._simple_call("probe_vector", {"path": str(path)}, timeout=timeout)
 
+    def read_vector_page(
+        self,
+        path: Path | str,
+        layer_index: int = 0,
+        start: int = 0,
+        count: int = 100,
+        timeout: float = 15.0,
+    ) -> dict[str, Any]:
+        """按范围读取矢量图层的一页要素（P5-03 分页属性表）。"""
+        return self._simple_call(
+            "read_vector_page",
+            {
+                "path": str(path),
+                "layer_index": int(layer_index),
+                "start": int(start),
+                "count": int(count),
+            },
+            timeout=timeout,
+        )
+
     def list_subdatasets(self, path: Path | str, timeout: float = 15.0) -> dict[str, Any]:
         """列出容器数据集的子数据集（P3-02）。"""
         return self._simple_call("list_subdatasets", {"path": str(path)}, timeout=timeout)

@@ -668,6 +668,43 @@ class QtWorkerClient(QObject):
             on_error=on_error,
         )
 
+    def read_vector_page(
+        self,
+        path: Path | str,
+        layer_index: int = 0,
+        start: int = 0,
+        count: int = 100,
+        timeout: float = 15.0,
+    ) -> dict[str, Any]:
+        """按范围读取矢量图层的一页要素（P5-03，同步）。"""
+        if not self.is_alive:
+            self.start()
+        return self._worker.read_vector_page(
+            path,
+            layer_index=layer_index,
+            start=start,
+            count=count,
+            timeout=timeout,
+        )
+
+    def read_vector_page_async(
+        self,
+        path: Path | str,
+        layer_index: int = 0,
+        start: int = 0,
+        count: int = 100,
+        on_success: Callable[[dict[str, Any]], None] | None = None,
+        on_error: Callable[[str], None] | None = None,
+    ) -> str:
+        """按范围读取矢量图层的一页要素（P5-03，异步）。"""
+        return self.call_async(
+            lambda: self._worker.read_vector_page(
+                path, layer_index=layer_index, start=start, count=count
+            ),
+            on_success=on_success,
+            on_error=on_error,
+        )
+
     def list_subdatasets(
         self,
         path: Path | str,

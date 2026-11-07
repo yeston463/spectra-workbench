@@ -62,6 +62,7 @@ from spectra_workbench.ui.canvas.image_canvas import ImageCanvas
 from spectra_workbench.ui.fonts import ensure_application_fonts
 from spectra_workbench.ui.forms.param_form import CapabilityFormWidget
 from spectra_workbench.ui.models.layer import LayerItem
+from spectra_workbench.ui.panels.attribute_panel import AttributePanel
 from spectra_workbench.ui.panels.display_panel import DisplayPanel
 from spectra_workbench.ui.panels.info_panel import InfoPanel
 from spectra_workbench.ui.panels.layer_panel import LayerPanel
@@ -360,9 +361,12 @@ class MainWindow(QMainWindow):
         self.info_panel = InfoPanel()
         self.display_panel = DisplayPanel()
         self.metadata_panel = MetadataPanel()
+        self.attribute_panel = AttributePanel()
+        self.attribute_panel.set_client(self.gdal_client)
         self.tab_right.addTab(self.info_panel, "坐标与 ROI")
         self.tab_right.addTab(self.display_panel, "显示")
         self.tab_right.addTab(self.metadata_panel, "数据源元数据")
+        self.tab_right.addTab(self.attribute_panel, "属性表")
         self.tab_right.addTab(self.form_widget, "算法参数")
         self.dock_right.setWidget(self.tab_right)
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.dock_right)
@@ -676,6 +680,7 @@ class MainWindow(QMainWindow):
             self.canvas_b.set_layer(None)
             self.info_panel.clear_all()
             self.display_panel.clear()
+            self.attribute_panel.clear()
             self.status_bar.showMessage("未选中图层")
             return
         client = self._client_for(layer)
@@ -687,6 +692,11 @@ class MainWindow(QMainWindow):
             self._apply_pending_view(self.canvas_b, self._pending_view_v2)
         self.form_widget.set_input_path(layer.file_path)
         self.info_panel.set_rois(list(layer.rois))
+        # P5-03：矢量图层联动分页属性表；栅格图层清空属性表
+        if layer.metadata.get("kind") == "vector":
+            self.attribute_panel.load_layer(layer.file_path)
+        else:
+            self.attribute_panel.clear()
         if renderable:
             self.display_panel.set_layer(layer.band_count, layer.display)
             self.status_bar.showMessage(

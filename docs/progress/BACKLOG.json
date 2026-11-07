@@ -648,9 +648,11 @@
         "P3-05",
         "P4-05"
       ],
-      "status": "todo",
+      "status": "done",
       "release_requirement": "core",
-      "evidence": [],
+      "evidence": [
+        "第 54 轮：分页属性表端到端接入，P5-03 转 done。(1) worker 新增 read_vector_page（adapter + entrypoint _SIMPLE_CALLS + process + client 同步/异步通道）：SetNextByIndex(start) 后只读 count 个要素，单页硬上限 1000（超过直接拒绝，从接口上杜绝一次性全读）；廉价计数 GetFeatureCount(force=0)，驱动给不出时如实返回 feature_count_expensive=true 与 feature_count=null，绝不代为全表扫描；逐要素标注 geometry_type/empty_geometry/part_count（空几何与多部件如实呈现），字段值由 GDAL 按数据集声明编码（如 .cpg）解码。实测纠正两处想当然：SetNextByIndex 返回 0 是 OGRERR_NONE 成功而非真值；GPKG 的 FID 来自 SQLite rowid 是 1-based。(2) GUI 新增 ui/panels/attribute_panel.py：VectorPageModel(QAbstractTableModel)（FID | 几何 | 字段… 列，几何列标注「空」「类型 ×部件数」）+ AttributePanel（一页 100 条、上一页/下一页、页码与要素数标签、多子图层下拉、请求代际丢弃迟到旧页、廉价计数不可得时以「最后一页不满」为结束条件并显示「≥ N」）；MainWindow 把面板加入右侧「属性表」页签，选中矢量图层联动加载、栅格图层清空。(3) 数值验收（独立 GDAL 子进程构造 fixture + 真实 worker）：150 点 GPKG 分页恰 [1..100]/[101..150]（FID 1-based）、小页逐页拼接等于全表；越界/零/负数/超大页与 layer_index 超范围全部明确拒绝；空几何（NULL 与显式空多边形）、MultiPolygon ×2 部件逐要素标注正确；GBK 编码 Shapefile（ENCODING=GBK 写出 .cpg）中文字段名「名称/数值」与字段值「地块甲/乙/丙」往返一致；单页 payload 保持小（不携带 WKT 全量几何）。(4) GUI 真实 MainWindow + QTest：150 点第一页 100 行、表头 [FID, 几何, value, name]、页码「第 1 / 2 页」、要素数「150」，点击下一页后首行 value=100、末行 p149；混合几何 fixture 几何列「Multi Polygon ×2」与「空几何」如实显示。(5) 新增 tests/integration/test_p5_vector_page.py（5 项）与 test_p5_attribute_panel_gui.py（2 项桌面路径）。受影响定向 7 passed；Ruff 干净；Mypy 68 个源文件 0 错误；Clean 全量 680 passed / 0 failed / rc=0 / clean_exit_verified=true（400.10s）。验收「按范围查询；字段、空几何、多部件和编码保留；大图层无一次性全读」由分页边界/几何标注/编码往返/单页上限断言逐项满足，**P5-03 转 done**。矢量画布渲染不在本项验收范围（仍未实现，界面如实标注）；边界：属性表只读，编辑/过滤/排序留待后续。"
+      ],
       "blocking_reason": null
     },
     {

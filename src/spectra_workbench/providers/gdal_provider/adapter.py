@@ -2976,6 +2976,152 @@ class GDALProviderAdapter(ProviderAdapter):
             "fields": fields,
         }
 
+    # ----------------------------------------------------- P5-03 分页属性表
+    #: 单页读取的要素数上限：属性表分页服务的硬上限，
+    #: 拒绝「一页拿全表」的调用，从接口上杜绝一次性全读。
+    MAX_VECTOR_PAGE_SIZE = 1000
+
+    def read_vector_page(
+        self,
+        path: Path | str,
+        layer_index: int = 0,
+        start: int = 0,
+        count: int = 100,
+    ) -> dict[str, Any]:
+        """按范围读取矢量图层的一页要素（P5-03 分页属性表）。
+
+        - **按范围查询**：``SetNextByIndex(start)`` 后只读 ``count`` 个要素，
+          本方法绝不迭代全表，也不主动触发全表统计；
+        - **廉价计数**：``GetFeatureCount(force=0)``，驱动拿不到廉价计数时
+          如实返回 ``feature_count_expensive=True`` 与 ``feature_count=None``，
+          绝不代为发起全表扫描；
+        - **空几何 / 多部件 / 编码**：逐要素如实标注几何类型、是否空几何与
+          部件数；字段值由 GDAL 按数据集声明编码（如 .cpg）解码为 Python str。
+        """
+        if not GDAL_AVAILABLE or gdal is None:
+            raise RuntimeError("GDAL 运行时不可用，无法读取矢量属性")
+        try:
+            from osgeo import ogr
+        except ImportError as exc:  # pragma: no cover - 引擎环境缺失
+            raise RuntimeError(f"OGR 运行时不可用：{exc}") from exc
+
+        in_path = Path(path)
+        if not in_path.exists():
+            raise FileNotFoundError(f"矢量数据集不存在: {in_path}")
+        layer_index = int(layer_index)
+        start = int(start)
+        count = int(count)
+        if layer_index < 0:
+            raise ValueError(f"layer_index 必须 ≥ 0，实际 {layer_index}")
+        if start < 0:
+            raise ValueError(f"start 必须 ≥ 0，实际 {start}")
+        if count < 1:
+            raise ValueError(f"count 必须 ≥ 1，实际 {count}")
+        if count > self.MAX_VECTOR_PAGE_SIZE:
+            raise ValueError(
+                f"单页 count={count} 超过上限 {self.MAX_VECTOR_PAGE_SIZE}："
+                "属性表必须分页读取，不允许一次性取全表"
+            )
+
+        ds = ogr.Open(str(in_path))
+        if ds is None:
+            raise RuntimeError(f"无法打开矢量数据集: {in_path}")
+        try:
+            layer_count = int(ds.GetLayerCount())
+            if layer_index >= layer_count:
+                raise ValueError(
+                    f"layer_index={layer_index} 超出范围（数据集共 {layer_count} 个图层）"
+                )
+            lyr = ds.GetLayerByIndex(layer_index)
+            if lyr is None:
+                raise RuntimeError(f"图层 {layer_index} 不可用")
+            defn = lyr.GetLayerDefn()
+            fields: list[dict[str, Any]] = []
+            for f_idx in range(defn.GetFieldCount()):
+                fdef = defn.GetFieldDefn(f_idx)
+                nullable: bool | None = None
+                try:
+                    nullable = bool(fdef.IsNullable())
+                except Exception:
+                    nullable = None
+                fields.append(
+                    {
+                        "name": fdef.GetName(),
+                        "type": fdef.GetTypeName(),
+                        "type_code": int(fdef.GetType()),
+                        "nullable": nullable,
+                    }
+                )
+            field_names = [f["name"] for f in fields]
+
+            # 廉价计数：force=0 只取驱动缓存/头信息，绝不发起全表扫描
+            feature_count: int | None = None
+            feature_count_expensive = True
+            try:
+                fc = lyr.GetFeatureCount(force=0)
+                if fc is not None and int(fc) >= 0:
+                    feature_count = int(fc)
+                    feature_count_expensive = False
+            except Exception:
+                feature_count = None
+                feature_count_expensive = True
+
+            features: list[dict[str, Any]] = []
+            # SetNextByIndex 语义由驱动保证（GPKG 走 SQL LIMIT/OFFSET，
+            # Shapefile 顺序跳转）；这里只保证本方法**读取**的要素数 ≤ count。
+            # OGR 返回码 0 = OGRERR_NONE（成功），非 0 才是失败
+            if lyr.SetNextByIndex(start) != 0:
+                raise RuntimeError(f"无法定位到要素 {start}（SetNextByIndex 失败）")
+            for _ in range(count):
+                feat = lyr.GetNextFeature()
+                if feat is None:
+                    break
+                geom = feat.GetGeometryRef()
+                geom_type = None
+                is_empty = True
+                part_count = 0
+                if geom is not None:
+                    geom_type = ogr.GeometryTypeToName(geom.GetGeometryType())
+                    is_empty = bool(geom.IsEmpty())
+                    part_count = int(geom.GetGeometryCount())
+                values: dict[str, Any] = {}
+                for name in field_names:
+                    values[name] = feat.GetField(name)
+                features.append(
+                    {
+                        "fid": int(feat.GetFID()),
+                        "geometry_type": geom_type,
+                        "empty_geometry": is_empty,
+                        "part_count": part_count,
+                        "fields": values,
+                    }
+                )
+
+            srs = lyr.GetSpatialRef()
+            crs_epsg: int | None = None
+            if srs is not None:
+                code = srs.GetAuthorityCode(None)
+                if code and str(code).isdigit():
+                    crs_epsg = int(code)
+
+            return {
+                "path": str(in_path),
+                "layer_index": layer_index,
+                "layer_name": lyr.GetName(),
+                "layer_count": layer_count,
+                "driver": ds.GetDriver().GetName() if ds.GetDriver() else None,
+                "crs_epsg": crs_epsg,
+                "start": start,
+                "requested_count": count,
+                "returned_count": len(features),
+                "feature_count": feature_count,
+                "feature_count_expensive": feature_count_expensive,
+                "fields": fields,
+                "features": features,
+            }
+        finally:
+            ds = None
+
     # ----------------------------------------------------- P3-02 子数据集发现
     def list_subdatasets(self, path: Path | str) -> dict[str, Any]:
         """列出容器数据集的子数据集（P3-02）。

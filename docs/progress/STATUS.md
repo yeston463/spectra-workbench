@@ -1,6 +1,6 @@
 # 执行状态
 
-更新：2026-11-07（第 53 轮 · 矢量成果通道边界完善：ESRI Shapefile 多文件 bundle 输出（sidecar 收集 + stale 删除 + discover_sidecars 的 ogr.Open 回退，栅格流行为不变）、contour fixedLevels（实测非空时完全替代等差序列）、polygonize/contour 的 band 参数；Clean 全量 673 项 / 0 失败 / rc=0 / clean_exit_verified=true。P5-02 保持 done。第 52 轮为 contour 接入并转 done）
+更新：2026-11-07（第 54 轮 · P5-03 分页属性表端到端：worker `read_vector_page` 按范围读取（单页上限 1000、廉价计数、空几何/多部件/编码逐要素标注）+ 属性表面板（一页 100 条、翻页、请求代际、矢量图层联动）；GBK Shapefile 编码往返、150 点分页边界逐项断言；**P5-03 转 done**。Clean 全量 680 项 / 0 失败 / rc=0 / clean_exit_verified=true。第 53 轮为矢量成果通道边界完善）
 
 ## 当前里程碑
 
@@ -25,7 +25,8 @@
 - **P5 全量栅格、矢量、地形与坐标能力**：
   - **P5-01 补齐栅格算法/传统工具入口**：**done**（第 47 轮基准逐项对账）。契约基准 443 条全部在注册表；注册表 448 条，多出的 5 条为平台组合/受限实现；8 条运行期缺口（3 条 blocked、5 条 missing）均有具体原因，未解释缺口 0。
   - **P5-02 栅格化、多边形化、等值线及地形工具**：**done**（第 48–52 轮逐项接入并验收，第 53 轮边界完善）。`gdal:dem` 地形分析（解析平面坡度/坡向/山体阴影数值验证）、`gdal:rasterize` 矢量栅格化（已知矩形烧录值/属性字段）、`gdal:grid` 散点插值（linear 逐像元解析值）、`gdal:polygonize` 栅格矢量化（标签图多边形 DN/面积、4/8 连通差异）与 `gdal:contour` 等值线（解析平面逐顶点验证、offset 对齐语义）共 5 项全部接入 Worker + GUI；第 51 轮建立**矢量成果输出通道**（GPKG/GeoJSON 单文件矩阵、`inspect_vector` OGR 重开校验、`kind=vector` 输出计划与矢量图层登记），提交校验不复用仅栅格路径；第 53 轮补齐 Shapefile 多文件 bundle 输出、contour fixedLevels 与 band 参数。审计 `platform_executable` 8 → 10（polygonize/contour 接入），运行期缺口维持 5 且均有具体原因。
-  - **P5-03 / P5-04 / P5-05**：todo。
+  - **P5-03 矢量图层与分页属性表**：**done**（第 54 轮）。worker `read_vector_page` 按范围读取（单页硬上限 1000、`GetFeatureCount(force=0)` 廉价计数拿不到就如实标注、空几何/多部件/编码逐要素标注）+ 属性表面板（一页 100 条、翻页、请求代际丢弃迟到旧页、多子图层下拉、矢量图层选中联动）；GBK 编码 Shapefile 中文字段名/值往返一致；大图层全程无一次性全读。
+  - **P5-04 / P5-05**：todo。
 
 ## 原 P3 验收标准逐项对账与剩余缺口
 
@@ -235,6 +236,35 @@ CRT 检测到栈状态异常后立即终止进程，这正是 `STATUS_STACK_BUFF
 |---|---|---|
 | 用合成影像完成同类验收 | 已满足 | 合成 ENVI/GTiff/GeoJSON/netCDF 样例覆盖多波段、像元数值、ROI 与对比 |
 | 保留真实数据待验状态 | **待验** | 课程原始数据位于 `C:\Users\赵航\Desktop\studio\_chaoxing_rs`（**只读**，不得运行其中的抓取/下载/OCR 脚本）；本轮全部用合成影像验收，未对课程原始 ENVI 栅格与 lena.tif 做真实打开验证 |
+
+### 第 54 轮：P5-03 分页属性表端到端（P5-03 → done）
+
+**一、实现**
+
+- worker 新增 `read_vector_page`（adapter + `entrypoint._SIMPLE_CALLS` + `workers/process.py` + client 同步/异步通道）：
+  - **按范围查询**：`SetNextByIndex(start)` 后只读 `count` 个要素，单页硬上限 1000（超过直接拒绝）——从接口上杜绝「一页拿全表」；
+  - **廉价计数**：`GetFeatureCount(force=0)`；驱动给不出时如实返回 `feature_count_expensive=true` 与 `feature_count=null`，绝不代为发起全表扫描；
+  - **空几何/多部件/编码**：逐要素标注 `geometry_type`/`empty_geometry`/`part_count`；字段值由 GDAL 按数据集声明编码（如 `.cpg`）解码。
+  - 运行时实测纠正两处想当然：`SetNextByIndex` 返回 **0 = OGRERR_NONE（成功）**而非真值；GPKG 的 FID 来自 SQLite rowid，**1-based**。
+- GUI 新增 `ui/panels/attribute_panel.py`：`VectorPageModel`（FID | 几何 | 字段…；几何列如实标注「空」「类型 ×部件数」）+ `AttributePanel`（一页 100 条、上一页/下一页、页码与要素数、多子图层下拉、**请求代际**丢弃迟到旧页；廉价计数不可得时以「最后一页不满」为结束条件并显示「≥ N」）。MainWindow 把面板加入右侧「属性表」页签，选中矢量图层联动加载，栅格图层清空。
+
+**二、数值验收（真实 worker + 独立 GDAL fixture）**
+
+- 150 点 GPKG：分页恰 `[1..100]`/`[101..150]`（FID 1-based）；60/页逐页拼接 == 全表；越界/零/负数/超大页/`layer_index` 超范围全部明确拒绝且不产出数据。
+- 混合几何：NULL 几何 → `geometry_type=None, empty=true`；显式空多边形 → `empty=true`；MultiPolygon ×2 部件 → `part_count=2`。
+- 编码保留：`ENCODING=GBK` 写出 `.cpg` 的 Shapefile，中文字段名「名称/数值」与字段值「地块甲/乙/丙」往返一致。
+- 单页 payload 保持小（不携带 WKT 全量几何）；GUI 真实 MainWindow + QTest：第一页 100 行、页码「第 1 / 2 页」、要素数「150」，点击下一页首行 `value=100`、末行 `p149`；几何列「Multi Polygon ×2」与「空几何」如实显示。
+
+**三、验证**
+
+- 新增 `tests/integration/test_p5_vector_page.py`（5 项）与 `tests/integration/test_p5_attribute_panel_gui.py`（2 项桌面路径）。
+- Ruff 干净；Mypy 68 个源文件 0 错误。
+- Clean 全量：**680 passed / 0 failed / rc=0 / clean_exit_verified=true**（400.10s，residual=0、cleanup_complete=true）。
+
+**四、边界与结论**
+
+- 验收「按范围查询；字段、空几何、多部件和编码保留；大图层无一次性全读」由分页边界/几何标注/编码往返/单页上限断言逐项满足——**P5-03 转 done**。
+- 矢量画布渲染不在本项验收范围（仍未实现，界面如实标注）；属性表为只读，编辑/过滤/排序留待后续。
 
 ### 第 53 轮：矢量成果通道边界完善——Shapefile bundle、fixedLevels、band（P5-02 保持 done）
 

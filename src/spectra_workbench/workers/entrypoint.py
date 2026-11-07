@@ -490,6 +490,11 @@ class WorkerRuntime:
             True,
         ),
         "probe_vector": ("probe_vector", (), True),
+        "read_vector_page": (
+            "read_vector_page",
+            ("layer_index", "start", "count"),
+            True,
+        ),
         "list_subdatasets": ("list_subdatasets", (), True),
         "crs_wkt": ("crs_wkt", ("epsg",), False),
         "transform_point": ("transform_point", ("x", "y", "src_wkt", "dst_wkt", "z"), False),
