@@ -375,6 +375,43 @@ class CapabilityFormWidget(QWidget):
         self.lbl_vt_dst_srs = QLabel("目标 CRS (dstSRS):")
         self.params_form.addRow(self.lbl_vt_dst_srs, self.txt_vt_dst_srs)
 
+        # --- P6-01 光谱指数 ---
+        self.cmb_sindex = QComboBox()
+        for label, val in (
+            ("NDVI = (NIR−Red)/(NIR+Red)", "ndvi"),
+            ("NDWI = (Green−NIR)/(Green+NIR)", "ndwi"),
+            ("NBR = (NIR−SWIR)/(NIR+SWIR)", "nbr"),
+            ("SAVI = (NIR−Red)/(NIR+Red+L)×(1+L)", "savi"),
+        ):
+            self.cmb_sindex.addItem(label, val)
+        self.lbl_sindex = QLabel("光谱指数 (index):")
+        self.params_form.addRow(self.lbl_sindex, self.cmb_sindex)
+
+        self.spin_band_a = QSpinBox()
+        self.spin_band_a.setRange(1, 999)
+        self.spin_band_a.setValue(1)
+        self.lbl_band_a = QLabel("波段 A (bandA，ndvi/nbr/savi=NIR，ndwi=Green):")
+        self.params_form.addRow(self.lbl_band_a, self.spin_band_a)
+
+        self.spin_band_b = QSpinBox()
+        self.spin_band_b.setRange(1, 999)
+        self.spin_band_b.setValue(2)
+        self.lbl_band_b = QLabel("波段 B (bandB，ndvi/savi=Red，ndwi=NIR，nbr=SWIR):")
+        self.params_form.addRow(self.lbl_band_b, self.spin_band_b)
+
+        self.spin_savi_l = QDoubleSpinBox()
+        self.spin_savi_l.setDecimals(4)
+        self.spin_savi_l.setRange(0.0, 1.0)
+        self.spin_savi_l.setSingleStep(0.1)
+        self.spin_savi_l.setValue(0.5)
+        self.lbl_savi_l = QLabel("SAVI 土壤调节因子 L (saviL，仅 savi):")
+        self.params_form.addRow(self.lbl_savi_l, self.spin_savi_l)
+
+        self.chk_use_physical = QCheckBox("使用波段元数据 scale/offset 换算物理量（推荐）")
+        self.chk_use_physical.setChecked(True)
+        self.lbl_use_physical = QLabel("物理量 (usePhysical):")
+        self.params_form.addRow(self.lbl_use_physical, self.chk_use_physical)
+
         # --- P4-03 概览构建 ---
         self.txt_levels = QLineEdit()
         self.txt_levels.setPlaceholderText("严格递增、每个≥2；例：2,4,8")
@@ -677,6 +714,14 @@ class CapabilityFormWidget(QWidget):
             (self.lbl_vt_dst_srs, self.txt_vt_dst_srs, "dstSRS"),
         ):
             self._set_row_visible(label, widget, key in sup)
+        # P6-01 光谱指数
+        self._set_row_visible(self.lbl_sindex, self.cmb_sindex, "sindex" in sup)
+        self._set_row_visible(self.lbl_band_a, self.spin_band_a, "bandA" in sup)
+        self._set_row_visible(self.lbl_band_b, self.spin_band_b, "bandB" in sup)
+        self._set_row_visible(self.lbl_savi_l, self.spin_savi_l, "saviL" in sup)
+        self._set_row_visible(
+            self.lbl_use_physical, self.chk_use_physical, "usePhysical" in sup
+        )
         self._set_row_visible(self.lbl_levels, self.txt_levels, "levels" in sup)
         self._set_row_visible(self.lbl_ovr_compress, self.cmb_ovr_compress, "overviewCompress" in sup)
         # P4-04
@@ -804,6 +849,16 @@ class CapabilityFormWidget(QWidget):
         ):
             if key not in supported:
                 widget.clear()
+        if "sindex" not in supported:
+            self.cmb_sindex.setCurrentIndex(0)
+        if "bandA" not in supported:
+            self.spin_band_a.setValue(1)
+        if "bandB" not in supported:
+            self.spin_band_b.setValue(2)
+        if "saviL" not in supported:
+            self.spin_savi_l.setValue(0.5)
+        if "usePhysical" not in supported:
+            self.chk_use_physical.setChecked(True)
         if "levels" not in supported:
             self.txt_levels.clear()
         if "overviewCompress" not in supported:
@@ -1008,6 +1063,20 @@ class CapabilityFormWidget(QWidget):
             if dst_srs_text:
                 params["dstSRS"] = dst_srs_text
 
+        # P6-01：光谱指数
+        if "sindex" in supported:
+            params["sindex"] = self.cmb_sindex.currentData()
+        if "bandA" in supported:
+            params["bandA"] = int(self.spin_band_a.value())
+        if "bandB" in supported:
+            params["bandB"] = int(self.spin_band_b.value())
+        if "saviL" in supported and self.spin_savi_l.value() != 0.5:
+            # 0.5 是 Worker 侧默认值，不产生冗余参数
+            params["saviL"] = float(self.spin_savi_l.value())
+        if "usePhysical" in supported and not self.chk_use_physical.isChecked():
+            # True 是 Worker 侧默认值；关闭物理量换算才显式下发
+            params["usePhysical"] = False
+
         # P4-04：表达式计算
         if "calc" in supported:
             raw_expr = self.txt_calc.text().strip()
@@ -1162,6 +1231,16 @@ class CapabilityFormWidget(QWidget):
                 has_alpha=False,
             )
             return "；".join(grid_violations) if grid_violations else None
+        if capability_id == "gdal:sindex":
+            # 光谱指数：输出恒为单波段 Float32 且必设 NoData
+            sindex_violations = validate_output_format(
+                out_fmt,
+                dtype="Float32",
+                bands=1,
+                has_nodata=True,
+                has_alpha=False,
+            )
+            return "；".join(sindex_violations) if sindex_violations else None
         has_nodata_param = any(
             params.get(key) is not None
             for key in ("srcNodata", "vrtNodata", "dstNodata", "noData")

@@ -1011,6 +1011,46 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
             ],
             validation_evidence=[],
         ),
+        CapabilityDescriptor(
+            capability_id="gdal:sindex",
+            descriptor_revision="1.0",
+            kind=CapabilityKind.algorithm,
+            name="平台光谱指数（NDVI/NDWI/NBR/SAVI）",
+            native_name="spectra_workbench.index_ops（numpy）",
+            category=["spectral", "index", "raster"],
+            description="按波段元数据（scale/offset）换算物理量后计算光谱指数，无效区（NoData/分母为零/非有限值）进输出 NoData。",
+            engine=_engine_spec(),
+            source=_source_spec("platform/sindex"),
+            parameters=[
+                ParameterSpec(key="sindex", native_name="index", label="光谱指数", type="string", required=True, choices=["ndvi", "ndwi", "nbr", "savi"]),
+                ParameterSpec(key="bandA", native_name="bandA", label="波段 A（ndvi/nbr/savi=NIR，ndwi=Green）", type="integer", required=True),
+                ParameterSpec(key="bandB", native_name="bandB", label="波段 B（ndvi/savi=Red，ndwi=NIR，nbr=SWIR）", type="integer", required=True),
+                ParameterSpec(key="saviL", native_name="saviL", label="SAVI 土壤调节因子 L（仅 savi）", type="number", required=False, default=0.5),
+                ParameterSpec(key="usePhysical", native_name="usePhysical", label="使用波段元数据 scale/offset 换算物理量", type="boolean", required=False, default=True),
+                ParameterSpec(key="dstNodata", native_name="dstNodata", label="输出 NoData", type="number", required=False, default=-9999.0),
+            ],
+            inputs=[PortSpec(key="input", data_type=DatasetKind.raster, required=True, description="多波段输入栅格（A/B 波段取自同一数据集）")],
+            outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="单波段 Float32 指数成果")],
+            requirements=[Requirement(kind="package", name="numpy", reason="指数逐像元 numpy 求值（gdal worker 运行时自带）")],
+            entrypoints=[
+                Entrypoint(kind="form", target="gdal:sindex", available=True, notes="平台适配器已接入（P6-01）"),
+            ],
+            state=CapabilityState(
+                presence=Presence.present,
+                binding=Binding.form,
+                validation=Validation.not_run,
+                availability=Availability.ready,
+            ),
+            effects="new_dataset",
+            cancellation="cooperative",
+            limitations=[
+                "输出恒为单波段 Float32，NoData 默认 -9999；PNG/JPEG 因不支持 NoData 在写盘前拒绝",
+                "物理量 = 原值 × scale + offset（仅当波段元数据提供非平凡 scale/offset）；usePhysical=false 时用原始像元值",
+                "波段角色随指数：ndvi A=NIR/B=Red，ndwi A=Green/B=NIR，nbr A=NIR/B=SWIR，savi 同 ndvi 加 L（0≤L≤1）",
+                "架构边界：方案规划的 science 独立 worker 待 sw-science 环境补 pydantic/栅格 IO 后建立，本期在 gdal worker 内以 numpy 实现",
+            ],
+            validation_evidence=[],
+        ),
     ]
 
 

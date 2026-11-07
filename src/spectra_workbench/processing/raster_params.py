@@ -170,6 +170,12 @@ _PARAM_ALIASES: dict[str, tuple[str, ...]] = {
     "spat": ("spat", "spatial_filter", "spat_bbox"),
     "where": ("where", "where_clause"),
     "select": ("select", "select_fields"),
+    # --- P6-01 光谱指数 ---
+    "sindex": ("sindex", "spectral_index"),
+    "bandA": ("band_a", "bandA"),
+    "bandB": ("band_b", "bandB"),
+    "saviL": ("savi_l", "saviL"),
+    "usePhysical": ("use_physical", "physical_values"),
     # --- P4-04 表达式 / 直方图与基础统计 ---
     "calc": ("calc_expr", "expression", "formula"),
     "statisticsMode": ("mode", "stats_mode", "statistics_mode"),
@@ -358,6 +364,10 @@ _CAPABILITY_SUPPORT: dict[str, frozenset[str]] = {
     # --- P5-04：矢量处理 / SQL / 坐标转换（成果为矢量）---
     # format 是非几何透传键（_OTHER_ALLOWED_KEYS），不进矩阵
     "ogr:vectortranslate": frozenset({"sql", "dstSRS", "spat", "where", "select"}),
+    # --- P6-01：光谱指数（成果为单波段 Float32 栅格）---
+    "gdal:sindex": frozenset(
+        {"sindex", "bandA", "bandB", "saviL", "usePhysical", "srcNodata", "dstNodata"}
+    ),
     # --- P4-04：受限表达式计算 / 直方图与基础统计 ---
     "gdal:calc": frozenset({"calc", "srcNodata", "dstNodata", "outputType"}),
     "gdal:statistics": frozenset(
@@ -805,6 +815,33 @@ def normalize_raster_params(
     if "band" in collected:
         _, value = collected["band"]
         out["band"] = _require_positive_int(value, "band")
+
+    # 11.13) P6-01：光谱指数
+    if "sindex" in collected:
+        _, value = collected["sindex"]
+        index_name = str(value).strip().lower()
+        if index_name not in ("ndvi", "ndwi", "nbr", "savi"):
+            raise ParameterError(
+                f"未知光谱指数 {value!r}；可用：ndvi, ndwi, nbr, savi"
+            )
+        out["sindex"] = index_name
+    if "bandA" in collected:
+        _, value = collected["bandA"]
+        out["bandA"] = _require_positive_int(value, "bandA")
+    if "bandB" in collected:
+        _, value = collected["bandB"]
+        out["bandB"] = _require_positive_int(value, "bandB")
+    if "saviL" in collected:
+        _, value = collected["saviL"]
+        l_value = _require_finite_float(value, "saviL")
+        if not (0.0 <= l_value <= 1.0):
+            raise ParameterError(f"SAVI 的土壤调节因子 L 必须在 [0, 1]，实际 {l_value}")
+        out["saviL"] = l_value
+    if "usePhysical" in collected:
+        _, value = collected["usePhysical"]
+        if not isinstance(value, bool):
+            raise ParameterError(f"参数 usePhysical 必须是布尔值，实际 {value!r}")
+        out["usePhysical"] = value
 
     # 11.12) P5-04：矢量处理 / SQL / 坐标转换
     if "sql" in collected:

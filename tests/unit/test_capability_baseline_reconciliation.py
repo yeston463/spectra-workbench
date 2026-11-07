@@ -17,6 +17,7 @@ PLATFORM_ONLY = {
     "gdal:bandmanage",
     "gdal:editmeta",
     "gdal:overview",
+    "gdal:sindex",
     "gdal:stack",
     "gdal:statistics",
 }
@@ -35,7 +36,8 @@ def test_baseline_reconciliation_has_no_missing_registry_entry() -> None:
 
     assert report["errors"] == []
     assert report["baseline_count"] == 443
-    assert report["registry_count"] == 448
+    # 第 58 轮新增平台能力 gdal:sindex：注册表 448 -> 449
+    assert report["registry_count"] == 449
     assert report["missing_from_registry"] == []
     assert set(report["platform_only"]) == PLATFORM_ONLY
     assert report["complete"] is True
@@ -61,7 +63,7 @@ def test_target_version_tools_are_indexed_and_gaps_have_reasons() -> None:
         item = next(i for i in report["missing_or_blocked"] if i["capability_id"] == cid)
         assert item["limitations"], f"{cid} 缺少具体原因"
 
-    # dem, rasterize, grid, polygonize, contour and vectortranslate are now wired.
+    # dem, rasterize, grid, polygonize, contour, vectortranslate and sindex are wired.
     for cid in (
         "gdal:dem",
         "gdal:rasterize",
@@ -69,6 +71,7 @@ def test_target_version_tools_are_indexed_and_gaps_have_reasons() -> None:
         "gdal:polygonize",
         "gdal:contour",
         "ogr:vectortranslate",
+        "gdal:sindex",
     ):
         cap = registry.get(cid)
         assert cap is not None and str(cap.state.availability) == "ready"

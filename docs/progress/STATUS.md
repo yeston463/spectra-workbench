@@ -1,6 +1,6 @@
 # 执行状态
 
-更新：2026-11-07（第 57 轮 · implemented 收官：逐项审计 20 项 implemented 的验收与既有证据，19 项转 done（P0-03/05、P1-01/04/05、P2-01~05、P3-01~05、P4-01/03/04/05），P0-02 维持 implemented（证据明示打包依赖不得据此标 done）；账本 done 29 / implemented 1 / todo 25。当日回归 Clean 全量 688 项 / 0 失败 / rc=0 / clean_exit_verified=true。第 56 轮 P5-05 转 done、P5 收官）
+更新：2026-11-07（第 58 轮 · P6-01 光谱指数 gdal:sindex 端到端：NDVI/NDWI/NBR/SAVI 按波段元数据 scale/offset 换算物理量（usePhysical 可关）、无效区三源进输出 NoData；合成值逐像元公式断言（原值 1/3 vs 物理量 0.0/−1/3/−3.0）、SAVI L=0 退化实测修复零值 truthiness 缺陷；**P6-01 转 done**。Clean 全量 693 项 / 0 失败 / rc=0 / clean_exit_verified=true。第 57 轮 implemented 收官 19 项转 done）
 
 ## 当前里程碑
 
@@ -23,6 +23,8 @@
   - **P5-03 矢量图层与分页属性表**：**done**（第 54 轮）。worker `read_vector_page` 按范围读取（单页硬上限 1000、`GetFeatureCount(force=0)` 廉价计数拿不到就如实标注、空几何/多部件/编码逐要素标注）+ 属性表面板（一页 100 条、翻页、请求代际丢弃迟到旧页、多子图层下拉、矢量图层选中联动）；GBK 编码 Shapefile 中文字段名/值往返一致；大图层全程无一次性全读。
   - **P5-04 矢量处理、SQL 与坐标转换**：**done**（第 55 轮）。`ogr:vectortranslate`（ogr2ogr 通道）接入：GPKG/GeoJSON/Shapefile/FlatGeobuf 转换、OGR SQL、where/select 属性过滤、spat 空间过滤（源 CRS 单位）、dstSRS 重投影（恒配 reproject=True + 无 SRS 源预检拒绝，杜绝假重投影）；已知坐标/轴序/空间关系/字段值逐项断言。
   - **P5-05 驱动读写能力及高级选项**：**done**（第 56 轮）。`describe_driver` 暴露 DCAP 四访问模式声明与 `DMD_CREATIONOPTIONLIST` 高级选项；ENVI/GPKG/GTiff/COG + 扩展驱动（netCDF/BMP/FlatGeobuf/GeoJSON/PNG/JPEG）四模式分开实测，已装可打开驱动枚举 180+；声明 vs 实况错位六项白名单化（ENVI CreateCopy 等元数据保守项），新错位强制显式过目。**P5 里程碑 P5-01~05 全部 done。**
+- **P6 遥感专题处理**：
+  - **P6-01 光谱、剖面、NDVI 等指数**：**done**（第 58 轮）。`gdal:sindex`（NDVI/NDWI/NBR/SAVI，numpy 求值）：物理量 = 原值 × scale + offset（波段元数据驱动，usePhysical 可关）、无效区三源（NoData/分母零/非有限值）进输出 NoData；合成值逐像元公式断言（原值 1/3 vs 物理量 0.0/−1/3/−3.0）、SAVI L=0 退化实测并修复零值 truthiness 缺陷。架构边界：science 独立 worker 待 sw-science 环境补装（registry 已声明），EVI 三波段指数与光谱剖面曲线归后续。
 
 ## 原 P3 验收标准逐项对账与剩余缺口
 
@@ -232,6 +234,36 @@ CRT 检测到栈状态异常后立即终止进程，这正是 `STATUS_STACK_BUFF
 |---|---|---|
 | 用合成影像完成同类验收 | 已满足 | 合成 ENVI/GTiff/GeoJSON/netCDF 样例覆盖多波段、像元数值、ROI 与对比 |
 | 保留真实数据待验状态 | **待验** | 课程原始数据位于 `C:\Users\赵航\Desktop\studio\_chaoxing_rs`（**只读**，不得运行其中的抓取/下载/OCR 脚本）；本轮全部用合成影像验收，未对课程原始 ENVI 栅格与 lena.tif 做真实打开验证 |
+
+### 第 58 轮：P6-01 光谱指数（P6-01 → done）
+
+**一、实现**
+
+- 运行时实测：QGIS GDAL 运行时自带 numpy 2.4.6 / scipy 1.18.1——指数在 gdal worker 内以 numpy 求值；**架构边界如实记录**：方案规划的 science 独立 worker 因 sw-science 环境仅有 numpy/scipy（无 pydantic/栅格 IO）暂不能承载 JSONL worker，待环境补装后建立（已写入 registry limitations）。
+- 新增 `providers/gdal_provider/index_ops.py::compute_index`（NDVI/NDWI/NBR/SAVI）：
+  - **物理量/原值**：`usePhysical=true`（默认）时按波段元数据换算（物理值 = 原值 × scale + offset，仅当存在非平凡 scale/offset），是否实际应用逐波段如实返回；
+  - **无效区三源**：波段 NoData 标签（srcNodata 可覆盖）、分母为零、非有限值 → 输出 NoData（默认 -9999），标签/无效区/像元值一致；
+  - 自审发现并修复顺序缺陷：NoData 检测必须在物理变换**之前**用原始值判定（变换会平移数值导致漏检）。
+- 契约：`sindex`/`bandA`/`bandB`/`saviL`/`usePhysical` 别名与支持矩阵；registry 新增平台能力 `gdal:sindex`（基线 448→449）；adapter 门禁 bandA==bandB 拒绝、输出恒单波段 Float32 必设 NoData（PNG/JPEG 预检拒绝）。
+- GUI：指数下拉（公式随选项展示）、bandA/bandB/saviL/usePhysical 控件与状态隔离。
+
+**二、数值验收（独立 GDAL 重开，双波段 fixture，A scale=0.1 NoData=-1、B scale=0.2）**
+
+- NDVI 原值：(200−100)/300=**1/3**、(100−100)/200=**0**（合法零不是 NoData）、分母零→NoData、A=-1→NoData。
+- NDVI 物理量：同像元 **(0,0)=0.0、(1,0)=−1/3、(2,0)=−3.0**——与原值结果不同，证明波段元数据真实参与（物理量/原值对应）。
+- SAVI：L=0.5 = (100/300.5)×1.5≈**0.499168**；L=0 退化为 NDVI——实测揪出并修复 `or 0.5` 把合法 L=0 当缺省的零值 truthiness 缺陷。
+- NDWI 反向组合正确；拒绝路径（缺 bandA/bandB、bandA==bandB、越界波段、未知指数、PNG）全部明确拒绝且不落盘。
+
+**三、验证**
+
+- 新增 `tests/integration/test_p6_index.py`（4 项）与 `tests/integration/test_p6_index_gui.py`（1 项桌面路径）；四维审计/对账/算法计数单测同步（449/444/239/12、算法规格 23→24）。
+- 受影响定向（P6-01 集成/GUI + 全部单测）：**285 passed**；Ruff 干净；Mypy 69 个源文件 0 错误。
+- Clean 全量：**693 passed / 0 failed / rc=0 / clean_exit_verified=true**（403.22s，residual=0、cleanup_complete=true）。
+
+**四、边界与结论**
+
+- 验收「物理量/原值与波段元数据对应；合成值和无效区符合公式」逐项满足——**P6-01 转 done**。
+- 遗留边界：EVI 等三波段指数、光谱剖面曲线（PyQtGraph）、science 独立 worker 归后续轮次。
 
 ### 第 57 轮：implemented 收官——19 项转 done（P0-02 维持 implemented）
 

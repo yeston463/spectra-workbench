@@ -61,6 +61,8 @@ CONNECTED_CAPABILITIES: frozenset[str] = frozenset(
         # P4-04：受限表达式计算 / 直方图与基础统计（后者输出 JSON artifact）
         "gdal:calc",
         "gdal:statistics",
+        # P6-01：光谱指数（成果为单波段栅格）
+        "gdal:sindex",
     }
 )
 
@@ -120,6 +122,7 @@ FORMAT_CAPABILITIES: frozenset[str] = frozenset(
         "gdal:polygonize",
         "gdal:contour",
         "ogr:vectortranslate",
+        "gdal:sindex",
         "gdal:calc",
     }
 )

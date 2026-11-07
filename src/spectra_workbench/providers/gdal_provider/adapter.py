@@ -58,6 +58,7 @@ from spectra_workbench.providers.base import (
 )
 from spectra_workbench.providers.gdal_provider.calc_ops import run_calc
 from spectra_workbench.providers.gdal_provider.expression_ops import ExpressionError
+from spectra_workbench.providers.gdal_provider.index_ops import compute_index
 from spectra_workbench.providers.gdal_provider.metadata_ops import (
     apply_nodata,
     build_overviews,
@@ -302,6 +303,8 @@ class GDALProviderAdapter(ProviderAdapter):
         "gdal:contour",
         # --- P5-04：矢量处理 / SQL / 坐标转换（成果为矢量）---
         "ogr:vectortranslate",
+        # --- P6-01：光谱指数（成果为单波段 Float32 栅格）---
+        "gdal:sindex",
         # --- P4-04：受限表达式计算 / 直方图与基础统计 ---
         "gdal:calc",
         P404_STATISTICS_CAPABILITY,
@@ -598,7 +601,7 @@ class GDALProviderAdapter(ProviderAdapter):
             not is_p402
             and in_path is not None
             and spec.capability_id != P404_STATISTICS_CAPABILITY
-            and spec.capability_id not in ("gdal:rasterize", "gdal:grid")
+            and spec.capability_id not in ("gdal:rasterize", "gdal:grid", "gdal:sindex")
             and spec.capability_id not in VECTOR_OUTPUT_CAPABILITIES
         ):
             format_violations = self._general_format_violations(in_path, norm, out_format)
@@ -660,6 +663,47 @@ class GDALProviderAdapter(ProviderAdapter):
         is_dem = spec.capability_id == "gdal:dem"
         is_rasterize = spec.capability_id == "gdal:rasterize"
         is_grid = spec.capability_id == "gdal:grid"
+        is_sindex = spec.capability_id == "gdal:sindex"
+
+        if is_sindex:
+            # 光谱指数：输出恒为单波段 Float32 且必设 NoData；bandA/bandB 必填
+            sindex_violations = validate_output_format(
+                out_format,
+                dtype="Float32",
+                bands=1,
+                has_nodata=True,
+                has_alpha=False,
+            )
+            if sindex_violations:
+                context.log("ERROR", f"光谱指数输出格式不受支持: {sindex_violations}")
+                return TaskResult(
+                    task_id=spec.task_id,
+                    attempt=spec.attempt,
+                    status=TaskStatus.failed,
+                    error={
+                        "code": "unsupported_format_combination",
+                        "message": "；".join(sindex_violations),
+                    },
+                    duration_seconds=round(time.monotonic() - start_time, 4),
+                )
+            if not norm.get("bandA") or not norm.get("bandB"):
+                message = "gdal:sindex 需要显式给出 bandA 与 bandB（1-based 波段号；角色随指数，如 NDVI 的 A=NIR、B=Red）"
+                return TaskResult(
+                    task_id=spec.task_id,
+                    attempt=spec.attempt,
+                    status=TaskStatus.failed,
+                    error={"code": "invalid_parameters", "message": message},
+                    duration_seconds=round(time.monotonic() - start_time, 4),
+                )
+            if norm.get("bandA") == norm.get("bandB"):
+                message = "gdal:sindex 的 bandA 与 bandB 不能相同（同波段指数恒为 0 或无效）"
+                return TaskResult(
+                    task_id=spec.task_id,
+                    attempt=spec.attempt,
+                    status=TaskStatus.failed,
+                    error={"code": "invalid_parameters", "message": message},
+                    duration_seconds=round(time.monotonic() - start_time, 4),
+                )
 
         if is_grid:
             grid_bands = 1
@@ -975,6 +1019,36 @@ class GDALProviderAdapter(ProviderAdapter):
                     str(dem_processing),
                     options=gdal.DEMProcessingOptions(**dem_kwargs),
                 )
+            elif is_sindex:
+                # 单输入能力：validate() 保证 input 端口存在，in_path 必已解析
+                index_info = compute_index(
+                    staged_path,
+                    in_path,  # type: ignore[arg-type]
+                    index=str(norm.get("sindex") or "ndvi"),
+                    band_a=int(norm["bandA"]),
+                    band_b=int(norm["bandB"]),
+                    # 零值合法（L=0 退化为 NDVI）：按 None 判断，绝不用 truthiness
+                    savi_l=(
+                        float(norm["saviL"]) if norm.get("saviL") is not None else 0.5
+                    ),
+                    use_physical=bool(norm.get("usePhysical", True)),
+                    src_nodata=(
+                        float(norm["srcNodata"]) if norm.get("srcNodata") is not None else None
+                    ),
+                    dst_nodata=(
+                        float(norm["dstNodata"]) if norm.get("dstNodata") is not None else -9999.0
+                    ),
+                    out_format=out_format,
+                    callback=_gdal_cb,
+                )
+                context.log(
+                    "INFO",
+                    f"光谱指数 {index_info['index']} 完成：物理量变换 A={index_info['physical_a']}"
+                    f"/B={index_info['physical_b']}，输入无效 {index_info['n_input_invalid']} 像元、"
+                    f"数学无效 {index_info['n_math_invalid']} 像元→输出 NoData",
+                )
+                # 成果已写盘：重开交给共享流水线做 GetFileList/重开校验/事务提交
+                ds = gdal.Open(str(staged_path), gdal.GA_ReadOnly)
             elif is_warp:
                 warp_kwargs: dict[str, Any] = {
                     "format": out_format,
@@ -1097,6 +1171,8 @@ class GDALProviderAdapter(ProviderAdapter):
                 if is_rasterize
                 else "DEMProcessing"
                 if is_dem
+                else "Sindex"
+                if is_sindex
                 else "Warp"
                 if is_warp
                 else "Translate"
@@ -1130,6 +1206,8 @@ class GDALProviderAdapter(ProviderAdapter):
                 if is_rasterize
                 else "DEMProcessing"
                 if is_dem
+                else "Sindex"
+                if is_sindex
                 else "Warp"
                 if is_warp
                 else "Translate"
