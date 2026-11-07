@@ -269,3 +269,92 @@ print("OK")
     assert bad_input.status is TaskStatus.failed
     assert bad_input.error and bad_input.error["code"] == "polygonize_error"
     assert not (tmp_path / "bad.gpkg").exists()
+
+
+def _make_two_band(gdal_rt: dict[str, Any], path: Path) -> Path:
+    script = f"""
+from osgeo import gdal, osr
+drv = gdal.GetDriverByName("GTiff")
+ds = drv.Create({str(path)!r}, 4, 2, 2, gdal.GDT_Byte)
+ds.SetGeoTransform((0.0, 1.0, 0.0, 2.0, 0.0, -1.0))
+srs = osr.SpatialReference(); srs.ImportFromEPSG(32650)
+ds.SetSpatialRef(srs)
+bands = [[[3, 3, 9, 9], [3, 3, 9, 9]], [[7, 7, 7, 7], [8, 8, 8, 8]]]
+for b, rows in enumerate(bands, start=1):
+    for r, row in enumerate(rows):
+        ds.GetRasterBand(b).WriteRaster(0, r, 4, 1, bytes(row), buf_type=gdal.GDT_Byte)
+ds = None
+print("OK")
+"""
+    proc = subprocess.run(
+        [str(gdal_rt["python"]), "-c", script],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        env=gdal_rt["env"],
+    )
+    assert proc.returncode == 0, proc.stderr
+    return path
+
+
+def test_polygonize_shapefile_bundle_commits_all_sidecars(
+    qapp: QApplication, gdal_rt: dict[str, Any], tmp_path: Path
+) -> None:
+    src = _make_labeled(gdal_rt, tmp_path / "labels4.tif", [[3, 3, 9, 9], [3, 3, 9, 9]])
+    out = tmp_path / "polyshp.shp"
+    result = _run(qapp, {"format": "ESRI Shapefile"}, src, out)
+    assert result.status is TaskStatus.succeeded, result.error
+
+    first = result.outputs[0]
+    assert first["data_type"] == "vector"
+    assert first["driver"] == "ESRI Shapefile"
+    # 多文件 bundle：主文件 + .shx/.dbf（.prj/.cpg 视驱动行为）全部登记提交
+    committed = {Path(u).suffix.lower() for u in first["committed_files"]}
+    assert ".shp" in committed and ".shx" in committed and ".dbf" in committed
+    for suffix in (".shp", ".shx", ".dbf"):
+        assert out.with_suffix(suffix).exists(), f"{suffix} 未提交"
+    # 旧成果残留 sidecar 不被遗留：预置一个旧 .qix（新成果不产生该文件），
+    # 覆盖提交后必须随事务删除，而不是与新 .shp 混用
+    stale_qix = tmp_path / "polyshp.qix"
+    stale_qix.write_bytes(b"stale-spatial-index")
+    result2 = _run(qapp, {"format": "Shapefile"}, src, out)
+    assert result2.status is TaskStatus.succeeded, result2.error
+    assert not stale_qix.exists(), "旧 .qix 应随覆盖提交删除"
+
+    info = _inspect_vector(gdal_rt, out)
+    assert info["driver"] == "ESRI Shapefile"
+    lyr = info["layers"][0]
+    assert lyr["feature_count"] == 2
+    by_dn = {f["fields"]["DN"]: f for f in lyr["features"]}
+    assert set(by_dn) == {3, 9}
+    for feat in by_dn.values():
+        assert feat["area"] == pytest.approx(4.0)
+
+
+def test_polygonize_band_selection_and_range_rejection(
+    qapp: QApplication, gdal_rt: dict[str, Any], tmp_path: Path
+) -> None:
+    src = _make_two_band(gdal_rt, tmp_path / "twoband.tif")
+
+    # band=2：使用第二波段 [[7,7,7,7],[8,8,8,8]] 而不是默认第一波段
+    out = tmp_path / "band2.gpkg"
+    result = _run(qapp, {"format": "GPKG", "band": 2}, src, out)
+    assert result.status is TaskStatus.succeeded, result.error
+    info = _inspect_vector(gdal_rt, out)
+    by_dn = {f["fields"]["DN"]: f for f in info["layers"][0]["features"]}
+    assert set(by_dn) == {7, 8}
+    for feat in by_dn.values():
+        assert feat["area"] == pytest.approx(4.0)
+
+    # band 超出范围：明确拒绝且不写目标
+    rejected = _run(qapp, {"format": "GPKG", "band": 3}, src, tmp_path / "band3.gpkg")
+    assert rejected.status is TaskStatus.failed
+    assert rejected.error and rejected.error["code"] == "invalid_parameters"
+    assert "3" in rejected.error["message"]
+    assert not (tmp_path / "band3.gpkg").exists()
+
+    # band=0 在契约层被拒绝（正整数校验）
+    zero = _run(qapp, {"format": "GPKG", "band": 0}, src, tmp_path / "band0.gpkg")
+    assert zero.status is TaskStatus.failed
+    assert zero.error and zero.error["code"] == "invalid_parameters"
+    assert not (tmp_path / "band0.gpkg").exists()

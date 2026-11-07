@@ -91,17 +91,17 @@ def test_cog_and_vrt_accept_standard_raster_semantics() -> None:
 # --- P5-02：矢量（OGR）输出格式矩阵 ---------------------------------------
 
 
-def test_vector_matrix_accepts_single_file_ogr_drivers() -> None:
+def test_vector_matrix_accepts_single_file_and_shapefile_drivers() -> None:
     assert validate_vector_output_format("GPKG") == []
     assert validate_vector_output_format("GeoJSON") == []
     assert validate_vector_output_format("geojson") == []
+    assert validate_vector_output_format("ESRI Shapefile") == []
+    assert validate_vector_output_format("Shapefile") == []
 
 
-def test_vector_matrix_rejects_raster_formats_and_shapefile() -> None:
-    for fmt in ("GTiff", "PNG", "JPEG", "COG", "ENVI", "VRT", "ESRI Shapefile", ""):
+def test_vector_matrix_rejects_raster_formats() -> None:
+    for fmt in ("GTiff", "PNG", "JPEG", "COG", "ENVI", "VRT", ""):
         violations = validate_vector_output_format(fmt)
         assert violations, f"{fmt!r} 应被矢量矩阵拒绝"
         joined = "；".join(violations)
-        assert "GPKG" in joined and "GeoJSON" in joined
-        if fmt == "ESRI Shapefile":
-            assert "多文件 bundle" in joined
+        assert "GPKG" in joined and "GeoJSON" in joined and "Shapefile" in joined

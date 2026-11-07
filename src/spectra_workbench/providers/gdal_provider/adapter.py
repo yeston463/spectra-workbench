@@ -42,6 +42,7 @@ from spectra_workbench.domain.models import (
 from spectra_workbench.processing.output_formats import (
     VECTOR_OUTPUT_FORMATS,
     normalize_output_format,
+    shapefile_sidecar_paths,
     validate_output_format,
     validate_vector_output_format,
 )
@@ -2401,10 +2402,10 @@ class GDALProviderAdapter(ProviderAdapter):
         # 2. 能力级参数门禁（取值合法性已由 normalize_raster_params 保证）
         is_contour = spec.capability_id == "gdal:contour"
         is_polygonize = spec.capability_id == "gdal:polygonize"
-        if is_contour and not norm.get("interval"):
+        if is_contour and not norm.get("interval") and not norm.get("fixedLevels"):
             return _fail(
                 "invalid_parameters",
-                "gdal:contour 需要正数 interval（等值线步长）",
+                "gdal:contour 需要正数 interval（等值线步长）或非空 fixedLevels（固定等级序列）",
             )
 
         layer_name = target_path.stem
@@ -2416,7 +2417,13 @@ class GDALProviderAdapter(ProviderAdapter):
             if src_ds is None:
                 raise RuntimeError(f"无法作为栅格打开输入: {in_path}")
             try:
-                band = src_ds.GetRasterBand(1)
+                band_index = int(norm.get("band") or 1)
+                if band_index < 1 or band_index > src_ds.RasterCount:
+                    return _fail(
+                        "invalid_parameters",
+                        f"band 超出范围：{band_index}（数据集共 {src_ds.RasterCount} 个波段）",
+                    )
+                band = src_ds.GetRasterBand(band_index)
                 from osgeo import ogr
 
                 ods = ogr.GetDriverByName(ogr_driver_name).CreateDataSource(
@@ -2454,13 +2461,19 @@ class GDALProviderAdapter(ProviderAdapter):
                         layer.CreateField(ogr.FieldDefn("ELEV", ogr.OFTReal))
                         nodata = band.GetNoDataValue()
                         use_no_data = nodata is not None
-                        # GDAL 3.13.3 实测：Python 绑定把 fixedLevelCount 折叠为
-                        # fixedLevels 序列参数（docstring 未更新），传 [] 表示无固定等级
+                        # GDAL 3.13.3 实测：第 4 参是 fixedLevels **序列**
+                        # （docstring 的 fixedLevelCount 已被 typemap 折叠），
+                        # 非空时**完全替代** interval/base 等差序列（interval=0 也可）；
+                        # 传 [] 表示按 interval/base 生成
+                        fixed_levels = [float(v) for v in norm.get("fixedLevels") or []]
+                        interval_value = (
+                            float(norm["interval"]) if norm.get("interval") else 0.0
+                        )
                         rc = gdal.ContourGenerate(
                             band,
-                            float(norm["interval"]),
+                            interval_value,
                             float(norm.get("offset") or 0.0),
-                            [],
+                            fixed_levels,
                             bool(use_no_data),
                             float(nodata) if use_no_data else 0.0,
                             layer,
@@ -2517,11 +2530,52 @@ class GDALProviderAdapter(ProviderAdapter):
             staged_path.unlink(missing_ok=True)
             return _fail("verification_failed", "staging 矢量成果不含任何图层")
 
-        # 5. 事务提交（单文件成果：GPKG / GeoJSON）
+        # 5. 构造提交对：GPKG/GeoJSON 是单文件；ESRI Shapefile 是
+        #    .shp/.shx/.dbf/.prj(/.cpg) 多文件 bundle（第 53 轮实测清单）。
+        if ogr_driver_name == "ESRI Shapefile":
+            staged_bundle = shapefile_sidecar_paths(staged_path)
+        else:
+            staged_bundle = []
+        commit_pairs: list[tuple[Path, Path]] = [(staged_path, target_path)]
+        for sidecar in staged_bundle:
+            commit_pairs.append((sidecar, target_path.with_suffix(sidecar.suffix)))
+
+        # 5.5 sidecar 所有权预检：输入碰撞拒绝；旧成果残留 sidecar 随事务备份后删除
+        #（覆盖已有 Shapefile 时旧 .shx/.dbf 与新成果不配对会污染图层，必须清掉）
+        new_targets = [tf for _, tf in commit_pairs]
+        protected_inputs = collect_protected_inputs([in_path]) if in_path else set()
+        try:
+            sidecar_report = ensure_no_stale_sidecars(
+                target_path,
+                new_targets,
+                protected_inputs=protected_inputs,
+                allow_stale_deletion=True,
+            )
+        except SidecarOwnershipError as sidecar_err:
+            context.log("ERROR", f"sidecar 所有权预检失败: {sidecar_err}")
+            return _fail(
+                sidecar_err.code,
+                str(sidecar_err),
+            )
+        new_target_set = {p.resolve() for p in new_targets}
+        stale_sidecars = [
+            p for p in sidecar_report.owned if p.resolve() not in new_target_set
+        ]
+        if stale_sidecars:
+            context.log(
+                "INFO",
+                "旧 sidecar 将随事务备份后删除："
+                + ", ".join(p.name for p in stale_sidecars),
+            )
+
+        # 6. 事务提交
         context.progress(0.95, "committing", "Committing staged vector output to destination")
         try:
             committed_files = context.commit_files(
-                [(staged_path, target_path)], overwrite=overwrite
+                commit_pairs,
+                overwrite=overwrite,
+                delete_paths=stale_sidecars,
+                protected_paths=protected_inputs,
             )
         except OutputConflictError as conflict_err:
             context.log("ERROR", f"Commit rejected due to existing target: {conflict_err}")
@@ -2530,7 +2584,7 @@ class GDALProviderAdapter(ProviderAdapter):
             context.log("ERROR", f"Transaction commit failed: {commit_err}")
             return _fail("commit_failed", str(commit_err))
 
-        # 6. 最终核验：target 再次 OGR 重开，图层数与要素数必须与 staging 一致
+        # 7. 最终核验：target 再次 OGR 重开，图层数与要素数必须与 staging 一致
         try:
             final_info = inspect_vector(target_path, sample=False)
         except Exception as final_err:

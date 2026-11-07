@@ -46,6 +46,11 @@ _SIDECAR_SUFFIXES = {
     ".sta",
 }
 
+#: ESRI Shapefile bundle（第 53 轮矢量成果接入）。
+#: 仅当目标是 .shp 时才参与所有权判定——避免给栅格目标引入新的
+#: 「同名文件即 sidecar」语义（栅格流的行为保持逐字节不变）。
+_SHAPEFILE_SIDECAR_SUFFIXES = {".shx", ".dbf", ".prj", ".cpg", ".qix"}
+
 
 class SidecarOwnershipError(RuntimeError):
     """Existing target sidecars cannot be safely replaced by this output."""
@@ -86,6 +91,8 @@ def _suffixes_for_target(target: Path) -> set[str]:
         suffixes.add(".jgw")
     elif suffix == ".png":
         suffixes.add(".pgw")
+    elif suffix == ".shp":
+        suffixes.update({".shx", ".dbf", ".prj", ".cpg", ".qix"})
     return suffixes
 
 
@@ -112,10 +119,13 @@ def _is_owned_name(target: Path, candidate: Path) -> bool:
     target_name = target.name.lower()
     # 只接受“目标名 + 已知 sidecar 后缀”或“同 stem + 已知后缀”。
     # 不再接受任意 target.name + "." 前缀（会把 mosaic.vrt.source.tif 误判）。
-    for suffix in _SIDECAR_SUFFIXES:
+    suffixes = set(_SIDECAR_SUFFIXES)
+    if target.suffix.lower() == ".shp":
+        suffixes |= _SHAPEFILE_SIDECAR_SUFFIXES
+    for suffix in suffixes:
         if lower_name == target_name + suffix.lower():
             return True
-    return candidate.stem == target.stem and candidate.suffix.lower() in _SIDECAR_SUFFIXES
+    return candidate.stem == target.stem and candidate.suffix.lower() in suffixes
 
 
 def collect_protected_inputs(sources: list[Path]) -> set[Path]:
@@ -178,11 +188,23 @@ def discover_sidecars(
 
         gdal.UseExceptions()
         ds = gdal.Open(str(target), gdal.GA_ReadOnly)
-    except Exception as exc:
-        report.ownership_complete = False
-        report.error = f"open_target_failed:{type(exc).__name__}:{exc}"
-        report.owned = sorted(set(report.owned))
-        return report
+    except Exception:
+        ds = None
+
+    if ds is None:
+        # ESRI Shapefile 等**仅矢量**驱动（只有 DCAP_VECTOR）无法被 gdal.Open
+        # 打开，但这不代表目标损坏——回退 ogr.Open 获取文件清单，
+        # 所有权判定规则保持不变（第 53 轮矢量成果接入）。
+        try:
+            from osgeo import ogr
+
+            ogr.UseExceptions()
+            ds = ogr.Open(str(target), 0)
+        except Exception as exc:
+            report.ownership_complete = False
+            report.error = f"open_target_failed:{type(exc).__name__}:{exc}"
+            report.owned = sorted(set(report.owned))
+            return report
 
     if ds is None:
         report.ownership_complete = False
@@ -191,7 +213,9 @@ def discover_sidecars(
         return report
 
     try:
-        report.driver = ds.GetDriver().ShortName
+        driver = ds.GetDriver()
+        # gdal.Driver 暴露 ShortName，ogr.Driver 暴露 GetName()
+        report.driver = getattr(driver, "ShortName", None) or driver.GetName()
         try:
             raw_files = ds.GetFileList() or []
         finally:

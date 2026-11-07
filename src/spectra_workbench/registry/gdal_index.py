@@ -554,8 +554,10 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
             engine=_engine_spec(),
             source=_source_spec("programs/gdal_contour.html"),
             parameters=[
-                ParameterSpec(key="interval", native_name="interval", label="等值线步长", type="number", required=True, default=10.0),
+                ParameterSpec(key="interval", native_name="interval", label="等值线步长", type="number", required=False, default=10.0),
                 ParameterSpec(key="offset", native_name="offset", label="基础偏移零点", type="number", required=False, default=0.0),
+                ParameterSpec(key="fixedLevels", native_name="fixedLevels", label="固定等级序列（完全替代 interval）", type="list", required=False),
+                ParameterSpec(key="band", native_name="band", label="输入波段（1-based，默认 1）", type="integer", required=False, default=1),
             ],
             inputs=[PortSpec(key="input", data_type=DatasetKind.raster, required=True, description="输入单波段高程栅格")],
             outputs=[PortSpec(key="output", data_type=DatasetKind.vector, required=True, description="生成的等值线矢量图层")],
@@ -574,9 +576,9 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
             effects="new_dataset",
             cancellation="cooperative",
             limitations=[
-                "矢量成果仅支持 GPKG / GeoJSON 单文件输出；ESRI Shapefile 为多文件 bundle，暂未接入",
-                "仅处理第 1 波段；遵循输入 NoData 标签（GDAL useNoData 语义）",
-                "固定等级序列需 ContourGenerateEx，当前未接入；本版仅 interval/offset",
+                "矢量成果支持 GPKG / GeoJSON 单文件与 ESRI Shapefile 多文件 bundle（.shp/.shx/.dbf/.prj/.cpg）",
+                "band 默认 1；遵循输入 NoData 标签（GDAL useNoData 语义）",
+                "interval 与 fixedLevels 二选一：fixedLevels 非空时完全替代等差序列（GDAL 3.13.3 实测）",
                 "输出为 3D Line String（wkbLineString25D），字段为 ID 与 ELEV",
             ],
             validation_evidence=[],
@@ -594,6 +596,7 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
             parameters=[
                 ParameterSpec(key="fieldName", native_name="fieldName", label="像元值保存字段名", type="string", required=False, default="DN"),
                 ParameterSpec(key="connectedness", native_name="connectedness", label="连通性 (4邻域/8邻域)", type="integer", required=False, default=4, choices=[4, 8]),
+                ParameterSpec(key="band", native_name="band", label="输入波段（1-based，默认 1）", type="integer", required=False, default=1),
             ],
             inputs=[PortSpec(key="input", data_type=DatasetKind.raster, required=True, description="输入离散分类栅格")],
             outputs=[PortSpec(key="output", data_type=DatasetKind.vector, required=True, description="生成的多边形矢量图层")],
@@ -612,8 +615,8 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
             effects="new_dataset",
             cancellation="cooperative",
             limitations=[
-                "矢量成果仅支持 GPKG / GeoJSON 单文件输出；ESRI Shapefile 为多文件 bundle，暂未接入",
-                "仅处理第 1 波段；mask 语义遵循 GDAL GetMaskBand（自动遵循 NoData/alpha/mask）",
+                "矢量成果支持 GPKG / GeoJSON 单文件与 ESRI Shapefile 多文件 bundle（.shp/.shx/.dbf/.prj/.cpg）",
+                "band 默认 1；mask 语义遵循 GDAL GetMaskBand（自动遵循 NoData/alpha/mask）",
                 "连通性支持 4/8 邻域（8CONNECTED）；像元值存入 fieldName 字段（默认 DN）",
             ],
             validation_evidence=[],

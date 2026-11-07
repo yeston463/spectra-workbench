@@ -161,8 +161,10 @@ _PARAM_ALIASES: dict[str, tuple[str, ...]] = {
     # 注意：field_name / field 已是 attribute 的别名，不得重复占用。
     "fieldName": ("dn_field",),
     "connectedness": ("connected", "connectivity"),
+    "band": ("band", "band_index"),
     "interval": ("contour_interval", "level_interval"),
     "offset": ("contour_base", "base_level"),
+    "fixedLevels": ("fixed_levels", "fixed_levels_contour"),
     # --- P4-04 表达式 / 直方图与基础统计 ---
     "calc": ("calc_expr", "expression", "formula"),
     "statisticsMode": ("mode", "stats_mode", "statistics_mode"),
@@ -346,8 +348,8 @@ _CAPABILITY_SUPPORT: dict[str, frozenset[str]] = {
         }
     ),
     # --- P5-02：栅格矢量化 / 等值线（成果为矢量）---
-    "gdal:polygonize": frozenset({"fieldName", "connectedness"}),
-    "gdal:contour": frozenset({"interval", "offset"}),
+    "gdal:polygonize": frozenset({"fieldName", "connectedness", "band"}),
+    "gdal:contour": frozenset({"interval", "offset", "fixedLevels", "band"}),
     # --- P4-04：受限表达式计算 / 直方图与基础统计 ---
     "gdal:calc": frozenset({"calc", "srcNodata", "dstNodata", "outputType"}),
     "gdal:statistics": frozenset(
@@ -774,6 +776,25 @@ def normalize_raster_params(
         _, value = collected["offset"]
         # 零值合法：contourBase=0 是有效的基准高程
         out["offset"] = _require_finite_float(value, "offset")
+    if "fixedLevels" in collected:
+        _, value = collected["fixedLevels"]
+        if not isinstance(value, (list, tuple)) or not value:
+            raise ParameterError("参数 fixedLevels 必须是非空的数值列表")
+        fixed: list[float] = []
+        for v in value:
+            try:
+                f = float(v)
+            except (TypeError, ValueError) as exc:
+                raise ParameterError(f"fixedLevels 含非数值元素：{v!r}") from exc
+            if not math.isfinite(f):
+                raise ParameterError(f"fixedLevels 含非有限值：{v!r}")
+            fixed.append(f)
+        out["fixedLevels"] = fixed
+
+    # 11.11) P5-02：矢量化的输入波段选择（1-based）
+    if "band" in collected:
+        _, value = collected["band"]
+        out["band"] = _require_positive_int(value, "band")
 
     if "levels" in collected:
         _, value = collected["levels"]

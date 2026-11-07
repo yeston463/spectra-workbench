@@ -8,12 +8,14 @@ silently losing alpha, mask, NoData or dtype.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
 __all__ = [
     "FORMAT_RULES",
     "FormatRule",
     "VECTOR_OUTPUT_FORMATS",
     "normalize_output_format",
+    "shapefile_sidecar_paths",
     "validate_output_format",
     "validate_vector_output_format",
 ]
@@ -145,14 +147,29 @@ def validate_output_format(
 # 矢量（OGR）输出格式矩阵（P5-02 polygonize / contour 专用）
 # ---------------------------------------------------------------------------
 # 与栅格矩阵同一哲学：刻意保守、写盘前拒绝。
-# 只接**单文件成果**驱动（GPKG / GeoJSON）——staging→commit 事务按单对文件移动；
-# ESRI Shapefile 是 .shp/.shx/.dbf/.prj 多文件 bundle，需要专门的矢量 bundle
-# 收集器才能与提交事务配合，未接入前必须明确拒绝而不是写出残缺成果。
+# GPKG / GeoJSON 是**单文件**成果——staging→commit 事务按单对文件移动；
+# ESRI Shapefile 是 .shp/.shx/.dbf/.prj 多文件 bundle（第 53 轮接入）：
+# 矢量分支按已知后缀收集 staged bundle 并映射到目标名，提交前做
+# stale sidecar 预检，提交后整体 OGR 重开比对。
 VECTOR_OUTPUT_FORMATS: dict[str, str] = {
     # 规范化名 -> OGR 驱动短名
     "GPKG": "GPKG",
     "GEOJSON": "GeoJSON",
+    "SHAPEFILE": "ESRI Shapefile",
+    "ESRI SHAPEFILE": "ESRI Shapefile",
 }
+
+#: Shapefile bundle 在主 .shp 之外可能出现的伴生后缀。
+_SHAPEFILE_SIDECAR_SUFFIXES: tuple[str, ...] = (".shx", ".dbf", ".prj", ".cpg")
+
+
+def shapefile_sidecar_paths(main_file: Path) -> list[Path]:
+    """返回 Shapefile 主文件旁**实际存在**的伴生文件（.shx/.dbf/.prj/.cpg）。"""
+    return [
+        candidate
+        for suffix in _SHAPEFILE_SIDECAR_SUFFIXES
+        if (candidate := main_file.with_suffix(suffix)).exists()
+    ]
 
 
 def validate_vector_output_format(format_name: str) -> list[str]:
@@ -161,6 +178,5 @@ def validate_vector_output_format(format_name: str) -> list[str]:
     if key in VECTOR_OUTPUT_FORMATS:
         return []
     return [
-        f"矢量成果仅支持 GPKG / GeoJSON，不支持 {format_name!r}；"
-        "ESRI Shapefile 为多文件 bundle（.shp/.shx/.dbf/.prj），暂未接入"
+        f"矢量成果仅支持 GPKG / GeoJSON / ESRI Shapefile，不支持 {format_name!r}"
     ]

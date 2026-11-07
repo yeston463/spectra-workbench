@@ -1,6 +1,6 @@
 # 执行状态
 
-更新：2026-11-07（第 52 轮 · P5-02 增量五：gdal:contour 等值线生成接入 Worker 与 GUI，解析平面 z=2x+3y 的等值线逐顶点解析验证（ELEV 集合、ID 递增、3D 顶点 Z==ELEV、内部顶点位于解析等值线上）、offset 等差对齐语义实证；**P5-02 转 done**——dem/rasterize/grid/polygonize/contour 共 5 项工具全部接入。Clean 全量 669 项 / 0 失败 / rc=0 / clean_exit_verified=true。第 51 轮为 polygonize 与矢量成果输出通道）
+更新：2026-11-07（第 53 轮 · 矢量成果通道边界完善：ESRI Shapefile 多文件 bundle 输出（sidecar 收集 + stale 删除 + discover_sidecars 的 ogr.Open 回退，栅格流行为不变）、contour fixedLevels（实测非空时完全替代等差序列）、polygonize/contour 的 band 参数；Clean 全量 673 项 / 0 失败 / rc=0 / clean_exit_verified=true。P5-02 保持 done。第 52 轮为 contour 接入并转 done）
 
 ## 当前里程碑
 
@@ -24,7 +24,7 @@
   - **P4-01 / P4-03 / P4-04 / P4-05**：implemented。P4-05 的完整用户流程验收以第 36 轮 P4-05 专项为准；P4-02 转为 done 不改变其余任务的证据边界。
 - **P5 全量栅格、矢量、地形与坐标能力**：
   - **P5-01 补齐栅格算法/传统工具入口**：**done**（第 47 轮基准逐项对账）。契约基准 443 条全部在注册表；注册表 448 条，多出的 5 条为平台组合/受限实现；8 条运行期缺口（3 条 blocked、5 条 missing）均有具体原因，未解释缺口 0。
-  - **P5-02 栅格化、多边形化、等值线及地形工具**：**done**（第 48–52 轮逐项接入并验收）。`gdal:dem` 地形分析（解析平面坡度/坡向/山体阴影数值验证）、`gdal:rasterize` 矢量栅格化（已知矩形烧录值/属性字段）、`gdal:grid` 散点插值（linear 逐像元解析值）、`gdal:polygonize` 栅格矢量化（标签图多边形 DN/面积、4/8 连通差异）与 `gdal:contour` 等值线（解析平面逐顶点验证、offset 对齐语义）共 5 项全部接入 Worker + GUI；第 51 轮建立**矢量成果输出通道**（GPKG/GeoJSON 单文件矩阵、`inspect_vector` OGR 重开校验、`kind=vector` 输出计划与矢量图层登记），提交校验不复用仅栅格路径。审计 `platform_executable` 8 → 10（polygonize/contour 接入），运行期缺口维持 5 且均有具体原因。
+  - **P5-02 栅格化、多边形化、等值线及地形工具**：**done**（第 48–52 轮逐项接入并验收，第 53 轮边界完善）。`gdal:dem` 地形分析（解析平面坡度/坡向/山体阴影数值验证）、`gdal:rasterize` 矢量栅格化（已知矩形烧录值/属性字段）、`gdal:grid` 散点插值（linear 逐像元解析值）、`gdal:polygonize` 栅格矢量化（标签图多边形 DN/面积、4/8 连通差异）与 `gdal:contour` 等值线（解析平面逐顶点验证、offset 对齐语义）共 5 项全部接入 Worker + GUI；第 51 轮建立**矢量成果输出通道**（GPKG/GeoJSON 单文件矩阵、`inspect_vector` OGR 重开校验、`kind=vector` 输出计划与矢量图层登记），提交校验不复用仅栅格路径；第 53 轮补齐 Shapefile 多文件 bundle 输出、contour fixedLevels 与 band 参数。审计 `platform_executable` 8 → 10（polygonize/contour 接入），运行期缺口维持 5 且均有具体原因。
   - **P5-03 / P5-04 / P5-05**：todo。
 
 ## 原 P3 验收标准逐项对账与剩余缺口
@@ -235,6 +235,34 @@ CRT 检测到栈状态异常后立即终止进程，这正是 `STATUS_STACK_BUFF
 |---|---|---|
 | 用合成影像完成同类验收 | 已满足 | 合成 ENVI/GTiff/GeoJSON/netCDF 样例覆盖多波段、像元数值、ROI 与对比 |
 | 保留真实数据待验状态 | **待验** | 课程原始数据位于 `C:\Users\赵航\Desktop\studio\_chaoxing_rs`（**只读**，不得运行其中的抓取/下载/OCR 脚本）；本轮全部用合成影像验收，未对课程原始 ENVI 栅格与 lena.tif 做真实打开验证 |
+
+### 第 53 轮：矢量成果通道边界完善——Shapefile bundle、fixedLevels、band（P5-02 保持 done）
+
+**一、实现**
+
+- **ESRI Shapefile 多文件 bundle 输出**（polygonize/contour）：
+  - `VECTOR_OUTPUT_FORMATS` 增加 Shapefile（键 `SHAPEFILE`/`ESRI SHAPEFILE` → OGR 驱动 `ESRI Shapefile`）；
+  - 矢量分支按已知后缀收集 staged bundle（`.shx/.dbf/.prj/.cpg`）映射到目标 stem 构造提交对；提交前复用 `ensure_no_stale_sidecars` 所有权预检，旧残留 sidecar（如旧 `.qix`）随事务删除，提交后整体 OGR 重开逐层比对；
+  - `sidecars.py` 增强：`_suffixes_for_target` 对 `.shp` 目标识别 `.shx/.dbf/.prj/.cpg/.qix`；`discover_sidecars` 在 `gdal.Open` 失败时**回退 `ogr.Open`**——实测 Shapefile 驱动只有 `DCAP_VECTOR`，`gdal.Open` 打不开曾把覆盖请求误判为「所有权无法确认」而拒绝；Shapefile 后缀语义仅在目标为 `.shp` 时启用，**栅格流行为逐字节不变**。
+- **contour fixedLevels**：契约新增 `fixedLevels`（非空有限浮点列表，别名 `fixed_levels`）；实测 Python 绑定第 4 参即 fixedLevels 序列且非空时**完全替代** interval/base 等差序列（interval 可省略）；`interval` 与 `fixedLevels` 二选一，皆缺 → `invalid_parameters`。
+- **band 参数**（polygonize/contour）：1-based、默认 1、别名 `band_index`；契约正整数校验，Worker 校验 `1 ≤ band ≤ RasterCount`（越界 → `invalid_parameters` 且不写目标）。
+- GUI：矢量格式候选增加 `Shapefile (.shp)`；新增 band 微调框与 fixedLevels 文本框及状态隔离；registry 两个 descriptor 补参数并如实更新限制（移除「仅第 1 波段」「fixedLevels 未接入」）。
+
+**二、数值验收（GDAL 3.13.3 运行时实测 + 独立 OGR 重开）**
+
+- Shapefile bundle：`.prj` 正常写出且图层 SRS 回读 `32650`；提交集合含 `.shp/.shx/.dbf(/.prj)`；预置的旧 `.qix` 在覆盖提交后随事务删除；OGR 重开 DN∈{3,9}、面积各 4.0。
+- fixedLevels=[2.5, 5.5]：ELEV 恰为 `{2.5, 5.5}`，顶点逐点位于解析等值线上；空列表契约层拒绝。
+- 双波段栅格 band=2：多边形来自第二波段（DN∈{7,8}）；band=3 越界与 band=0 均明确拒绝且目标不落盘。
+
+**三、验证**
+
+- 受影响定向（全部单测 + polygonize/contour 集成 + GUI 复跑）：**294 passed**；Ruff 干净；Mypy 67 个源文件 0 错误。
+- Clean 全量：**673 passed / 0 failed / rc=0 / clean_exit_verified=true**（418.71s，residual=0、cleanup_complete=true）。
+
+**四、边界与下一步**
+
+- 剩余遗留：DEM color-relief 颜色表参数（需要「文件路径参数」通道）、矢量画布渲染（P5-03 范围）。
+- 下一步：P5-03 矢量图层与分页属性表（按范围查询；字段、空几何、多部件和编码保留；大图层无一次性全读）。
 
 ### 第 52 轮：P5-02 增量五——contour 等值线生成，P5-02 转 done
 

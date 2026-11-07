@@ -64,7 +64,7 @@ if TYPE_CHECKING:
 #: 输出格式下拉的候选项按能力族切换：
 #: 栅格成果走栅格驱动矩阵，矢量成果（P5-02 polygonize/contour）走 OGR 驱动。
 _RASTER_FORMAT_ITEMS = ["GTiff (GeoTIFF)", "ENVI (.dat/.hdr)", "COG (云优化 GeoTIFF)", "PNG", "JPEG"]
-_VECTOR_FORMAT_ITEMS = ["GPKG (GeoPackage)", "GeoJSON (.geojson)"]
+_VECTOR_FORMAT_ITEMS = ["GPKG (GeoPackage)", "GeoJSON (.geojson)", "Shapefile (.shp)"]
 
 
 
@@ -316,6 +316,13 @@ class CapabilityFormWidget(QWidget):
         self.lbl_connectedness = QLabel("连通性 (connectedness):")
         self.params_form.addRow(self.lbl_connectedness, self.cmb_connectedness)
 
+        # --- P5-02 矢量化输入波段（polygonize/contour 共用）---
+        self.spin_band = QSpinBox()
+        self.spin_band.setRange(1, 999)
+        self.spin_band.setValue(1)
+        self.lbl_band = QLabel("输入波段 (band，1-based):")
+        self.params_form.addRow(self.lbl_band, self.spin_band)
+
         # --- P5-02 等值线（成果为矢量）---
         self.spin_contour_interval = QDoubleSpinBox()
         self.spin_contour_interval.setDecimals(6)
@@ -332,6 +339,13 @@ class CapabilityFormWidget(QWidget):
         self.spin_contour_offset.setValue(0.0)
         self.lbl_contour_offset = QLabel("基准高程 (offset，0 合法):")
         self.params_form.addRow(self.lbl_contour_offset, self.spin_contour_offset)
+
+        self.txt_fixed_levels = QLineEdit()
+        self.txt_fixed_levels.setPlaceholderText(
+            "留空=按 interval 生成；填逗号分隔高程则完全替代，例：2.5,5.5,11"
+        )
+        self.lbl_fixed_levels = QLabel("固定等级 (fixedLevels):")
+        self.params_form.addRow(self.lbl_fixed_levels, self.txt_fixed_levels)
 
         # --- P4-03 概览构建 ---
         self.txt_levels = QLineEdit()
@@ -614,12 +628,17 @@ class CapabilityFormWidget(QWidget):
         self._set_row_visible(
             self.lbl_connectedness, self.cmb_connectedness, "connectedness" in sup
         )
+        # P5-02 矢量化输入波段（polygonize/contour 共用）
+        self._set_row_visible(self.lbl_band, self.spin_band, "band" in sup)
         # P5-02 等值线（成果为矢量）
         self._set_row_visible(
             self.lbl_contour_interval, self.spin_contour_interval, "interval" in sup
         )
         self._set_row_visible(
             self.lbl_contour_offset, self.spin_contour_offset, "offset" in sup
+        )
+        self._set_row_visible(
+            self.lbl_fixed_levels, self.txt_fixed_levels, "fixedLevels" in sup
         )
         self._set_row_visible(self.lbl_levels, self.txt_levels, "levels" in sup)
         self._set_row_visible(self.lbl_ovr_compress, self.cmb_ovr_compress, "overviewCompress" in sup)
@@ -731,10 +750,14 @@ class CapabilityFormWidget(QWidget):
             self.txt_field_name.setText("DN")
         if "connectedness" not in supported:
             self.cmb_connectedness.setCurrentIndex(0)
+        if "band" not in supported:
+            self.spin_band.setValue(1)
         if "interval" not in supported:
             self.spin_contour_interval.setValue(10.0)
         if "offset" not in supported:
             self.spin_contour_offset.setValue(0.0)
+        if "fixedLevels" not in supported:
+            self.txt_fixed_levels.clear()
         if "levels" not in supported:
             self.txt_levels.clear()
         if "overviewCompress" not in supported:
@@ -879,6 +902,9 @@ class CapabilityFormWidget(QWidget):
             conn = self.cmb_connectedness.currentData()
             if conn:
                 params["connectedness"] = int(conn)
+        if "band" in supported and self.spin_band.value() != 1:
+            # 1 是 Worker 侧默认值，不产生冗余参数；显式选择其它波段才下发
+            params["band"] = int(self.spin_band.value())
 
         # P5-02：等值线（成果为矢量）
         if "interval" in supported and self.spin_contour_interval.value() > 0:
@@ -887,6 +913,20 @@ class CapabilityFormWidget(QWidget):
         if "offset" in supported and self.spin_contour_offset.value() != 0.0:
             # 0 是 Worker 侧默认值，不产生冗余参数；非 0 基准高程如实下发
             params["offset"] = float(self.spin_contour_offset.value())
+        if "fixedLevels" in supported:
+            raw_fixed = self.txt_fixed_levels.text().strip()
+            if raw_fixed:
+                parts_fixed = [
+                    x.strip() for x in raw_fixed.replace(";", ",").split(",") if x.strip()
+                ]
+                fixed_out: list[float] = []
+                for part in parts_fixed:
+                    try:
+                        fixed_out.append(float(part))
+                    except ValueError:
+                        return params, f"fixedLevels 需要逗号分隔的高程数值，当前为：{raw_fixed}"
+                if fixed_out:
+                    params["fixedLevels"] = fixed_out
 
         # P4-04：表达式计算
         if "calc" in supported:
@@ -1187,6 +1227,7 @@ class CapabilityFormWidget(QWidget):
             "JPEG": "JPEG",
             "GPKG": "GPKG",
             "GeoJSON": "GeoJSON",
+            "Shapefile": "ESRI Shapefile",
         }
         out_fmt = fmt_map.get(raw_fmt, "GTiff")
 

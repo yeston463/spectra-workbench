@@ -248,6 +248,43 @@ def test_contour_geojson_single_file(
     _assert_analytic(info, expected_levels={float(k) for k in range(1, 36)})
 
 
+def test_contour_fixed_levels_replace_interval(
+    qapp: QApplication, gdal_rt: dict[str, Any], tmp_path: Path
+) -> None:
+    # GDAL 3.13.3 实测：fixedLevels 非空时**完全替代** interval/base 等差序列
+    # （interval 甚至可以不给）。ELEV 应恰为给定等级，顶点仍逐点位于解析等值线上。
+    src = _make_plane(gdal_rt, tmp_path / "plane_fixed.tif")
+    out = tmp_path / "contour_fixed.gpkg"
+    result = _run(qapp, {"format": "GPKG", "fixedLevels": [2.5, 5.5]}, src, out)
+    assert result.status is TaskStatus.succeeded, result.error
+    _assert_analytic(_inspect_contours(gdal_rt, out), expected_levels={2.5, 5.5})
+
+    # fixedLevels 为空列表：契约层拒绝（非空校验）
+    empty = _run(qapp, {"format": "GPKG", "fixedLevels": []}, src, tmp_path / "empty.gpkg")
+    assert empty.status is TaskStatus.failed
+    assert empty.error and empty.error["code"] == "invalid_parameters"
+    assert not (tmp_path / "empty.gpkg").exists()
+
+
+def test_contour_shapefile_bundle_and_band(
+    qapp: QApplication, gdal_rt: dict[str, Any], tmp_path: Path
+) -> None:
+    src = _make_plane(gdal_rt, tmp_path / "plane_shp.tif")
+    out = tmp_path / "contour.shp"
+    result = _run(qapp, {"format": "ESRI Shapefile", "interval": 5.0}, src, out)
+    assert result.status is TaskStatus.succeeded, result.error
+    first = result.outputs[0]
+    assert first["driver"] == "ESRI Shapefile"
+    committed = {Path(u).suffix.lower() for u in first["committed_files"]}
+    assert {".shp", ".shx", ".dbf"} <= committed
+    info = _inspect_contours(gdal_rt, out)
+    assert info["driver"] == "ESRI Shapefile"
+    _assert_analytic(
+        info,
+        expected_levels={float(k) for k in range(5, 36, 5)},
+    )
+
+
 def test_contour_rejects_missing_or_bad_interval_and_raster_format(
     qapp: QApplication, gdal_rt: dict[str, Any], tmp_path: Path
 ) -> None:
