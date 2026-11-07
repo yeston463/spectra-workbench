@@ -1,6 +1,6 @@
 # 执行状态
 
-更新：2026-11-07（第 47 轮 · P5-01 基准逐项对账：GDAL 3.13.3 + Rasterio 1.5.2 契约基准 443 条全部登记，注册表 448 条（含 5 条平台扩展），8 条运行期缺口均有具体原因；Clean 全量 646 项 / 0 失败 / rc=0 / clean_exit_verified=true。P5-01 转为 done。第 46 轮为长周期压力与 native dump）
+更新：2026-11-07（第 48 轮 · P5-02 首个增量：gdal:dem 地形分析接入 Worker 与 GUI，解析平面数值验证坡度/坡向/山体阴影、zFactor/scale 生效、color-relief 与 PNG 明确拒绝；Clean 全量 649 项 / 0 失败 / rc=0 / clean_exit_verified=true。P5-02 保持 in_progress，rasterize/polygonize/contour/grid 仍待做。第 47 轮为 P5-01 基准对账）
 
 ## 当前里程碑
 
@@ -24,7 +24,7 @@
   - **P4-01 / P4-03 / P4-04 / P4-05**：implemented。P4-05 的完整用户流程验收以第 36 轮 P4-05 专项为准；P4-02 转为 done 不改变其余任务的证据边界。
 - **P5 全量栅格、矢量、地形与坐标能力**：
   - **P5-01 补齐栅格算法/传统工具入口**：**done**（第 47 轮基准逐项对账）。契约基准 443 条全部在注册表；注册表 448 条，多出的 5 条为平台组合/受限实现；8 条运行期缺口（3 条 blocked、5 条 missing）均有具体原因，未解释缺口 0。
-  - **P5-02 / P5-03 / P5-04 / P5-05**：todo。P5-02 的栅格化/多边形化/等值线/地形实现仍待开始；P5-01 只完成入口与基准对账，不把“已编目”当作“已可执行”。
+  - **P5-02 / P5-03 / P5-04 / P5-05**：P5-02 **in_progress**（第 48 轮已接入 `gdal:dem` 地形分析，rasterize/polygonize/contour/grid 仍待做）；P5-03/P5-04/P5-05 为 todo。P5-01 只完成入口与基准对账，不把“已编目”当作“已可执行”。
 
 ## 原 P3 验收标准逐项对账与剩余缺口
 
@@ -234,6 +234,39 @@ CRT 检测到栈状态异常后立即终止进程，这正是 `STATUS_STACK_BUFF
 |---|---|---|
 | 用合成影像完成同类验收 | 已满足 | 合成 ENVI/GTiff/GeoJSON/netCDF 样例覆盖多波段、像元数值、ROI 与对比 |
 | 保留真实数据待验状态 | **待验** | 课程原始数据位于 `C:\Users\赵航\Desktop\studio\_chaoxing_rs`（**只读**，不得运行其中的抓取/下载/OCR 脚本）；本轮全部用合成影像验收，未对课程原始 ENVI 栅格与 lena.tif 做真实打开验证 |
+
+### 第 48 轮：P5-02 首增量——DEM 地形分析接入（P5-02 in_progress）
+
+**一、实现**
+
+- `processing/raster_params.py` 新增 `DEM_PROCESSINGS`、`processing`/`zFactor`/`scale` 别名与 `gdal:dem` 参数支持矩阵；`color-relief` 因缺少颜色表参数，在契约层明确拒绝，不做“接受后忽略”。
+- `GDALProviderAdapter` 新增 `gdal:dem` 分支，调用 `gdal.DEMProcessing`，复用既有 staging → 重开校验 → 事务提交 → sidecar 处理流程；支持 hillshade/slope/aspect/TRI/TPI/roughness 与 zFactor/scale。
+- DEM 输出固定 Float32 单波段；执行前按格式矩阵拒绝 PNG/JPEG，避免“源是 Byte 所以放行、成果却写不出”的错配。
+- 注册表 `gdal:dem` 从 blocked/indexed 改为 ready/form；限制说明明确 color-relief 与格式矩阵边界。
+- GUI 表单新增地形模式、zFactor、scale 控件，输出格式选择；提交前预检复用共享矩阵。
+
+**二、数值验收（解析平面 z = 2·col + 3·row，1×1 像元）**
+
+- 坡度：`atan(√13)` **74.49864°**，中心与内部像元一致，边缘按 GDAL 语义为 NoData。
+- 坡向：**326.30994°**，与 GDAL 解析平面对照一致。
+- 山体阴影：默认参数 **219.0**；`zFactor=2` 时为 **200.0**，证明参数真实参与。
+- `scale=0.5` 时坡度 **82.10486°**，证明垂直比例因数真实参与。
+- `color-relief` 返回 `invalid_parameters` 并说明需要颜色表；PNG 返回 `unsupported_format_combination`，两者均不写出目标。
+- GUI 真实 `MainWindow` + 真实 Worker + QTest 提交 slope 成功并自动加载成果；同一表单选择 PNG 时在发出 TaskSpec 前被拦截。
+
+**三、验证**
+
+- 新增 `tests/integration/test_p5_dem.py`（2 项，解析平面数值）与 `tests/integration/test_p5_dem_gui.py`（1 项，真实桌面路径）。
+- 受影响定向组合（DEM、基准对账、基线审计、UI、smoke、wiring）：**44 passed**（22.60s）。
+- Ruff 干净；Mypy 66 个源文件 0 错误。
+- Clean 全量：**649 passed / 0 failed / rc=0 / clean_exit_verified=true**（360.88s，job 观测、residual=0、cleanup_complete=true）。
+- 审计刷新：注册表 448 条；缺口 8 → **7**（`gdal:dem` 移出 blocked）；`gdal:grid`/`gdal:rasterize` 仍 blocked，`gdal:cli:gdal_auth`、HDF5 与 3 个 rio 插件仍缺失。
+
+**四、边界与下一步**
+
+- P5-02 保持 **in_progress**：rasterize、polygonize、contour、grid 尚未接入；其中 polygonize/contour 需要扩展“成果为矢量”的输出计划、OGR 重开校验与图层登记，不能复用仅栅格的提交校验。
+- `color-relief` 需要颜色表文件参数，尚未接入。
+- 下一步：`gdal:rasterize`（矢量→栅格，已知矩形/标签图验证），随后 `gdal:polygonize`/`gdal:contour` 与矢量成果通道，最后 `gdal:grid`。
 
 ### 第 47 轮：P5-01 基准逐项对账（P5-01 → done）
 

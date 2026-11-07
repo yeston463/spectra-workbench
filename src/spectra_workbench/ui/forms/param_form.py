@@ -230,6 +230,36 @@ class CapabilityFormWidget(QWidget):
         self.lbl_band_list = QLabel("波段顺序 (bandList):")
         self.params_form.addRow(self.lbl_band_list, self.txt_band_list)
 
+        # --- P5-02 地形分析 ---
+        self.cmb_dem_processing = QComboBox()
+        for label, val in (
+            ("山体阴影 (hillshade)", "hillshade"),
+            ("坡度 (slope)", "slope"),
+            ("坡向 (aspect)", "aspect"),
+            ("地形 ruggedness 指数 (TRI)", "TRI"),
+            ("地形位置指数 (TPI)", "TPI"),
+            ("粗糙度 (roughness)", "roughness"),
+        ):
+            self.cmb_dem_processing.addItem(label, val)
+        self.lbl_dem_processing = QLabel("地形模式 (processing):")
+        self.params_form.addRow(self.lbl_dem_processing, self.cmb_dem_processing)
+
+        self.spin_dem_zfactor = QDoubleSpinBox()
+        self.spin_dem_zfactor.setDecimals(6)
+        self.spin_dem_zfactor.setRange(-1e9, 1e9)
+        self.spin_dem_zfactor.setSingleStep(0.1)
+        self.spin_dem_zfactor.setValue(1.0)
+        self.lbl_dem_zfactor = QLabel("高程缩放 (zFactor):")
+        self.params_form.addRow(self.lbl_dem_zfactor, self.spin_dem_zfactor)
+
+        self.spin_dem_scale = QDoubleSpinBox()
+        self.spin_dem_scale.setDecimals(6)
+        self.spin_dem_scale.setRange(1e-6, 1e12)
+        self.spin_dem_scale.setSingleStep(0.1)
+        self.spin_dem_scale.setValue(1.0)
+        self.lbl_dem_scale = QLabel("垂直比例 (scale):")
+        self.params_form.addRow(self.lbl_dem_scale, self.spin_dem_scale)
+
         # --- P4-03 概览构建 ---
         self.txt_levels = QLineEdit()
         self.txt_levels.setPlaceholderText("严格递增、每个≥2；例：2,4,8")
@@ -464,6 +494,12 @@ class CapabilityFormWidget(QWidget):
             self.lbl_relative_paths, self.chk_relative_paths, "relativePaths" in sup
         )
         self._set_row_visible(self.lbl_band_list, self.txt_band_list, "bandList" in sup)
+        # P5-02 地形分析
+        self._set_row_visible(
+            self.lbl_dem_processing, self.cmb_dem_processing, "processing" in sup
+        )
+        self._set_row_visible(self.lbl_dem_zfactor, self.spin_dem_zfactor, "zFactor" in sup)
+        self._set_row_visible(self.lbl_dem_scale, self.spin_dem_scale, "scale" in sup)
         self._set_row_visible(self.lbl_levels, self.txt_levels, "levels" in sup)
         self._set_row_visible(self.lbl_ovr_compress, self.cmb_ovr_compress, "overviewCompress" in sup)
         # P4-04
@@ -554,6 +590,12 @@ class CapabilityFormWidget(QWidget):
             self.chk_relative_paths.setChecked(True)
         if "bandList" not in supported:
             self.txt_band_list.clear()
+        if "processing" not in supported:
+            self.cmb_dem_processing.setCurrentIndex(0)
+        if "zFactor" not in supported:
+            self.spin_dem_zfactor.setValue(1.0)
+        if "scale" not in supported:
+            self.spin_dem_scale.setValue(1.0)
         if "levels" not in supported:
             self.txt_levels.clear()
         if "overviewCompress" not in supported:
@@ -646,6 +688,14 @@ class CapabilityFormWidget(QWidget):
                 if not bands:
                     return params, "波段顺序不能为空列表（留空表示保留全部）"
                 params["bandList"] = bands
+
+        # P5-02：地形分析
+        if "processing" in supported:
+            params["processing"] = self.cmb_dem_processing.currentData()
+        if "zFactor" in supported:
+            params["zFactor"] = float(self.spin_dem_zfactor.value())
+        if "scale" in supported:
+            params["scale"] = float(self.spin_dem_scale.value())
 
         # P4-04：表达式计算
         if "calc" in supported:
@@ -770,6 +820,15 @@ class CapabilityFormWidget(QWidget):
         """
         if capability_id == "gdal:statistics":
             return None
+        if capability_id == "gdal:dem":
+            dem_violations = validate_output_format(
+                out_fmt,
+                dtype="Float32",
+                bands=1,
+                has_nodata=False,
+                has_alpha=False,
+            )
+            return "；".join(dem_violations) if dem_violations else None
         has_nodata_param = any(
             params.get(key) is not None
             for key in ("srcNodata", "vrtNodata", "dstNodata", "noData")
@@ -932,6 +991,8 @@ class CapabilityFormWidget(QWidget):
         elif cid in {"gdal:merge", "gdal_merge", "gdal:stack", "gdal:bandmanage"}:
             # P4-02 组合能力的输出容器由用户选择；Worker 消费 format 参数，
             # 并在写盘前按 S4 矩阵拒绝不支持的组合。
+            params["format"] = out_fmt
+        elif cid == "gdal:dem":
             params["format"] = out_fmt
         elif cid == "gdal:calc":
             # 表达式成果是真实栅格，格式选项必须下发给 worker（默认 GTiff）

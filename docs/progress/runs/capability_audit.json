@@ -7,20 +7,20 @@
     "ratio": 0.9888
   },
   "callable": {
-    "count": 235,
-    "ratio": 0.5246
+    "count": 236,
+    "ratio": 0.5268
   },
   "platform_executable": {
-    "count": 5,
-    "ratio": 0.0112
+    "count": 6,
+    "ratio": 0.0134
   },
   "verified": {
     "count": 5,
     "ratio": 0.0112
   },
   "missing": {
-    "count": 8,
-    "ratio": 0.0179,
+    "count": 7,
+    "ratio": 0.0156,
     "items": [
       {
         "capability_id": "gdal:cli:gdal_auth",
@@ -32,18 +32,6 @@
         "binding": "none",
         "limitations": [
           "Windows QGIS 运行时未编译该独立命令；凭据在当前版本需通过环境变量或配置文件提供"
-        ]
-      },
-      {
-        "capability_id": "gdal:dem",
-        "name": "GDAL DEM 数字高程地形分析",
-        "provider": "gdal",
-        "kind": "algorithm",
-        "presence": "present",
-        "availability": "blocked",
-        "binding": "indexed",
-        "limitations": [
-          "平台适配器暂未接入该算法执行器；CLI 工具可正常调用"
         ]
       },
       {
@@ -130,20 +118,20 @@
         "ratio": 0.9951
       },
       "callable": {
-        "count": 197,
-        "ratio": 0.484
+        "count": 198,
+        "ratio": 0.4865
       },
       "platform_executable": {
-        "count": 4,
-        "ratio": 0.0098
+        "count": 5,
+        "ratio": 0.0123
       },
       "verified": {
         "count": 4,
         "ratio": 0.0098
       },
       "missing": {
-        "count": 5,
-        "ratio": 0.0123,
+        "count": 4,
+        "ratio": 0.0098,
         "items": [
           {
             "capability_id": "gdal:cli:gdal_auth",
@@ -155,18 +143,6 @@
             "binding": "none",
             "limitations": [
               "Windows QGIS 运行时未编译该独立命令；凭据在当前版本需通过环境变量或配置文件提供"
-            ]
-          },
-          {
-            "capability_id": "gdal:dem",
-            "name": "GDAL DEM 数字高程地形分析",
-            "provider": "gdal",
-            "kind": "algorithm",
-            "presence": "present",
-            "availability": "blocked",
-            "binding": "indexed",
-            "limitations": [
-              "平台适配器暂未接入该算法执行器；CLI 工具可正常调用"
             ]
           },
           {
@@ -288,7 +264,7 @@
       "gdal:stack",
       "gdal:statistics"
     ],
-    "gap_count": 8,
+    "gap_count": 7,
     "missing_or_blocked": [
       {
         "capability_id": "gdal:cli:gdal_auth",
@@ -299,17 +275,6 @@
         "binding": "none",
         "limitations": [
           "Windows QGIS 运行时未编译该独立命令；凭据在当前版本需通过环境变量或配置文件提供"
-        ]
-      },
-      {
-        "capability_id": "gdal:dem",
-        "name": "GDAL DEM 数字高程地形分析",
-        "provider": "gdal",
-        "presence": "present",
-        "availability": "blocked",
-        "binding": "indexed",
-        "limitations": [
-          "平台适配器暂未接入该算法执行器；CLI 工具可正常调用"
         ]
       },
       {
@@ -393,7 +358,7 @@
           "gdal:stack",
           "gdal:statistics"
         ],
-        "gap_count": 5,
+        "gap_count": 4,
         "unexplained_gap_count": 0
       },
       "rasterio": {

@@ -257,6 +257,8 @@ class GDALProviderAdapter(ProviderAdapter):
         # --- P4-03：元数据编辑 / 概览构建（in-place）---
         "gdal:editmeta",
         "gdal:overview",
+        # --- P5-02：地形分析 ---
+        "gdal:dem",
         # --- P4-04：受限表达式计算 / 直方图与基础统计 ---
         "gdal:calc",
         P404_STATISTICS_CAPABILITY,
@@ -593,6 +595,33 @@ class GDALProviderAdapter(ProviderAdapter):
             )
 
         is_warp = spec.capability_id in ("gdal:warp", "gdalwarp")
+        is_dem = spec.capability_id == "gdal:dem"
+
+        # DEM 地形分析输出固定为 Float32 单波段；输入可能是 Byte/UInt16，
+        # 不能只按源 dtype 判断格式矩阵，否则 PNG/JPEG 会在提交后才失败。
+        if is_dem:
+            dem_format_violations = validate_output_format(
+                out_format,
+                dtype="Float32",
+                bands=1,
+                has_nodata=False,
+                has_alpha=False,
+            )
+            if dem_format_violations:
+                context.log(
+                    "ERROR",
+                    f"DEM 输出格式不受支持: {dem_format_violations}",
+                )
+                return TaskResult(
+                    task_id=spec.task_id,
+                    attempt=spec.attempt,
+                    status=TaskStatus.failed,
+                    error={
+                        "code": "unsupported_format_combination",
+                        "message": "；".join(dem_format_violations),
+                    },
+                    duration_seconds=round(time.monotonic() - start_time, 4),
+                )
 
         # 重采样算法：契约已保证是受支持的 canonical 名，这里只做名字 -> GDAL 常量映射
         resample_alg = _resample_gdal_constants()[norm.get("resampleAlg", "nearest")]
@@ -650,7 +679,26 @@ class GDALProviderAdapter(ProviderAdapter):
                 )
 
         try:
-            if is_warp:
+            if is_dem:
+                dem_processing = norm.get("processing")
+                if not dem_processing:
+                    raise ValueError("gdal:dem 需要 processing 参数")
+                dem_kwargs: dict[str, Any] = {
+                    "format": out_format,
+                    "creationOptions": creation_options,
+                    "callback": _gdal_cb,
+                }
+                if norm.get("zFactor") is not None:
+                    dem_kwargs["zFactor"] = float(norm["zFactor"])
+                if norm.get("scale") is not None:
+                    dem_kwargs["scale"] = float(norm["scale"])
+                ds = gdal.DEMProcessing(
+                    str(staged_path),
+                    str(in_path),
+                    str(dem_processing),
+                    options=gdal.DEMProcessingOptions(**dem_kwargs),
+                )
+            elif is_warp:
                 warp_kwargs: dict[str, Any] = {
                     "format": out_format,
                     "resampleAlg": resample_alg,
@@ -765,7 +813,9 @@ class GDALProviderAdapter(ProviderAdapter):
                     error={"code": "task_cancelled", "message": "Operation cancelled by user"},
                     duration_seconds=round(time.monotonic() - start_time, 4),
                 )
-            op_name = "Warp" if is_warp else "Translate"
+            op_name = (
+                "DEMProcessing" if is_dem else ("Warp" if is_warp else "Translate")
+            )
             context.log("ERROR", f"GDAL {op_name} failed: {exc}")
             return TaskResult(
                 task_id=spec.task_id,
@@ -788,7 +838,9 @@ class GDALProviderAdapter(ProviderAdapter):
                     error={"code": "task_cancelled", "message": "Operation cancelled by user"},
                     duration_seconds=round(time.monotonic() - start_time, 4),
                 )
-            op_name = "Warp" if is_warp else "Translate"
+            op_name = (
+                "DEMProcessing" if is_dem else ("Warp" if is_warp else "Translate")
+            )
             return TaskResult(
                 task_id=spec.task_id,
                 attempt=spec.attempt,

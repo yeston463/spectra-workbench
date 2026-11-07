@@ -25,6 +25,7 @@ from collections.abc import Mapping
 from typing import Any
 
 __all__ = [
+    "DEM_PROCESSINGS",
     "ParameterError",
     "RESAMPLE_ALGORITHMS",
     "RESAMPLE_ALIASES",
@@ -145,6 +146,10 @@ _PARAM_ALIASES: dict[str, tuple[str, ...]] = {
     # --- P4-03 元数据 / 概览 ---
     "levels": ("levels", "overview_levels", "decimations"),
     "overviewCompress": ("overview_compress", "ovr_compress"),
+    # --- P5-02 地形分析 ---
+    "processing": ("processing", "dem_processing", "dem_mode"),
+    "zFactor": ("z_factor", "zfactor", "z_scale"),
+    "scale": ("scale", "vertical_scale"),
     # --- P4-04 表达式 / 直方图与基础统计 ---
     "calc": ("calc_expr", "expression", "formula"),
     "statisticsMode": ("mode", "stats_mode", "statistics_mode"),
@@ -179,6 +184,17 @@ OVERVIEW_RESAMPLINGS: tuple[str, ...] = (
 
 #: 概览压缩方式（作用于内嵌概览或外部 .ovr——两者本质都是 GTiff）。
 OVERVIEW_COMPRESSIONS: tuple[str, ...] = ("NONE", "DEFLATE", "LZW")
+
+#: GDAL DEMProcessing 支持的地形模式。
+#: color-relief 需要额外颜色表文件，当前未接入，故不列入可提交集合。
+DEM_PROCESSINGS: tuple[str, ...] = (
+    "hillshade",
+    "slope",
+    "aspect",
+    "TRI",
+    "TPI",
+    "roughness",
+)
 
 #: 允许出现在 parameters 里、但不属于上述栅格几何参数的非几何键。
 _OTHER_ALLOWED_KEYS: frozenset[str] = frozenset(
@@ -287,6 +303,8 @@ _CAPABILITY_SUPPORT: dict[str, frozenset[str]] = {
     # --- P4-03：元数据编辑 / 概览构建（均为 in-place 更新）---
     "gdal:editmeta": frozenset({"srcNodata"}),
     "gdal:overview": frozenset({"resampleAlg", "levels", "overviewCompress"}),
+    # --- P5-02：地形分析 ---
+    "gdal:dem": frozenset({"processing", "zFactor", "scale"}),
     # --- P4-04：受限表达式计算 / 直方图与基础统计 ---
     "gdal:calc": frozenset({"calc", "srcNodata", "dstNodata", "outputType"}),
     "gdal:statistics": frozenset(
@@ -615,6 +633,31 @@ def normalize_raster_params(
         if not isinstance(value, bool):
             raise ParameterError(f"relativePaths 必须是布尔值，实际 {value!r}")
         out["relativePaths"] = value
+
+    # 11.6) P5-02：地形分析
+    if "processing" in collected:
+        _, value = collected["processing"]
+        raw_processing = str(value).strip()
+        canonical_by_lower = {p.lower(): p for p in DEM_PROCESSINGS}
+        canonical = canonical_by_lower.get(raw_processing.lower())
+        if canonical is None:
+            if raw_processing.lower() == "color-relief":
+                raise ParameterError(
+                    "processing='color-relief' 需要额外颜色表文件，当前未接入；"
+                    f"可用：{', '.join(DEM_PROCESSINGS)}"
+                )
+            raise ParameterError(
+                f"未知的地形模式 {value!r}；可用：{', '.join(DEM_PROCESSINGS)}"
+            )
+        out["processing"] = canonical
+
+    if "zFactor" in collected:
+        _, value = collected["zFactor"]
+        out["zFactor"] = _require_finite_float(value, "zFactor")
+
+    if "scale" in collected:
+        _, value = collected["scale"]
+        out["scale"] = _require_positive_float(value, "scale")
 
     if "levels" in collected:
         _, value = collected["levels"]
