@@ -176,6 +176,9 @@ _PARAM_ALIASES: dict[str, tuple[str, ...]] = {
     "bandB": ("band_b", "bandB"),
     "saviL": ("savi_l", "saviL"),
     "usePhysical": ("use_physical", "physical_values"),
+    # --- P6-02 FFT 滤波 / 去条纹 ---
+    "fftBand": ("fft_band", "fftBand"),
+    "suppressBins": ("suppress_bins", "fft_suppress"),
     # --- P4-04 表达式 / 直方图与基础统计 ---
     "calc": ("calc_expr", "expression", "formula"),
     "statisticsMode": ("mode", "stats_mode", "statistics_mode"),
@@ -367,6 +370,10 @@ _CAPABILITY_SUPPORT: dict[str, frozenset[str]] = {
     # --- P6-01：光谱指数（成果为单波段 Float32 栅格）---
     "gdal:sindex": frozenset(
         {"sindex", "bandA", "bandB", "saviL", "usePhysical", "srcNodata", "dstNodata"}
+    ),
+    # --- P6-02：FFT 滤波 / 去条纹（成果为单波段 Float32 栅格 + 掩膜 sidecar）---
+    "gdal:fftfilter": frozenset(
+        {"fftBand", "suppressBins", "srcNodata", "dstNodata"}
     ),
     # --- P4-04：受限表达式计算 / 直方图与基础统计 ---
     "gdal:calc": frozenset({"calc", "srcNodata", "dstNodata", "outputType"}),
@@ -842,6 +849,30 @@ def normalize_raster_params(
         if not isinstance(value, bool):
             raise ParameterError(f"参数 usePhysical 必须是布尔值，实际 {value!r}")
         out["usePhysical"] = value
+
+    # 11.14) P6-02：FFT 滤波
+    if "fftBand" in collected:
+        _, value = collected["fftBand"]
+        out["fftBand"] = _require_positive_int(value, "fftBand")
+    if "suppressBins" in collected:
+        _, value = collected["suppressBins"]
+        if not isinstance(value, (list, tuple)):
+            raise ParameterError(
+                "参数 suppressBins 必须是 [fy, fx] 对的列表，例：[[0, 4], [0, -4]]"
+            )
+        bins: list[tuple[int, int]] = []
+        for v in value:
+            if not isinstance(v, (list, tuple)) or len(v) != 2:
+                raise ParameterError(
+                    f"suppressBins 的元素必须是 [fy, fx] 二元组，实际 {v!r}"
+                )
+            fy, fx = v
+            if not _is_int_like(fy) or not _is_int_like(fx):
+                raise ParameterError(
+                    f"suppressBins 的 fy/fx 必须是整数（不接受小数截断），实际 {v!r}"
+                )
+            bins.append((int(fy), int(fx)))
+        out["suppressBins"] = bins
 
     # 11.12) P5-04：矢量处理 / SQL / 坐标转换
     if "sql" in collected:

@@ -412,6 +412,20 @@ class CapabilityFormWidget(QWidget):
         self.lbl_use_physical = QLabel("物理量 (usePhysical):")
         self.params_form.addRow(self.lbl_use_physical, self.chk_use_physical)
 
+        # --- P6-02 FFT 频域滤波 / 去条纹 ---
+        self.spin_fft_band = QSpinBox()
+        self.spin_fft_band.setRange(1, 999)
+        self.spin_fft_band.setValue(1)
+        self.lbl_fft_band = QLabel("FFT 处理波段 (fftBand，1-based):")
+        self.params_form.addRow(self.lbl_fft_band, self.spin_fft_band)
+
+        self.txt_fft_suppress = QLineEdit()
+        self.txt_fft_suppress.setPlaceholderText(
+            "留空=恒等往返；每对 [fy,fx] 用分号分隔，例：0,4;0,-4（自动补厄米对称伙伴）"
+        )
+        self.lbl_fft_suppress = QLabel("抑制频率 bin (suppressBins):")
+        self.params_form.addRow(self.lbl_fft_suppress, self.txt_fft_suppress)
+
         # --- P4-03 概览构建 ---
         self.txt_levels = QLineEdit()
         self.txt_levels.setPlaceholderText("严格递增、每个≥2；例：2,4,8")
@@ -722,6 +736,13 @@ class CapabilityFormWidget(QWidget):
         self._set_row_visible(
             self.lbl_use_physical, self.chk_use_physical, "usePhysical" in sup
         )
+        # P6-02 FFT 滤波 / 去条纹
+        self._set_row_visible(
+            self.lbl_fft_band, self.spin_fft_band, "fftBand" in sup
+        )
+        self._set_row_visible(
+            self.lbl_fft_suppress, self.txt_fft_suppress, "suppressBins" in sup
+        )
         self._set_row_visible(self.lbl_levels, self.txt_levels, "levels" in sup)
         self._set_row_visible(self.lbl_ovr_compress, self.cmb_ovr_compress, "overviewCompress" in sup)
         # P4-04
@@ -859,6 +880,10 @@ class CapabilityFormWidget(QWidget):
             self.spin_savi_l.setValue(0.5)
         if "usePhysical" not in supported:
             self.chk_use_physical.setChecked(True)
+        if "fftBand" not in supported:
+            self.spin_fft_band.setValue(1)
+        if "suppressBins" not in supported:
+            self.txt_fft_suppress.clear()
         if "levels" not in supported:
             self.txt_levels.clear()
         if "overviewCompress" not in supported:
@@ -1077,6 +1102,37 @@ class CapabilityFormWidget(QWidget):
             # True 是 Worker 侧默认值；关闭物理量换算才显式下发
             params["usePhysical"] = False
 
+        # P6-02：FFT 频域滤波 / 去条纹
+        if "fftBand" in supported:
+            params["fftBand"] = int(self.spin_fft_band.value())
+        if "suppressBins" in supported:
+            raw_bins = self.txt_fft_suppress.text().strip()
+            if raw_bins:
+                pairs: list[list[int]] = []
+                # 每对 [fy,fx] 用分号分隔；逗号只作分量分隔符。
+                for chunk in raw_bins.replace("；", ";").split(";"):
+                    chunk = chunk.strip()
+                    if not chunk:
+                        continue
+                    parts_bin = [
+                        x.strip() for x in chunk.replace("，", ",").split(",") if x.strip()
+                    ]
+                    if len(parts_bin) != 2:
+                        return params, (
+                            "suppressBins 每对必须是 [fy,fx] 两个整数，"
+                            f"当前片段为：{chunk}"
+                        )
+                    try:
+                        fy, fx = int(parts_bin[0]), int(parts_bin[1])
+                    except ValueError:
+                        return params, (
+                            "suppressBins 的 fy/fx 必须是整数（不接受小数截断），"
+                            f"当前片段为：{chunk}"
+                        )
+                    pairs.append([fy, fx])
+                if pairs:
+                    params["suppressBins"] = pairs
+
         # P4-04：表达式计算
         if "calc" in supported:
             raw_expr = self.txt_calc.text().strip()
@@ -1231,16 +1287,16 @@ class CapabilityFormWidget(QWidget):
                 has_alpha=False,
             )
             return "；".join(grid_violations) if grid_violations else None
-        if capability_id == "gdal:sindex":
-            # 光谱指数：输出恒为单波段 Float32 且必设 NoData
-            sindex_violations = validate_output_format(
+        if capability_id in ("gdal:sindex", "gdal:fftfilter"):
+            # 光谱指数 / FFT 滤波：输出恒为单波段 Float32 且必设 NoData
+            violations = validate_output_format(
                 out_fmt,
                 dtype="Float32",
                 bands=1,
                 has_nodata=True,
                 has_alpha=False,
             )
-            return "；".join(sindex_violations) if sindex_violations else None
+            return "；".join(violations) if violations else None
         has_nodata_param = any(
             params.get(key) is not None
             for key in ("srcNodata", "vrtNodata", "dstNodata", "noData")
@@ -1416,11 +1472,14 @@ class CapabilityFormWidget(QWidget):
             params["format"] = out_fmt
         elif cid == "gdal:dem":
             params["format"] = out_fmt
-        elif cid in {"gdal:rasterize", "gdal:grid"}:
+        elif cid in {"gdal:rasterize", "gdal:grid", "gdal:sindex", "gdal:fftfilter"}:
+            # 这四个能力都真实消费 format；此前 sindex/fftfilter 漏发 format，
+            # 会导致 GUI 里选 COG/ENVI 仍被 Worker 静默写成 GTiff。
             params["format"] = out_fmt
-            raw_type = self.cmb_out_type.currentText()
-            if "Default" not in raw_type:
-                params["output_type"] = raw_type.split()[0]
+            if cid in {"gdal:rasterize", "gdal:grid"}:
+                raw_type = self.cmb_out_type.currentText()
+                if "Default" not in raw_type:
+                    params["output_type"] = raw_type.split()[0]
         elif is_vector_output(cid):
             # P5-02 矢量成果：GPKG / GeoJSON 由 OGR 驱动矩阵校验（GUI 预检 + Worker）
             params["format"] = out_fmt

@@ -35,6 +35,9 @@ _SIDECAR_SUFFIXES = {
     ".aux.xml",
     ".ovr",
     ".msk",
+    # P6-02：FFT 掩膜 sidecar 与成果同名（<成果名>.fft_mask.json），
+    # 覆盖旧成果时必须作为 owned sidecar 参与事务删除/替换。
+    ".fft_mask.json",
     ".wld",
     ".tfw",
     ".tifw",
@@ -83,7 +86,16 @@ class SidecarReport:
 
 
 def _suffixes_for_target(target: Path) -> set[str]:
-    suffixes = {".wld", ".hdr", ".aux.xml", ".ovr", ".msk", ".enp", ".sta"}
+    suffixes = {
+        ".wld",
+        ".hdr",
+        ".aux.xml",
+        ".ovr",
+        ".msk",
+        ".enp",
+        ".sta",
+        ".fft_mask.json",
+    }
     suffix = target.suffix.lower()
     if suffix in {".tif", ".tiff"}:
         suffixes.update({".tfw", ".tifw"})
@@ -100,7 +112,7 @@ def known_sidecar_candidates(target: Path) -> list[Path]:
     """Return existing files that follow known sidecar naming for this target."""
     candidates: set[Path] = set()
     for suffix in _suffixes_for_target(target):
-        if suffix == ".aux.xml" or suffix == ".ovr" or suffix == ".msk":
+        if suffix in {".aux.xml", ".ovr", ".msk", ".fft_mask.json"}:
             candidates.add(target.with_name(target.name + suffix))
         else:
             candidates.add(target.with_suffix(suffix))

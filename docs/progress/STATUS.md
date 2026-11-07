@@ -1,6 +1,6 @@
 # 执行状态
 
-更新：2026-11-07（第 58 轮 · P6-01 光谱指数 gdal:sindex 端到端：NDVI/NDWI/NBR/SAVI 按波段元数据 scale/offset 换算物理量（usePhysical 可关）、无效区三源进输出 NoData；合成值逐像元公式断言（原值 1/3 vs 物理量 0.0/−1/3/−3.0）、SAVI L=0 退化实测修复零值 truthiness 缺陷；**P6-01 转 done**。Clean 全量 693 项 / 0 失败 / rc=0 / clean_exit_verified=true。第 57 轮 implemented 收官 19 项转 done）
+更新：2026-11-07（第 59 轮 · P6-02 FFT 频域滤波/去条纹 gdal:fftfilter 端到端：8×8/7×9 合成图往返、频率定位、厄米掩膜对称与 sidecar 复现全部数值验收；复数输入明确拒绝；修复第 58 轮 sindex 门禁回归并补齐 sindex/fftfilter 的 format 下发；**P6-02 转 done**。Clean 全量 717 项 / 0 失败 / rc=0 / clean_exit_verified=true）
 
 ## 当前里程碑
 
@@ -24,7 +24,8 @@
   - **P5-04 矢量处理、SQL 与坐标转换**：**done**（第 55 轮）。`ogr:vectortranslate`（ogr2ogr 通道）接入：GPKG/GeoJSON/Shapefile/FlatGeobuf 转换、OGR SQL、where/select 属性过滤、spat 空间过滤（源 CRS 单位）、dstSRS 重投影（恒配 reproject=True + 无 SRS 源预检拒绝，杜绝假重投影）；已知坐标/轴序/空间关系/字段值逐项断言。
   - **P5-05 驱动读写能力及高级选项**：**done**（第 56 轮）。`describe_driver` 暴露 DCAP 四访问模式声明与 `DMD_CREATIONOPTIONLIST` 高级选项；ENVI/GPKG/GTiff/COG + 扩展驱动（netCDF/BMP/FlatGeobuf/GeoJSON/PNG/JPEG）四模式分开实测，已装可打开驱动枚举 180+；声明 vs 实况错位六项白名单化（ENVI CreateCopy 等元数据保守项），新错位强制显式过目。**P5 里程碑 P5-01~05 全部 done。**
 - **P6 遥感专题处理**：
-  - **P6-01 光谱、剖面、NDVI 等指数**：**done**（第 58 轮）。`gdal:sindex`（NDVI/NDWI/NBR/SAVI，numpy 求值）：物理量 = 原值 × scale + offset（波段元数据驱动，usePhysical 可关）、无效区三源（NoData/分母零/非有限值）进输出 NoData；合成值逐像元公式断言（原值 1/3 vs 物理量 0.0/−1/3/−3.0）、SAVI L=0 退化实测并修复零值 truthiness 缺陷。架构边界：science 独立 worker 待 sw-science 环境补装（registry 已声明），EVI 三波段指数与光谱剖面曲线归后续。
+  - **P6-01 光谱、剖面、NDVI 等指数**：**done**（第 58 轮）。`gdal:sindex`（NDVI/NDWI/NBR/SAVI，numpy 求值）：物理量 = 原值 × scale + offset（波段元数据驱动，usePhysical 可关）、无效区三源（NoData/分母零/非有限值）进输出 NoData；合成值逐像元公式断言（原值 1/3 vs 物理量 0.0/−1/3/−3.0）、SAVI L=0 退化实测并修复零值 truthiness 缺陷。架构边界：science 独立 worker 待 sw-science 环境补装（registry 已声明），EVI 三波段指数与光谱剖面曲线归后续。第 59 轮修复 P6-02 重构误伤的 sindex 门禁回归，并补齐 GUI 的 format 下发。
+  - **P6-02 FFT 专用界面与去条纹**：**done**（第 59 轮）。`gdal:fftfilter`（numpy.fft）：FFT2 → 厄米对称抑制掩膜 → IFFT2 → 单波段 Float32 + 掩膜 sidecar；8×8/7×9 合成图空抑制往返、已知条纹频率定位（抑制 (0,2) 后逐像元等于剩余正弦）、对称伙伴 (0,W−2) 与 sidecar 重跑复现全部数值验收；NoData 标签/像元一致；复数输入明确拒绝；GUI 支持 fftBand/suppressBins 与 ENVI 等格式真实下发。遗留：分块/流式 FFT、频谱中心化与交互式掩膜编辑 UI 归后续。
 
 ## 原 P3 验收标准逐项对账与剩余缺口
 
@@ -234,6 +235,35 @@ CRT 检测到栈状态异常后立即终止进程，这正是 `STATUS_STACK_BUFF
 |---|---|---|
 | 用合成影像完成同类验收 | 已满足 | 合成 ENVI/GTiff/GeoJSON/netCDF 样例覆盖多波段、像元数值、ROI 与对比 |
 | 保留真实数据待验状态 | **待验** | 课程原始数据位于 `C:\Users\赵航\Desktop\studio\_chaoxing_rs`（**只读**，不得运行其中的抓取/下载/OCR 脚本）；本轮全部用合成影像验收，未对课程原始 ENVI 栅格与 lena.tif 做真实打开验证 |
+
+### 第 59 轮：P6-02 FFT 频域滤波 / 去条纹（P6-02 → done）
+
+**一、实现**
+
+- 新增 `providers/gdal_provider/fft_ops.py`：单波段实数栅格 **FFT2 → 厄米对称抑制掩膜 → IFFT2 → Float32** 成果；空 `suppressBins` 为恒等往返（相对容差校验），抑制 bin 允许负数并按 `fftfreq` 语义模归一化、自动补 `(−fy,−fx)` 伙伴；逆变换虚部超容差即报实现缺陷；NoData 像元以波段均值填充参与 FFT、逆变换后按原始有效掩膜回填输出 NoData；**复数输入明确拒绝**（不静默丢弃虚部）。
+- 掩膜 sidecar `<成果名>.fft_mask.json` 记录 requested/applied bins、尺寸、`hermitian_symmetric` 与输出 NoData；用 applied bins 重跑可逐像元复现。sidecar 所有权识别 `.fft_mask.json`，覆盖旧成果时随事务替换，不残留陈旧掩膜。
+- 契约/接线：`fftBand`/`suppressBins`/`srcNodata`/`dstNodata` 别名与支持矩阵；adapter 新增 `SUPPORTED_CAPABILITIES`、格式门禁（恒单波段 Float32+NoData，PNG/JPEG 写盘前拒绝）与执行分支；registry 新增平台能力编目；GUI 新增 fftBand 微调框、suppressBins 文本解析（分号分隔 `[fy,fx]` 对、整数校验）与状态隔离，预检按 Float32/1 波段/必设 NoData。
+- **修复第 58 轮 P6-01 回归**：未提交的 FFT 重构把 `if not bandA or not bandB` 误改成 `if is_sindex`，导致所有 sindex 任务无条件失败；已恢复条件并用 `is None` 守零值铁律，`bandA==bandB` 分支重新可达。同时补齐 sindex/fftfilter 的 `format` 下发——此前 GUI 选择 COG/ENVI 会被 Worker 静默写成 GTiff。
+
+**二、数值验收（独立 GDAL 重开）**
+
+- 8×8 与 7×9 合成图 = 常量 10 + x 方向 `cos(2π·2x/W)` + y 方向 `sin(2π·y/H)`。
+- **往返**：空 suppressBins 输出逐像元等于输入，最大误差 ≤ 1e-4。
+- **频率定位**：抑制 (0,2) 后 x 条纹消失，输出逐像元等于 `10 + 5sin(2π·y/H)`（≤ 1e-4）。
+- **掩膜对称性**：sidecar 的 applied bins 含 (0,2) 与厄米伙伴 (0,W−2)；逐项 `mask[fy,fx] == mask[(−fy)%H,(−fx)%W]`。
+- **保存掩膜可复现**：用 sidecar applied bins 重跑第二份成果，逐像元一致（≤ 1e-6）。
+- **NoData**：标签/像元/计数三者一致，其余像元无 NaN/Inf；**ENVI** 输出真实写出 `.dat/.hdr` 且掩膜 sidecar 成套提交；PNG 写盘前拒绝；缺 fftBand、越界波段、非法 suppressBins、复数输入均明确拒绝且不落盘；覆盖写后旧掩膜被新掩膜替换。
+
+**三、验证**
+
+- 新增 `tests/unit/test_p6_fft_ops.py`（14 项）、`tests/integration/test_p6_fft.py`（9 项）、`tests/integration/test_p6_fft_gui.py`（1 项桌面路径）；四维审计/对账/算法计数同步为 **450/445/240/13**、算法规格 24→25、GDAL 编目 408→409。
+- 受影响定向：266 项单测、13 项 P6-01/P6-02 集成、2 项 P6 GUI、30 项 sidecar/表单回归全绿。
+- Ruff 干净；Mypy 70 个源文件 0 错误；Clean 全量：**717 passed / 0 failed / rc=0 / clean_exit_verified=true**（475.89s，residual=0、cleanup_complete=true）。
+
+**四、边界与结论**
+
+- 验收「往返、频率定位、掩膜对称性、复数/奇偶尺寸通过；保存掩膜可复现」逐项满足——**P6-02 转 done**；账本现为 done 31 / implemented 1（P0-02）/ todo 23。
+- 遗留边界：分块/流式 FFT（当前整幅读入）、频谱中心化与交互式掩膜编辑 UI（本期为文本 bin 列表）归后续轮次。
 
 ### 第 58 轮：P6-01 光谱指数（P6-01 → done）
 

@@ -58,6 +58,7 @@ from spectra_workbench.providers.base import (
 )
 from spectra_workbench.providers.gdal_provider.calc_ops import run_calc
 from spectra_workbench.providers.gdal_provider.expression_ops import ExpressionError
+from spectra_workbench.providers.gdal_provider.fft_ops import fft_filter
 from spectra_workbench.providers.gdal_provider.index_ops import compute_index
 from spectra_workbench.providers.gdal_provider.metadata_ops import (
     apply_nodata,
@@ -305,6 +306,8 @@ class GDALProviderAdapter(ProviderAdapter):
         "ogr:vectortranslate",
         # --- P6-01：光谱指数（成果为单波段 Float32 栅格）---
         "gdal:sindex",
+        # --- P6-02：FFT 滤波 / 去条纹（成果为单波段 Float32 栅格 + 掩膜 sidecar）---
+        "gdal:fftfilter",
         # --- P4-04：受限表达式计算 / 直方图与基础统计 ---
         "gdal:calc",
         P404_STATISTICS_CAPABILITY,
@@ -601,7 +604,7 @@ class GDALProviderAdapter(ProviderAdapter):
             not is_p402
             and in_path is not None
             and spec.capability_id != P404_STATISTICS_CAPABILITY
-            and spec.capability_id not in ("gdal:rasterize", "gdal:grid", "gdal:sindex")
+            and spec.capability_id not in ("gdal:rasterize", "gdal:grid", "gdal:sindex", "gdal:fftfilter")
             and spec.capability_id not in VECTOR_OUTPUT_CAPABILITIES
         ):
             format_violations = self._general_format_violations(in_path, norm, out_format)
@@ -664,46 +667,58 @@ class GDALProviderAdapter(ProviderAdapter):
         is_rasterize = spec.capability_id == "gdal:rasterize"
         is_grid = spec.capability_id == "gdal:grid"
         is_sindex = spec.capability_id == "gdal:sindex"
+        is_fftfilter = spec.capability_id == "gdal:fftfilter"
 
-        if is_sindex:
-            # 光谱指数：输出恒为单波段 Float32 且必设 NoData；bandA/bandB 必填
-            sindex_violations = validate_output_format(
+        if is_sindex or is_fftfilter:
+            # 两能力输出恒为单波段 Float32 且必设 NoData；PNG/JPEG 写盘前拒绝
+            violations = validate_output_format(
                 out_format,
                 dtype="Float32",
                 bands=1,
                 has_nodata=True,
                 has_alpha=False,
             )
-            if sindex_violations:
-                context.log("ERROR", f"光谱指数输出格式不受支持: {sindex_violations}")
+            if violations:
+                label = "光谱指数" if is_sindex else "FFT 滤波"
+                context.log("ERROR", f"{label}输出格式不受支持: {violations}")
                 return TaskResult(
                     task_id=spec.task_id,
                     attempt=spec.attempt,
                     status=TaskStatus.failed,
                     error={
                         "code": "unsupported_format_combination",
-                        "message": "；".join(sindex_violations),
+                        "message": "；".join(violations),
                     },
                     duration_seconds=round(time.monotonic() - start_time, 4),
                 )
-            if not norm.get("bandA") or not norm.get("bandB"):
-                message = "gdal:sindex 需要显式给出 bandA 与 bandB（1-based 波段号；角色随指数，如 NDVI 的 A=NIR、B=Red）"
-                return TaskResult(
-                    task_id=spec.task_id,
-                    attempt=spec.attempt,
-                    status=TaskStatus.failed,
-                    error={"code": "invalid_parameters", "message": message},
-                    duration_seconds=round(time.monotonic() - start_time, 4),
-                )
-            if norm.get("bandA") == norm.get("bandB"):
-                message = "gdal:sindex 的 bandA 与 bandB 不能相同（同波段指数恒为 0 或无效）"
-                return TaskResult(
-                    task_id=spec.task_id,
-                    attempt=spec.attempt,
-                    status=TaskStatus.failed,
-                    error={"code": "invalid_parameters", "message": message},
-                    duration_seconds=round(time.monotonic() - start_time, 4),
-                )
+
+        if is_sindex and (norm.get("bandA") is None or norm.get("bandB") is None):
+            message = "gdal:sindex 需要显式给出 bandA 与 bandB（1-based 波段号；角色随指数，如 NDVI 的 A=NIR、B=Red）"
+            return TaskResult(
+                task_id=spec.task_id,
+                attempt=spec.attempt,
+                status=TaskStatus.failed,
+                error={"code": "invalid_parameters", "message": message},
+                duration_seconds=round(time.monotonic() - start_time, 4),
+            )
+        if is_sindex and norm.get("bandA") == norm.get("bandB"):
+            message = "gdal:sindex 的 bandA 与 bandB 不能相同（同波段指数恒为 0 或无效）"
+            return TaskResult(
+                task_id=spec.task_id,
+                attempt=spec.attempt,
+                status=TaskStatus.failed,
+                error={"code": "invalid_parameters", "message": message},
+                duration_seconds=round(time.monotonic() - start_time, 4),
+            )
+        if is_fftfilter and not norm.get("fftBand"):
+            message = "gdal:fftfilter 需要显式给出 fftBand（1-based 波段号）"
+            return TaskResult(
+                task_id=spec.task_id,
+                attempt=spec.attempt,
+                status=TaskStatus.failed,
+                error={"code": "invalid_parameters", "message": message},
+                duration_seconds=round(time.monotonic() - start_time, 4),
+            )
 
         if is_grid:
             grid_bands = 1
@@ -1049,6 +1064,35 @@ class GDALProviderAdapter(ProviderAdapter):
                 )
                 # 成果已写盘：重开交给共享流水线做 GetFileList/重开校验/事务提交
                 ds = gdal.Open(str(staged_path), gdal.GA_ReadOnly)
+            elif is_fftfilter:
+                # 零值/空列表合法：suppressBins 为空 = 恒等掩膜（往返校验路径）
+                suppress_bins = [
+                    (int(fy), int(fx)) for fy, fx in (norm.get("suppressBins") or [])
+                ]
+                fft_info = fft_filter(
+                    staged_path,
+                    in_path,  # type: ignore[arg-type]
+                    band=int(norm["fftBand"]),
+                    suppressed_bins=suppress_bins,
+                    src_nodata=(
+                        float(norm["srcNodata"]) if norm.get("srcNodata") is not None else None
+                    ),
+                    dst_nodata=(
+                        float(norm["dstNodata"]) if norm.get("dstNodata") is not None else -9999.0
+                    ),
+                    out_format=out_format,
+                    save_mask=True,
+                    callback=_gdal_cb,
+                )
+                context.log(
+                    "INFO",
+                    f"FFT 滤波完成：抑制 {len(fft_info['applied_suppressed_bins'])} 个 bin"
+                    f"（厄米对称），NoData 填充 {fft_info['n_nodata_filled']} 像元，"
+                    f"频域能量 {fft_info['energy_before']:.4g}→{fft_info['energy_after']:.4g}；"
+                    f"掩膜 sidecar：{fft_info['mask_sidecar']}",
+                )
+                # 掩膜 sidecar 在共享提交流程（step 5）按 tail 映射规则成套提交
+                ds = gdal.Open(str(staged_path), gdal.GA_ReadOnly)
             elif is_warp:
                 warp_kwargs: dict[str, Any] = {
                     "format": out_format,
@@ -1173,6 +1217,8 @@ class GDALProviderAdapter(ProviderAdapter):
                 if is_dem
                 else "Sindex"
                 if is_sindex
+                else "FFTFilter"
+                if is_fftfilter
                 else "Warp"
                 if is_warp
                 else "Translate"
@@ -1208,6 +1254,8 @@ class GDALProviderAdapter(ProviderAdapter):
                 if is_dem
                 else "Sindex"
                 if is_sindex
+                else "FFTFilter"
+                if is_fftfilter
                 else "Warp"
                 if is_warp
                 else "Translate"
@@ -1225,6 +1273,11 @@ class GDALProviderAdapter(ProviderAdapter):
         staged_files: list[Path] = [Path(f).resolve() for f in raw_files]
         if staged_path.resolve() not in staged_files:
             staged_files.insert(0, staged_path.resolve())
+        if is_fftfilter:
+            # P6-02：FFT 掩膜 sidecar 与成果成套提交（tail 映射规则自动适用）
+            mask_sidecar = staged_path.with_name(staged_path.name + ".fft_mask.json")
+            if mask_sidecar.exists():
+                staged_files.append(mask_sidecar.resolve())
         # 在 Windows 上显式关闭 dataset 释放文件锁
         del ds
 

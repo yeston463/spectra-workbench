@@ -63,6 +63,8 @@ CONNECTED_CAPABILITIES: frozenset[str] = frozenset(
         "gdal:statistics",
         # P6-01：光谱指数（成果为单波段栅格）
         "gdal:sindex",
+        # P6-02：FFT 滤波 / 去条纹（成果为单波段栅格 + 掩膜 sidecar）
+        "gdal:fftfilter",
     }
 )
 
@@ -123,6 +125,7 @@ FORMAT_CAPABILITIES: frozenset[str] = frozenset(
         "gdal:contour",
         "ogr:vectortranslate",
         "gdal:sindex",
+        "gdal:fftfilter",
         "gdal:calc",
     }
 )

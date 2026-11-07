@@ -1051,6 +1051,46 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
             ],
             validation_evidence=[],
         ),
+        CapabilityDescriptor(
+            capability_id="gdal:fftfilter",
+            descriptor_revision="1.0",
+            kind=CapabilityKind.algorithm,
+            name="平台 FFT 频域滤波与去条纹",
+            native_name="spectra_workbench.fft_ops（numpy.fft）",
+            category=["fft", "filter", "raster"],
+            description="单波段 FFT2 → 厄米对称频域抑制掩膜 → 逆 FFT2；掩膜 sidecar 记录抑制 bin 以复现成果。",
+            engine=_engine_spec(),
+            source=_source_spec("platform/fftfilter"),
+            parameters=[
+                ParameterSpec(key="fftBand", native_name="fftBand", label="处理波段（1-based）", type="integer", required=True),
+                ParameterSpec(key="suppressBins", native_name="suppressBins", label="抑制频率 bin [fy,fx] 列表（负数按模归一化，自动补对称伙伴；空=恒等往返）", type="list", required=False),
+                ParameterSpec(key="srcNodata", native_name="srcNodata", label="源 NoData 覆盖（缺省读波段标签）", type="number", required=False),
+                ParameterSpec(key="dstNodata", native_name="dstNodata", label="输出 NoData", type="number", required=False, default=-9999.0),
+            ],
+            inputs=[PortSpec(key="input", data_type=DatasetKind.raster, required=True, description="单波段输入栅格")],
+            outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="单波段 Float32 滤波成果")],
+            requirements=[Requirement(kind="package", name="numpy", reason="FFT 逐像元 numpy.fft 求值（gdal worker 运行时自带）")],
+            entrypoints=[
+                Entrypoint(kind="form", target="gdal:fftfilter", available=True, notes="平台适配器已接入（P6-02）"),
+            ],
+            state=CapabilityState(
+                presence=Presence.present,
+                binding=Binding.form,
+                validation=Validation.not_run,
+                availability=Availability.ready,
+            ),
+            effects="new_dataset",
+            cancellation="cooperative",
+            limitations=[
+                "输出恒为单波段 Float32；掩膜 sidecar 为 <成果名>.fft_mask.json（含抑制 bin 与对称伙伴清单，可复现）",
+                "源波段 NoData 像元以均值填充参与 FFT、逆变换后回填输出 NoData——大空洞场景物理意义有限",
+                "实数输入的掩膜自动补厄米对称伙伴，保证逆变换为实数（虚部幅度超容差即报实现缺陷）",
+                "抑制 bin 允许负数（fftfreq 语义），按模归一化到 [0,H)×[0,W)",
+                "仅接受实数波段；复数波段明确拒绝（不静默丢弃虚部）",
+                "FFT 需整幅读入内存（频域算法不可按窗口分块），超大影像的分块 FFT 归后续轮次",
+            ],
+            validation_evidence=[],
+        ),
     ]
 
 
