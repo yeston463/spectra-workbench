@@ -36,6 +36,7 @@ from PySide6.QtWidgets import (
 from spectra_workbench.domain.capability_wiring import (
     CONNECTED_CAPABILITIES,
     is_multi_input,
+    is_vector_output,
     supports_output_format,
 )
 from spectra_workbench.domain.models import (
@@ -45,7 +46,10 @@ from spectra_workbench.domain.models import (
     OutputPlan,
     TaskSpec,
 )
-from spectra_workbench.processing.output_formats import validate_output_format
+from spectra_workbench.processing.output_formats import (
+    validate_output_format,
+    validate_vector_output_format,
+)
 from spectra_workbench.processing.raster_params import (
     RESAMPLE_ALGORITHM_CHOICES,
     ParameterError,
@@ -55,6 +59,12 @@ from spectra_workbench.processing.raster_params import (
 
 if TYPE_CHECKING:
     from spectra_workbench.domain.models import CapabilityDescriptor
+
+
+#: 输出格式下拉的候选项按能力族切换：
+#: 栅格成果走栅格驱动矩阵，矢量成果（P5-02 polygonize/contour）走 OGR 驱动。
+_RASTER_FORMAT_ITEMS = ["GTiff (GeoTIFF)", "ENVI (.dat/.hdr)", "COG (云优化 GeoTIFF)", "PNG", "JPEG"]
+_VECTOR_FORMAT_ITEMS = ["GPKG (GeoPackage)", "GeoJSON (.geojson)"]
 
 
 
@@ -293,6 +303,19 @@ class CapabilityFormWidget(QWidget):
         self.lbl_zfield = QLabel("高程字段 (zField):")
         self.params_form.addRow(self.lbl_zfield, self.txt_zfield)
 
+        # --- P5-02 栅格矢量化（成果为矢量）---
+        self.txt_field_name = QLineEdit()
+        self.txt_field_name.setPlaceholderText("像元值保存字段名，默认 DN")
+        self.txt_field_name.setText("DN")
+        self.lbl_field_name = QLabel("值字段名 (fieldName):")
+        self.params_form.addRow(self.lbl_field_name, self.txt_field_name)
+
+        self.cmb_connectedness = QComboBox()
+        self.cmb_connectedness.addItem("4 邻域 (connectedness=4)", 4)
+        self.cmb_connectedness.addItem("8 邻域 (connectedness=8)", 8)
+        self.lbl_connectedness = QLabel("连通性 (connectedness):")
+        self.params_form.addRow(self.lbl_connectedness, self.cmb_connectedness)
+
         # --- P4-03 概览构建 ---
         self.txt_levels = QLineEdit()
         self.txt_levels.setPlaceholderText("严格递增、每个≥2；例：2,4,8")
@@ -441,8 +464,25 @@ class CapabilityFormWidget(QWidget):
         p = Path(path).resolve()
         self.txt_input.setText(str(p))
         if not self.txt_output.text():
-            out_name = f"{p.stem}_processed.tif"
+            # 矢量成果（P5-02）默认 GeoPackage 容器，避免推荐 .tif 后缀误导
+            suffix = ".gpkg" if self._is_vector_cap() else ".tif"
+            out_name = f"{p.stem}_processed{suffix}"
             self.txt_output.setText(str(p.parent / out_name))
+
+    def _is_vector_cap(self) -> bool:
+        cap = self._current_cap
+        return cap is not None and is_vector_output(cap.capability_id)
+
+    def _apply_format_choices(self, capability_id: str) -> None:
+        """按能力族重填输出格式下拉（矢量成果只有 GPKG / GeoJSON）。"""
+        items = _VECTOR_FORMAT_ITEMS if is_vector_output(capability_id) else _RASTER_FORMAT_ITEMS
+        current_items = [self.cmb_format.itemText(i) for i in range(self.cmb_format.count())]
+        if current_items == items:
+            return
+        self.cmb_format.blockSignals(True)
+        self.cmb_format.clear()
+        self.cmb_format.addItems(items)
+        self.cmb_format.blockSignals(False)
 
     def load_capability(self, cap: CapabilityDescriptor) -> None:
         """载入并呈现一项能力的参数配置表单或未支持说明。"""
@@ -496,6 +536,8 @@ class CapabilityFormWidget(QWidget):
         )
         self.lbl_format.setVisible(show_format)
         self.cmb_format.setVisible(show_format)
+        # 矢量成果（P5-02）的格式候选项与栅格不同，按能力族重填
+        self._apply_format_choices(cid)
 
         show_out_type = is_translate or is_rasterize or is_grid or "outputType" in sup
         self.lbl_out_type.setVisible(show_out_type)
@@ -548,6 +590,13 @@ class CapabilityFormWidget(QWidget):
             self.lbl_grid_algorithm, self.cmb_grid_algorithm, "algorithm" in sup
         )
         self._set_row_visible(self.lbl_zfield, self.txt_zfield, "zField" in sup)
+        # P5-02 栅格矢量化（成果为矢量）
+        self._set_row_visible(
+            self.lbl_field_name, self.txt_field_name, "fieldName" in sup
+        )
+        self._set_row_visible(
+            self.lbl_connectedness, self.cmb_connectedness, "connectedness" in sup
+        )
         self._set_row_visible(self.lbl_levels, self.txt_levels, "levels" in sup)
         self._set_row_visible(self.lbl_ovr_compress, self.cmb_ovr_compress, "overviewCompress" in sup)
         # P4-04
@@ -654,6 +703,10 @@ class CapabilityFormWidget(QWidget):
             self.cmb_grid_algorithm.setCurrentIndex(0)
         if "zField" not in supported:
             self.txt_zfield.clear()
+        if "fieldName" not in supported:
+            self.txt_field_name.setText("DN")
+        if "connectedness" not in supported:
+            self.cmb_connectedness.setCurrentIndex(0)
         if "levels" not in supported:
             self.txt_levels.clear()
         if "overviewCompress" not in supported:
@@ -789,6 +842,16 @@ class CapabilityFormWidget(QWidget):
             if zfield:
                 params["zField"] = zfield
 
+        # P5-02：栅格矢量化（成果为矢量）
+        if "fieldName" in supported:
+            field_name = self.txt_field_name.text().strip()
+            if field_name:
+                params["fieldName"] = field_name
+        if "connectedness" in supported:
+            conn = self.cmb_connectedness.currentData()
+            if conn:
+                params["connectedness"] = int(conn)
+
         # P4-04：表达式计算
         if "calc" in supported:
             raw_expr = self.txt_calc.text().strip()
@@ -890,9 +953,9 @@ class CapabilityFormWidget(QWidget):
         init_dir = str(Path(self.txt_input.text()).parent) if self.txt_input.text() else str(self._project_root)
         path, _ = QFileDialog.getSaveFileName(
             self,
-            "选择输出影像文件",
+            "选择输出文件",
             init_dir,
-            "GeoTIFF (*.tif);;ENVI (*.dat);;所有文件 (*.*)",
+            "GeoTIFF (*.tif);;ENVI (*.dat);;GeoPackage (*.gpkg);;GeoJSON (*.geojson *.json);;所有文件 (*)",
         )
         if path:
             self.txt_output.setText(path)
@@ -912,6 +975,10 @@ class CapabilityFormWidget(QWidget):
         """
         if capability_id == "gdal:statistics":
             return None
+        if is_vector_output(capability_id):
+            # P5-02 矢量成果走 OGR 驱动矩阵（GPKG/GeoJSON），与栅格矩阵无关
+            vector_violations = validate_vector_output_format(out_fmt)
+            return "；".join(vector_violations) if vector_violations else None
         if capability_id == "gdal:dem":
             dem_violations = validate_output_format(
                 out_fmt,
@@ -1076,7 +1143,15 @@ class CapabilityFormWidget(QWidget):
         params: dict[str, Any] = {"overwrite": overwrite}
 
         raw_fmt = self.cmb_format.currentText().split()[0]
-        fmt_map = {"GTiff": "GTiff", "ENVI": "ENVI", "COG": "COG", "PNG": "PNG", "JPEG": "JPEG"}
+        fmt_map = {
+            "GTiff": "GTiff",
+            "ENVI": "ENVI",
+            "COG": "COG",
+            "PNG": "PNG",
+            "JPEG": "JPEG",
+            "GPKG": "GPKG",
+            "GeoJSON": "GeoJSON",
+        }
         out_fmt = fmt_map.get(raw_fmt, "GTiff")
 
         if "warp" in cid:
@@ -1109,6 +1184,9 @@ class CapabilityFormWidget(QWidget):
             raw_type = self.cmb_out_type.currentText()
             if "Default" not in raw_type:
                 params["output_type"] = raw_type.split()[0]
+        elif is_vector_output(cid):
+            # P5-02 矢量成果：GPKG / GeoJSON 由 OGR 驱动矩阵校验（GUI 预检 + Worker）
+            params["format"] = out_fmt
         elif cid == "gdal:calc":
             # 表达式成果是真实栅格，格式选项必须下发给 worker（默认 GTiff）
             params["format"] = out_fmt
@@ -1193,6 +1271,8 @@ class CapabilityFormWidget(QWidget):
                     kind=(
                         DatasetKind.artifact
                         if cid == "gdal:statistics"
+                        else DatasetKind.vector
+                        if is_vector_output(cid)
                         else DatasetKind.raster
                     ),
                     uri=out_p.as_uri(),

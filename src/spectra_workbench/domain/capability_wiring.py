@@ -20,7 +20,9 @@ __all__ = [
     "CONNECTED_CAPABILITIES",
     "FORMAT_CAPABILITIES",
     "MULTI_INPUT_CAPABILITIES",
+    "VECTOR_OUTPUT_CAPABILITIES",
     "is_multi_input",
+    "is_vector_output",
     "supports_output_format",
 ]
 
@@ -51,6 +53,8 @@ CONNECTED_CAPABILITIES: frozenset[str] = frozenset(
         "gdal:dem",
         "gdal:rasterize",
         "gdal:grid",
+        # P5-02：栅格矢量化（成果为矢量，P5-02）
+        "gdal:polygonize",
         # P4-04：受限表达式计算 / 直方图与基础统计（后者输出 JSON artifact）
         "gdal:calc",
         "gdal:statistics",
@@ -77,6 +81,21 @@ def is_multi_input(capability_id: str) -> bool:
     return capability_id in MULTI_INPUT_CAPABILITIES
 
 
+#: 成果为**矢量**（OGR 数据集）的能力：输出计划 kind=vector、格式矩阵走
+#: OGR 驱动（GPKG/GeoJSON）、提交校验走 OGR 重开而非栅格重开（P5-02）。
+VECTOR_OUTPUT_CAPABILITIES: frozenset[str] = frozenset(
+    {
+        "gdal:polygonize",
+        "gdal:contour",
+    }
+)
+
+
+def is_vector_output(capability_id: str) -> bool:
+    """该能力的成果是否为矢量数据集（OutputPlan kind=vector）。"""
+    return capability_id in VECTOR_OUTPUT_CAPABILITIES
+
+
 #: 输出格式由用户选择、且适配器真实消费 ``format`` 参数的能力。
 #: ``gdal:buildvrt`` 只产出 VRT，不接受其它格式；统计报告固定 JSON artifact。
 FORMAT_CAPABILITIES: frozenset[str] = frozenset(
@@ -93,6 +112,7 @@ FORMAT_CAPABILITIES: frozenset[str] = frozenset(
         "gdal:dem",
         "gdal:rasterize",
         "gdal:grid",
+        "gdal:polygonize",
         "gdal:calc",
     }
 )

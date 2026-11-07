@@ -30,6 +30,7 @@ except ImportError:
     gdal = None
     osr = None
 
+from spectra_workbench.domain.capability_wiring import VECTOR_OUTPUT_CAPABILITIES
 from spectra_workbench.domain.models import (
     Availability,
     CapabilityDescriptor,
@@ -38,7 +39,12 @@ from spectra_workbench.domain.models import (
     TaskSpec,
     TaskStatus,
 )
-from spectra_workbench.processing.output_formats import validate_output_format
+from spectra_workbench.processing.output_formats import (
+    VECTOR_OUTPUT_FORMATS,
+    normalize_output_format,
+    validate_output_format,
+    validate_vector_output_format,
+)
 from spectra_workbench.processing.raster_params import (
     ParameterError,
     normalize_raster_params,
@@ -80,6 +86,7 @@ from spectra_workbench.providers.gdal_provider.statistics_ops import (
     compute_statistics,
     write_statistics_report,
 )
+from spectra_workbench.providers.gdal_provider.vector_ops import inspect_vector
 from spectra_workbench.registry.gdal_index import (
     GDAL_VERSION,
     build_gdal_baseline,
@@ -289,6 +296,8 @@ class GDALProviderAdapter(ProviderAdapter):
         "gdal:dem",
         "gdal:rasterize",
         "gdal:grid",
+        # --- P5-02：栅格矢量化 / 等值线（成果为矢量）---
+        "gdal:polygonize",
         # --- P4-04：受限表达式计算 / 直方图与基础统计 ---
         "gdal:calc",
         P404_STATISTICS_CAPABILITY,
@@ -586,6 +595,7 @@ class GDALProviderAdapter(ProviderAdapter):
             and in_path is not None
             and spec.capability_id != P404_STATISTICS_CAPABILITY
             and spec.capability_id not in ("gdal:rasterize", "gdal:grid")
+            and spec.capability_id not in VECTOR_OUTPUT_CAPABILITIES
         ):
             format_violations = self._general_format_violations(in_path, norm, out_format)
             if format_violations:
@@ -623,6 +633,23 @@ class GDALProviderAdapter(ProviderAdapter):
                 target_path=target_path,
                 staged_path=staged_path,
                 start_time=start_time,
+            )
+
+        # P5-02 矢量成果（polygonize / contour）：成果是 OGR 数据集，
+        # 建层/写要素/OGR 重开校验与栅格完全不同，走独立分支。
+        # 矢量成果能力是单输入能力，validate() 已保证 input 端口存在，
+        # 因此此处 in_path 必已解析（is_p402 分支才允许为 None）。
+        if spec.capability_id in VECTOR_OUTPUT_CAPABILITIES and in_path is not None:
+            return self._execute_vector_output(
+                spec,
+                context,
+                norm=norm,
+                in_path=in_path,
+                out_format=out_format,
+                target_path=target_path,
+                staged_path=staged_path,
+                start_time=start_time,
+                callback=_gdal_cb,
             )
 
         is_warp = spec.capability_id in ("gdal:warp", "gdalwarp")
@@ -2315,6 +2342,250 @@ class GDALProviderAdapter(ProviderAdapter):
                 }
             ],
             duration_seconds=duration,
+        )
+
+    # ------------------------------------------------------------------
+    # P5-02：矢量成果（polygonize / contour）
+    # ------------------------------------------------------------------
+    def _execute_vector_output(
+        self,
+        spec: TaskSpec,
+        context: ExecutionContext,
+        *,
+        norm: dict[str, Any],
+        in_path: Path,
+        out_format: str,
+        target_path: Path,
+        staged_path: Path,
+        start_time: float,
+        callback: Any,
+    ) -> TaskResult:
+        """执行成果为**矢量**（OGR 数据集）的能力（P5-02）。
+
+        与栅格主流程的关键差异（不能复用仅栅格的提交校验）：
+        - 输出格式走 OGR 驱动矩阵（GPKG/GeoJSON），显式给非矢量格式必须拒绝；
+        - 建数据源/图层/字段后由 ``gdal.Polygonize`` / ``gdal.ContourGenerate``
+          写入要素，进度与取消经 GDAL callback 生效；
+        - staging 校验与最终核验都用 ``inspect_vector`` 真实重开并逐层比对
+          要素数——``gdal.Open`` 读不到矢量图层，绝不复用。
+        """
+        out_plan = spec.outputs[0]
+        overwrite = out_plan.overwrite
+
+        def _fail(code: str, message: str) -> TaskResult:
+            return TaskResult(
+                task_id=spec.task_id,
+                attempt=spec.attempt,
+                status=TaskStatus.failed,
+                error={"code": code, "message": message},
+                duration_seconds=round(time.monotonic() - start_time, 4),
+            )
+
+        # 1. 输出格式：显式 format/driver 必须是受支持的 OGR 驱动；未给时默认 GPKG。
+        explicit_format = (
+            str(spec.parameters.get("format") or "").strip()
+            or str(out_plan.driver or "").strip()
+        )
+        effective_format = explicit_format or "GPKG"
+        vector_violations = validate_vector_output_format(effective_format)
+        if vector_violations:
+            context.log("ERROR", f"矢量输出格式不受支持: {vector_violations}")
+            return _fail(
+                "unsupported_format_combination", "；".join(vector_violations)
+            )
+        ogr_driver_name = VECTOR_OUTPUT_FORMATS[
+            normalize_output_format(effective_format)
+        ]
+
+        # 2. 能力级参数门禁（取值合法性已由 normalize_raster_params 保证）
+        is_contour = spec.capability_id == "gdal:contour"
+        is_polygonize = spec.capability_id == "gdal:polygonize"
+        if is_contour and not norm.get("interval"):
+            return _fail(
+                "invalid_parameters",
+                "gdal:contour 需要正数 interval（等值线步长）",
+            )
+
+        layer_name = target_path.stem
+        op_name = "ContourGenerate" if is_contour else "Polygonize"
+
+        # 3. 生成矢量成果（staging 内）
+        try:
+            src_ds = gdal.OpenEx(str(in_path), gdal.OF_RASTER | gdal.OF_READONLY)
+            if src_ds is None:
+                raise RuntimeError(f"无法作为栅格打开输入: {in_path}")
+            try:
+                band = src_ds.GetRasterBand(1)
+                from osgeo import ogr
+
+                ods = ogr.GetDriverByName(ogr_driver_name).CreateDataSource(
+                    str(staged_path)
+                )
+                if ods is None:
+                    raise RuntimeError(
+                        f"无法创建矢量输出（驱动 {ogr_driver_name}）: {staged_path}"
+                    )
+                try:
+                    if is_polygonize:
+                        field_name = str(norm.get("fieldName") or "DN")
+                        layer = ods.CreateLayer(
+                            layer_name, src_ds.GetSpatialRef(), ogr.wkbUnknown
+                        )
+                        layer.CreateField(ogr.FieldDefn(field_name, ogr.OFTInteger))
+                        connectedness = int(norm.get("connectedness") or 4)
+                        options = ["8CONNECTED=YES"] if connectedness == 8 else []
+                        # GDAL 3.13.3 实测：options 必须传列表（None 会被拒绝）
+                        rc = gdal.Polygonize(
+                            band, band.GetMaskBand(), layer, 0, options, callback
+                        )
+                        if rc != 0:
+                            raise RuntimeError(
+                                gdal.GetLastErrorMsg()
+                                or f"Polygonize 失败（rc={rc}）"
+                            )
+                    else:
+                        layer = ods.CreateLayer(
+                            layer_name,
+                            src_ds.GetSpatialRef(),
+                            ogr.wkbLineString25D,
+                        )
+                        layer.CreateField(ogr.FieldDefn("ID", ogr.OFTInteger64))
+                        layer.CreateField(ogr.FieldDefn("ELEV", ogr.OFTReal))
+                        nodata = band.GetNoDataValue()
+                        use_no_data = nodata is not None
+                        # GDAL 3.13.3 实测：Python 绑定把 fixedLevelCount 折叠为
+                        # fixedLevels 序列参数（docstring 未更新），传 [] 表示无固定等级
+                        rc = gdal.ContourGenerate(
+                            band,
+                            float(norm["interval"]),
+                            float(norm.get("offset") or 0.0),
+                            [],
+                            bool(use_no_data),
+                            float(nodata) if use_no_data else 0.0,
+                            layer,
+                            0,
+                            1,
+                            callback,
+                        )
+                        if rc != 0:
+                            raise RuntimeError(
+                                gdal.GetLastErrorMsg()
+                                or f"ContourGenerate 失败（rc={rc}）"
+                            )
+                finally:
+                    # 显式关闭矢量数据源，Windows 上释放文件锁并刷新到磁盘
+                    ods = None
+            finally:
+                src_ds = None
+        except Exception as exc:
+            if context.is_cancelled.is_set():
+                context.log(
+                    "WARNING", f"Task {spec.task_id} was cancelled during {op_name}"
+                )
+                staged_path.unlink(missing_ok=True)
+                return TaskResult(
+                    task_id=spec.task_id,
+                    attempt=spec.attempt,
+                    status=TaskStatus.cancelled,
+                    error={"code": "task_cancelled", "message": "Operation cancelled by user"},
+                    duration_seconds=round(time.monotonic() - start_time, 4),
+                )
+            context.log("ERROR", f"GDAL {op_name} failed: {exc}")
+            staged_path.unlink(missing_ok=True)
+            return _fail(f"{op_name.lower()}_error", str(exc))
+
+        if context.is_cancelled.is_set():
+            staged_path.unlink(missing_ok=True)
+            return TaskResult(
+                task_id=spec.task_id,
+                attempt=spec.attempt,
+                status=TaskStatus.cancelled,
+                error={"code": "task_cancelled", "message": "Operation cancelled by user"},
+                duration_seconds=round(time.monotonic() - start_time, 4),
+            )
+
+        # 4. staging 成果 OGR 重开校验（真实读图层与要素，不只是文件存在）
+        context.progress(0.9, "verifying", "Re-opening staged vector output for validation")
+        try:
+            staged_info = inspect_vector(staged_path)
+        except Exception as verify_err:
+            context.log("ERROR", f"Verification of staged vector output failed: {verify_err}")
+            staged_path.unlink(missing_ok=True)
+            return _fail("verification_failed", str(verify_err))
+        if staged_info["layer_count"] < 1:
+            staged_path.unlink(missing_ok=True)
+            return _fail("verification_failed", "staging 矢量成果不含任何图层")
+
+        # 5. 事务提交（单文件成果：GPKG / GeoJSON）
+        context.progress(0.95, "committing", "Committing staged vector output to destination")
+        try:
+            committed_files = context.commit_files(
+                [(staged_path, target_path)], overwrite=overwrite
+            )
+        except OutputConflictError as conflict_err:
+            context.log("ERROR", f"Commit rejected due to existing target: {conflict_err}")
+            return _fail("output_already_exists", str(conflict_err))
+        except Exception as commit_err:
+            context.log("ERROR", f"Transaction commit failed: {commit_err}")
+            return _fail("commit_failed", str(commit_err))
+
+        # 6. 最终核验：target 再次 OGR 重开，图层数与要素数必须与 staging 一致
+        try:
+            final_info = inspect_vector(target_path, sample=False)
+        except Exception as final_err:
+            context.log("ERROR", f"Final vector reopen check failed: {final_err}")
+            return _fail("final_reopen_failed", str(final_err))
+        staged_counts = [
+            int(layer.get("feature_count") or 0)
+            for layer in staged_info["layers"]
+            if "feature_count" in layer
+        ]
+        final_counts = [
+            int(layer.get("feature_count") or 0)
+            for layer in final_info["layers"]
+            if "feature_count" in layer
+        ]
+        if (
+            staged_info["layer_count"] != final_info["layer_count"]
+            or sorted(staged_counts) != sorted(final_counts)
+        ):
+            message = (
+                f"提交前后矢量成果不一致：layers {staged_info['layer_count']}→"
+                f"{final_info['layer_count']}，features {sorted(staged_counts)}→"
+                f"{sorted(final_counts)}"
+            )
+            context.log("ERROR", message)
+            return _fail("final_reopen_failed", message)
+
+        duration = round(time.monotonic() - start_time, 4)
+        context.progress(1.0, "completed", "Vector output completed successfully")
+        first_layer = (final_info.get("layers") or [{}])[0]
+        context.log(
+            "INFO",
+            f"Task {spec.task_id} completed in {duration}s -> {target_path} "
+            f"({final_info.get('driver')}, {final_info['layer_count']} layer(s), "
+            f"{first_layer.get('feature_count', 0)} feature(s))",
+        )
+        output_record = {
+            "key": out_plan.key,
+            "uri": target_path.as_uri(),
+            "data_type": "vector",
+            "driver": final_info.get("driver") or ogr_driver_name,
+            "layer_count": final_info.get("layer_count", 0),
+            "feature_count": first_layer.get("feature_count", 0),
+            "geometry_type": first_layer.get("geometry_type"),
+            "committed_files": [f.as_uri() for f in committed_files],
+        }
+        return TaskResult(
+            task_id=spec.task_id,
+            attempt=spec.attempt,
+            status=TaskStatus.succeeded,
+            outputs=[output_record],
+            duration_seconds=duration,
+            engine_runtime={
+                "provider_id": "gdal",
+                "version": gdal.__version__,
+            },
         )
 
     def _stage_source_bundle(self, source: Path, staged_path: Path, context: Any) -> str | None:

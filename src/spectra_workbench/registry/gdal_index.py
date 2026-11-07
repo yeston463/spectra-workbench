@@ -593,18 +593,23 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
             outputs=[PortSpec(key="output", data_type=DatasetKind.vector, required=True, description="生成的多边形矢量图层")],
             requirements=[Requirement(kind="package", name="GDAL", reason="需 GDAL Polygonize API")],
             entrypoints=[
+                Entrypoint(kind="form", target="gdal:polygonize", available=True, notes="平台适配器已接入（P5-02）"),
                 Entrypoint(kind="cli", target="gdal_polygonize.exe", available=True),
                 Entrypoint(kind="script", target="osgeo.gdal.Polygonize", available=True),
             ],
             state=CapabilityState(
                 presence=Presence.present,
-                binding=Binding.cli,
+                binding=Binding.form,
                 validation=Validation.not_run,
                 availability=Availability.ready,
             ),
             effects="new_dataset",
             cancellation="cooperative",
-            limitations=[],
+            limitations=[
+                "矢量成果仅支持 GPKG / GeoJSON 单文件输出；ESRI Shapefile 为多文件 bundle，暂未接入",
+                "仅处理第 1 波段；mask 语义遵循 GDAL GetMaskBand（自动遵循 NoData/alpha/mask）",
+                "连通性支持 4/8 邻域（8CONNECTED）；像元值存入 fieldName 字段（默认 DN）",
+            ],
             validation_evidence=[],
         ),
         CapabilityDescriptor(

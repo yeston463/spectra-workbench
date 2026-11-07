@@ -1,6 +1,6 @@
 # 执行状态
 
-更新：2026-11-07（第 50 轮 · P5-02 增量三：gdal:grid 散点栅格插值接入 Worker 与 GUI，解析平面 z=2x+3y 的 linear 插值逐像元验证、缺 width/height 与 PNG 默认 Float64 明确拒绝；Clean 全量 657 项 / 0 失败 / rc=0 / clean_exit_verified=true。P5-02 保持 in_progress，polygonize/contour 仍待做。第 49 轮为 rasterize）
+更新：2026-11-07（第 51 轮 · P5-02 增量四：gdal:polygonize 栅格矢量化接入 Worker 与 GUI，**矢量成果输出通道建立**——GPKG/GeoJSON 单文件矩阵、inspect_vector OGR 重开校验、kind=vector 输出计划与图层登记；标签图面积/DN 字段与 4/8 连通差异实证；Clean 全量 664 项 / 0 失败 / rc=0 / clean_exit_verified=true。P5-02 保持 in_progress，contour 仍待做。第 50 轮为 grid）
 
 ## 当前里程碑
 
@@ -24,7 +24,7 @@
   - **P4-01 / P4-03 / P4-04 / P4-05**：implemented。P4-05 的完整用户流程验收以第 36 轮 P4-05 专项为准；P4-02 转为 done 不改变其余任务的证据边界。
 - **P5 全量栅格、矢量、地形与坐标能力**：
   - **P5-01 补齐栅格算法/传统工具入口**：**done**（第 47 轮基准逐项对账）。契约基准 443 条全部在注册表；注册表 448 条，多出的 5 条为平台组合/受限实现；8 条运行期缺口（3 条 blocked、5 条 missing）均有具体原因，未解释缺口 0。
-  - **P5-02 / P5-03 / P5-04 / P5-05**：P5-02 **in_progress**（第 48–50 轮已接入 `gdal:dem` 地形分析、`gdal:rasterize` 矢量栅格化、`gdal:grid` 散点插值；polygonize/contour 仍待做）；P5-03/P5-04/P5-05 为 todo。P5-01 只完成入口与基准对账，不把“已编目”当作“已可执行”。
+  - **P5-02 / P5-03 / P5-04 / P5-05**：P5-02 **in_progress**（第 48–51 轮已接入 `gdal:dem` 地形分析、`gdal:rasterize` 矢量栅格化、`gdal:grid` 散点插值、`gdal:polygonize` 栅格矢量化并建立矢量成果输出通道——GPKG/GeoJSON 矩阵、OGR 重开校验、kind=vector 与图层登记；contour 仍待做）；P5-03/P5-04/P5-05 为 todo。P5-01 只完成入口与基准对账，不把“已编目”当作“已可执行”。
 
 ## 原 P3 验收标准逐项对账与剩余缺口
 
@@ -234,6 +234,42 @@ CRT 检测到栈状态异常后立即终止进程，这正是 `STATUS_STACK_BUFF
 |---|---|---|
 | 用合成影像完成同类验收 | 已满足 | 合成 ENVI/GTiff/GeoJSON/netCDF 样例覆盖多波段、像元数值、ROI 与对比 |
 | 保留真实数据待验状态 | **待验** | 课程原始数据位于 `C:\Users\赵航\Desktop\studio\_chaoxing_rs`（**只读**，不得运行其中的抓取/下载/OCR 脚本）；本轮全部用合成影像验收，未对课程原始 ENVI 栅格与 lena.tif 做真实打开验证 |
+
+### 第 51 轮：P5-02 增量四——polygonize 栅格矢量化与矢量成果输出通道（P5-02 in_progress）
+
+**一、实现**
+
+- `processing/output_formats.py` 新增 `VECTOR_OUTPUT_FORMATS` 与 `validate_vector_output_format`：刻意保守只接**单文件** OGR 驱动 GPKG/GeoJSON；ESRI Shapefile 因 `.shp/.shx/.dbf/.prj` 多文件 bundle 需专门收集器而明确拒绝（拒绝消息写明原因）。
+- 新增 `providers/gdal_provider/vector_ops.py::inspect_vector`：`ogr.Open` 只读真实重开，逐图层收集几何类型/要素数/CRS/范围/字段，并**实际读取最多 5 个要素的 WKT 与字段值**（对齐 `inspect_raster`「samples 是真实读出的像元」哲学）；惰性导入保证无 osgeo 环境可导入。
+- `GDALProviderAdapter` 新增 `_execute_vector_output` 独立分支（矢量成果不进栅格主流程，不复用 `gdal.Open` 重开）：
+  - GDAL 3.13.3 运行时实测：`gdal.Polygonize` 的 `options` 必须传**列表**（`None` 被拒绝）；8 连通用 `options=["8CONNECTED=YES"]`；
+  - 显式 `format`/`driver` 必须过矢量矩阵（否则 `unsupported_format_combination`），未给时默认 GPKG；
+  - 建数据源/图层（图层名=输出 stem）/`fieldName` 字段（默认 DN）后调 `gdal.Polygonize(band, band.GetMaskBand(), …, callback)`，取消经 callback 生效；
+  - staging `inspect_vector` → `commit_files` 单对事务提交 → target 二次 `inspect_vector` 并逐层比对要素数（不一致即 `final_reopen_failed`）；`TaskResult.outputs` 登记 `data_type=vector`、driver、layer_count、feature_count。
+- `processing/raster_params.py` 新增 `fieldName`（别名 `dn_field`，避开 `attribute` 已占用的 `field_name`）、`connectedness`（4/8，拒绝小数截断）与 `gdal:polygonize` 支持矩阵。
+- `capability_wiring.py` 新增 `VECTOR_OUTPUT_CAPABILITIES` 与 `is_vector_output`；CONNECTED/FORMAT_CAPABILITIES += `gdal:polygonize`；注册表 `gdal:polygonize` 翻转为 ready/form，限制写明（仅 GPKG/GeoJSON、仅第 1 波段、mask 遵循 GetMaskBand）。
+- GUI：格式下拉按能力族重填（矢量只有 GPKG/GeoJSON）；新增 fieldName/connectedness 控件与状态隔离；预检走矢量矩阵；OutputPlan `kind=vector`；输出对话框补 GPKG/GeoJSON 过滤器；矢量成果经 P3-02「栅格探测失败→矢量探测」回退登记为图层（主窗口零改动）。
+
+**二、数值验收（GDAL 3.13.3 运行时独立 OGR 重开）**
+
+- 标签图 `[[3,3,9,9],[3,3,9,9]]` → GPKG 恰 2 个要素、`DN∈{3,9}`、每个多边形面积 4.0（像元单位）、SRS 32650 传递。
+- 对角像元 `[[5,0],[0,5]]` → 4 邻域 2 个 DN=5 多边形、8 邻域 1 个——**8CONNECTED 实证生效**，不是只检查文件存在。
+- GeoJSON 单文件输出、默认 DN 字段；显式 GTiff → `unsupported_format_combination`（消息含 GPKG/GeoJSON）；矢量输入 → `polygonize_error`；目标均不落盘。
+- GUI 真实 `MainWindow` + Worker + QTest：GPKG 提交成功、图层计数 2（矢量成果自动登记）、面积/字段独立复核。
+
+**三、验证**
+
+- 新增 `tests/integration/test_p5_polygonize.py`（4 项数值/边界）与 `tests/integration/test_p5_polygonize_gui.py`（1 项桌面路径）；`test_output_format_matrix.py` 新增矢量矩阵 2 项；对账测试 ready 断言加入 `gdal:polygonize`。
+- 受影响定向（单测三件套 + 基线四维 + 集成/GUI 复跑）：**41 passed**。
+- Ruff 干净；Mypy 67 个源文件 0 错误。
+- Clean 全量：**664 passed / 0 failed / rc=0 / clean_exit_verified=true**（382.37s，residual=0、cleanup_complete=true）。
+- 审计刷新：`platform_executable` 8 → **9**（`gdal:polygonize` 接入，callable 238 不变）；缺口维持 **5**。
+
+**四、边界与下一步**
+
+- P5-02 保持 **in_progress**：contour 尚未接入。
+- 矢量输出 v1 边界：Shapefile 多文件 bundle、polygonize 指定波段/mask 文件、矢量渲染——均未接入，限制已在注册表如实声明。
+- 下一步：`gdal:contour`（解析平面 z=2x+3y 等高线，逐顶点解析验证 ELEV），完成后 P5-02 转 done。
 
 ### 第 50 轮：P5-02 增量三——grid 散点栅格插值（P5-02 in_progress）
 

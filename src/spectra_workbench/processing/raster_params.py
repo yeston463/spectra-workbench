@@ -157,6 +157,12 @@ _PARAM_ALIASES: dict[str, tuple[str, ...]] = {
     # --- P5-02 散点栅格插值 ---
     "algorithm": ("algorithm", "grid_algorithm"),
     "zField": ("z_field", "zfield", "z_attribute"),
+    # --- P5-02 栅格矢量化 / 等值线 ---
+    # 注意：field_name / field 已是 attribute 的别名，不得重复占用。
+    "fieldName": ("dn_field",),
+    "connectedness": ("connected", "connectivity"),
+    "interval": ("contour_interval", "level_interval"),
+    "offset": ("contour_base", "base_level"),
     # --- P4-04 表达式 / 直方图与基础统计 ---
     "calc": ("calc_expr", "expression", "formula"),
     "statisticsMode": ("mode", "stats_mode", "statistics_mode"),
@@ -339,6 +345,9 @@ _CAPABILITY_SUPPORT: dict[str, frozenset[str]] = {
             "noData",
         }
     ),
+    # --- P5-02：栅格矢量化 / 等值线（成果为矢量）---
+    "gdal:polygonize": frozenset({"fieldName", "connectedness"}),
+    "gdal:contour": frozenset({"interval", "offset"}),
     # --- P4-04：受限表达式计算 / 直方图与基础统计 ---
     "gdal:calc": frozenset({"calc", "srcNodata", "dstNodata", "outputType"}),
     "gdal:statistics": frozenset(
@@ -385,6 +394,9 @@ _CAPABILITY_ALIASES: dict[str, str] = {
     "gdal raster calc": "gdal:calc",
     "gdal:histogram": "gdal:statistics",
     "gdalinfo -stats": "gdal:statistics",
+    # --- P5-02 能力别名 ---
+    "gdal_polygonize": "gdal:polygonize",
+    "gdal_contour": "gdal:contour",
     # 保留 rio_convert / rio:convert 等 CLI 风格别名
     "rio:convert": "rasterio:convert",
 }
@@ -735,6 +747,33 @@ def normalize_raster_params(
         if not zfield:
             raise ParameterError("参数 zField 必须是非空字段名")
         out["zField"] = zfield
+
+    # 11.9) P5-02：栅格矢量化
+    if "fieldName" in collected:
+        _, value = collected["fieldName"]
+        field_name = str(value).strip()
+        if not field_name:
+            raise ParameterError("参数 fieldName 必须是非空字段名")
+        out["fieldName"] = field_name
+    if "connectedness" in collected:
+        _, value = collected["connectedness"]
+        if not _is_int_like(value):
+            raise ParameterError(
+                f"参数 connectedness 必须是整数（4 或 8，不接受小数截断），实际 {value!r}"
+            )
+        conn = int(value)
+        if conn not in (4, 8):
+            raise ParameterError(f"参数 connectedness 只支持 4/8 邻域，实际 {conn}")
+        out["connectedness"] = conn
+
+    # 11.10) P5-02：等值线
+    if "interval" in collected:
+        _, value = collected["interval"]
+        out["interval"] = _require_positive_float(value, "interval")
+    if "offset" in collected:
+        _, value = collected["offset"]
+        # 零值合法：contourBase=0 是有效的基准高程
+        out["offset"] = _require_finite_float(value, "offset")
 
     if "levels" in collected:
         _, value = collected["levels"]

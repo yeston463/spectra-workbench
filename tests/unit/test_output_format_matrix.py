@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from spectra_workbench.processing.output_formats import validate_output_format
+from spectra_workbench.processing.output_formats import (
+    validate_output_format,
+    validate_vector_output_format,
+)
 
 
 def test_gtiff_accepts_float_nodata_mask_alpha() -> None:
@@ -83,3 +86,22 @@ def test_cog_and_vrt_accept_standard_raster_semantics() -> None:
             has_alpha=False,
             has_mask=True,
         ) == []
+
+
+# --- P5-02：矢量（OGR）输出格式矩阵 ---------------------------------------
+
+
+def test_vector_matrix_accepts_single_file_ogr_drivers() -> None:
+    assert validate_vector_output_format("GPKG") == []
+    assert validate_vector_output_format("GeoJSON") == []
+    assert validate_vector_output_format("geojson") == []
+
+
+def test_vector_matrix_rejects_raster_formats_and_shapefile() -> None:
+    for fmt in ("GTiff", "PNG", "JPEG", "COG", "ENVI", "VRT", "ESRI Shapefile", ""):
+        violations = validate_vector_output_format(fmt)
+        assert violations, f"{fmt!r} 应被矢量矩阵拒绝"
+        joined = "；".join(violations)
+        assert "GPKG" in joined and "GeoJSON" in joined
+        if fmt == "ESRI Shapefile":
+            assert "多文件 bundle" in joined
