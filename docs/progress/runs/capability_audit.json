@@ -7,20 +7,20 @@
     "ratio": 0.9888
   },
   "callable": {
-    "count": 236,
-    "ratio": 0.5268
+    "count": 237,
+    "ratio": 0.529
   },
   "platform_executable": {
-    "count": 6,
-    "ratio": 0.0134
+    "count": 7,
+    "ratio": 0.0156
   },
   "verified": {
     "count": 5,
     "ratio": 0.0112
   },
   "missing": {
-    "count": 7,
-    "ratio": 0.0156,
+    "count": 6,
+    "ratio": 0.0134,
     "items": [
       {
         "capability_id": "gdal:cli:gdal_auth",
@@ -49,18 +49,6 @@
       {
         "capability_id": "gdal:grid",
         "name": "GDAL 离散点栅格插值",
-        "provider": "gdal",
-        "kind": "algorithm",
-        "presence": "present",
-        "availability": "blocked",
-        "binding": "indexed",
-        "limitations": [
-          "平台适配器暂未接入该算法执行器；CLI 工具可正常调用"
-        ]
-      },
-      {
-        "capability_id": "gdal:rasterize",
-        "name": "GDAL 矢量要素栅格化",
         "provider": "gdal",
         "kind": "algorithm",
         "presence": "present",
@@ -118,20 +106,20 @@
         "ratio": 0.9951
       },
       "callable": {
-        "count": 198,
-        "ratio": 0.4865
+        "count": 199,
+        "ratio": 0.4889
       },
       "platform_executable": {
-        "count": 5,
-        "ratio": 0.0123
+        "count": 6,
+        "ratio": 0.0147
       },
       "verified": {
         "count": 4,
         "ratio": 0.0098
       },
       "missing": {
-        "count": 4,
-        "ratio": 0.0098,
+        "count": 3,
+        "ratio": 0.0074,
         "items": [
           {
             "capability_id": "gdal:cli:gdal_auth",
@@ -160,18 +148,6 @@
           {
             "capability_id": "gdal:grid",
             "name": "GDAL 离散点栅格插值",
-            "provider": "gdal",
-            "kind": "algorithm",
-            "presence": "present",
-            "availability": "blocked",
-            "binding": "indexed",
-            "limitations": [
-              "平台适配器暂未接入该算法执行器；CLI 工具可正常调用"
-            ]
-          },
-          {
-            "capability_id": "gdal:rasterize",
-            "name": "GDAL 矢量要素栅格化",
             "provider": "gdal",
             "kind": "algorithm",
             "presence": "present",
@@ -264,7 +240,7 @@
       "gdal:stack",
       "gdal:statistics"
     ],
-    "gap_count": 7,
+    "gap_count": 6,
     "missing_or_blocked": [
       {
         "capability_id": "gdal:cli:gdal_auth",
@@ -291,17 +267,6 @@
       {
         "capability_id": "gdal:grid",
         "name": "GDAL 离散点栅格插值",
-        "provider": "gdal",
-        "presence": "present",
-        "availability": "blocked",
-        "binding": "indexed",
-        "limitations": [
-          "平台适配器暂未接入该算法执行器；CLI 工具可正常调用"
-        ]
-      },
-      {
-        "capability_id": "gdal:rasterize",
-        "name": "GDAL 矢量要素栅格化",
         "provider": "gdal",
         "presence": "present",
         "availability": "blocked",
@@ -358,7 +323,7 @@
           "gdal:stack",
           "gdal:statistics"
         ],
-        "gap_count": 4,
+        "gap_count": 3,
         "unexplained_gap_count": 0
       },
       "rasterio": {

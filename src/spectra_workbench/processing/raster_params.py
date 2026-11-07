@@ -150,6 +150,10 @@ _PARAM_ALIASES: dict[str, tuple[str, ...]] = {
     "processing": ("processing", "dem_processing", "dem_mode"),
     "zFactor": ("z_factor", "zfactor", "z_scale"),
     "scale": ("scale", "vertical_scale"),
+    # --- P5-02 矢量栅格化 ---
+    "burnValues": ("burn_values", "burn", "burn_value"),
+    "attribute": ("attribute", "attribute_name", "field", "field_name"),
+    "allTouched": ("all_touched", "alltouched"),
     # --- P4-04 表达式 / 直方图与基础统计 ---
     "calc": ("calc_expr", "expression", "formula"),
     "statisticsMode": ("mode", "stats_mode", "statistics_mode"),
@@ -305,6 +309,21 @@ _CAPABILITY_SUPPORT: dict[str, frozenset[str]] = {
     "gdal:overview": frozenset({"resampleAlg", "levels", "overviewCompress"}),
     # --- P5-02：地形分析 ---
     "gdal:dem": frozenset({"processing", "zFactor", "scale"}),
+    # --- P5-02：矢量栅格化 ---
+    "gdal:rasterize": frozenset(
+        {
+            "xRes",
+            "yRes",
+            "width",
+            "height",
+            "outputBounds",
+            "outputType",
+            "burnValues",
+            "attribute",
+            "allTouched",
+            "noData",
+        }
+    ),
     # --- P4-04：受限表达式计算 / 直方图与基础统计 ---
     "gdal:calc": frozenset({"calc", "srcNodata", "dstNodata", "outputType"}),
     "gdal:statistics": frozenset(
@@ -658,6 +677,35 @@ def normalize_raster_params(
     if "scale" in collected:
         _, value = collected["scale"]
         out["scale"] = _require_positive_float(value, "scale")
+
+    # 11.7) P5-02：矢量栅格化
+    if "burnValues" in collected and "attribute" in collected:
+        raise ParameterError("burnValues 与 attribute 互斥，不能同时指定")
+    if "burnValues" in collected:
+        _, value = collected["burnValues"]
+        if not isinstance(value, (list, tuple)) or not value:
+            raise ParameterError("参数 burnValues 必须是非空的数值列表")
+        burns: list[float] = []
+        for v in value:
+            try:
+                f = float(v)
+            except (TypeError, ValueError) as exc:
+                raise ParameterError(f"burnValues 含非数值元素：{v!r}") from exc
+            if not math.isfinite(f):
+                raise ParameterError(f"burnValues 含非有限值：{v!r}")
+            burns.append(f)
+        out["burnValues"] = burns
+    if "attribute" in collected:
+        _, value = collected["attribute"]
+        attr = str(value).strip()
+        if not attr:
+            raise ParameterError("参数 attribute 必须是非空字段名")
+        out["attribute"] = attr
+    if "allTouched" in collected:
+        _, value = collected["allTouched"]
+        if not isinstance(value, bool):
+            raise ParameterError(f"allTouched 必须是布尔值，实际 {value!r}")
+        out["allTouched"] = value
 
     if "levels" in collected:
         _, value = collected["levels"]

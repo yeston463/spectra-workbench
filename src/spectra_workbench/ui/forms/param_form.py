@@ -260,6 +260,21 @@ class CapabilityFormWidget(QWidget):
         self.lbl_dem_scale = QLabel("垂直比例 (scale):")
         self.params_form.addRow(self.lbl_dem_scale, self.spin_dem_scale)
 
+        # --- P5-02 矢量栅格化 ---
+        self.txt_burn_values = QLineEdit()
+        self.txt_burn_values.setPlaceholderText("例：7；多波段例：7,8（与 attribute 互斥）")
+        self.lbl_burn_values = QLabel("烧录像元值 (burnValues):")
+        self.params_form.addRow(self.lbl_burn_values, self.txt_burn_values)
+
+        self.txt_attribute = QLineEdit()
+        self.txt_attribute.setPlaceholderText("按字段值烧录，例：value（与 burnValues 互斥）")
+        self.lbl_attribute = QLabel("烧录字段 (attribute):")
+        self.params_form.addRow(self.lbl_attribute, self.txt_attribute)
+
+        self.chk_all_touched = QCheckBox("包含所有触及像元（allTouched）")
+        self.lbl_all_touched = QLabel("全触及像元 (allTouched):")
+        self.params_form.addRow(self.lbl_all_touched, self.chk_all_touched)
+
         # --- P4-03 概览构建 ---
         self.txt_levels = QLineEdit()
         self.txt_levels.setPlaceholderText("严格递增、每个≥2；例：2,4,8")
@@ -449,6 +464,7 @@ class CapabilityFormWidget(QWidget):
         is_warp = "warp" in cid
         is_translate = "translate" in cid
         is_rasterio = "rasterio" in cid
+        is_rasterize = cid == "gdal:rasterize"
         sup = supported_params_for(cid) or frozenset()
 
         # 显示或隐藏相应字段（统计报告输出 JSON artifact，不显示栅格格式选项）
@@ -462,7 +478,7 @@ class CapabilityFormWidget(QWidget):
         self.lbl_format.setVisible(show_format)
         self.cmb_format.setVisible(show_format)
 
-        show_out_type = is_translate or "outputType" in sup
+        show_out_type = is_translate or is_rasterize or "outputType" in sup
         self.lbl_out_type.setVisible(show_out_type)
         self.cmb_out_type.setVisible(show_out_type)
 
@@ -500,6 +516,14 @@ class CapabilityFormWidget(QWidget):
         )
         self._set_row_visible(self.lbl_dem_zfactor, self.spin_dem_zfactor, "zFactor" in sup)
         self._set_row_visible(self.lbl_dem_scale, self.spin_dem_scale, "scale" in sup)
+        # P5-02 矢量栅格化
+        self._set_row_visible(
+            self.lbl_burn_values, self.txt_burn_values, "burnValues" in sup
+        )
+        self._set_row_visible(self.lbl_attribute, self.txt_attribute, "attribute" in sup)
+        self._set_row_visible(
+            self.lbl_all_touched, self.chk_all_touched, "allTouched" in sup
+        )
         self._set_row_visible(self.lbl_levels, self.txt_levels, "levels" in sup)
         self._set_row_visible(self.lbl_ovr_compress, self.cmb_ovr_compress, "overviewCompress" in sup)
         # P4-04
@@ -511,9 +535,9 @@ class CapabilityFormWidget(QWidget):
 
         # P4-01：裁剪 / 重采样 / 输出网格
         self._set_row_visible(self.lbl_clip, self.txt_clip, is_translate or is_warp)
-        self._set_row_visible(self.lbl_xres, self.spin_xres, is_translate or is_warp)
-        self._set_row_visible(self.lbl_yres, self.spin_yres, is_translate or is_warp)
-        self._set_row_visible(self.lbl_outsize, self.txt_outsize, is_translate or is_warp)
+        self._set_row_visible(self.lbl_xres, self.spin_xres, is_translate or is_warp or is_rasterize)
+        self._set_row_visible(self.lbl_yres, self.spin_yres, is_translate or is_warp or is_rasterize)
+        self._set_row_visible(self.lbl_outsize, self.txt_outsize, is_translate or is_warp or is_rasterize)
         self._set_row_visible(self.lbl_tap, self.chk_tap, is_warp)
 
         # 切换能力时**隔离状态**：把新能力不适用的控件值重置。
@@ -596,6 +620,12 @@ class CapabilityFormWidget(QWidget):
             self.spin_dem_zfactor.setValue(1.0)
         if "scale" not in supported:
             self.spin_dem_scale.setValue(1.0)
+        if "burnValues" not in supported:
+            self.txt_burn_values.clear()
+        if "attribute" not in supported:
+            self.txt_attribute.clear()
+        if "allTouched" not in supported:
+            self.chk_all_touched.setChecked(False)
         if "levels" not in supported:
             self.txt_levels.clear()
         if "overviewCompress" not in supported:
@@ -697,6 +727,32 @@ class CapabilityFormWidget(QWidget):
         if "scale" in supported:
             params["scale"] = float(self.spin_dem_scale.value())
 
+        # P5-02：矢量栅格化
+        if "burnValues" in supported:
+            raw_burn = self.txt_burn_values.text().strip()
+            if raw_burn:
+                parts_burn = [
+                    x.strip()
+                    for x in raw_burn.replace(";", ",").split(",")
+                    if x.strip()
+                ]
+                burns: list[float] = []
+                for part in parts_burn:
+                    try:
+                        burns.append(float(part))
+                    except ValueError:
+                        return params, f"burnValues 需要逗号分隔的数字，当前为：{raw_burn}"
+                if burns:
+                    params["burnValues"] = burns
+        if "attribute" in supported:
+            attr = self.txt_attribute.text().strip()
+            if attr:
+                params["attribute"] = attr
+        if "allTouched" in supported:
+            params["allTouched"] = self.chk_all_touched.isChecked()
+        if params.get("burnValues") and params.get("attribute"):
+            return params, "burnValues 与 attribute 互斥，不能同时指定"
+
         # P4-04：表达式计算
         if "calc" in supported:
             raw_expr = self.txt_calc.text().strip()
@@ -787,9 +843,9 @@ class CapabilityFormWidget(QWidget):
     def _browse_input(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
             self,
-            "选择输入遥感影像",
+            "选择输入数据",
             str(self._project_root),
-            "栅格影像 (*.tif *.tiff *.dat *.img *.hdr *.png *.jpg);;所有文件 (*.*)",
+            "栅格/矢量 (*.tif *.tiff *.dat *.img *.hdr *.png *.jpg *.geojson *.json *.gpkg *.shp);;所有文件 (*.*)",
         )
         if path:
             self.set_input_path(path)
@@ -829,6 +885,15 @@ class CapabilityFormWidget(QWidget):
                 has_alpha=False,
             )
             return "；".join(dem_violations) if dem_violations else None
+        if capability_id == "gdal:rasterize":
+            rasterize_violations = validate_output_format(
+                out_fmt,
+                dtype=str(params.get("outputType") or "Float64"),
+                bands=len(params.get("burnValues") or []) or 1,
+                has_nodata=params.get("noData") is not None,
+                has_alpha=False,
+            )
+            return "；".join(rasterize_violations) if rasterize_violations else None
         has_nodata_param = any(
             params.get(key) is not None
             for key in ("srcNodata", "vrtNodata", "dstNodata", "noData")
@@ -994,6 +1059,11 @@ class CapabilityFormWidget(QWidget):
             params["format"] = out_fmt
         elif cid == "gdal:dem":
             params["format"] = out_fmt
+        elif cid == "gdal:rasterize":
+            params["format"] = out_fmt
+            raw_type = self.cmb_out_type.currentText()
+            if "Default" not in raw_type:
+                params["output_type"] = raw_type.split()[0]
         elif cid == "gdal:calc":
             # 表达式成果是真实栅格，格式选项必须下发给 worker（默认 GTiff）
             params["format"] = out_fmt

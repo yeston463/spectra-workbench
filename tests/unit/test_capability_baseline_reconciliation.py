@@ -61,10 +61,11 @@ def test_target_version_tools_are_indexed_and_gaps_have_reasons() -> None:
         item = next(i for i in report["missing_or_blocked"] if i["capability_id"] == cid)
         assert item["limitations"], f"{cid} 缺少具体原因"
 
-    # dem is now wired to the adapter; grid/rasterize remain indexed only.
-    dem = registry.get("gdal:dem")
-    assert dem is not None and str(dem.state.availability) == "ready"
-    for cid in ("gdal:grid", "gdal:rasterize"):
+    # dem and rasterize are now wired; grid remains indexed only.
+    for cid in ("gdal:dem", "gdal:rasterize"):
+        cap = registry.get(cid)
+        assert cap is not None and str(cap.state.availability) == "ready"
+    for cid in ("gdal:grid",):
         assert cid in gap_ids
         item = next(i for i in report["missing_or_blocked"] if i["capability_id"] == cid)
         assert item["availability"] == "blocked"

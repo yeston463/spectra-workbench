@@ -257,8 +257,9 @@ class GDALProviderAdapter(ProviderAdapter):
         # --- P4-03：元数据编辑 / 概览构建（in-place）---
         "gdal:editmeta",
         "gdal:overview",
-        # --- P5-02：地形分析 ---
+        # --- P5-02：地形分析 / 矢量栅格化 ---
         "gdal:dem",
+        "gdal:rasterize",
         # --- P4-04：受限表达式计算 / 直方图与基础统计 ---
         "gdal:calc",
         P404_STATISTICS_CAPABILITY,
@@ -555,6 +556,7 @@ class GDALProviderAdapter(ProviderAdapter):
             not is_p402
             and in_path is not None
             and spec.capability_id != P404_STATISTICS_CAPABILITY
+            and spec.capability_id not in ("gdal:rasterize", "gdal:grid")
         ):
             format_violations = self._general_format_violations(in_path, norm, out_format)
             if format_violations:
@@ -596,6 +598,45 @@ class GDALProviderAdapter(ProviderAdapter):
 
         is_warp = spec.capability_id in ("gdal:warp", "gdalwarp")
         is_dem = spec.capability_id == "gdal:dem"
+        is_rasterize = spec.capability_id == "gdal:rasterize"
+
+        if is_rasterize:
+            rasterize_bands = len(norm.get("burnValues") or []) or 1
+            rasterize_dtype = str(norm.get("outputType") or "Float64")
+            rasterize_violations = validate_output_format(
+                out_format,
+                dtype=rasterize_dtype,
+                bands=rasterize_bands,
+                has_nodata=norm.get("noData") is not None,
+                has_alpha=False,
+            )
+            if rasterize_violations:
+                context.log(
+                    "ERROR",
+                    f"Rasterize 输出格式不受支持: {rasterize_violations}",
+                )
+                return TaskResult(
+                    task_id=spec.task_id,
+                    attempt=spec.attempt,
+                    status=TaskStatus.failed,
+                    error={
+                        "code": "unsupported_format_combination",
+                        "message": "；".join(rasterize_violations),
+                    },
+                    duration_seconds=round(time.monotonic() - start_time, 4),
+                )
+            if all(
+                norm.get(key) is None
+                for key in ("xRes", "yRes", "width", "height")
+            ):
+                message = "gdal:rasterize 需要 xRes/yRes 或 width/height 以确定输出网格"
+                return TaskResult(
+                    task_id=spec.task_id,
+                    attempt=spec.attempt,
+                    status=TaskStatus.failed,
+                    error={"code": "invalid_parameters", "message": message},
+                    duration_seconds=round(time.monotonic() - start_time, 4),
+                )
 
         # DEM 地形分析输出固定为 Float32 单波段；输入可能是 Byte/UInt16，
         # 不能只按源 dtype 判断格式矩阵，否则 PNG/JPEG 会在提交后才失败。
@@ -679,7 +720,107 @@ class GDALProviderAdapter(ProviderAdapter):
                 )
 
         try:
-            if is_dem:
+            if is_rasterize:
+                burn_values = norm.get("burnValues")
+                attribute = norm.get("attribute")
+                if not burn_values and not attribute:
+                    raise ValueError("gdal:rasterize 需要 burnValues 或 attribute")
+                src_ds = gdal.OpenEx(str(in_path), gdal.OF_VECTOR)
+                if src_ds is None:
+                    raise RuntimeError(f"无法作为矢量打开输入: {in_path}")
+                try:
+                    rasterize_kwargs: dict[str, Any] = {
+                        "creationOptions": creation_options,
+                        "callback": _gdal_cb,
+                    }
+                    if burn_values:
+                        rasterize_kwargs["burnValues"] = [float(v) for v in burn_values]
+                    if attribute:
+                        rasterize_kwargs["attribute"] = str(attribute)
+                    if norm.get("allTouched") is not None:
+                        rasterize_kwargs["allTouched"] = bool(norm["allTouched"])
+                    if norm.get("xRes") is not None:
+                        rasterize_kwargs["xRes"] = float(norm["xRes"])
+                    if norm.get("yRes") is not None:
+                        rasterize_kwargs["yRes"] = float(norm["yRes"])
+                    if norm.get("width") is not None:
+                        rasterize_kwargs["width"] = int(norm["width"])
+                    if norm.get("height") is not None:
+                        rasterize_kwargs["height"] = int(norm["height"])
+                    if norm.get("outputBounds") is not None:
+                        rasterize_kwargs["outputBounds"] = [
+                            float(v) for v in norm["outputBounds"]
+                        ]
+                    if norm.get("outputType") is not None:
+                        rasterize_kwargs["outputType"] = getattr(
+                            gdal, f"GDT_{norm['outputType']}"
+                        )
+                    if norm.get("noData") is not None:
+                        rasterize_kwargs["noData"] = float(norm["noData"])
+                    if "outputBounds" not in rasterize_kwargs:
+                        # OGR GetExtent 返回 (minX, maxX, minY, maxY)，必须换成
+                        # GDAL Rasterize 的 (minX, minY, maxX, maxY)。
+                        min_x = min_y = float("inf")
+                        max_x = max_y = float("-inf")
+                        for layer_idx in range(src_ds.GetLayerCount()):
+                            layer = src_ds.GetLayer(layer_idx)
+                            if layer is None:
+                                continue
+                            extent = layer.GetExtent()
+                            if not extent:
+                                continue
+                            e_min_x, e_max_x, e_min_y, e_max_y = extent
+                            min_x = min(min_x, float(e_min_x))
+                            min_y = min(min_y, float(e_min_y))
+                            max_x = max(max_x, float(e_max_x))
+                            max_y = max(max_y, float(e_max_y))
+                        if all(
+                            math.isfinite(v) for v in (min_x, min_y, max_x, max_y)
+                        ):
+                            rasterize_kwargs["outputBounds"] = (
+                                min_x,
+                                min_y,
+                                max_x,
+                                max_y,
+                            )
+                    if out_format.upper() == "GTIFF":
+                        rasterize_kwargs["format"] = out_format
+                        ds = gdal.Rasterize(
+                            str(staged_path),
+                            src_ds,
+                            options=gdal.RasterizeOptions(**rasterize_kwargs),
+                        )
+                    else:
+                        # Rasterize can only create drivers with DCAP_CREATE;
+                        # PNG/JPEG/COG are CreateCopy-only. Rasterize to a
+                        # temporary GTiff and translate to the requested format.
+                        raw_path = staged_path.with_name(
+                            f"{staged_path.stem}_raw.tif"
+                        )
+                        rasterize_kwargs["format"] = "GTiff"
+                        raw_ds = gdal.Rasterize(
+                            str(raw_path),
+                            src_ds,
+                            options=gdal.RasterizeOptions(**rasterize_kwargs),
+                        )
+                        if raw_ds is None:
+                            raise RuntimeError("Rasterize 临时栅格创建失败")
+                        del raw_ds
+                        try:
+                            ds = gdal.Translate(
+                                str(staged_path),
+                                str(raw_path),
+                                options=gdal.TranslateOptions(
+                                    format=out_format,
+                                    creationOptions=creation_options,
+                                    callback=_gdal_cb,
+                                ),
+                            )
+                        finally:
+                            raw_path.unlink(missing_ok=True)
+                finally:
+                    src_ds = None
+            elif is_dem:
                 dem_processing = norm.get("processing")
                 if not dem_processing:
                     raise ValueError("gdal:dem 需要 processing 参数")
@@ -814,7 +955,13 @@ class GDALProviderAdapter(ProviderAdapter):
                     duration_seconds=round(time.monotonic() - start_time, 4),
                 )
             op_name = (
-                "DEMProcessing" if is_dem else ("Warp" if is_warp else "Translate")
+                "Rasterize"
+                if is_rasterize
+                else "DEMProcessing"
+                if is_dem
+                else "Warp"
+                if is_warp
+                else "Translate"
             )
             context.log("ERROR", f"GDAL {op_name} failed: {exc}")
             return TaskResult(
@@ -839,7 +986,13 @@ class GDALProviderAdapter(ProviderAdapter):
                     duration_seconds=round(time.monotonic() - start_time, 4),
                 )
             op_name = (
-                "DEMProcessing" if is_dem else ("Warp" if is_warp else "Translate")
+                "Rasterize"
+                if is_rasterize
+                else "DEMProcessing"
+                if is_dem
+                else "Warp"
+                if is_warp
+                else "Translate"
             )
             return TaskResult(
                 task_id=spec.task_id,

@@ -47,8 +47,9 @@ CONNECTED_CAPABILITIES: frozenset[str] = frozenset(
         # P4-03：元数据编辑 / 概览构建（in-place）
         "gdal:editmeta",
         "gdal:overview",
-        # P5-02：地形分析
+        # P5-02：地形分析 / 矢量栅格化
         "gdal:dem",
+        "gdal:rasterize",
         # P4-04：受限表达式计算 / 直方图与基础统计（后者输出 JSON artifact）
         "gdal:calc",
         "gdal:statistics",
@@ -89,6 +90,7 @@ FORMAT_CAPABILITIES: frozenset[str] = frozenset(
         "gdal:stack",
         "gdal:bandmanage",
         "gdal:dem",
+        "gdal:rasterize",
         "gdal:calc",
     }
 )

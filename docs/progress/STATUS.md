@@ -1,6 +1,6 @@
 # 执行状态
 
-更新：2026-11-07（第 48 轮 · P5-02 首个增量：gdal:dem 地形分析接入 Worker 与 GUI，解析平面数值验证坡度/坡向/山体阴影、zFactor/scale 生效、color-relief 与 PNG 明确拒绝；Clean 全量 649 项 / 0 失败 / rc=0 / clean_exit_verified=true。P5-02 保持 in_progress，rasterize/polygonize/contour/grid 仍待做。第 47 轮为 P5-01 基准对账）
+更新：2026-11-07（第 49 轮 · P5-02 增量二：gdal:rasterize 矢量栅格化接入 Worker 与 GUI，已知矩形/字段标签图验证、burnValues 与 attribute 互斥、输出网格必需、PNG 需显式 Byte 且经 CreateCopy 两步落盘；Clean 全量 654 项 / 0 失败 / rc=0 / clean_exit_verified=true。P5-02 保持 in_progress，polygonize/contour/grid 仍待做。第 48 轮为 DEM 地形分析）
 
 ## 当前里程碑
 
@@ -24,7 +24,7 @@
   - **P4-01 / P4-03 / P4-04 / P4-05**：implemented。P4-05 的完整用户流程验收以第 36 轮 P4-05 专项为准；P4-02 转为 done 不改变其余任务的证据边界。
 - **P5 全量栅格、矢量、地形与坐标能力**：
   - **P5-01 补齐栅格算法/传统工具入口**：**done**（第 47 轮基准逐项对账）。契约基准 443 条全部在注册表；注册表 448 条，多出的 5 条为平台组合/受限实现；8 条运行期缺口（3 条 blocked、5 条 missing）均有具体原因，未解释缺口 0。
-  - **P5-02 / P5-03 / P5-04 / P5-05**：P5-02 **in_progress**（第 48 轮已接入 `gdal:dem` 地形分析，rasterize/polygonize/contour/grid 仍待做）；P5-03/P5-04/P5-05 为 todo。P5-01 只完成入口与基准对账，不把“已编目”当作“已可执行”。
+  - **P5-02 / P5-03 / P5-04 / P5-05**：P5-02 **in_progress**（第 48 轮已接入 `gdal:dem` 地形分析，第 49 轮已接入 `gdal:rasterize` 矢量栅格化；polygonize/contour/grid 仍待做）；P5-03/P5-04/P5-05 为 todo。P5-01 只完成入口与基准对账，不把“已编目”当作“已可执行”。
 
 ## 原 P3 验收标准逐项对账与剩余缺口
 
@@ -234,6 +234,46 @@ CRT 检测到栈状态异常后立即终止进程，这正是 `STATUS_STACK_BUFF
 |---|---|---|
 | 用合成影像完成同类验收 | 已满足 | 合成 ENVI/GTiff/GeoJSON/netCDF 样例覆盖多波段、像元数值、ROI 与对比 |
 | 保留真实数据待验状态 | **待验** | 课程原始数据位于 `C:\Users\赵航\Desktop\studio\_chaoxing_rs`（**只读**，不得运行其中的抓取/下载/OCR 脚本）；本轮全部用合成影像验收，未对课程原始 ENVI 栅格与 lena.tif 做真实打开验证 |
+
+### 第 49 轮：P5-02 增量二——rasterize 矢量栅格化（P5-02 in_progress）
+
+**一、实现**
+
+- `processing/raster_params.py` 新增 `burnValues`、`attribute`、`allTouched` 别名与 `gdal:rasterize` 支持矩阵；`burnValues` 与 `attribute` 在契约层互斥，禁止同时提交。
+- `GDALProviderAdapter` 新增 `gdal:rasterize` 分支：
+  - 以 `gdal.OpenEx(..., OF_VECTOR)` 打开 GeoJSON/GPKG/SHP 等矢量输入；
+  - 未指定 `outputBounds` 时按所有图层 extent 自动计算（OGR `GetExtent` 的 `minX,maxX,minY,maxY` 显式转换为 GDAL 的 `minX,minY,maxX,maxY`）；
+  - 支持 `burnValues`、`attribute`、`allTouched`、`xRes/yRes`、`width/height`、`outputBounds`、`outputType`、`noData`；
+  - 无 `xRes/yRes` 且无 `width/height` 时明确拒绝，不猜测输出网格；
+  - GTiff 直接创建；PNG/JPEG/COG/ENVI 等 CreateCopy-only 驱动先栅格化到临时 GTiff，再 `Translate` 到目标格式，避免 `Rasterize` 直接创建失败。
+- 注册表 `gdal:rasterize` 从 blocked/indexed 改为 ready/form，补充 xRes/yRes/outputBounds 参数与限制说明；`CONNECTED_CAPABILITIES`、`FORMAT_CAPABILITIES` 与 GUI 同步。
+- GUI 新增 burnValues / attribute / allTouched 控件，rasterize 显示输出格式、数据类型、xRes/yRes 与输出尺寸；提交前按输出 dtype/波段数执行格式矩阵预检。
+
+**二、数值验收（已知矩形/标签图）**
+
+GeoJSON：两个 2×2 矩形，x=0..2 的 `value=3`，x=2..4 的 `value=9`。
+
+- `burnValues=[7]`, `xRes=1`, `yRes=1`：输出 4×2，全部为 7，CRS 保留。
+- `attribute="value"`：输出 `[[3,3,9,9],[3,3,9,9]]`，字段标签图正确。
+- `allTouched=True`：输出全部 7，覆盖规则生效。
+- `burnValues` + `attribute` 同时给出：`invalid_parameters` 且说明互斥。
+- 无输出网格参数：`invalid_parameters`，不写文件。
+- PNG 默认 Float64：`unsupported_format_combination`；显式 `outputType=Byte` 后通过两步 CreateCopy 成功，输出 Byte 且值正确。
+- GUI 真实 `MainWindow` + Worker + QTest：矢量源打开、rasterize 表单提交成功并自动加载成果；PNG 默认 Float64 在发出 TaskSpec 前被拦截。
+
+**三、验证**
+
+- 新增 `tests/integration/test_p5_rasterize.py`（4 项数值/边界）与 `tests/integration/test_p5_rasterize_gui.py`（1 项桌面路径）。
+- 受影响定向组合（DEM、rasterize、基准对账、基线审计、UI、smoke、wiring）：**49 passed**（27.76s）。
+- Ruff 干净；Mypy 66 个源文件 0 错误。
+- Clean 全量：**654 passed / 0 failed / rc=0 / clean_exit_verified=true**（356.58s，job 观测、residual=0、cleanup_complete=true）。
+- 审计刷新：缺口 7 → **6**（`gdal:rasterize` 移出 blocked）；`gdal:grid` 仍 blocked，`gdal_auth`/HDF5/3 个 rio 插件仍缺失。
+
+**四、边界与下一步**
+
+- P5-02 保持 **in_progress**：polygonize、contour、grid 尚未接入。
+- polygonize/contour 需要“成果为矢量”的输出计划、OGR 重开校验与图层登记；当前提交校验只打开栅格，不能直接复用。
+- 下一步：`gdal:polygonize`（已知标签栅格→多边形，验证字段值与面积），随后 `gdal:contour`（解析平面等高线高程属性），最后 `gdal:grid`（散点平面插值）。
 
 ### 第 48 轮：P5-02 首增量——DEM 地形分析接入（P5-02 in_progress）
 
