@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -43,6 +44,7 @@ from spectra_workbench.domain.models import (
     OutputPlan,
     TaskSpec,
 )
+from spectra_workbench.processing.output_formats import validate_output_format
 from spectra_workbench.processing.raster_params import (
     RESAMPLE_ALGORITHM_CHOICES,
     ParameterError,
@@ -65,6 +67,7 @@ class CapabilityFormWidget(QWidget):
         super().__init__(parent)
         self._current_cap: CapabilityDescriptor | None = None
         self._project_root = Path.cwd()
+        self._metadata_provider: Callable[[Path], dict[str, Any]] | None = None
 
         self._init_ui()
 
@@ -362,6 +365,12 @@ class CapabilityFormWidget(QWidget):
 
     def set_project_root(self, root: Path | str) -> None:
         self._project_root = Path(root).resolve()
+
+    def set_metadata_provider(
+        self, provider: Callable[[Path], dict[str, Any]] | None
+    ) -> None:
+        """注入 GUI 侧只读元数据提供者（通常由 MainWindow 调用 worker probe）。"""
+        self._metadata_provider = provider
 
     def set_input_path(self, path: Path | str) -> None:
         """从图层列表自动填充输入路径，并智能推荐默认输出路径。"""
@@ -739,6 +748,93 @@ class CapabilityFormWidget(QWidget):
         if path:
             self.txt_output.setText(path)
 
+    def _preflight_output_format(
+        self,
+        capability_id: str,
+        in_paths: list[Path],
+        out_fmt: str,
+        params: dict[str, Any],
+    ) -> str | None:
+        """Use the shared format matrix before submitting a task.
+
+        Metadata comes from the injected worker probe when available. Without
+        metadata only the unambiguous parameter-level rules are enforced; the
+        worker still performs the authoritative check.
+        """
+        if capability_id == "gdal:statistics":
+            return None
+        has_nodata_param = any(
+            params.get(key) is not None
+            for key in ("srcNodata", "vrtNodata", "dstNodata", "noData")
+        )
+        if out_fmt.upper() in {"PNG", "JPEG"} and has_nodata_param:
+            return f"{out_fmt} 不支持 NoData；请改用 GTiff/COG/ENVI 或清除 NoData 参数"
+
+        infos: list[dict[str, Any]] = []
+        if self._metadata_provider is not None:
+            for path in in_paths:
+                try:
+                    infos.append(self._metadata_provider(path))
+                except Exception:
+                    return None
+        if not infos:
+            raw_type_text = self.cmb_out_type.currentText()
+            dtype = None if "Default" in raw_type_text else raw_type_text.split()[0]
+            if dtype and out_fmt.upper() in {"PNG", "JPEG"}:
+                bands = 1
+                if capability_id == "gdal:bandmanage" and params.get("bandList"):
+                    bands = len(params["bandList"])
+                violations = validate_output_format(
+                    out_fmt,
+                    dtype=dtype,
+                    bands=bands,
+                    has_nodata=has_nodata_param,
+                    has_alpha=False,
+                )
+                if violations:
+                    return "；".join(violations)
+            return None
+
+        has_nodata = has_nodata_param
+        has_alpha = False
+        has_mask = False
+        for info in infos:
+            bands_info = info.get("bands") or []
+            for band in bands_info:
+                has_nodata = has_nodata or band.get("nodata") is not None
+                has_alpha = has_alpha or bool(band.get("has_alpha"))
+                flags = int(band.get("mask_flags") or 0)
+                has_mask = has_mask or bool(flags & 2)
+        if has_alpha:
+            has_mask = False
+
+        if capability_id == "gdal:stack":
+            bands = sum(int(info.get("count") or len(info.get("bands") or [])) for info in infos)
+        elif capability_id == "gdal:bandmanage":
+            bands = len(params.get("bandList") or []) or int(
+                infos[0].get("count") or len(infos[0].get("bands") or [])
+            )
+        else:
+            bands = int(infos[0].get("count") or len(infos[0].get("bands") or []))
+
+        raw_type_text = self.cmb_out_type.currentText()
+        dtype = params.get("outputType")
+        if not dtype:
+            dtype = None if "Default" in raw_type_text else raw_type_text.split()[0]
+        if not dtype:
+            dtypes = infos[0].get("dtypes") or []
+            dtype = dtypes[0] if dtypes else ""
+
+        violations = validate_output_format(
+            out_fmt,
+            dtype=str(dtype or ""),
+            bands=bands,
+            has_nodata=has_nodata,
+            has_alpha=has_alpha,
+            has_mask=has_mask,
+        )
+        return "；".join(violations) if violations else None
+
     def _on_submit_clicked(self) -> None:
         if not self._current_cap:
             return
@@ -861,6 +957,11 @@ class CapabilityFormWidget(QWidget):
             params.update(normalize_raster_params(params, capability_id=cid))
         except ParameterError as exc:
             QMessageBox.warning(self, "参数不合法", str(exc))
+            return
+
+        format_error = self._preflight_output_format(cid, in_paths, out_fmt, params)
+        if format_error:
+            QMessageBox.warning(self, "输出格式不支持", format_error)
             return
 
         provider_id = "rasterio" if "rasterio" in cid or "rio" in cid else "gdal"

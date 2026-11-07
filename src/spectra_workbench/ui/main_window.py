@@ -354,6 +354,9 @@ class MainWindow(QMainWindow):
         self.tab_right = QTabWidget()
         self.form_widget = CapabilityFormWidget()
         self.form_widget.set_project_root(self.project_root)
+        self.form_widget.set_metadata_provider(
+            lambda path: self.gdal_client.probe_dataset(path, timeout=10.0)
+        )
         self.info_panel = InfoPanel()
         self.display_panel = DisplayPanel()
         self.metadata_panel = MetadataPanel()

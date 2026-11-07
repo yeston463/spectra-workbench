@@ -1,6 +1,6 @@
 # 执行状态
 
-更新：2026-11-06（第 43 轮 · S4 输出格式矩阵与预检：GTiff/COG/ENVI/PNG/JPEG/VRT 的 dtype/波段/NoData/mask/alpha 实际支持、执行前拒绝与提交前重开核对；Clean 全量 631 项 / 0 失败 / rc=0 / clean_exit_verified=true。第 42 轮为 S3 事务删除）
+更新：2026-11-07（第 44 轮 · S4 GUI 格式预检与注册表限制同步：提交 TaskSpec 前按共享矩阵拦截，元数据经 Worker 探测注入；Clean 全量 637 项 / 0 失败 / rc=0 / clean_exit_verified=true。第 43 轮为 S4 后端矩阵，第 42 轮为 S3 事务删除）
 
 ## 当前里程碑
 
@@ -228,6 +228,34 @@ CRT 检测到栈状态异常后立即终止进程，这正是 `STATUS_STACK_BUFF
 |---|---|---|
 | 用合成影像完成同类验收 | 已满足 | 合成 ENVI/GTiff/GeoJSON/netCDF 样例覆盖多波段、像元数值、ROI 与对比 |
 | 保留真实数据待验状态 | **待验** | 课程原始数据位于 `C:\Users\赵航\Desktop\studio\_chaoxing_rs`（**只读**，不得运行其中的抓取/下载/OCR 脚本）；本轮全部用合成影像验收，未对课程原始 ENVI 栅格与 lena.tif 做真实打开验证 |
+
+### 第 44 轮：S4 GUI 格式预检与注册表限制同步
+
+**一、GUI 预检**
+
+- `CapabilityFormWidget` 新增 `_preflight_output_format`，直接复用 `processing/output_formats.py` 的 `validate_output_format`，在组装并发出 `TaskSpec` 之前拦截不支持的组合。
+- `MainWindow` 通过 `set_metadata_provider` 注入只读元数据提供者（`gdal_client.probe_dataset`），表单据此获得源 dtype、波段数、NoData、alpha 与 mask 标志。
+- 无元数据时仍执行不依赖源数据的规则：PNG/JPEG + NoData 参数明确拒绝，显式输出 dtype 也会校验；不做「没有元数据就放行一切」的静默放行。
+- Worker 仍是权威校验点：GUI 拦截只改善反馈时机，后端 `unsupported_format_combination` 与提交前实际重开核对保持不变。
+- 注册表 `limitations` 同步 buildvrt / stack / bandmanage / merge 的混合 CRS、波段结构、格式矩阵与 sidecar 边界说明。`ready` 仍只表示「已接入」，不代表任意输入可执行。
+
+**二、测试与证据**
+
+- 新增 `tests/integration/test_p4_gui_format_preflight.py`（6 项）：元数据驱动的 PNG Float32 拒绝、JPEG alpha 拒绝、PNG Byte RGB 放行、无元数据 PNG+NoData 拒绝、提交被拦截且不发出 TaskSpec、主窗口注入提供者。
+- 定向 GUI 回归（格式预检 + P4-02 GUI + 完整用户流程）**22 passed**（15.69s）。
+- Ruff / Mypy（66 个源文件）干净。
+- Clean 全量：**637 passed / 0 failed / rc=0 / clean_exit_verified=true**（378.96s，`process_observation=job`、`residual=0`、`cleanup_complete=true`、`source_snapshot_changed=false`）。
+
+**三、失败样本保留**
+
+- 新增 GUI 用例首跑时未在构造 `QWidget` 前创建 `QApplication`，子进程 `rc=3221226505`；`work/test_runs/s4_gui.log`、`s4_gui1.log` 保留现场。
+- 修正为模块级 `qapp` + autouse 夹具后 6 项通过。这是测试夹具错误，不是产品退出路径异常；**不据此声称 0xC0000409 已根治**。
+
+**四、边界**
+
+- 元数据提供者在提交路径内同步调用 `probe_dataset`，最多等待 10 秒，可能阻塞 UI；S5 桌面验收需评估并处理。
+- `scripts/audit-capabilities.ps1` 仍只审计注册表级 presence/binding/validation/availability，当前输入可执行性尚未成为独立审计维度。
+- S5 P4-02 桌面端到端验收仍未开始；P4-02 保持 implemented。
 
 ### 第 43 轮：S4 输出格式矩阵与执行前预检
 

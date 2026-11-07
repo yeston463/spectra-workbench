@@ -361,7 +361,7 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
             ),
             effects="new_dataset",
             cancellation="cooperative",
-            limitations=["仅构建 VRT 描述、不写物理像元；源引用默认相对最终目录"],
+            limitations=["仅构建 VRT 描述、不写物理像元；源引用默认相对最终目录", "混合 CRS 明确拒绝；非 separate 要求源波段结构一致；源依赖只读，不参与 sidecar 删除"],
             validation_evidence=[],
         ),
         CapabilityDescriptor(
@@ -394,7 +394,7 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
             ),
             effects="new_dataset",
             cancellation="cooperative",
-            limitations=["separate=True 时每个源的所有波段依次进入，波段数不必相同"],
+            limitations=["separate=True 时每个源的所有波段依次进入，波段数不必相同", "输出格式受 S4 矩阵限制（PNG/JPEG 不支持 NoData/mask；JPEG 仅 Byte 1/3 波段）"],
             validation_evidence=[],
         ),
         CapabilityDescriptor(
@@ -424,7 +424,7 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
             ),
             effects="new_dataset",
             cancellation="cooperative",
-            limitations=["波段号从 1 开始；输出顺序严格按给定列表"],
+            limitations=["波段号从 1 开始；输出顺序严格按给定列表", "输出格式受 S4 矩阵限制；ENVI/JPEG 等不支持的 alpha/波段组合会提前拒绝"],
             validation_evidence=[],
         ),
         CapabilityDescriptor(
@@ -846,7 +846,7 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
             ),
             effects="new_dataset",
             cancellation="cooperative",
-            limitations=["本机无 gdal_merge.py，平台实现走「VRT + Translate」路径；不兼容输入会被明确拒绝"],
+            limitations=["本机无 gdal_merge.py，平台实现走「VRT + Translate」路径；不兼容输入会被明确拒绝", "输出格式受 S4 矩阵限制；旧 sidecar 事务删除、输入依赖受保护"],
             validation_evidence=[],
         ),
         CapabilityDescriptor(
