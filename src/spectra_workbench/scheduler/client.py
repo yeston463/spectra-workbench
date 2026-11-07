@@ -687,6 +687,29 @@ class QtWorkerClient(QObject):
             timeout=timeout,
         )
 
+    def describe_driver(
+        self,
+        format_name: str,
+        timeout: float = 10.0,
+    ) -> dict[str, Any]:
+        """返回驱动的读写能力声明与高级创建选项（P5-05，同步）。"""
+        if not self.is_alive:
+            self.start()
+        return self._worker.describe_driver(format_name, timeout=timeout)
+
+    def describe_driver_async(
+        self,
+        format_name: str,
+        on_success: Callable[[dict[str, Any]], None] | None = None,
+        on_error: Callable[[str], None] | None = None,
+    ) -> str:
+        """返回驱动的读写能力声明与高级创建选项（P5-05，异步）。"""
+        return self.call_async(
+            lambda: self._worker.describe_driver(format_name),
+            on_success=on_success,
+            on_error=on_error,
+        )
+
     def read_vector_page_async(
         self,
         path: Path | str,

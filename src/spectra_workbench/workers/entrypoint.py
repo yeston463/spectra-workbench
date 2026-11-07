@@ -497,6 +497,7 @@ class WorkerRuntime:
         ),
         "list_subdatasets": ("list_subdatasets", (), True),
         "crs_wkt": ("crs_wkt", ("epsg",), False),
+        "describe_driver": ("describe_driver", ("format_name",), False),
         "transform_point": ("transform_point", ("x", "y", "src_wkt", "dst_wkt", "z"), False),
         "transform_coordinates": (
             "transform_coordinates",

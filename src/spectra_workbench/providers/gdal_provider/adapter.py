@@ -2756,6 +2756,80 @@ class GDALProviderAdapter(ProviderAdapter):
         context.log("INFO", f"staging 副本就绪：{len(files)} 个文件")
         return None
 
+    # ----------------------------------------------------- P5-05 驱动能力
+    #: 驱动能力探测读取的 DCAP 元数据项（读/建/复制建/更新分开的声明面）。
+    _DRIVER_DCAP_KEYS = (
+        "DCAP_OPEN",
+        "DCAP_CREATE",
+        "DCAP_CREATECOPY",
+        "DCAP_UPDATE",
+        "DCAP_RASTER",
+        "DCAP_VECTOR",
+    )
+
+    def describe_driver(self, format_name: str) -> dict[str, Any]:
+        """返回指定驱动的读写能力声明与高级创建选项（P5-05）。
+
+        - **能力声明**：``DCAP_OPEN/CREATE/CREATECOPY/UPDATE`` 四个访问模式
+          与 raster/vector 种类**分开**如实报告——声明是 GDAL 元数据，
+          实际行为可能有出入（如 ENVI 标称无 CreateCopy、实测可用），
+          两者都由验收矩阵分开实测，这里不擅自合并；
+        - **高级选项**：解析 ``DMD_CREATIONOPTIONLIST``（XML），逐选项给出
+          名称/类型/默认值/说明与 string-select 的候选值；
+        - ``DMD_EXTENSION`` 提供典型扩展名。
+        """
+        if not GDAL_AVAILABLE or gdal is None:
+            raise RuntimeError("GDAL 运行时不可用，无法探测驱动能力")
+        name = str(format_name or "").strip()
+        if not name:
+            raise ValueError("format 不能为空（例：GTiff / GPKG / ENVI / COG）")
+        driver = gdal.GetDriverByName(name)
+        if driver is None:
+            raise RuntimeError(f"GDAL 未注册驱动 {name!r}")
+
+        flags = {key: bool(driver.GetMetadataItem(key)) for key in self._DRIVER_DCAP_KEYS}
+        extension = driver.GetMetadataItem("DMD_EXTENSION") or ""
+        option_xml = driver.GetMetadataItem("DMD_CREATIONOPTIONLIST") or ""
+
+        creation_options: list[dict[str, Any]] = []
+        if option_xml:
+            from xml.etree import ElementTree as ET
+
+            try:
+                root = ET.fromstring(option_xml)
+                for node in root.iter("Option"):
+                    option: dict[str, Any] = {
+                        "name": node.get("name", ""),
+                        "type": node.get("type", ""),
+                        "default": node.get("default"),
+                        "description": node.get("description", ""),
+                    }
+                    values = [v.text for v in node.findall("Value") if v.text]
+                    if values:
+                        option["values"] = values
+                    creation_options.append(option)
+            except ET.ParseError:
+                # 个别驱动的选项 XML 不规范：如实保留原文，不编造解析结果
+                creation_options = [
+                    {"name": "_raw", "type": "raw", "description": option_xml}
+                ]
+
+        long_name = ""
+        try:
+            long_name = driver.LongName or ""
+        except Exception:
+            long_name = ""
+
+        return {
+            "format": name,
+            "driver_name": driver.ShortName,
+            "long_name": long_name,
+            "flags": flags,
+            "extension": extension,
+            "creation_options": creation_options,
+            "creation_option_count": len(creation_options),
+        }
+
     def probe_dataset(self, path: Path | str) -> dict[str, Any]:
         """探测并返回数据集详细元数据（零全量内存加载）。"""
         if not GDAL_AVAILABLE or gdal is None:

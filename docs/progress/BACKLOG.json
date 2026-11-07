@@ -685,9 +685,11 @@
         "P5-04",
         "P4-03"
       ],
-      "status": "todo",
+      "status": "done",
       "release_requirement": "core",
-      "evidence": [],
+      "evidence": [
+        "第 56 轮：驱动读写能力矩阵与高级选项端到端实测，P5-05 转 done（P5 里程碑全部完成）。(1) worker 新增 describe_driver（adapter + entrypoint _SIMPLE_CALLS 无路径通道 + process + client 同步/异步）：按驱动如实报告 DCAP_OPEN/DCAP_CREATE/DCAP_CREATECOPY/DCAP_UPDATE 四个访问模式声明与 raster/vector 种类（声明与实测不合并）；解析 DMD_CREATIONOPTIONLIST（ElementTree）逐选项给出名称/类型/默认值/说明与 string-select 候选值（GTiff 23 项含 COMPRESS[LZW/DEFLATE…]/TILED，GPKG 含 VERSION），个别不规范 XML 保留原文不编造；DMD_EXTENSION 提供典型扩展名。(2) 四模式分开实测矩阵（GDAL 运行时子进程，每模式真实执行并记录）：GTiff 四模式全通过；ENVI 建/更新/复制建实测可用（CreateCopy 声明 false 实测可用）；COG Create 实测可用（GDAL 3.13 已支持，声明一致）、Update 实测失败（声明一致）；PNG Create 实测失败（CreateCopy-only，声明一致）、CreateCopy 可用；GPKG 按矢量使用方式读/建/更新全通过（双能力驱动按 DCAP 推导会误判为 raster，实测用 kind 覆盖表按真实使用方式执行）；netCDF/BMP/FlatGeobuf/GeoJSON 扩展驱动进入矩阵；已装可打开驱动枚举 180+，netCDF/FlatGeobuf/BMP/HFA/PCIDSK 均在清单。(3) 声明 vs 实况错位治理：错位分两类——「声明 true 实测失败」= 真问题（测试直接失败）；「声明 false 实测可用」= GDAL 元数据保守（ENVI CreateCopy、FlatGeobuf Update/CreateCopy、GeoJSON CreateCopy、BMP CreateCopy/Update 六项白名单化，新错位必须显式过目）。(4) 新增 tests/integration/test_p5_driver_matrix.py（2 项：四模式矩阵 + describe_driver 通道与选项解析）。受影响定向 2 passed；Ruff 干净；Mypy 68 个源文件 0 错误；Clean 全量 688 passed / 0 failed / rc=0 / clean_exit_verified=true（392.20s）。验收「读/建/复制建/更新分开；ENVI/GPKG/GTiff/COG 和已装扩展驱动实测」由四模式分离实测、点名驱动全覆盖、扩展驱动枚举+实测与声明-实况错位白名单逐项满足，**P5-05 转 done，P5 里程碑收官**。遗留边界：高级选项目前经 describe_driver 暴露与既有 creation_options 参数消费，GUI 逐驱动选项表单化留待 P9-02 能力路由补齐。"
+      ],
       "blocking_reason": null
     },
     {

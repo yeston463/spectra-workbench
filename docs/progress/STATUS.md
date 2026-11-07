@@ -1,6 +1,6 @@
 # 执行状态
 
-更新：2026-11-07（第 55 轮 · P5-04 ogr:vectortranslate 端到端：矢量格式转换（GPKG/GeoJSON/Shapefile/FlatGeobuf）、SQL、where/select/spat 过滤与 dstSRS 重投影；实测三项 GDAL 语义——dstSRS 需配 reproject=True（否则假重投影）、无 SRS 源预检拒绝、输出轴序为传统 GIS 顺序（X=经度）；已知坐标 (500000,3000000)→(117.0, 27.1224696) 断言；**P5-04 转 done**。Clean 全量 686 项 / 0 失败 / rc=0 / clean_exit_verified=true。第 54 轮为 P5-03 分页属性表）
+更新：2026-11-07（第 56 轮 · P5-05 驱动读写能力矩阵与高级选项：describe_driver 暴露 DCAP 四模式声明与 DMD_CREATIONOPTIONLIST 高级选项；ENVI/GPKG/GTiff/COG+扩展驱动四模式分开实测，声明 vs 实况错位六项白名单化（ENVI CreateCopy 等），COG 在 3.13 已支持 Create；**P5-05 转 done，P5 里程碑全部完成**。Clean 全量 688 项 / 0 失败 / rc=0 / clean_exit_verified=true。第 55 轮为 P5-04）
 
 ## 当前里程碑
 
@@ -27,7 +27,7 @@
   - **P5-02 栅格化、多边形化、等值线及地形工具**：**done**（第 48–52 轮逐项接入并验收，第 53 轮边界完善）。`gdal:dem` 地形分析（解析平面坡度/坡向/山体阴影数值验证）、`gdal:rasterize` 矢量栅格化（已知矩形烧录值/属性字段）、`gdal:grid` 散点插值（linear 逐像元解析值）、`gdal:polygonize` 栅格矢量化（标签图多边形 DN/面积、4/8 连通差异）与 `gdal:contour` 等值线（解析平面逐顶点验证、offset 对齐语义）共 5 项全部接入 Worker + GUI；第 51 轮建立**矢量成果输出通道**（GPKG/GeoJSON 单文件矩阵、`inspect_vector` OGR 重开校验、`kind=vector` 输出计划与矢量图层登记），提交校验不复用仅栅格路径；第 53 轮补齐 Shapefile 多文件 bundle 输出、contour fixedLevels 与 band 参数。审计 `platform_executable` 8 → 10（polygonize/contour 接入），运行期缺口维持 5 且均有具体原因。
   - **P5-03 矢量图层与分页属性表**：**done**（第 54 轮）。worker `read_vector_page` 按范围读取（单页硬上限 1000、`GetFeatureCount(force=0)` 廉价计数拿不到就如实标注、空几何/多部件/编码逐要素标注）+ 属性表面板（一页 100 条、翻页、请求代际丢弃迟到旧页、多子图层下拉、矢量图层选中联动）；GBK 编码 Shapefile 中文字段名/值往返一致；大图层全程无一次性全读。
   - **P5-04 矢量处理、SQL 与坐标转换**：**done**（第 55 轮）。`ogr:vectortranslate`（ogr2ogr 通道）接入：GPKG/GeoJSON/Shapefile/FlatGeobuf 转换、OGR SQL、where/select 属性过滤、spat 空间过滤（源 CRS 单位）、dstSRS 重投影（恒配 reproject=True + 无 SRS 源预检拒绝，杜绝假重投影）；已知坐标/轴序/空间关系/字段值逐项断言。
-  - **P5-05**：todo。
+  - **P5-05 驱动读写能力及高级选项**：**done**（第 56 轮）。`describe_driver` 暴露 DCAP 四访问模式声明与 `DMD_CREATIONOPTIONLIST` 高级选项；ENVI/GPKG/GTiff/COG + 扩展驱动（netCDF/BMP/FlatGeobuf/GeoJSON/PNG/JPEG）四模式分开实测，已装可打开驱动枚举 180+；声明 vs 实况错位六项白名单化（ENVI CreateCopy 等元数据保守项），新错位强制显式过目。**P5 里程碑 P5-01~05 全部 done。**
 
 ## 原 P3 验收标准逐项对账与剩余缺口
 
@@ -237,6 +237,31 @@ CRT 检测到栈状态异常后立即终止进程，这正是 `STATUS_STACK_BUFF
 |---|---|---|
 | 用合成影像完成同类验收 | 已满足 | 合成 ENVI/GTiff/GeoJSON/netCDF 样例覆盖多波段、像元数值、ROI 与对比 |
 | 保留真实数据待验状态 | **待验** | 课程原始数据位于 `C:\Users\赵航\Desktop\studio\_chaoxing_rs`（**只读**，不得运行其中的抓取/下载/OCR 脚本）；本轮全部用合成影像验收，未对课程原始 ENVI 栅格与 lena.tif 做真实打开验证 |
+
+### 第 56 轮：P5-05 驱动读写能力矩阵与高级选项（P5-05 → done，P5 收官）
+
+**一、实现**
+
+- worker 新增 `describe_driver`（adapter + `entrypoint._SIMPLE_CALLS` 无路径通道 + process + client 同步/异步）：
+  - **能力声明**：`DCAP_OPEN/CREATE/CREATECOPY/UPDATE` 四访问模式与 raster/vector 种类**分开**如实报告——声明与实测不合并；
+  - **高级选项**：解析 `DMD_CREATIONOPTIONLIST`，逐选项名称/类型/默认值/说明与 string-select 候选值（GTiff 含 COMPRESS[LZW/DEFLATE…]/TILED，GPKG 含 VERSION）；个别不规范 XML 保留原文不编造；`DMD_EXTENSION` 提供典型扩展名。
+- 四模式**分开实测矩阵**（GDAL 运行时子进程逐模式真实执行）：GTiff/ENVI/COG/GPKG 四个点名驱动 + netCDF/BMP/FlatGeobuf/GeoJSON/PNG/JPEG 扩展代表；双能力驱动（GPKG）按 kind 覆盖表以真实使用方式（矢量）实测。
+
+**二、实测结论（GDAL 3.13.3，声明 vs 实况错位如实记录）**
+
+- GTiff 四模式全通过；ENVI 建/更新/复制建实测可用（**CreateCopy 声明 false 实测可用**）；COG Create 实测可用（**3.13 已支持 Create**，旧版 CreateCopy-only 认知过时）、Update 实测失败；PNG Create 实测失败（CreateCopy-only）、CreateCopy 可用；GPKG 读/建/更新全通过；netCDF/BMP/FlatGeobuf/GeoJSON 进入矩阵；已装可打开驱动 **180+**（netCDF/FlatGeobuf/BMP/HFA/PCIDSK 均在清单）。
+- 错位治理分两类：「声明 true 实测失败」= 真问题（测试直接失败）；「声明 false 实测可用」= 元数据保守，六项白名单化（ENVI CreateCopy、FlatGeobuf Update/CreateCopy、GeoJSON CreateCopy、BMP CreateCopy/Update），新错位必须显式过目。
+
+**三、验证**
+
+- 新增 `tests/integration/test_p5_driver_matrix.py`（2 项：四模式矩阵 + describe_driver 通道与选项解析）。
+- Ruff 干净；Mypy 68 个源文件 0 错误。
+- Clean 全量：**688 passed / 0 failed / rc=0 / clean_exit_verified=true**（392.20s，residual=0、cleanup_complete=true）。
+
+**四、边界与结论**
+
+- 验收「读/建/复制建/更新分开；ENVI/GPKG/GTiff/COG 和已装扩展驱动实测」逐项满足——**P5-05 转 done，P5 里程碑全部完成**。
+- 遗留边界：GUI 逐驱动创建选项表单化留待 P9-02 能力路由补齐；高级选项目前经 describe_driver 暴露并经既有 creation_options 参数消费。
 
 ### 第 55 轮：P5-04 ogr:vectortranslate——矢量处理、SQL 与坐标转换（P5-04 → done）
 

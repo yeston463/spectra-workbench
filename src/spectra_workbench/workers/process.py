@@ -753,6 +753,12 @@ class WorkerProcess:
         """向 worker 索取 EPSG 对应的 WKT（GUI 侧不导入 osr）。"""
         return self._simple_call("crs_wkt", {"epsg": int(epsg)}, timeout=timeout)
 
+    def describe_driver(self, format_name: str, timeout: float = 10.0) -> dict[str, Any]:
+        """返回驱动的读写能力声明与高级创建选项（P5-05）。"""
+        return self._simple_call(
+            "describe_driver", {"format_name": str(format_name)}, timeout=timeout
+        )
+
     def transform_point(
         self, x: float, y: float, src_wkt: str, dst_wkt: str, timeout: float = 10.0
     ) -> dict[str, Any]:
