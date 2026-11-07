@@ -52,12 +52,16 @@ from PySide6.QtWidgets import QApplication
 # 退出异常 0xC0000409 现场捕获（第 33 轮诊断）
 #
 # 事件日志已确证：崩溃在 ucrtbase.dll 固定偏移 0xa527e，ExceptionCode=c0000409。
-# UCRT 的 abort() 在调用 fastfail 之前会先触发 SIGABRT 处理器——
-# 只要处理器不返回（转而抛 SystemExit），fastfail 就不会发生，
-# 我们就能在崩溃前拿到完整线程栈。若 SIGABRT 未被触发而崩溃照旧，
-# 说明走的是栈保护（__report_gsfailure）或纯虚调用等其他路径，另作处理。
+# 第 46 轮用受控 os.abort() 捕获的 native minidump 进一步确认：
+# 该偏移对应 __fastfail(7)，即 CRT 的 fatal-app-exit / abort 路径。
 #
-# 退出码约定：69 = 捕获到 SIGABRT（此前会直接 0xC0000409）。
+# **实测修正**：在本机 Python 3.12 + UCRT 上，os.abort() 不会进入 Python 的
+# SIGABRT handler，而是直接 fastfail（子进程 rc=3221226505，无 abort-capture
+# 输出）。因此下面安装的 handler 只能覆盖确实会转成 SIGABRT 的其它中止路径，
+# 不能据此认为 0xC0000409 已被拦截或解释器退出已安全。
+#
+# 退出码约定：69 = 捕获到 SIGABRT（若该路径真的触发）；fastfail 路径仍会
+# 直接以 0xC0000409 结束，需靠 WER/native dump 诊断。
 # ============================================================================
 
 _ABORT_EXIT_CODE = 69

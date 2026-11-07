@@ -1,0 +1,2431 @@
+{
+  "schema_version": "1.0",
+  "kind": "worker_lifecycle_long_run",
+  "started_at": "2026-11-07T00:52:36.553158+00:00",
+  "finished_at": "2026-11-07T00:54:27.765863+00:00",
+  "duration_seconds": 111.219,
+  "cycles_requested": 200,
+  "cycles_completed": 200,
+  "task_every": 10,
+  "tasks_succeeded": 20,
+  "worker_id": "stress-bb7a735b",
+  "handle_before": 160,
+  "handle_after": 167,
+  "handle_growth": 7,
+  "max_handle_growth": 7,
+  "threads_before": 0,
+  "threads_after": 0,
+  "worker_threads_after": [],
+  "memory_before": {
+    "working_set": 35037184,
+    "private": 24203264
+  },
+  "memory_after": {
+    "working_set": 36061184,
+    "private": 24301568
+  },
+  "memory_private_growth": 98304,
+  "failures": [],
+  "samples": [
+    {
+      "cycle": 1,
+      "pid": 22784,
+      "generation": 0,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35737600,
+        "private": 24227840
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 2,
+      "pid": 28996,
+      "generation": 1,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35741696,
+        "private": 24227840
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 3,
+      "pid": 17064,
+      "generation": 2,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35753984,
+        "private": 24227840
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 4,
+      "pid": 7944,
+      "generation": 3,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35753984,
+        "private": 24227840
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 5,
+      "pid": 8004,
+      "generation": 4,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35758080,
+        "private": 24227840
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 6,
+      "pid": 21116,
+      "generation": 5,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35758080,
+        "private": 24227840
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 7,
+      "pid": 13160,
+      "generation": 6,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35758080,
+        "private": 24227840
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 8,
+      "pid": 29980,
+      "generation": 7,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35758080,
+        "private": 24227840
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 9,
+      "pid": 29024,
+      "generation": 8,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35758080,
+        "private": 24227840
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 10,
+      "pid": 17396,
+      "generation": 9,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35831808,
+        "private": 24227840
+      },
+      "task_ok": true
+    },
+    {
+      "cycle": 11,
+      "pid": 28812,
+      "generation": 10,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35831808,
+        "private": 24227840
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 12,
+      "pid": 27388,
+      "generation": 11,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35868672,
+        "private": 24268800
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 13,
+      "pid": 3192,
+      "generation": 12,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35872768,
+        "private": 24268800
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 14,
+      "pid": 30500,
+      "generation": 13,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35872768,
+        "private": 24268800
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 15,
+      "pid": 30548,
+      "generation": 14,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35893248,
+        "private": 24285184
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 16,
+      "pid": 13092,
+      "generation": 15,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35897344,
+        "private": 24285184
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 17,
+      "pid": 27844,
+      "generation": 16,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35897344,
+        "private": 24285184
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 18,
+      "pid": 4912,
+      "generation": 17,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35897344,
+        "private": 24285184
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 19,
+      "pid": 15188,
+      "generation": 18,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35897344,
+        "private": 24285184
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 20,
+      "pid": 5584,
+      "generation": 19,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35909632,
+        "private": 24285184
+      },
+      "task_ok": true
+    },
+    {
+      "cycle": 21,
+      "pid": 14940,
+      "generation": 20,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35909632,
+        "private": 24285184
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 22,
+      "pid": 28508,
+      "generation": 21,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35909632,
+        "private": 24285184
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 23,
+      "pid": 30596,
+      "generation": 22,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35909632,
+        "private": 24285184
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 24,
+      "pid": 3572,
+      "generation": 23,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35909632,
+        "private": 24285184
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 25,
+      "pid": 26680,
+      "generation": 24,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35909632,
+        "private": 24285184
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 26,
+      "pid": 29572,
+      "generation": 25,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35913728,
+        "private": 24285184
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 27,
+      "pid": 1272,
+      "generation": 26,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35913728,
+        "private": 24285184
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 28,
+      "pid": 28388,
+      "generation": 27,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35913728,
+        "private": 24285184
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 29,
+      "pid": 30488,
+      "generation": 28,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35913728,
+        "private": 24285184
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 30,
+      "pid": 18968,
+      "generation": 29,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35921920,
+        "private": 24285184
+      },
+      "task_ok": true
+    },
+    {
+      "cycle": 31,
+      "pid": 19944,
+      "generation": 30,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35921920,
+        "private": 24285184
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 32,
+      "pid": 5204,
+      "generation": 31,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35921920,
+        "private": 24285184
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 33,
+      "pid": 22276,
+      "generation": 32,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35921920,
+        "private": 24285184
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 34,
+      "pid": 6036,
+      "generation": 33,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35921920,
+        "private": 24285184
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 35,
+      "pid": 27884,
+      "generation": 34,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35921920,
+        "private": 24285184
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 36,
+      "pid": 12820,
+      "generation": 35,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35921920,
+        "private": 24285184
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 37,
+      "pid": 6096,
+      "generation": 36,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35921920,
+        "private": 24285184
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 38,
+      "pid": 29716,
+      "generation": 37,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35921920,
+        "private": 24285184
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 39,
+      "pid": 1892,
+      "generation": 38,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35921920,
+        "private": 24285184
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 40,
+      "pid": 6996,
+      "generation": 39,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35921920,
+        "private": 24285184
+      },
+      "task_ok": true
+    },
+    {
+      "cycle": 41,
+      "pid": 27928,
+      "generation": 40,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35921920,
+        "private": 24285184
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 42,
+      "pid": 10788,
+      "generation": 41,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35921920,
+        "private": 24285184
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 43,
+      "pid": 27496,
+      "generation": 42,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35921920,
+        "private": 24285184
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 44,
+      "pid": 21528,
+      "generation": 43,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35921920,
+        "private": 24285184
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 45,
+      "pid": 25476,
+      "generation": 44,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35921920,
+        "private": 24285184
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 46,
+      "pid": 30348,
+      "generation": 45,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35926016,
+        "private": 24285184
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 47,
+      "pid": 25980,
+      "generation": 46,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35926016,
+        "private": 24285184
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 48,
+      "pid": 4552,
+      "generation": 47,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35926016,
+        "private": 24285184
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 49,
+      "pid": 30816,
+      "generation": 48,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35926016,
+        "private": 24285184
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 50,
+      "pid": 29136,
+      "generation": 49,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35930112,
+        "private": 24285184
+      },
+      "task_ok": true
+    },
+    {
+      "cycle": 51,
+      "pid": 27924,
+      "generation": 50,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35930112,
+        "private": 24285184
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 52,
+      "pid": 17164,
+      "generation": 51,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35930112,
+        "private": 24285184
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 53,
+      "pid": 5516,
+      "generation": 52,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35930112,
+        "private": 24285184
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 54,
+      "pid": 11600,
+      "generation": 53,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35930112,
+        "private": 24285184
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 55,
+      "pid": 30472,
+      "generation": 54,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35930112,
+        "private": 24285184
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 56,
+      "pid": 28928,
+      "generation": 55,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35930112,
+        "private": 24285184
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 57,
+      "pid": 27288,
+      "generation": 56,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35930112,
+        "private": 24285184
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 58,
+      "pid": 16564,
+      "generation": 57,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35930112,
+        "private": 24285184
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 59,
+      "pid": 5816,
+      "generation": 58,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35930112,
+        "private": 24285184
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 60,
+      "pid": 7452,
+      "generation": 59,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35930112,
+        "private": 24285184
+      },
+      "task_ok": true
+    },
+    {
+      "cycle": 61,
+      "pid": 31484,
+      "generation": 60,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35946496,
+        "private": 24301568
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 62,
+      "pid": 20704,
+      "generation": 61,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35946496,
+        "private": 24301568
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 63,
+      "pid": 29952,
+      "generation": 62,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35946496,
+        "private": 24301568
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 64,
+      "pid": 17576,
+      "generation": 63,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35946496,
+        "private": 24301568
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 65,
+      "pid": 28788,
+      "generation": 64,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35946496,
+        "private": 24301568
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 66,
+      "pid": 24396,
+      "generation": 65,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35946496,
+        "private": 24301568
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 67,
+      "pid": 25844,
+      "generation": 66,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35946496,
+        "private": 24301568
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 68,
+      "pid": 20816,
+      "generation": 67,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35950592,
+        "private": 24301568
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 69,
+      "pid": 19372,
+      "generation": 68,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35950592,
+        "private": 24301568
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 70,
+      "pid": 25596,
+      "generation": 69,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35954688,
+        "private": 24301568
+      },
+      "task_ok": true
+    },
+    {
+      "cycle": 71,
+      "pid": 32196,
+      "generation": 70,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35958784,
+        "private": 24301568
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 72,
+      "pid": 30288,
+      "generation": 71,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35958784,
+        "private": 24301568
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 73,
+      "pid": 27996,
+      "generation": 72,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35958784,
+        "private": 24301568
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 74,
+      "pid": 29944,
+      "generation": 73,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35958784,
+        "private": 24301568
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 75,
+      "pid": 27652,
+      "generation": 74,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35962880,
+        "private": 24301568
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 76,
+      "pid": 4892,
+      "generation": 75,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35962880,
+        "private": 24301568
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 77,
+      "pid": 4992,
+      "generation": 76,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35962880,
+        "private": 24301568
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 78,
+      "pid": 29820,
+      "generation": 77,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35962880,
+        "private": 24301568
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 79,
+      "pid": 31192,
+      "generation": 78,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35962880,
+        "private": 24301568
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 80,
+      "pid": 30632,
+      "generation": 79,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35962880,
+        "private": 24301568
+      },
+      "task_ok": true
+    },
+    {
+      "cycle": 81,
+      "pid": 12952,
+      "generation": 80,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35979264,
+        "private": 24317952
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 82,
+      "pid": 4024,
+      "generation": 81,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35979264,
+        "private": 24317952
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 83,
+      "pid": 25492,
+      "generation": 82,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35979264,
+        "private": 24317952
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 84,
+      "pid": 27216,
+      "generation": 83,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35979264,
+        "private": 24317952
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 85,
+      "pid": 26872,
+      "generation": 84,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35979264,
+        "private": 24317952
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 86,
+      "pid": 29800,
+      "generation": 85,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35979264,
+        "private": 24317952
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 87,
+      "pid": 17900,
+      "generation": 86,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35979264,
+        "private": 24317952
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 88,
+      "pid": 4680,
+      "generation": 87,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35979264,
+        "private": 24317952
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 89,
+      "pid": 32272,
+      "generation": 88,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35979264,
+        "private": 24317952
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 90,
+      "pid": 27808,
+      "generation": 89,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35987456,
+        "private": 24317952
+      },
+      "task_ok": true
+    },
+    {
+      "cycle": 91,
+      "pid": 2460,
+      "generation": 90,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36003840,
+        "private": 24334336
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 92,
+      "pid": 11536,
+      "generation": 91,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36003840,
+        "private": 24334336
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 93,
+      "pid": 12752,
+      "generation": 92,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36003840,
+        "private": 24334336
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 94,
+      "pid": 24684,
+      "generation": 93,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36003840,
+        "private": 24334336
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 95,
+      "pid": 32164,
+      "generation": 94,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36003840,
+        "private": 24334336
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 96,
+      "pid": 28560,
+      "generation": 95,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36003840,
+        "private": 24334336
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 97,
+      "pid": 29984,
+      "generation": 96,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36003840,
+        "private": 24334336
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 98,
+      "pid": 11296,
+      "generation": 97,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36003840,
+        "private": 24334336
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 99,
+      "pid": 30088,
+      "generation": 98,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36003840,
+        "private": 24334336
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 100,
+      "pid": 32424,
+      "generation": 99,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36003840,
+        "private": 24334336
+      },
+      "task_ok": true
+    },
+    {
+      "cycle": 101,
+      "pid": 30676,
+      "generation": 100,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36003840,
+        "private": 24334336
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 102,
+      "pid": 10672,
+      "generation": 101,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36003840,
+        "private": 24334336
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 103,
+      "pid": 20424,
+      "generation": 102,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36003840,
+        "private": 24334336
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 104,
+      "pid": 27380,
+      "generation": 103,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36003840,
+        "private": 24334336
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 105,
+      "pid": 32608,
+      "generation": 104,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36003840,
+        "private": 24334336
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 106,
+      "pid": 32072,
+      "generation": 105,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36003840,
+        "private": 24334336
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 107,
+      "pid": 15476,
+      "generation": 106,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36003840,
+        "private": 24334336
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 108,
+      "pid": 1516,
+      "generation": 107,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35946496,
+        "private": 24227840
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 109,
+      "pid": 30568,
+      "generation": 108,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35946496,
+        "private": 24227840
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 110,
+      "pid": 32668,
+      "generation": 109,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35954688,
+        "private": 24227840
+      },
+      "task_ok": true
+    },
+    {
+      "cycle": 111,
+      "pid": 8696,
+      "generation": 110,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35954688,
+        "private": 24227840
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 112,
+      "pid": 23524,
+      "generation": 111,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35954688,
+        "private": 24227840
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 113,
+      "pid": 31404,
+      "generation": 112,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35954688,
+        "private": 24227840
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 114,
+      "pid": 14396,
+      "generation": 113,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35954688,
+        "private": 24227840
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 115,
+      "pid": 12792,
+      "generation": 114,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35954688,
+        "private": 24227840
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 116,
+      "pid": 31900,
+      "generation": 115,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35954688,
+        "private": 24227840
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 117,
+      "pid": 30364,
+      "generation": 116,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35954688,
+        "private": 24227840
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 118,
+      "pid": 27220,
+      "generation": 117,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35954688,
+        "private": 24227840
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 119,
+      "pid": 29444,
+      "generation": 118,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35954688,
+        "private": 24227840
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 120,
+      "pid": 26664,
+      "generation": 119,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35966976,
+        "private": 24227840
+      },
+      "task_ok": true
+    },
+    {
+      "cycle": 121,
+      "pid": 27744,
+      "generation": 120,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35966976,
+        "private": 24227840
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 122,
+      "pid": 29552,
+      "generation": 121,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35966976,
+        "private": 24227840
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 123,
+      "pid": 31008,
+      "generation": 122,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35966976,
+        "private": 24227840
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 124,
+      "pid": 11560,
+      "generation": 123,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35966976,
+        "private": 24227840
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 125,
+      "pid": 24896,
+      "generation": 124,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35966976,
+        "private": 24227840
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 126,
+      "pid": 27672,
+      "generation": 125,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35966976,
+        "private": 24227840
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 127,
+      "pid": 30248,
+      "generation": 126,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35966976,
+        "private": 24227840
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 128,
+      "pid": 32208,
+      "generation": 127,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35966976,
+        "private": 24227840
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 129,
+      "pid": 14492,
+      "generation": 128,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35966976,
+        "private": 24227840
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 130,
+      "pid": 28436,
+      "generation": 129,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35966976,
+        "private": 24227840
+      },
+      "task_ok": true
+    },
+    {
+      "cycle": 131,
+      "pid": 26208,
+      "generation": 130,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35966976,
+        "private": 24227840
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 132,
+      "pid": 31336,
+      "generation": 131,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35971072,
+        "private": 24227840
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 133,
+      "pid": 31716,
+      "generation": 132,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35971072,
+        "private": 24227840
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 134,
+      "pid": 28484,
+      "generation": 133,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35971072,
+        "private": 24227840
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 135,
+      "pid": 27592,
+      "generation": 134,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35971072,
+        "private": 24227840
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 136,
+      "pid": 20592,
+      "generation": 135,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35971072,
+        "private": 24227840
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 137,
+      "pid": 26860,
+      "generation": 136,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35971072,
+        "private": 24227840
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 138,
+      "pid": 8712,
+      "generation": 137,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35971072,
+        "private": 24227840
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 139,
+      "pid": 13544,
+      "generation": 138,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35971072,
+        "private": 24227840
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 140,
+      "pid": 5260,
+      "generation": 139,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35971072,
+        "private": 24227840
+      },
+      "task_ok": true
+    },
+    {
+      "cycle": 141,
+      "pid": 19384,
+      "generation": 140,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35971072,
+        "private": 24227840
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 142,
+      "pid": 18320,
+      "generation": 141,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35971072,
+        "private": 24227840
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 143,
+      "pid": 13260,
+      "generation": 142,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35971072,
+        "private": 24227840
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 144,
+      "pid": 32232,
+      "generation": 143,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35971072,
+        "private": 24227840
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 145,
+      "pid": 19188,
+      "generation": 144,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35971072,
+        "private": 24227840
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 146,
+      "pid": 24720,
+      "generation": 145,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35971072,
+        "private": 24227840
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 147,
+      "pid": 30000,
+      "generation": 146,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35971072,
+        "private": 24227840
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 148,
+      "pid": 3544,
+      "generation": 147,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35971072,
+        "private": 24227840
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 149,
+      "pid": 31384,
+      "generation": 148,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35971072,
+        "private": 24227840
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 150,
+      "pid": 27888,
+      "generation": 149,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 35987456,
+        "private": 24248320
+      },
+      "task_ok": true
+    },
+    {
+      "cycle": 151,
+      "pid": 20204,
+      "generation": 150,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36003840,
+        "private": 24264704
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 152,
+      "pid": 24776,
+      "generation": 151,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36003840,
+        "private": 24264704
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 153,
+      "pid": 25180,
+      "generation": 152,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36007936,
+        "private": 24264704
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 154,
+      "pid": 30980,
+      "generation": 153,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36007936,
+        "private": 24264704
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 155,
+      "pid": 30724,
+      "generation": 154,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36007936,
+        "private": 24264704
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 156,
+      "pid": 31988,
+      "generation": 155,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36007936,
+        "private": 24264704
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 157,
+      "pid": 18076,
+      "generation": 156,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36007936,
+        "private": 24264704
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 158,
+      "pid": 21124,
+      "generation": 157,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36007936,
+        "private": 24264704
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 159,
+      "pid": 32096,
+      "generation": 158,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36007936,
+        "private": 24264704
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 160,
+      "pid": 7776,
+      "generation": 159,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36020224,
+        "private": 24264704
+      },
+      "task_ok": true
+    },
+    {
+      "cycle": 161,
+      "pid": 28340,
+      "generation": 160,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36020224,
+        "private": 24264704
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 162,
+      "pid": 10700,
+      "generation": 161,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36020224,
+        "private": 24264704
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 163,
+      "pid": 8176,
+      "generation": 162,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36020224,
+        "private": 24264704
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 164,
+      "pid": 27188,
+      "generation": 163,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36020224,
+        "private": 24264704
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 165,
+      "pid": 12112,
+      "generation": 164,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36020224,
+        "private": 24264704
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 166,
+      "pid": 16060,
+      "generation": 165,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36020224,
+        "private": 24264704
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 167,
+      "pid": 15320,
+      "generation": 166,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36020224,
+        "private": 24264704
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 168,
+      "pid": 3884,
+      "generation": 167,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36020224,
+        "private": 24264704
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 169,
+      "pid": 30656,
+      "generation": 168,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36020224,
+        "private": 24264704
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 170,
+      "pid": 30544,
+      "generation": 169,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36024320,
+        "private": 24264704
+      },
+      "task_ok": true
+    },
+    {
+      "cycle": 171,
+      "pid": 29376,
+      "generation": 170,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36024320,
+        "private": 24264704
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 172,
+      "pid": 3892,
+      "generation": 171,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36024320,
+        "private": 24264704
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 173,
+      "pid": 29144,
+      "generation": 172,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36024320,
+        "private": 24264704
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 174,
+      "pid": 30964,
+      "generation": 173,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36024320,
+        "private": 24264704
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 175,
+      "pid": 31388,
+      "generation": 174,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36024320,
+        "private": 24264704
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 176,
+      "pid": 31884,
+      "generation": 175,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36024320,
+        "private": 24264704
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 177,
+      "pid": 28888,
+      "generation": 176,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36024320,
+        "private": 24264704
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 178,
+      "pid": 30208,
+      "generation": 177,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36024320,
+        "private": 24264704
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 179,
+      "pid": 27328,
+      "generation": 178,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36024320,
+        "private": 24264704
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 180,
+      "pid": 4020,
+      "generation": 179,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36044800,
+        "private": 24301568
+      },
+      "task_ok": true
+    },
+    {
+      "cycle": 181,
+      "pid": 11764,
+      "generation": 180,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36044800,
+        "private": 24301568
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 182,
+      "pid": 5464,
+      "generation": 181,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36044800,
+        "private": 24301568
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 183,
+      "pid": 28420,
+      "generation": 182,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36044800,
+        "private": 24301568
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 184,
+      "pid": 9520,
+      "generation": 183,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36044800,
+        "private": 24301568
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 185,
+      "pid": 28344,
+      "generation": 184,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36044800,
+        "private": 24301568
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 186,
+      "pid": 26284,
+      "generation": 185,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36044800,
+        "private": 24301568
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 187,
+      "pid": 29176,
+      "generation": 186,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36044800,
+        "private": 24301568
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 188,
+      "pid": 27848,
+      "generation": 187,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36044800,
+        "private": 24301568
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 189,
+      "pid": 16932,
+      "generation": 188,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36044800,
+        "private": 24301568
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 190,
+      "pid": 29032,
+      "generation": 189,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36048896,
+        "private": 24301568
+      },
+      "task_ok": true
+    },
+    {
+      "cycle": 191,
+      "pid": 14180,
+      "generation": 190,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36048896,
+        "private": 24301568
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 192,
+      "pid": 22648,
+      "generation": 191,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36048896,
+        "private": 24301568
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 193,
+      "pid": 10316,
+      "generation": 192,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36048896,
+        "private": 24301568
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 194,
+      "pid": 31700,
+      "generation": 193,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36048896,
+        "private": 24301568
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 195,
+      "pid": 3052,
+      "generation": 194,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36048896,
+        "private": 24301568
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 196,
+      "pid": 32016,
+      "generation": 195,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36052992,
+        "private": 24301568
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 197,
+      "pid": 31852,
+      "generation": 196,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36052992,
+        "private": 24301568
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 198,
+      "pid": 29356,
+      "generation": 197,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36052992,
+        "private": 24301568
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 199,
+      "pid": 7352,
+      "generation": 198,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36052992,
+        "private": 24301568
+      },
+      "task_ok": null
+    },
+    {
+      "cycle": 200,
+      "pid": 30788,
+      "generation": 199,
+      "handles": 167,
+      "threads": 0,
+      "memory": {
+        "working_set": 36061184,
+        "private": 24301568
+      },
+      "task_ok": true
+    }
+  ]
+}

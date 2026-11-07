@@ -1,6 +1,6 @@
 # 执行状态
 
-更新：2026-11-07（第 45 轮 · S5 P4-02 桌面端到端验收：真实 MainWindow + 真实 Worker + QTest 交互，覆盖优先级顺序、混合 CRS 保留旧成果、ENVI 新建/覆盖、alpha/NoData 格式矩阵、真实计算取消/重试、成果加载与项目保存重开、VRT 失效源明确报错；Clean 全量 644 项 / 0 失败 / rc=0 / clean_exit_verified=true。P4-02 据此转为 done。第 44 轮为 S4 GUI 格式预检，第 43 轮为 S4 后端矩阵）
+更新：2026-11-07（第 46 轮 · 长周期 worker 压力与 native dump 证据：200 轮真实 Worker 启动/停止 + 20 个 GDAL 任务，句柄增长 +7、线程收敛 0、私有内存 +96 KB；受控 abort 捕获 1.78 MB minidump，确认历史 0xC0000409 为 ucrtbase+0xa527e / fastfail(7) 的 abort 路径，但不宣称调用方与根因。P4-02 已于第 45 轮转为 done；Clean 全量仍为 644 项 / 0 失败 / rc=0。第 45 轮为 S5 桌面验收）
 
 ## 当前里程碑
 
@@ -231,6 +231,28 @@ CRT 检测到栈状态异常后立即终止进程，这正是 `STATUS_STACK_BUFF
 |---|---|---|
 | 用合成影像完成同类验收 | 已满足 | 合成 ENVI/GTiff/GeoJSON/netCDF 样例覆盖多波段、像元数值、ROI 与对比 |
 | 保留真实数据待验状态 | **待验** | 课程原始数据位于 `C:\Users\赵航\Desktop\studio\_chaoxing_rs`（**只读**，不得运行其中的抓取/下载/OCR 脚本）；本轮全部用合成影像验收，未对课程原始 ENVI 栅格与 lena.tif 做真实打开验证 |
+
+### 第 46 轮：长周期 Worker 压力与 native dump 证据
+
+**一、长周期 Worker/句柄压力（可复现脚本）**
+
+- 新增 `scripts/stress_worker_lifecycle.py`：同一 `WorkerProcess` 连续 200 轮 start/probe/stop，每 10 轮执行一次真实 `gdal:translate`，每轮记录 PID、generation、父进程句柄数、线程数、工作集/私有内存；任一任务失败、线程残留或句柄增长超过 16 即返回非零。
+- 实测：**200 轮完成 / 20 个 GDAL 任务成功 / 111.2s**；句柄 160 → 167（增长 **+7**，最大增长 +7）；Worker 线程残留 **0**；私有内存仅 +96 KB；失败列表为空。
+- 报告：`docs/progress/runs/worker_long_run.json`。该结果覆盖短中期 start/stop 压力，不替代数小时级真实桌面会话；P9-04 仍为 todo，只登记为部分证据。
+
+**二、native dump 与历史 0xC0000409 签名**
+
+- 纠正：HKCU `LocalDumps` 实际已配置（`DumpFolder=work/crash_dumps`、`DumpType=2`、`DumpCount=5`），并非“未配置”；但本机 WER 不把 `os.abort()` 的 dump 留在该目录，而是在 `C:\ProgramData\Microsoft\Windows\WER\Temp` 生成临时 `.mdmp` 后删除。
+- 通过轮询 WER Temp 并即时复制，成功捕获受控 `os.abort()` 的 **1,783,483 字节 minidump**（SHA-256 `e8df873d…58a7857`）。解析结果：`ExceptionCode=0xC0000409`、异常地址 `ucrtbase.dll+0xa527e`、`fastfail` 参数 **7**（fatal-app-exit）。
+- 历史 WER `Report.wer`（2026-11-06 18:51/18:57，项目 pytest 进程）签名完全相同：`ucrtbase.dll` / `0xa527e` / `c0000409` / 参数 7。故可确认历史异常走的是 **CRT abort / fatal-app-exit 路径**，不是笼统的随机栈破坏；**仍未定位是谁调用了 abort**，不宣称根因或已根治。
+- 负结果：`tests/conftest.py` 安装的 SIGABRT handler 在该环境**拦截不到** `os.abort()`（子进程仍直接 `rc=3221226505`，无 `[abort-capture]` 输出）。已修正注释，避免把该 handler 当成已生效的防线。
+- 分析报告：`docs/progress/runs/controlled_abort_dump_analysis.json`。受控 dump 仅用于验证捕获链路与签名对照，不是产品崩溃现场。
+
+**三、验证与边界**
+
+- 定向：`scripts/stress_worker_lifecycle.py` 退出码 0；Ruff 检查通过；全量 644 项的上一次 Clean 运行仍为当前代码基线（本轮仅新增诊断脚本与注释修正，未改产品执行路径）。
+- native dump 捕获目前依赖 WER Temp 轮询，不是自动常驻机制；若未来再次复现，应按同一流程保留 dump 后再分析调用方。
+- P4-02 保持 **done**；P9-04/P9-05 仍为 todo，本轮只登记部分证据，不改变里程碑状态。
 
 ### 第 45 轮：S5 P4-02 桌面端到端验收
 

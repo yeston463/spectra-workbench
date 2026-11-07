@@ -1,0 +1,45 @@
+{
+  "schema_version": "1.0",
+  "kind": "controlled_abort_minidump_analysis",
+  "generated_at": "2026-11-07T01:06:13.282741+00:00",
+  "purpose": "Verify native dump capture and compare the controlled abort signature with the historical intermittent 0xC0000409 events. This is NOT a product crash dump and must not be presented as root-cause proof.",
+  "dump": {
+    "path": "C:\\Users\\赵航\\Desktop\\studio\\spectra-workbench\\work\\crash_dumps\\captured_WER.282e882d-db2e-44df-9970-961ac062985f.tmp.mdmp",
+    "size_bytes": 1783483,
+    "sha256": "e8df873da14e2924ad0044a3c1b6e56ac1db897a9b04c9de5d41f00ad58a7857",
+    "signature": "MDMP",
+    "stream_count": 14,
+    "flags": 2491681
+  },
+  "exception": {
+    "thread_id": 30568,
+    "code": 3221226505,
+    "code_hex": "0xc0000409",
+    "flags": 1,
+    "address": 140707238072958,
+    "address_hex": "0x00007ff8f4f1527e",
+    "parameters": [
+      7
+    ],
+    "fastfail_code": 7,
+    "context_size": 1232,
+    "context_rva": 8380
+  },
+  "fault_module": "C:\\Windows\\System32\\ucrtbase.dll",
+  "fault_module_offset": 676478,
+  "fault_module_offset_hex": "0xa527e",
+  "historical_wer_signature": {
+    "module": "ucrtbase.dll",
+    "offset": "0xa527e",
+    "exception_code": "c0000409",
+    "parameter_7": "0000000000000007"
+  },
+  "signature_match": true,
+  "interpretation": [
+    "ucrtbase+0xa527e with fastfail code 7 is the CRT abort()/fatal-app-exit path.",
+    "The historical WER reports listed the same offset, exception code and parameter 7.",
+    "This narrows the historical failures to an abort()/fatal-app-exit path; it does not identify the caller.",
+    "tests/conftest.py installs a SIGABRT handler, but os.abort() bypasses it on this Python/UCRT build (observed rc=3221226505 with no abort-capture output)."
+  ],
+  "capture_method": "Poll C:\\ProgramData\\Microsoft\\Windows\\WER\\Temp for WER*.tmp.mdmp while the controlled child calls os.abort(), then copy the dump before WER removes it. The configured HKCU LocalDumps folder did not retain the dump."
+}
