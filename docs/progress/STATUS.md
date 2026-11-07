@@ -250,7 +250,7 @@ CRT 检测到栈状态异常后立即终止进程，这正是 `STATUS_STACK_BUFF
 
 **三、验证与边界**
 
-- 定向：`scripts/stress_worker_lifecycle.py` 退出码 0；Ruff 检查通过；全量 644 项的上一次 Clean 运行仍为当前代码基线（本轮仅新增诊断脚本与注释修正，未改产品执行路径）。
+- 定向：`scripts/stress_worker_lifecycle.py` 退出码 0；Ruff 检查通过；诊断改动后的最终 Clean 全量：**644 passed / 0 failed / rc=0 / clean_exit_verified=true**（362.45s，`process_observation=job`、`residual=0`、`cleanup_complete=true`）。
 - native dump 捕获目前依赖 WER Temp 轮询，不是自动常驻机制；若未来再次复现，应按同一流程保留 dump 后再分析调用方。
 - P4-02 保持 **done**；P9-04/P9-05 仍为 todo，本轮只登记部分证据，不改变里程碑状态。
 
