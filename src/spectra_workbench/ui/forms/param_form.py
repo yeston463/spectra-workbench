@@ -275,6 +275,24 @@ class CapabilityFormWidget(QWidget):
         self.lbl_all_touched = QLabel("全触及像元 (allTouched):")
         self.params_form.addRow(self.lbl_all_touched, self.chk_all_touched)
 
+        # --- P5-02 散点栅格插值 ---
+        self.cmb_grid_algorithm = QComboBox()
+        for label, val in (
+            ("反距离加权 (invdist)", "invdist"),
+            ("反距离加权最近邻 (invdistnn)", "invdistnn"),
+            ("滑动平均 (average)", "average"),
+            ("最近邻 (nearest)", "nearest"),
+            ("线性 (linear)", "linear"),
+        ):
+            self.cmb_grid_algorithm.addItem(label, val)
+        self.lbl_grid_algorithm = QLabel("插值算法 (algorithm):")
+        self.params_form.addRow(self.lbl_grid_algorithm, self.cmb_grid_algorithm)
+
+        self.txt_zfield = QLineEdit()
+        self.txt_zfield.setPlaceholderText("留空=读几何 Z；例：value")
+        self.lbl_zfield = QLabel("高程字段 (zField):")
+        self.params_form.addRow(self.lbl_zfield, self.txt_zfield)
+
         # --- P4-03 概览构建 ---
         self.txt_levels = QLineEdit()
         self.txt_levels.setPlaceholderText("严格递增、每个≥2；例：2,4,8")
@@ -465,6 +483,7 @@ class CapabilityFormWidget(QWidget):
         is_translate = "translate" in cid
         is_rasterio = "rasterio" in cid
         is_rasterize = cid == "gdal:rasterize"
+        is_grid = cid == "gdal:grid"
         sup = supported_params_for(cid) or frozenset()
 
         # 显示或隐藏相应字段（统计报告输出 JSON artifact，不显示栅格格式选项）
@@ -478,7 +497,7 @@ class CapabilityFormWidget(QWidget):
         self.lbl_format.setVisible(show_format)
         self.cmb_format.setVisible(show_format)
 
-        show_out_type = is_translate or is_rasterize or "outputType" in sup
+        show_out_type = is_translate or is_rasterize or is_grid or "outputType" in sup
         self.lbl_out_type.setVisible(show_out_type)
         self.cmb_out_type.setVisible(show_out_type)
 
@@ -524,6 +543,11 @@ class CapabilityFormWidget(QWidget):
         self._set_row_visible(
             self.lbl_all_touched, self.chk_all_touched, "allTouched" in sup
         )
+        # P5-02 散点栅格插值
+        self._set_row_visible(
+            self.lbl_grid_algorithm, self.cmb_grid_algorithm, "algorithm" in sup
+        )
+        self._set_row_visible(self.lbl_zfield, self.txt_zfield, "zField" in sup)
         self._set_row_visible(self.lbl_levels, self.txt_levels, "levels" in sup)
         self._set_row_visible(self.lbl_ovr_compress, self.cmb_ovr_compress, "overviewCompress" in sup)
         # P4-04
@@ -537,7 +561,7 @@ class CapabilityFormWidget(QWidget):
         self._set_row_visible(self.lbl_clip, self.txt_clip, is_translate or is_warp)
         self._set_row_visible(self.lbl_xres, self.spin_xres, is_translate or is_warp or is_rasterize)
         self._set_row_visible(self.lbl_yres, self.spin_yres, is_translate or is_warp or is_rasterize)
-        self._set_row_visible(self.lbl_outsize, self.txt_outsize, is_translate or is_warp or is_rasterize)
+        self._set_row_visible(self.lbl_outsize, self.txt_outsize, is_translate or is_warp or is_rasterize or is_grid)
         self._set_row_visible(self.lbl_tap, self.chk_tap, is_warp)
 
         # 切换能力时**隔离状态**：把新能力不适用的控件值重置。
@@ -626,6 +650,10 @@ class CapabilityFormWidget(QWidget):
             self.txt_attribute.clear()
         if "allTouched" not in supported:
             self.chk_all_touched.setChecked(False)
+        if "algorithm" not in supported:
+            self.cmb_grid_algorithm.setCurrentIndex(0)
+        if "zField" not in supported:
+            self.txt_zfield.clear()
         if "levels" not in supported:
             self.txt_levels.clear()
         if "overviewCompress" not in supported:
@@ -752,6 +780,14 @@ class CapabilityFormWidget(QWidget):
             params["allTouched"] = self.chk_all_touched.isChecked()
         if params.get("burnValues") and params.get("attribute"):
             return params, "burnValues 与 attribute 互斥，不能同时指定"
+
+        # P5-02：散点栅格插值
+        if "algorithm" in supported:
+            params["algorithm"] = self.cmb_grid_algorithm.currentData()
+        if "zField" in supported:
+            zfield = self.txt_zfield.text().strip()
+            if zfield:
+                params["zField"] = zfield
 
         # P4-04：表达式计算
         if "calc" in supported:
@@ -894,6 +930,15 @@ class CapabilityFormWidget(QWidget):
                 has_alpha=False,
             )
             return "；".join(rasterize_violations) if rasterize_violations else None
+        if capability_id == "gdal:grid":
+            grid_violations = validate_output_format(
+                out_fmt,
+                dtype=str(params.get("outputType") or "Float64"),
+                bands=1,
+                has_nodata=params.get("noData") is not None,
+                has_alpha=False,
+            )
+            return "；".join(grid_violations) if grid_violations else None
         has_nodata_param = any(
             params.get(key) is not None
             for key in ("srcNodata", "vrtNodata", "dstNodata", "noData")
@@ -1059,7 +1104,7 @@ class CapabilityFormWidget(QWidget):
             params["format"] = out_fmt
         elif cid == "gdal:dem":
             params["format"] = out_fmt
-        elif cid == "gdal:rasterize":
+        elif cid in {"gdal:rasterize", "gdal:grid"}:
             params["format"] = out_fmt
             raw_type = self.cmb_out_type.currentText()
             if "Default" not in raw_type:

@@ -7,20 +7,20 @@
     "ratio": 0.9888
   },
   "callable": {
-    "count": 237,
-    "ratio": 0.529
+    "count": 238,
+    "ratio": 0.5312
   },
   "platform_executable": {
-    "count": 7,
-    "ratio": 0.0156
+    "count": 8,
+    "ratio": 0.0179
   },
   "verified": {
     "count": 5,
     "ratio": 0.0112
   },
   "missing": {
-    "count": 6,
-    "ratio": 0.0134,
+    "count": 5,
+    "ratio": 0.0112,
     "items": [
       {
         "capability_id": "gdal:cli:gdal_auth",
@@ -44,18 +44,6 @@
         "binding": "none",
         "limitations": [
           "当前 Windows QGIS GDAL 运行时未链接 HDF5 动态库；部分 HDF5 文件可通过 netCDF 驱动尝试读取"
-        ]
-      },
-      {
-        "capability_id": "gdal:grid",
-        "name": "GDAL 离散点栅格插值",
-        "provider": "gdal",
-        "kind": "algorithm",
-        "presence": "present",
-        "availability": "blocked",
-        "binding": "indexed",
-        "limitations": [
-          "平台适配器暂未接入该算法执行器；CLI 工具可正常调用"
         ]
       },
       {
@@ -106,20 +94,20 @@
         "ratio": 0.9951
       },
       "callable": {
-        "count": 199,
-        "ratio": 0.4889
+        "count": 200,
+        "ratio": 0.4914
       },
       "platform_executable": {
-        "count": 6,
-        "ratio": 0.0147
+        "count": 7,
+        "ratio": 0.0172
       },
       "verified": {
         "count": 4,
         "ratio": 0.0098
       },
       "missing": {
-        "count": 3,
-        "ratio": 0.0074,
+        "count": 2,
+        "ratio": 0.0049,
         "items": [
           {
             "capability_id": "gdal:cli:gdal_auth",
@@ -143,18 +131,6 @@
             "binding": "none",
             "limitations": [
               "当前 Windows QGIS GDAL 运行时未链接 HDF5 动态库；部分 HDF5 文件可通过 netCDF 驱动尝试读取"
-            ]
-          },
-          {
-            "capability_id": "gdal:grid",
-            "name": "GDAL 离散点栅格插值",
-            "provider": "gdal",
-            "kind": "algorithm",
-            "presence": "present",
-            "availability": "blocked",
-            "binding": "indexed",
-            "limitations": [
-              "平台适配器暂未接入该算法执行器；CLI 工具可正常调用"
             ]
           }
         ]
@@ -240,7 +216,7 @@
       "gdal:stack",
       "gdal:statistics"
     ],
-    "gap_count": 6,
+    "gap_count": 5,
     "missing_or_blocked": [
       {
         "capability_id": "gdal:cli:gdal_auth",
@@ -262,17 +238,6 @@
         "binding": "none",
         "limitations": [
           "当前 Windows QGIS GDAL 运行时未链接 HDF5 动态库；部分 HDF5 文件可通过 netCDF 驱动尝试读取"
-        ]
-      },
-      {
-        "capability_id": "gdal:grid",
-        "name": "GDAL 离散点栅格插值",
-        "provider": "gdal",
-        "presence": "present",
-        "availability": "blocked",
-        "binding": "indexed",
-        "limitations": [
-          "平台适配器暂未接入该算法执行器；CLI 工具可正常调用"
         ]
       },
       {
@@ -323,7 +288,7 @@
           "gdal:stack",
           "gdal:statistics"
         ],
-        "gap_count": 3,
+        "gap_count": 2,
         "unexplained_gap_count": 0
       },
       "rasterio": {

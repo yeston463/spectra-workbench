@@ -1,6 +1,6 @@
 # 执行状态
 
-更新：2026-11-07（第 49 轮 · P5-02 增量二：gdal:rasterize 矢量栅格化接入 Worker 与 GUI，已知矩形/字段标签图验证、burnValues 与 attribute 互斥、输出网格必需、PNG 需显式 Byte 且经 CreateCopy 两步落盘；Clean 全量 654 项 / 0 失败 / rc=0 / clean_exit_verified=true。P5-02 保持 in_progress，polygonize/contour/grid 仍待做。第 48 轮为 DEM 地形分析）
+更新：2026-11-07（第 50 轮 · P5-02 增量三：gdal:grid 散点栅格插值接入 Worker 与 GUI，解析平面 z=2x+3y 的 linear 插值逐像元验证、缺 width/height 与 PNG 默认 Float64 明确拒绝；Clean 全量 657 项 / 0 失败 / rc=0 / clean_exit_verified=true。P5-02 保持 in_progress，polygonize/contour 仍待做。第 49 轮为 rasterize）
 
 ## 当前里程碑
 
@@ -24,7 +24,7 @@
   - **P4-01 / P4-03 / P4-04 / P4-05**：implemented。P4-05 的完整用户流程验收以第 36 轮 P4-05 专项为准；P4-02 转为 done 不改变其余任务的证据边界。
 - **P5 全量栅格、矢量、地形与坐标能力**：
   - **P5-01 补齐栅格算法/传统工具入口**：**done**（第 47 轮基准逐项对账）。契约基准 443 条全部在注册表；注册表 448 条，多出的 5 条为平台组合/受限实现；8 条运行期缺口（3 条 blocked、5 条 missing）均有具体原因，未解释缺口 0。
-  - **P5-02 / P5-03 / P5-04 / P5-05**：P5-02 **in_progress**（第 48 轮已接入 `gdal:dem` 地形分析，第 49 轮已接入 `gdal:rasterize` 矢量栅格化；polygonize/contour/grid 仍待做）；P5-03/P5-04/P5-05 为 todo。P5-01 只完成入口与基准对账，不把“已编目”当作“已可执行”。
+  - **P5-02 / P5-03 / P5-04 / P5-05**：P5-02 **in_progress**（第 48–50 轮已接入 `gdal:dem` 地形分析、`gdal:rasterize` 矢量栅格化、`gdal:grid` 散点插值；polygonize/contour 仍待做）；P5-03/P5-04/P5-05 为 todo。P5-01 只完成入口与基准对账，不把“已编目”当作“已可执行”。
 
 ## 原 P3 验收标准逐项对账与剩余缺口
 
@@ -234,6 +234,45 @@ CRT 检测到栈状态异常后立即终止进程，这正是 `STATUS_STACK_BUFF
 |---|---|---|
 | 用合成影像完成同类验收 | 已满足 | 合成 ENVI/GTiff/GeoJSON/netCDF 样例覆盖多波段、像元数值、ROI 与对比 |
 | 保留真实数据待验状态 | **待验** | 课程原始数据位于 `C:\Users\赵航\Desktop\studio\_chaoxing_rs`（**只读**，不得运行其中的抓取/下载/OCR 脚本）；本轮全部用合成影像验收，未对课程原始 ENVI 栅格与 lena.tif 做真实打开验证 |
+
+### 第 50 轮：P5-02 增量三——grid 散点栅格插值（P5-02 in_progress）
+
+**一、实现**
+
+- `processing/raster_params.py` 新增 `algorithm`、`zField` 别名与 `gdal:grid` 支持矩阵；算法名与高程字段做非空校验。
+- `GDALProviderAdapter` 新增 `gdal:grid` 分支：
+  - `gdal.OpenEx(OF_VECTOR)` 打开点/多点矢量；
+  - 必须给出 `width/height`，否则明确拒绝，不猜测网格；
+  - 未指定 `outputBounds` 时按图层 extent 自动计算（复用 `_vector_bounds`，显式处理 OGR 轴顺序）；
+  - 支持 `algorithm`、`zField`、`width/height`、`outputBounds`、`outputType`、`noData`；
+  - GTiff 直接创建；PNG/JPEG/COG/ENVI 等 CreateCopy-only 驱动先写临时 GTiff 再 Translate。
+- 注册表 `gdal:grid` 从 blocked/indexed 改为 ready/form，补充 zField/width/height/outputBounds 参数；GUI 新增插值算法、高程字段控件，显示输出格式/数据类型/输出尺寸。
+- 空 `algorithm`/`zField` 与非法组合在契约层拒绝；输出格式矩阵按 Float64/显式 outputType 预检。
+
+**二、数值验收（解析平面 z = 2x + 3y）**
+
+点集：`(0,0)`、`(4,0)`、`(0,2)`、`(4,2)`、`(2,1)`，属性 `value = 2x + 3y`。
+
+- `algorithm=linear`, `width=4`, `height=2`, `outputBounds=(0,0,4,2)`, `zField=value`：
+  - 输出 4×2 Float64；
+  - 顶行 `[5.5, 7.5, 9.5, 11.5]`，底行 `[2.5, 4.5, 6.5, 8.5]`，与像素中心解析值逐项一致。
+- 缺 `width/height`：`invalid_parameters`，不写文件。
+- PNG 默认 Float64：`unsupported_format_combination`，不写文件。
+- GUI 真实 `MainWindow` + Worker + QTest：打开点图层、选择 grid、linear/zField/4×2 提交成功并自动加载成果。
+
+**三、验证**
+
+- 新增 `tests/integration/test_p5_grid.py`（2 项数值/边界）与 `tests/integration/test_p5_grid_gui.py`（1 项桌面路径）。
+- 受影响定向组合：**51 passed**（29.18s）；Grid GUI 单项 1 passed（1.69s）。
+- Ruff 干净；Mypy 66 个源文件 0 错误。
+- Clean 全量：**657 passed / 0 failed / rc=0 / clean_exit_verified=true**（358.19s，job 观测、residual=0、cleanup_complete=true）。
+- 审计刷新：缺口 6 → **5**（`gdal:grid` 移出 blocked）；剩余为 `gdal:cli:gdal_auth`、HDF5 与 3 个 rio 插件。
+
+**四、边界与下一步**
+
+- P5-02 保持 **in_progress**：polygonize、contour 尚未接入。
+- 两者需要矢量成果输出计划、OGR 重开校验与图层登记；当前提交校验只打开栅格，不能直接复用。
+- 下一步：`gdal:polygonize`（已知标签栅格→多边形，验证字段值与面积），随后 `gdal:contour`（解析平面等高线高程属性）。
 
 ### 第 49 轮：P5-02 增量二——rasterize 矢量栅格化（P5-02 in_progress）
 

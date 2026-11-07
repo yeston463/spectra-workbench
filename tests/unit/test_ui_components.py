@@ -141,10 +141,10 @@ def test_param_form_connected_vs_unsupported(qapp: QApplication) -> None:
     assert spec.engine.provider_id == "gdal"
     assert spec.inputs["input"].uri == in_file.as_uri()
 
-    # 2. 未接入平台的能力：gdal:grid
-    grid_cap = registry.get("gdal:grid")
-    assert grid_cap is not None
-    form.load_capability(grid_cap)
+    # 2. 未接入平台的能力：gdal:retile
+    retile_cap = registry.get("gdal:retile")
+    assert retile_cap is not None
+    form.load_capability(retile_cap)
     assert not form.btn_submit.isEnabled()
     assert "禁止提交" in form.btn_submit.text()
     assert not form.lbl_unsupported_banner.isHidden()

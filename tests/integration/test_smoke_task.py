@@ -511,7 +511,7 @@ def test_gdal_warp_reprojection_numerical_and_crs():
 
 
 def test_gdal_worker_unsupported_capability_rejection():
-    """负向准入测试：未接入的算法（如 gdal:grid）安全拒绝，不执行 Translate，不产生目标文件。"""
+    """负向准入测试：未接入的算法（如 gdal:retile）安全拒绝，不执行 Translate，不产生目标文件。"""
     root = find_project_root()
     in_dat = root / "tests" / "fixtures" / "data" / "a01_ramp_16x16.dat"
 
@@ -524,15 +524,15 @@ def test_gdal_worker_unsupported_capability_rejection():
             worker.start(timeout=15.0)
 
             spec = TaskSpec(
-                task_id="unsupported-grid-test",
-                capability_id="gdal:grid",
+                task_id="unsupported-retile-test",
+                capability_id="gdal:retile",
                 descriptor_revision="1.0",
                 engine=EngineConstraint(provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"),
                 project_root=str(temp_root),
                 workspace=str(temp_root / "workspace"),
                 inputs={"input": DatasetRef(dataset_id="source", kind=DatasetKind.raster, uri=in_dat.as_uri())},
                 outputs=[OutputPlan(key="output", kind=DatasetKind.raster, uri=target_tif.as_uri(), driver="GTiff")],
-                parameters={"algorithm": "invdist"},
+                parameters={},
             )
             res = worker.execute_task(spec, timeout=20.0)
 

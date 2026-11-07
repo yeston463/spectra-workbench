@@ -154,6 +154,9 @@ _PARAM_ALIASES: dict[str, tuple[str, ...]] = {
     "burnValues": ("burn_values", "burn", "burn_value"),
     "attribute": ("attribute", "attribute_name", "field", "field_name"),
     "allTouched": ("all_touched", "alltouched"),
+    # --- P5-02 散点栅格插值 ---
+    "algorithm": ("algorithm", "grid_algorithm"),
+    "zField": ("z_field", "zfield", "z_attribute"),
     # --- P4-04 表达式 / 直方图与基础统计 ---
     "calc": ("calc_expr", "expression", "formula"),
     "statisticsMode": ("mode", "stats_mode", "statistics_mode"),
@@ -321,6 +324,18 @@ _CAPABILITY_SUPPORT: dict[str, frozenset[str]] = {
             "burnValues",
             "attribute",
             "allTouched",
+            "noData",
+        }
+    ),
+    # --- P5-02：散点栅格插值 ---
+    "gdal:grid": frozenset(
+        {
+            "algorithm",
+            "zField",
+            "width",
+            "height",
+            "outputBounds",
+            "outputType",
             "noData",
         }
     ),
@@ -706,6 +721,20 @@ def normalize_raster_params(
         if not isinstance(value, bool):
             raise ParameterError(f"allTouched 必须是布尔值，实际 {value!r}")
         out["allTouched"] = value
+
+    # 11.8) P5-02：散点栅格插值
+    if "algorithm" in collected:
+        _, value = collected["algorithm"]
+        algorithm = str(value).strip()
+        if not algorithm:
+            raise ParameterError("参数 algorithm 必须是非空插值算法名")
+        out["algorithm"] = algorithm
+    if "zField" in collected:
+        _, value = collected["zField"]
+        zfield = str(value).strip()
+        if not zfield:
+            raise ParameterError("参数 zField 必须是非空字段名")
+        out["zField"] = zfield
 
     if "levels" in collected:
         _, value = collected["levels"]

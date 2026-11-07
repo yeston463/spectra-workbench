@@ -350,16 +350,17 @@ def test_four_dimensional_state_independence_and_audit():
     # 第 35 轮（P4-04）：新增 gdal:statistics 编目，并把 gdal:calc 补上 form 入口
     # （原条目已计入基线，故只 +1 个新条目）：447 -> 448、442 -> 443、234 -> 235。
     # 第 48 轮（P5-02）：gdal:dem 接入 form 执行器，callable +1、platform_executable +1，
-    # 从缺失清单移出，缺失项 8 -> 7；第 49 轮 gdal:rasterize 接入后 7 -> 6。
+    # 从缺失清单移出，缺失项 8 -> 7；第 49 轮 gdal:rasterize 接入后 7 -> 6；
+    # 第 50 轮 gdal:grid 接入后 6 -> 5。
     assert report["total_baseline_count"] == 448
     assert report["discovered"]["count"] == 443
-    assert report["callable"]["count"] == 237
-    assert report["platform_executable"]["count"] == 7
+    assert report["callable"]["count"] == 238
+    assert report["platform_executable"]["count"] == 8
     assert report["verified"]["count"] == 5
     # 第 32 轮：gdal:buildvrt 由 blocked 改为 ready（平台已接入），
     # 故从缺失清单移出，缺失项 9 -> 8。其余 8 项是运行时确实不可用的
     # （gdal_auth 不存在、HDF5 驱动缺失、rio cogeo/color/mbtiles 等未安装）。
-    assert report["missing"]["count"] == 6
+    assert report["missing"]["count"] == 5
 
     assert report["discovered"]["ratio"] > 0.90
     assert report["callable"]["ratio"] > 0.50
@@ -372,11 +373,11 @@ def test_four_dimensional_state_independence_and_audit():
     gdal_rep = by_provider["gdal"]
     # 第 32 轮新增 stack/bandmanage；第 34 轮新增 editmeta/overview；
     # 第 35 轮新增 statistics：基线总数 402 -> 407，已发现 400 -> 405。
-    # gdal:buildvrt、P5-02 的 gdal:dem 与 gdal:rasterize 由 blocked 改为 ready，
-    # GDAL 缺失项 6 -> 5 -> 4 -> 3。
+    # gdal:buildvrt、P5-02 的 gdal:dem/rasterize/grid 由 blocked 改为 ready，
+    # GDAL 缺失项 6 -> 5 -> 4 -> 3 -> 2。
     assert gdal_rep["total_baseline_count"] == 407
     assert gdal_rep["discovered"]["count"] == 405
-    assert gdal_rep["missing"]["count"] == 3
+    assert gdal_rep["missing"]["count"] == 2
 
     rio_rep = by_provider["rasterio"]
     assert rio_rep["total_baseline_count"] == 41
@@ -397,24 +398,25 @@ def test_provider_adapters_discover_baseline():
 
 
 def test_audit_capability_registered_without_handler(project_root: Path):
-    """审计测试 1：能力在注册表中存在（如 gdal:grid），但平台 Adapter 尚未接入 Handler。"""
+    """审计测试 1：能力在注册表中存在（如 gdal:retile），但平台 Adapter 尚未接入 Handler。"""
     reg = get_default_registry()
-    assert reg.has("gdal:grid"), "gdal:grid 必须存在于目录中以保持完整上游基准"
-    grid_cap = reg.get("gdal:grid")
-    assert grid_cap is not None
-    assert grid_cap.state.availability == Availability.blocked
+    assert reg.has("gdal:retile"), "gdal:retile 必须存在于目录中以保持完整上游基准"
+    retile_cap = reg.get("gdal:retile")
+    assert retile_cap is not None
+    assert retile_cap.state.availability == Availability.ready
 
     adapter = GDALProviderAdapter()
+    assert "gdal:retile" not in adapter.SUPPORTED_CAPABILITIES
     in_dat = project_root / "tests/fixtures/data/a01_ramp_16x16.dat"
     spec = TaskSpec(
         task_id="audit-unhandled-cap",
-        capability_id="gdal:grid",
+        capability_id="gdal:retile",
         descriptor_revision="1.0",
         engine=EngineConstraint(provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"),
         project_root=str(project_root),
         workspace=str(project_root / ".staging"),
         inputs={"input": DatasetRef(dataset_id="in", kind=DatasetKind.raster, uri=in_dat.as_uri())},
-        outputs=[OutputPlan(key="output", kind=DatasetKind.raster, uri=(project_root / "grid.tif").as_uri())],
+        outputs=[OutputPlan(key="output", kind=DatasetKind.raster, uri=(project_root / "retile.tif").as_uri())],
         parameters={},
     )
     val = adapter.validate(spec)

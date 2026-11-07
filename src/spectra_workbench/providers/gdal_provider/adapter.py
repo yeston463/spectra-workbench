@@ -179,6 +179,34 @@ def _affine_bounds(
     return [min(xs), min(ys), max(xs), max(ys)]
 
 
+def _vector_bounds(src_ds: Any) -> tuple[float, float, float, float] | None:
+    """Union all vector layer extents as (minx, miny, maxx, maxy).
+
+    OGR returns (minX, maxX, minY, maxY); GDAL Rasterize/Grid expect
+    (minX, minY, maxX, maxY). Missing/invalid extents return None.
+    """
+    min_x = min_y = float("inf")
+    max_x = max_y = float("-inf")
+    try:
+        for layer_idx in range(src_ds.GetLayerCount()):
+            layer = src_ds.GetLayer(layer_idx)
+            if layer is None:
+                continue
+            extent = layer.GetExtent()
+            if not extent:
+                continue
+            e_min_x, e_max_x, e_min_y, e_max_y = extent
+            min_x = min(min_x, float(e_min_x))
+            min_y = min(min_y, float(e_min_y))
+            max_x = max(max_x, float(e_max_x))
+            max_y = max(max_y, float(e_max_y))
+    except Exception:
+        return None
+    if not all(math.isfinite(v) for v in (min_x, min_y, max_x, max_y)):
+        return None
+    return (min_x, min_y, max_x, max_y)
+
+
 #: 源窗口预裁剪的像元数预算上限（单波段等价像元）。
 #: 预裁剪走惰性 VRT（不物化像元），此上限用于防御「窗口过大导致下游 Warp
 #: 在目标范围上仍需展开巨量数据」的情形：超限时明确拒绝，而不是默默跑巨量作业。
@@ -257,9 +285,10 @@ class GDALProviderAdapter(ProviderAdapter):
         # --- P4-03：元数据编辑 / 概览构建（in-place）---
         "gdal:editmeta",
         "gdal:overview",
-        # --- P5-02：地形分析 / 矢量栅格化 ---
+        # --- P5-02：地形分析 / 矢量栅格化 / 散点插值 ---
         "gdal:dem",
         "gdal:rasterize",
+        "gdal:grid",
         # --- P4-04：受限表达式计算 / 直方图与基础统计 ---
         "gdal:calc",
         P404_STATISTICS_CAPABILITY,
@@ -599,6 +628,42 @@ class GDALProviderAdapter(ProviderAdapter):
         is_warp = spec.capability_id in ("gdal:warp", "gdalwarp")
         is_dem = spec.capability_id == "gdal:dem"
         is_rasterize = spec.capability_id == "gdal:rasterize"
+        is_grid = spec.capability_id == "gdal:grid"
+
+        if is_grid:
+            grid_bands = 1
+            grid_dtype = str(norm.get("outputType") or "Float64")
+            grid_violations = validate_output_format(
+                out_format,
+                dtype=grid_dtype,
+                bands=grid_bands,
+                has_nodata=norm.get("noData") is not None,
+                has_alpha=False,
+            )
+            if grid_violations:
+                context.log(
+                    "ERROR",
+                    f"Grid 输出格式不受支持: {grid_violations}",
+                )
+                return TaskResult(
+                    task_id=spec.task_id,
+                    attempt=spec.attempt,
+                    status=TaskStatus.failed,
+                    error={
+                        "code": "unsupported_format_combination",
+                        "message": "；".join(grid_violations),
+                    },
+                    duration_seconds=round(time.monotonic() - start_time, 4),
+                )
+            if not norm.get("width") or not norm.get("height"):
+                message = "gdal:grid 需要 width/height 以确定输出网格"
+                return TaskResult(
+                    task_id=spec.task_id,
+                    attempt=spec.attempt,
+                    status=TaskStatus.failed,
+                    error={"code": "invalid_parameters", "message": message},
+                    duration_seconds=round(time.monotonic() - start_time, 4),
+                )
 
         if is_rasterize:
             rasterize_bands = len(norm.get("burnValues") or []) or 1
@@ -720,7 +785,69 @@ class GDALProviderAdapter(ProviderAdapter):
                 )
 
         try:
-            if is_rasterize:
+            if is_grid:
+                src_ds = gdal.OpenEx(str(in_path), gdal.OF_VECTOR)
+                if src_ds is None:
+                    raise RuntimeError(f"无法作为矢量打开输入: {in_path}")
+                try:
+                    grid_kwargs: dict[str, Any] = {
+                        "creationOptions": creation_options,
+                        "callback": _gdal_cb,
+                        "width": int(norm["width"]),
+                        "height": int(norm["height"]),
+                        "algorithm": str(norm.get("algorithm") or "invdist"),
+                    }
+                    if norm.get("zField"):
+                        grid_kwargs["zfield"] = str(norm["zField"])
+                    if norm.get("outputBounds") is not None:
+                        grid_kwargs["outputBounds"] = [
+                            float(v) for v in norm["outputBounds"]
+                        ]
+                    else:
+                        bounds = _vector_bounds(src_ds)
+                        if bounds is not None:
+                            grid_kwargs["outputBounds"] = bounds
+                    if norm.get("outputType") is not None:
+                        grid_kwargs["outputType"] = getattr(
+                            gdal, f"GDT_{norm['outputType']}"
+                        )
+                    if norm.get("noData") is not None:
+                        grid_kwargs["noData"] = float(norm["noData"])
+                    if out_format.upper() == "GTIFF":
+                        grid_kwargs["format"] = out_format
+                        ds = gdal.Grid(
+                            str(staged_path),
+                            src_ds,
+                            options=gdal.GridOptions(**grid_kwargs),
+                        )
+                    else:
+                        raw_path = staged_path.with_name(
+                            f"{staged_path.stem}_raw.tif"
+                        )
+                        grid_kwargs["format"] = "GTiff"
+                        raw_ds = gdal.Grid(
+                            str(raw_path),
+                            src_ds,
+                            options=gdal.GridOptions(**grid_kwargs),
+                        )
+                        if raw_ds is None:
+                            raise RuntimeError("Grid 临时栅格创建失败")
+                        del raw_ds
+                        try:
+                            ds = gdal.Translate(
+                                str(staged_path),
+                                str(raw_path),
+                                options=gdal.TranslateOptions(
+                                    format=out_format,
+                                    creationOptions=creation_options,
+                                    callback=_gdal_cb,
+                                ),
+                            )
+                        finally:
+                            raw_path.unlink(missing_ok=True)
+                finally:
+                    src_ds = None
+            elif is_rasterize:
                 burn_values = norm.get("burnValues")
                 attribute = norm.get("attribute")
                 if not burn_values and not attribute:
@@ -758,31 +885,9 @@ class GDALProviderAdapter(ProviderAdapter):
                     if norm.get("noData") is not None:
                         rasterize_kwargs["noData"] = float(norm["noData"])
                     if "outputBounds" not in rasterize_kwargs:
-                        # OGR GetExtent 返回 (minX, maxX, minY, maxY)，必须换成
-                        # GDAL Rasterize 的 (minX, minY, maxX, maxY)。
-                        min_x = min_y = float("inf")
-                        max_x = max_y = float("-inf")
-                        for layer_idx in range(src_ds.GetLayerCount()):
-                            layer = src_ds.GetLayer(layer_idx)
-                            if layer is None:
-                                continue
-                            extent = layer.GetExtent()
-                            if not extent:
-                                continue
-                            e_min_x, e_max_x, e_min_y, e_max_y = extent
-                            min_x = min(min_x, float(e_min_x))
-                            min_y = min(min_y, float(e_min_y))
-                            max_x = max(max_x, float(e_max_x))
-                            max_y = max(max_y, float(e_max_y))
-                        if all(
-                            math.isfinite(v) for v in (min_x, min_y, max_x, max_y)
-                        ):
-                            rasterize_kwargs["outputBounds"] = (
-                                min_x,
-                                min_y,
-                                max_x,
-                                max_y,
-                            )
+                        bounds = _vector_bounds(src_ds)
+                        if bounds is not None:
+                            rasterize_kwargs["outputBounds"] = bounds
                     if out_format.upper() == "GTIFF":
                         rasterize_kwargs["format"] = out_format
                         ds = gdal.Rasterize(
@@ -955,7 +1060,9 @@ class GDALProviderAdapter(ProviderAdapter):
                     duration_seconds=round(time.monotonic() - start_time, 4),
                 )
             op_name = (
-                "Rasterize"
+                "Grid"
+                if is_grid
+                else "Rasterize"
                 if is_rasterize
                 else "DEMProcessing"
                 if is_dem
@@ -986,7 +1093,9 @@ class GDALProviderAdapter(ProviderAdapter):
                     duration_seconds=round(time.monotonic() - start_time, 4),
                 )
             op_name = (
-                "Rasterize"
+                "Grid"
+                if is_grid
+                else "Rasterize"
                 if is_rasterize
                 else "DEMProcessing"
                 if is_dem
