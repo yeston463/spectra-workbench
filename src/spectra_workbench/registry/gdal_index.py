@@ -561,18 +561,24 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
             outputs=[PortSpec(key="output", data_type=DatasetKind.vector, required=True, description="生成的等值线矢量图层")],
             requirements=[Requirement(kind="package", name="GDAL", reason="需 GDAL Contour 生成核心")],
             entrypoints=[
+                Entrypoint(kind="form", target="gdal:contour", available=True, notes="平台适配器已接入（P5-02）"),
                 Entrypoint(kind="cli", target="gdal_contour.exe", available=True),
                 Entrypoint(kind="script", target="osgeo.gdal.ContourGenerate", available=True),
             ],
             state=CapabilityState(
                 presence=Presence.present,
-                binding=Binding.cli,
+                binding=Binding.form,
                 validation=Validation.not_run,
                 availability=Availability.ready,
             ),
             effects="new_dataset",
             cancellation="cooperative",
-            limitations=[],
+            limitations=[
+                "矢量成果仅支持 GPKG / GeoJSON 单文件输出；ESRI Shapefile 为多文件 bundle，暂未接入",
+                "仅处理第 1 波段；遵循输入 NoData 标签（GDAL useNoData 语义）",
+                "固定等级序列需 ContourGenerateEx，当前未接入；本版仅 interval/offset",
+                "输出为 3D Line String（wkbLineString25D），字段为 ID 与 ELEV",
+            ],
             validation_evidence=[],
         ),
         CapabilityDescriptor(

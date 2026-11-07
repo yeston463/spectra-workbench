@@ -316,6 +316,23 @@ class CapabilityFormWidget(QWidget):
         self.lbl_connectedness = QLabel("连通性 (connectedness):")
         self.params_form.addRow(self.lbl_connectedness, self.cmb_connectedness)
 
+        # --- P5-02 等值线（成果为矢量）---
+        self.spin_contour_interval = QDoubleSpinBox()
+        self.spin_contour_interval.setDecimals(6)
+        self.spin_contour_interval.setRange(0.0, 1e9)
+        self.spin_contour_interval.setSingleStep(1.0)
+        self.spin_contour_interval.setValue(10.0)
+        self.lbl_contour_interval = QLabel("等值线步长 (interval，必填>0):")
+        self.params_form.addRow(self.lbl_contour_interval, self.spin_contour_interval)
+
+        self.spin_contour_offset = QDoubleSpinBox()
+        self.spin_contour_offset.setDecimals(6)
+        self.spin_contour_offset.setRange(-1e9, 1e9)
+        self.spin_contour_offset.setSingleStep(1.0)
+        self.spin_contour_offset.setValue(0.0)
+        self.lbl_contour_offset = QLabel("基准高程 (offset，0 合法):")
+        self.params_form.addRow(self.lbl_contour_offset, self.spin_contour_offset)
+
         # --- P4-03 概览构建 ---
         self.txt_levels = QLineEdit()
         self.txt_levels.setPlaceholderText("严格递增、每个≥2；例：2,4,8")
@@ -597,6 +614,13 @@ class CapabilityFormWidget(QWidget):
         self._set_row_visible(
             self.lbl_connectedness, self.cmb_connectedness, "connectedness" in sup
         )
+        # P5-02 等值线（成果为矢量）
+        self._set_row_visible(
+            self.lbl_contour_interval, self.spin_contour_interval, "interval" in sup
+        )
+        self._set_row_visible(
+            self.lbl_contour_offset, self.spin_contour_offset, "offset" in sup
+        )
         self._set_row_visible(self.lbl_levels, self.txt_levels, "levels" in sup)
         self._set_row_visible(self.lbl_ovr_compress, self.cmb_ovr_compress, "overviewCompress" in sup)
         # P4-04
@@ -707,6 +731,10 @@ class CapabilityFormWidget(QWidget):
             self.txt_field_name.setText("DN")
         if "connectedness" not in supported:
             self.cmb_connectedness.setCurrentIndex(0)
+        if "interval" not in supported:
+            self.spin_contour_interval.setValue(10.0)
+        if "offset" not in supported:
+            self.spin_contour_offset.setValue(0.0)
         if "levels" not in supported:
             self.txt_levels.clear()
         if "overviewCompress" not in supported:
@@ -851,6 +879,14 @@ class CapabilityFormWidget(QWidget):
             conn = self.cmb_connectedness.currentData()
             if conn:
                 params["connectedness"] = int(conn)
+
+        # P5-02：等值线（成果为矢量）
+        if "interval" in supported and self.spin_contour_interval.value() > 0:
+            params["interval"] = float(self.spin_contour_interval.value())
+        # 否则不产生参数，由 Worker 以 invalid_parameters 明确拒绝缺步长
+        if "offset" in supported and self.spin_contour_offset.value() != 0.0:
+            # 0 是 Worker 侧默认值，不产生冗余参数；非 0 基准高程如实下发
+            params["offset"] = float(self.spin_contour_offset.value())
 
         # P4-04：表达式计算
         if "calc" in supported:

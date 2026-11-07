@@ -298,6 +298,7 @@ class GDALProviderAdapter(ProviderAdapter):
         "gdal:grid",
         # --- P5-02：栅格矢量化 / 等值线（成果为矢量）---
         "gdal:polygonize",
+        "gdal:contour",
         # --- P4-04：受限表达式计算 / 直方图与基础统计 ---
         "gdal:calc",
         P404_STATISTICS_CAPABILITY,

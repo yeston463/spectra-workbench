@@ -53,8 +53,9 @@ CONNECTED_CAPABILITIES: frozenset[str] = frozenset(
         "gdal:dem",
         "gdal:rasterize",
         "gdal:grid",
-        # P5-02：栅格矢量化（成果为矢量，P5-02）
+        # P5-02：栅格矢量化 / 等值线（成果为矢量，P5-02）
         "gdal:polygonize",
+        "gdal:contour",
         # P4-04：受限表达式计算 / 直方图与基础统计（后者输出 JSON artifact）
         "gdal:calc",
         "gdal:statistics",
@@ -113,6 +114,7 @@ FORMAT_CAPABILITIES: frozenset[str] = frozenset(
         "gdal:rasterize",
         "gdal:grid",
         "gdal:polygonize",
+        "gdal:contour",
         "gdal:calc",
     }
 )

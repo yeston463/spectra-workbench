@@ -1,6 +1,6 @@
 # 执行状态
 
-更新：2026-11-07（第 51 轮 · P5-02 增量四：gdal:polygonize 栅格矢量化接入 Worker 与 GUI，**矢量成果输出通道建立**——GPKG/GeoJSON 单文件矩阵、inspect_vector OGR 重开校验、kind=vector 输出计划与图层登记；标签图面积/DN 字段与 4/8 连通差异实证；Clean 全量 664 项 / 0 失败 / rc=0 / clean_exit_verified=true。P5-02 保持 in_progress，contour 仍待做。第 50 轮为 grid）
+更新：2026-11-07（第 52 轮 · P5-02 增量五：gdal:contour 等值线生成接入 Worker 与 GUI，解析平面 z=2x+3y 的等值线逐顶点解析验证（ELEV 集合、ID 递增、3D 顶点 Z==ELEV、内部顶点位于解析等值线上）、offset 等差对齐语义实证；**P5-02 转 done**——dem/rasterize/grid/polygonize/contour 共 5 项工具全部接入。Clean 全量 669 项 / 0 失败 / rc=0 / clean_exit_verified=true。第 51 轮为 polygonize 与矢量成果输出通道）
 
 ## 当前里程碑
 
@@ -24,7 +24,8 @@
   - **P4-01 / P4-03 / P4-04 / P4-05**：implemented。P4-05 的完整用户流程验收以第 36 轮 P4-05 专项为准；P4-02 转为 done 不改变其余任务的证据边界。
 - **P5 全量栅格、矢量、地形与坐标能力**：
   - **P5-01 补齐栅格算法/传统工具入口**：**done**（第 47 轮基准逐项对账）。契约基准 443 条全部在注册表；注册表 448 条，多出的 5 条为平台组合/受限实现；8 条运行期缺口（3 条 blocked、5 条 missing）均有具体原因，未解释缺口 0。
-  - **P5-02 / P5-03 / P5-04 / P5-05**：P5-02 **in_progress**（第 48–51 轮已接入 `gdal:dem` 地形分析、`gdal:rasterize` 矢量栅格化、`gdal:grid` 散点插值、`gdal:polygonize` 栅格矢量化并建立矢量成果输出通道——GPKG/GeoJSON 矩阵、OGR 重开校验、kind=vector 与图层登记；contour 仍待做）；P5-03/P5-04/P5-05 为 todo。P5-01 只完成入口与基准对账，不把“已编目”当作“已可执行”。
+  - **P5-02 栅格化、多边形化、等值线及地形工具**：**done**（第 48–52 轮逐项接入并验收）。`gdal:dem` 地形分析（解析平面坡度/坡向/山体阴影数值验证）、`gdal:rasterize` 矢量栅格化（已知矩形烧录值/属性字段）、`gdal:grid` 散点插值（linear 逐像元解析值）、`gdal:polygonize` 栅格矢量化（标签图多边形 DN/面积、4/8 连通差异）与 `gdal:contour` 等值线（解析平面逐顶点验证、offset 对齐语义）共 5 项全部接入 Worker + GUI；第 51 轮建立**矢量成果输出通道**（GPKG/GeoJSON 单文件矩阵、`inspect_vector` OGR 重开校验、`kind=vector` 输出计划与矢量图层登记），提交校验不复用仅栅格路径。审计 `platform_executable` 8 → 10（polygonize/contour 接入），运行期缺口维持 5 且均有具体原因。
+  - **P5-03 / P5-04 / P5-05**：todo。
 
 ## 原 P3 验收标准逐项对账与剩余缺口
 
@@ -234,6 +235,38 @@ CRT 检测到栈状态异常后立即终止进程，这正是 `STATUS_STACK_BUFF
 |---|---|---|
 | 用合成影像完成同类验收 | 已满足 | 合成 ENVI/GTiff/GeoJSON/netCDF 样例覆盖多波段、像元数值、ROI 与对比 |
 | 保留真实数据待验状态 | **待验** | 课程原始数据位于 `C:\Users\赵航\Desktop\studio\_chaoxing_rs`（**只读**，不得运行其中的抓取/下载/OCR 脚本）；本轮全部用合成影像验收，未对课程原始 ENVI 栅格与 lena.tif 做真实打开验证 |
+
+### 第 52 轮：P5-02 增量五——contour 等值线生成，P5-02 转 done
+
+**一、实现**
+
+- `GDALProviderAdapter.SUPPORTED_CAPABILITIES` 加入 `gdal:contour`，`_execute_vector_output` 的 contour 分支激活：
+  - `gdal.OpenEx(OF_RASTER)` 打开单波段栅格，建 `wkbLineString25D` 图层与 `ID`(OFTInteger64)/`ELEV`(OFTReal) 字段；
+  - `gdal.ContourGenerate(band, interval, offset, [], useNoData, nodata, layer, 0, 1, callback)`——GDAL 3.13.3 运行时实测：Python 绑定把 docstring 里的 `fixedLevelCount` 折叠为 `fixedLevels` 序列参数（传 `[]` 表示无固定等级）；
+  - 遵循输入 NoData 标签（`useNoData`）；`interval` 必填且为正（缺省/非正 → `invalid_parameters`）；
+  - 复用与 polygonize 相同的矢量矩阵预检、staging `inspect_vector`、单对 `commit_files` 事务与提交后逐层要素数比对。
+- `processing/raster_params.py` 的 `gdal:contour` 支持矩阵 `{interval, offset}`（interval 正数、offset 0 合法）与别名；`capability_wiring.py` 的 CONNECTED/FORMAT_CAPABILITIES += `gdal:contour`。
+- 注册表 `gdal:contour` 翻转为 ready/form，限制如实写明（仅 GPKG/GeoJSON、仅第 1 波段、遵循 NoData、fixedLevels 需 ContourGenerateEx 未接入、输出 3D Line String 与 ID/ELEV 字段）。
+- GUI 新增 interval（默认 10.0，必填>0）/offset（默认 0.0）控件与状态隔离；格式下拉复用矢量族候选——**表单中 PNG 等栅格格式根本不可选**，即矢量预检的正确形态；OutputPlan `kind=vector`。
+
+**二、数值验收（解析平面 z = 2*col + 3*row，独立 OGR 重开）**
+
+- `interval=1`、`offset=0`：恰 **35 条**等值线，`ELEV` 集合 = `{1..35}`（0 级仅在 (0,0) 单点退化，无等值线）；`ID` 按等级递增；每个 3D 顶点 `Z == ELEV`；内部顶点满足 `|2*col + 3*row − ELEV| < 1e-4`（`col=x−0.5`、`row=7.5−y`），边界顶点被裁剪到数据集范围——等值线几何与解析平面**逐点一致**，不是只检查文件存在。
+- `offset` 是等差序列的**对齐点**（GDAL 向两侧延伸覆盖数据范围，非等级下限）：`interval=2` 时 `offset=0/1` 分别产生偶数 `{2,4,…,34}` 与奇数 `{1,3,…,35}` 等级——offset 语义实证。
+- GeoJSON 单文件输出同性质；缺 `interval`、`interval=0`、PNG 均明确拒绝且目标不落盘。
+- GUI 真实 `MainWindow` + Worker + QTest：GPKG 提交成功、图层计数 2（矢量成果自动登记）、ELEV 集合独立复核、格式候选断言恰为 GPKG/GeoJSON。
+
+**三、验证**
+
+- 新增 `tests/integration/test_p5_contour.py`（4 项数值/边界）与 `tests/integration/test_p5_contour_gui.py`（1 项桌面路径）；对账测试 ready 断言加入 `gdal:contour`。
+- 受影响定向：**36 passed**；Ruff 干净；Mypy 67 个源文件 0 错误。
+- Clean 全量：**669 passed / 0 failed / rc=0 / clean_exit_verified=true**（351.45s，residual=0、cleanup_complete=true）。
+- 审计刷新：`platform_executable` 9 → **10**；缺口维持 **5**（`gdal:cli:gdal_auth`、HDF5、3 个 rio 插件）。
+
+**四、边界与 P5-02 结论**
+
+- P5-02 的全部工具（`gdal:dem` / `gdal:rasterize` / `gdal:grid` / `gdal:polygonize` / `gdal:contour` 共 5 项）均已从契约编目接入为可执行表单入口；验收「已知矩形/标签图和解析平面验证；不能只检查文件存在」由数值/几何断言满足——**P5-02 转 done**。
+- 遗留边界（不影响验收，已在注册表/证据如实声明）：Shapefile 多文件 bundle 输出、polygonize 指定波段/外部 mask 文件、contour fixedLevels（需 ContourGenerateEx）、矢量画布渲染（P5-03 范围）。
 
 ### 第 51 轮：P5-02 增量四——polygonize 栅格矢量化与矢量成果输出通道（P5-02 in_progress）
 
