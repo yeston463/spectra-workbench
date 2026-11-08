@@ -496,6 +496,7 @@ class WorkerRuntime:
             True,
         ),
         "list_subdatasets": ("list_subdatasets", (), True),
+        "probe_multidim": ("probe_multidim", (), True),
         "crs_wkt": ("crs_wkt", ("epsg",), False),
         "describe_driver": ("describe_driver", ("format_name",), False),
         "transform_point": ("transform_point", ("x", "y", "src_wkt", "dst_wkt", "z"), False),

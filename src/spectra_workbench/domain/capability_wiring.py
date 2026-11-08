@@ -79,6 +79,8 @@ CONNECTED_CAPABILITIES: frozenset[str] = frozenset(
         "gdal:calibrate",
         "gdal:dos1",
         "gdal:cloudreplace",
+        # P8-01：多维数组二维切片（netCDF/HDF 按 GDAL multidim 模型）
+        "gdal:mdim_slice",
     }
 )
 

@@ -202,6 +202,9 @@ _PARAM_ALIASES: dict[str, tuple[str, ...]] = {
     "bandB": ("band_b", "bandB"),
     "saviL": ("savi_l", "saviL"),
     "usePhysical": ("use_physical", "physical_values"),
+    # --- P8-01 多维数据（netCDF/HDF 经 GDAL multidim 模型读写）---
+    "array": ("array", "mdarray", "md_array"),
+    "dimSelect": ("dim_select", "dimselect", "dimensions", "dim_slice"),
     # --- P6-02 FFT 滤波 / 去条纹 ---
     "fftBand": ("fft_band", "fftBand"),
     "suppressBins": ("suppress_bins", "fft_suppress"),
@@ -555,6 +558,8 @@ _CAPABILITY_SUPPORT: dict[str, frozenset[str]] = {
             "dstNodata",
         }
     ),
+    # --- P8-01：多维数组二维切片（netCDF/HDF 按 GDAL multidim 模型）---
+    "gdal:mdim_slice": frozenset({"array", "dimSelect"}),
     # --- P4-04：受限表达式计算 / 直方图与基础统计 ---
     "gdal:calc": frozenset({"calc", "srcNodata", "dstNodata", "outputType"}),
     "gdal:statistics": frozenset(
@@ -646,6 +651,74 @@ def _is_int_like(value: Any) -> bool:
     if isinstance(value, float):
         return value.is_integer()
     return False
+
+
+def _strict_int(value: Any, key_hint: str) -> int:
+    """整数字符串/整型浮点 → int（小数/bool/其他形状显式拒绝）。"""
+    if isinstance(value, bool):
+        raise ParameterError(f"dimSelect 的 {key_hint!r} 索引必须是整数，实际 {value!r}")
+    if isinstance(value, int):
+        return int(value)
+    if isinstance(value, float):
+        if value.is_integer():
+            return int(value)
+        raise ParameterError(
+            f"dimSelect 的 {key_hint!r} 索引必须是整数，实际 {value!r}"
+        )
+    if isinstance(value, str):
+        text = value.strip()
+        try:
+            return int(text)
+        except ValueError as exc:
+            raise ParameterError(
+                f"dimSelect 的 {key_hint!r} 索引必须是整数，实际 {value!r}"
+            ) from exc
+    raise ParameterError(f"dimSelect 的 {key_hint!r} 索引必须是整数，实际 {value!r}")
+
+
+def _parse_dim_select_text(text: str) -> dict[str, int]:
+    """``time=1,depth=0`` → dict（重复维度/缺键/非整数索引显式拒绝）。"""
+    result: dict[str, int] = {}
+    for pair in text.split(","):
+        if "=" not in pair:
+            raise ParameterError(f"dimSelect 条目必须是 dim=index 形式，实际 {pair!r}")
+        k, _, raw = pair.partition("=")
+        key = k.strip()
+        val = raw.strip()
+        if not key or not val:
+            raise ParameterError(f"dimSelect 条目键/值缺失：{pair!r}")
+        if key in result:
+            raise ParameterError(f"dimSelect 维度重复：{key!r}")
+        result[key] = _strict_int(val, key)
+    return result
+
+
+def _normalize_dim_select(value: Any) -> dict[str, int]:
+    """P8-01 dimSelect：dict[str, int] 或 ``k=v`` 逗号分隔字符串。
+
+    - dict：键 str、值整数（整型浮点可，小数拒绝；bool 拒绝）；
+    - 字符串：``time=1,depth=0``；键/值两侧空白忽略；未知形状显式拒绝；
+    - 空选择 / 空字符串 → ParameterError（钉死数量校验由 adapter 结合
+      数组秩完成，这里只做形态校验）。
+    """
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            raise ParameterError("参数 dimSelect 不能为空（dim=index 列表）")
+        return _parse_dim_select_text(text)
+    if isinstance(value, dict):
+        result2: dict[str, int] = {}
+        for k, v in value.items():
+            if not isinstance(k, str) or not k.strip():
+                raise ParameterError(f"dimSelect 键必须是非空字符串，实际 {k!r}")
+            if k.strip() in result2:
+                raise ParameterError(f"dimSelect 维度重复：{k.strip()!r}")
+            result2[k.strip()] = _strict_int(v, k.strip())
+        return result2
+    raise ParameterError(
+        "参数 dimSelect 必须是 dict 或 \"dim=index\" 逗号分隔字符串，实际 "
+        f"{type(value).__name__}"
+    )
 
 
 def _require_int_list(value: Any, name: str, expected: int) -> list[int]:
@@ -1064,6 +1137,17 @@ def normalize_raster_params(
         if not isinstance(value, bool):
             raise ParameterError(f"参数 usePhysical 必须是布尔值，实际 {value!r}")
         out["usePhysical"] = value
+
+    # 11.14b) P8-01：多维切片 array / dimSelect
+    if "array" in collected:
+        _, value = collected["array"]
+        arr_name = str(value).strip()
+        if not arr_name:
+            raise ParameterError("参数 array 必须是非空多维数组名")
+        out["array"] = arr_name
+    if "dimSelect" in collected:
+        _, value = collected["dimSelect"]
+        out["dimSelect"] = _normalize_dim_select(value)
 
     # 11.14) P6-02：FFT 滤波
     if "fftBand" in collected:

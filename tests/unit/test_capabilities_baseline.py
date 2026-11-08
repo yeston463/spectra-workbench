@@ -169,7 +169,7 @@ def test_gdal_algorithms_count_and_structure():
     已在 registry 文档串中标注。
     """
     algorithms = build_gdal_algorithms()
-    assert len(algorithms) == 36
+    assert len(algorithms) == 37
 
     algo_ids = {a.capability_id for a in algorithms}
     expected_ids = {
@@ -216,6 +216,8 @@ def test_gdal_algorithms_count_and_structure():
         "gdal:calibrate",
         "gdal:dos1",
         "gdal:cloudreplace",
+        # P8-01：多维数组二维切片（GDAL multidim 模型，netCDF/HDF）
+        "gdal:mdim_slice",
         # P6-06 blocked：FLAASH 外部引擎 / 农业计数（方法未确定）
         "platform:flaash_external",
         "platform:agriculture_count",
@@ -394,10 +396,12 @@ def test_four_dimensional_state_independence_and_audit():
     # 第 62 轮（P6-05）：新增 gdal:mask 与 gdal:fvc：456/451/246/20。
     # 第 63 轮（P6-06）：新增 calibrate/dos1/cloudreplace + blocked 的
     # flaash_external/agriculture_count：461/454/249/23、missing 7。
-    assert report["total_baseline_count"] == 461
-    assert report["discovered"]["count"] == 454
-    assert report["callable"]["count"] == 249
-    assert report["platform_executable"]["count"] == 23
+    # 第 69 轮（P8-01）：新增平台能力 gdal:mdim_slice（form 执行器）：
+    # 469/455/250/24。
+    assert report["total_baseline_count"] == 462
+    assert report["discovered"]["count"] == 455
+    assert report["callable"]["count"] == 250
+    assert report["platform_executable"]["count"] == 24
     # 第 63 轮 blocked 新增 flaash_external 与 agriculture_count：5 -> 7
     assert report["missing"]["count"] == 7
     assert report["verified"]["count"] == 5
@@ -419,10 +423,11 @@ def test_four_dimensional_state_independence_and_audit():
     # 第 61 轮新增 gcpregister/rasterdiff（pansharpen 升级既有条目）：411 -> 413、409 -> 411。
     # 第 62 轮新增 gdal:mask / gdal:fvc：413 -> 415、411 -> 413。
     # 第 63 轮新增 3 个可执行 + 2 个 blocked：415 -> 420、413 -> 416、missing 5。
+    # 第 69 轮（P8-01）：新增平台能力 gdal:mdim_slice：420 -> 421、416 -> 417。
     # gdal:buildvrt、P5-02 的 gdal:dem/rasterize/grid 由 blocked 改为 ready，
     # GDAL 缺失项 6 -> 5 -> 4 -> 3 -> 2。
-    assert gdal_rep["total_baseline_count"] == 420
-    assert gdal_rep["discovered"]["count"] == 416
+    assert gdal_rep["total_baseline_count"] == 421
+    assert gdal_rep["discovered"]["count"] == 417
     # ? 63 ? blocked ?? flaash_external ? agriculture_count?2 -> 4
     assert gdal_rep["missing"]["count"] == 4
 
@@ -439,8 +444,9 @@ def test_provider_adapters_discover_baseline():
     # 第 32/34/35 轮新增编目；第 58 轮 gdal:sindex：407 -> 408；
     # 第 59 轮 gdal:fftfilter：408 -> 409；第 60 轮 pca/tasseledcap：409 -> 411；
     # 第 61 轮 gcpregister/rasterdiff：411 -> 413；第 62 轮 mask/fvc：413 -> 415；
-    # 第 63 轮 calibrate/dos1/cloudreplace + 2 blocked：415 -> 420。
-    assert len(gdal_caps) == 420
+    # 第 63 轮 calibrate/dos1/cloudreplace + 2 blocked：415 -> 420；
+    # 第 69 轮（P8-01）mdim_slice：420 -> 421。
+    assert len(gdal_caps) == 421
 
     rio_adapter = RasterioProviderAdapter()
     rio_caps = rio_adapter.discover()

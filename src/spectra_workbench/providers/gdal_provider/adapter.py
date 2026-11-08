@@ -70,6 +70,11 @@ from spectra_workbench.providers.gdal_provider.fvc_ops import run_fvc
 from spectra_workbench.providers.gdal_provider.gcp_ops import run_gcp_registration
 from spectra_workbench.providers.gdal_provider.index_ops import compute_index
 from spectra_workbench.providers.gdal_provider.mask_ops import run_mask
+from spectra_workbench.providers.gdal_provider.mdim_ops import (
+    MDimError,
+    build_multidim_tree,
+    run_multidim_slice,
+)
 from spectra_workbench.providers.gdal_provider.metadata_ops import (
     apply_nodata,
     build_overviews,
@@ -342,6 +347,8 @@ class GDALProviderAdapter(ProviderAdapter):
         # --- P4-04：受限表达式计算 / 直方图与基础统计 ---
         "gdal:calc",
         P404_STATISTICS_CAPABILITY,
+        # --- P8-01：多维数组二维切片（netCDF/HDF 按 GDAL multidim 模型）---
+        "gdal:mdim_slice",
     }
 
     #: 需要多个输入源的能力（至少 2 个）。
@@ -651,6 +658,7 @@ class GDALProviderAdapter(ProviderAdapter):
                 "gdal:calibrate",
                 "gdal:dos1",
                 "gdal:cloudreplace",
+                "gdal:mdim_slice",
             )
             and spec.capability_id not in VECTOR_OUTPUT_CAPABILITIES
         ):
@@ -725,6 +733,7 @@ class GDALProviderAdapter(ProviderAdapter):
         is_calibrate = spec.capability_id == "gdal:calibrate"
         is_dos1 = spec.capability_id == "gdal:dos1"
         is_cloudreplace = spec.capability_id == "gdal:cloudreplace"
+        is_mdim_slice = spec.capability_id == "gdal:mdim_slice"
 
         if is_calibrate:
             calibrate_mode = str(norm.get("calibrateMode") or "physical")
@@ -2018,6 +2027,64 @@ class GDALProviderAdapter(ProviderAdapter):
                     f"sidecar：{cloud_info['sidecar']}",
                 )
                 ds = gdal.Open(str(staged_path), gdal.GA_ReadOnly)
+            elif is_mdim_slice:
+                # P8-01：多维数组二维切片（TaskSpec 通道；geo 之外的维度全部显式钉死）
+                mdim_array = str(norm.get("array") or "")
+                if not mdim_array:
+                    return TaskResult(
+                        task_id=spec.task_id,
+                        attempt=spec.attempt,
+                        status=TaskStatus.failed,
+                        error={
+                            "code": "invalid_parameters",
+                            "message": "参数 array 必填（多维数组名，例如 temp/sst）",
+                        },
+                        duration_seconds=round(time.monotonic() - start_time, 4),
+                    )
+                raw_select = norm.get("dimSelect")
+                if not isinstance(raw_select, dict) or not raw_select:
+                    return TaskResult(
+                        task_id=spec.task_id,
+                        attempt=spec.attempt,
+                        status=TaskStatus.failed,
+                        error={
+                            "code": "invalid_parameters",
+                            "message": (
+                                "参数 dimSelect 必填（除两个保留维外的全部维度，"
+                                "例：time=1,depth=0）"
+                            ),
+                        },
+                        duration_seconds=round(time.monotonic() - start_time, 4),
+                    )
+                try:
+                    mdim_info = run_multidim_slice(
+                        in_path,  # type: ignore[arg-type]
+                        mdim_array,
+                        raw_select,
+                        staged_path,
+                    )
+                except MDimError as mdim_err:
+                    return TaskResult(
+                        task_id=spec.task_id,
+                        attempt=spec.attempt,
+                        status=TaskStatus.failed,
+                        error={"code": "mdim_error", "message": str(mdim_err)},
+                        duration_seconds=round(time.monotonic() - start_time, 4),
+                    )
+                sel_txt = "；".join(
+                    f"{s['dim']}={s['index']}" + (
+                        f"@{s['value']}" if s.get("value") is not None else ""
+                    )
+                    for s in mdim_info["selected"]
+                )
+                context.log(
+                    "INFO",
+                    f"多维切片完成：{mdim_info['shape'][0]}×{mdim_info['shape'][1]}，"
+                    f"钉死 {sel_txt}；unit={mdim_info['unit']}，"
+                    f"sidecar：{mdim_info['sidecar']}，"
+                    f"georeferenced={mdim_info['georeferenced']}",
+                )
+                ds = gdal.Open(str(staged_path), gdal.GA_ReadOnly)
             elif is_sindex:
                 # 单输入能力：validate() 保证 input 端口存在，in_path 必已解析
                 index_info = compute_index(
@@ -2354,6 +2421,10 @@ class GDALProviderAdapter(ProviderAdapter):
             )
             if cloud_sidecar.exists():
                 staged_files.append(cloud_sidecar.resolve())
+        if is_mdim_slice:
+            mdim_sidecar = staged_path.with_name(staged_path.name + ".mdim_slice.json")
+            if mdim_sidecar.exists():
+                staged_files.append(mdim_sidecar.resolve())
         # 在 Windows 上显式关闭 dataset 释放文件锁
         del ds
 
@@ -4166,10 +4237,16 @@ class GDALProviderAdapter(ProviderAdapter):
             del ds
 
     # ------------------------------------------------------- P3-02 矢量元数据
-    def probe_vector(self, path: Path | str) -> dict[str, Any]:
-        """探测矢量数据集的基础元数据（P3-02）。
+    def probe_multidim(self, path: Path | str) -> dict[str, Any]:
+        """多维数据树（P8-01）：group/attributes/dimensions/arrays。
 
-        只读取结构信息，不做全表扫描：
+        只读结构信息：数组节点的 dims/shape/unit/scale/offset/nodata/srs
+        如实记录，无则 None；不触发任何全量数组读取。
+        """
+        return build_multidim_tree(path)
+
+    def probe_vector(self, path: Path | str) -> dict[str, Any]:
+        """探测矢量数据集的基础元数据（P3-02）。        只读取结构信息，不做全表扫描：
         - 图层名称、几何类型、CRS、范围；
         - 字段名称 / 类型 / 可空性。
 

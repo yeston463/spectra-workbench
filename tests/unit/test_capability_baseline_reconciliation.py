@@ -23,6 +23,7 @@ PLATFORM_ONLY = {
     "gdal:fvc",
     "gdal:gcpregister",
     "gdal:mask",
+    "gdal:mdim_slice",
     "gdal:overview",
     "gdal:pca",
     "gdal:rasterdiff",
@@ -48,8 +49,9 @@ def test_baseline_reconciliation_has_no_missing_registry_entry() -> None:
 
     assert report["errors"] == []
     assert report["baseline_count"] == 443
-    # 第 58/59/60/61/62/63 轮新增平台能力（pansharpen 升级既有条目）：448 -> 461
-    assert report["registry_count"] == 461
+    # 第 58/59/60/61/62/63 轮新增平台能力（pansharpen 升级既有条目）：448 -> 461；
+    # 第 69 轮（P8-01）新增 gdal:mdim_slice：461 -> 462
+    assert report["registry_count"] == 462
     assert report["missing_from_registry"] == []
     assert set(report["platform_only"]) == PLATFORM_ONLY
     assert report["complete"] is True

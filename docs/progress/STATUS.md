@@ -1,6 +1,6 @@
 # 执行状态
 
-更新：2026-11-08（第 68 轮 · P7-05 历史与可复现导出：`processing/history.py::HistoryStore`（SQLite 任务/输入指纹/真实引擎版本/关键配置 + schema_version 迁移守门）+ `reopen_params`（从历史重开参数真实重提 → 数值同类）+ `export_workflow_recipe`（历史 → 标准 workflow 文档、边自动合成、P7-04 入口直接回放跨引擎链同类成果）；3 项测试 + 官方闸门 808 passed / clean_exit_verified=True / residual=0）✅。
+更新：2026-11-08（第 69 轮 · P8-01 多维数据树与二维切片：worker `probe_multidim` 查询通道（group/array/dimension/attribute/unit/scale/offset/nodata 如实树）+ `gdal:mdim_slice` 能力（非地理维钉死 → 二维 GTiff，raw 像元 + sidecar 单位/坐标/缩放/偏移/CRS 状态，无参考不编造）+ 注册面七件套（registry 四维对账 462/455/250/24）+ GUI 表单行；4 项集成测试 + 官方闸门 812 passed / clean_exit_verified=True / residual=0）✅；HDF5 writer 本运行时缺失如实边界（netCDF/CF 多维验收载体）。
 
 ## 当前里程碑
 
@@ -37,6 +37,7 @@
   - **P7-03 批处理**：**done**（第 66 轮）。`processing/batch.py`：模板（capability_id/engine_provider 必填校验、inputs/outputs 逐 item `{item[key]}` 展开、未知键显式 `BatchError`）→ N 份 TaskSpec；单输入 key=`input`、多输入 `list[DatasetRef]`，单输出 key=`output`、多输出 `output_0/output_1`；`overwrite` 模板参数透传 OutputPlan.overwrite，`params` 内字符串同样经模板展开（非原样透传）；`run_batch` 严格串行（execute 返回 TaskStatus），`continue_on_error=True` 失败继续并如实搜集 succeeded/failed/cancelled 终态与 duration，`False` 首败立即停止且未处置条目显式 `pending`（error=skipped，不冒充成功）；`BatchReport.summary()/all_terminal()` 供调用方审计；`write_manifest` 把 batch manifest（batch_id/summary/entries）落盘为 JSON。验收测试 `tests/integration/test_p7_batch_worker.py` 5 项全部基于真实 QGIS GDAL 3.44.15 worker 端到端（多输入/多输出展开、参数变化、同名冲突 overwrite=True 真实覆盖 stub 文件、单项失败继续、strict 停止 + manifest 汇总）。顺带诊断并修复全量回归缺陷：MainWindow 构造期 `attribute_panel.set_client(self.gdal_client)` 懒建真实 gdal client 在测试夹具换槽后无人停止（进程残留 4 个 → clean_exit_verified=false），`MainWindow._owned_clients` 登记 + closeEvent 全回收。全量 `scripts/test.ps1 -All` 恢复 **clean_exit_verified=True / residual=0**。遗留：批处理严格串行（并行与 platform:* 外部引擎不在范围）；GUI 批处理面板归后续。
   - **P7-04 DAG 工作流**：**done**（第 67 轮）。`processing/workflow.py`：带版本的节点图（节点引用稳定 capability_id、缺省引擎约束 gdal→gdal-qgis/3.13.3 / rasterio→rasterio-venv/1.5.2 可覆盖、类型化端口 raster/vector）；`render_workflow_nodes` 提交前校验——环检测（Kahn，环成员精确列出）、端口错配拒绝（生产者声明 kind × 消费者期望 kind）、未知上游节点/输出键拒绝、输出 URI 冲突与「输出=他人字面输入」写穿拒绝、按引擎的节点计数汇总（不承诺估算）；`run_workflow` 拓扑串行（execute 注入 TaskStatus|TaskResult，TaskResult.error 转写报告；TaskSpec 通道与批处理/菜单共用注册表与 adapter）；**跨引擎物化** gdal→rasterio 经真实 committed 文件衔接（数值独立重开断言）；**失败/恢复**——引擎级失败下游 pending(skipped)、独立分支继续、node_key/输入/输出指纹未变的成功节点重跑 `cached`（引擎调用数 0、文件 mtime 不变）；**缓存失效**——上游参数变化重跑使产物内容变化（Float32→Byte 实测）→ 下游指纹失效自动重执行并消费新产物；指纹 fast=size+mtime / strong=sha256 记录复现等级；`workflow-cache.json` manifest 落盘。顺带修复预置缺陷：rasterio convert `commit_files` 未透传 `overwrite`（真实 worker 重跑已存在目标被误拒），与 gdal 侧语义对齐。官方闸门 **805 passed / clean_exit_verified=True / residual=0**。遗留：同进程管线优化、调度器并行、GUI 工作流面板归后续。
   - **P7-05 历史与可复现导出**：**done**（第 68 轮）。`processing/history.py`（纯 stdlib）：`HistoryStore` SQLite（schema_version 显式迁移：旧库自动升 v1、更高未知版本拒开不降级；单写入方）：`record` 登记 TaskSpec 通道真实执行——kind/group、capability/task/attempt/status/duration、**spec 引擎约束 + worker 上报真实引擎版本**（TaskResult.engine_runtime）、完整 params JSON、错误 JSON、输入（端口→URI/kind+指纹 size+mtime，strong 可选 sha256）与输出（key→URI/committed_files+指纹）；`reopen_params(run_id)` 从历史重开参数（capability/engine/params/inputs），实测真实 gdal worker 重提后数值与历史一致（[[1,2],[3,4]] 2×2）；`export_workflow_recipe(run_ids, path)` 导出**标准 workflow 文档**（P7-04 run_workflow 唯一入口）：capability/engine/params 原样回填、历史 URI 解码为本地路径（中文百分号往返）、**边自动合成**（输入 URI=他节点输出 → node 引用保 DAG 序），跨引擎链回放实测：每能力引擎恰再调用一次、final 值 [[5,6],[7,8]] 与历史一致、mid mtime 变化（真实重写非读缓）。官方闸门 **808 passed / clean_exit_verified=True / residual=0**。遗留：GUI 历史面板/重跑 UI、多写入方并发策略、远程来源稳定标识归后续。
+  - **P8-01 多维数据树与二维切片**：**done**（第 69 轮）。worker `probe_multidim` 查询通道（entrypoint._SIMPLE_CALLS + mdim_ops.build_multidim_tree + client 同步封装）递归展开 group/attrs/dims（has_coordinate_array）/arrays，数组节点 dims/shape/unit/scale/offset/nodata/srs_wkt 无值如实 None；`gdal:mdim_slice`（TaskSpec 通道，可进批处理/工作流/历史）：非地理维全部显式钉死（恰 rank-2，k=v 文本或 dict 双形态且严格整型拒绝 1.5），GetView 取剩余两维原序 rows/cols，像元 raw 原值（独立推导 [[12,13,14],[15,16,17]] 断言），sidecar 记 selected（含坐标值）/remaining_dims/coords/unit/scale/offset/nodata/georeferenced，输出带 SetUnitType/SetScale/SetOffset/SetNoDataValue；SetSpatialRef 的数组 CRS 保留实测 EPSG:4326；无参考数组不编造地理参考（crs=None + georeferenced=false）；拒绝矩阵 7 例全不落盘；注册面四维对账 462/455/250/24（registry 七件套 + GUI 表单行 + 能力切换状态隔离）。遗留：HDF5 writer 本运行时缺失（netCDF/CF 容器验收；HDF5 待驱动补齐）、GUI 多维树面板/交互预览、complex 数组支持。
 ## 原 P3 验收标准逐项对账与剩余缺口
 
 | ID | 任务 | 原始验收标准 | 当前已满足项与实测证据 | 剩余缺口与待验条件 | 当前状态 |
@@ -245,6 +246,59 @@ CRT 检测到栈状态异常后立即终止进程，这正是 `STATUS_STACK_BUFF
 |---|---|---|
 | 用合成影像完成同类验收 | 已满足 | 合成 ENVI/GTiff/GeoJSON/netCDF 样例覆盖多波段、像元数值、ROI 与对比 |
 | 保留真实数据待验状态 | **待验** | 课程原始数据位于 `C:\Users\赵航\Desktop\studio\_chaoxing_rs`（**只读**，不得运行其中的抓取/下载/OCR 脚本）；本轮全部用合成影像验收，未对课程原始 ENVI 栅格与 lena.tif 做真实打开验证 |
+
+### 第 69 轮：P8-01 多维数据树与二维切片（P8-01 → done）
+
+**一、运行时探针（先探测后实现，实测入实现）**
+
+- GDAL 3.13.3 netCDF 驱动 `DCAP_MULTIDIM_RASTER=YES`；`CreateMultiDimensional` 需
+  「chdir 到目录 + 相对文件名」（P3-02 定档限制完全复现，读取不受限）；
+  `_FillValue` 必须在数据写入前创建；python 3.13 包装用 `ExtendedDataType.Create`
+  而非 ArrayDataType；切片走 `GetView('[1,0,:,:]')` → dims [y,x]。
+
+**二、实现**
+
+- `providers/gdal_provider/mdim_ops.py`（**仅 worker 进程 import**；`_gdal()` 惰性模式）：
+  - `build_multidim_tree(path)`：递归 group（attrs/dims 含 has_coordinate_array/arrays/子组）；
+    数组节点 dims/shape/**unit/scale/offset/nodata（无值 None 不编造）/srs_wkt**；
+  - `run_multidim_slice(in_path, array, dim_select, staged_path)`：钉死校验（数量恰
+    rank-2、未知维、越界、非整数索引全部显式拒绝）→ `GetView` 取剩余两维原序 →
+    GTiff raw 值 + band SetUnitType/SetScale/SetOffset/SetNoData/SetSpatialRef（有则用）→
+    sidecar `<name>.mdim_slice.json`（selected 含坐标值/remaining_dims/coords/
+    unit/scale/offset/nodata/georeferenced/value_semantics=raw）。
+- 查询通道：`entrypoint._SIMPLE_CALLS["probe_multidim"]` → adapter `probe_multidim`
+  → 查询面与 P3-02 probe_* 同型；`workers/process.py`、`scheduler/client.py` 同步封装。
+- 处理能力接 adapter：SUPPORTED_CAPABILITIES + 分派 job（参数缺失/形态错 →
+  invalid_parameters；mdim 错误 → mdim_error）+ staged_files sidecar 收集。
+- 注册面（P6-01 七件套模式）：registry `gdal:mdim_slice`（limitations 5 条）；
+  capability_wiring CONNECTED_CAPABILITIES；raster_params 别名/SUPPORT/
+  `_normalize_dim_select`（k=v 文本 + dict 双形态、严格整型拒绝 1.5）；GUI param_form
+  新增 array/dimSelect 行 + 可见性/重置/collect 必填校验。
+
+**三、验收（真实 worker，独立引擎重开断言）**
+
+- 数据树：dims {time:2,depth:2,y:2,x:3}、has_coordinate_array 全 true、
+  temp Kelvin/0.5/1.0、temp 无参考如实 None、sst 带 WGS 84；
+- 切片像元：temp|time=1,depth=0 → [[12,13,14],[15,16,17]]（=arange(24).reshape
+  (2,2,2,3)[1][0]，与实现无关）；band scale/offset/unit 保留；无 CRS → 输出
+  crs=None + georeferenced=false；
+- CRS 保留：sst|time=0,depth=1 → [[1006..1011]] 且输出 crs_epsg=4326、unit=degC；
+- 拒绝矩阵 7 例（array 缺失/未知数组/未知维/钉死数量不足/越界/小数索引/rank<3）
+  全部不落盘。
+
+**四、闸门**
+
+- P8-01 4 项集成 + param/UI 靶向 43 项全绿；unit 对账 20 项全绿；
+- 官方 `scripts/test.ps1 -All -TimeoutSeconds 1800`：Ruff PASS / mypy 88 文件 0 错误 /
+  **812 passed / rc=0 / clean_exit_verified=True / residual=0 / cleanup_complete=True**。
+
+**五、边界与结论**
+
+- 验收「合成 netCDF/HDF5 的 time/depth/x/y、单位和切片像元正确」：netCDF/CF 容器
+  全部口径通过——**P8-01 转 done**；账本现为 done 40 / implemented 2 / todo 13。
+- 边界：本运行时 **HDF5 writer 缺失**（无容器级 HDF5 验收，待驱动补齐——已在
+  registry limitations 与 STATUS 如实记录）；complex/bool 数组显式拒绝；
+  GUI 多维树面板/交互预览归后续。
 
 ### 第 68 轮：P7-05 历史与可复现导出（P7-05 → done）
 

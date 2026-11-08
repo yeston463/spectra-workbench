@@ -981,9 +981,20 @@
         "P5-01",
         "P3-05"
       ],
-      "status": "todo",
+      "status": "done",
       "release_requirement": "core",
-      "evidence": [],
+      "evidence": [
+        "第 69 轮：P8-01 多维数据树与二维切片转 done。先跑运行时探针（work/probe_multidim2.py，真实 QGIS GDAL 3.13.3）：netCDF 驱动DCAP_MULTIDIM_RASTER=YES；CreateMultiDimensional 需 chdir 到目录 + 相对文件名（P3-02 定档限制完全复现）；MDArray 写入顺序约束（_FillValue 必须在数据前）；python 包装 gdal 3.13 用 ExtendedDataType.Create 而非 ArrayDataType；切片 GetView('[1,0,:,:]') → dims [y,x] shape [2,3]。这些实测结论全部进入实现。",
+        "(1) 多维数据树：新增 worker 查询通道 `probe_multidim`（workers/entrypoint.py _SIMPLE_CALLS + providers/gdal_provider/mdim_ops.py::build_multidim_tree + workers/process.py + scheduler/client.py 同步封装，与 P3-02 probe_* 查询通道同一模式）：递归 group/attributes/dims（含 has_coordinate_array）/arrays；数组节点如实记录 dims/shape/unit/scale/offset/nodata（无值则 None，不编造）/srs_wkt。tests/integration/test_p8_multidim.py::test_multidim_tree_probe 断言dims {time:2,depth:2,y:2,x:3}、全部.has_coordinate_array=True、temp 在 Kelvin/0.5/1.0、temp 无参考如实 None、sst 带 WGS 84。",
+        "(2) 二维切片能力 gdal:mdim_slice（TaskSpec 通道，可进批处理/工作流/历史重跑）：非地理维**全部显式钉死**（数量必须恰 rank-2），GetView('[t,d,:,:]') 取剩余两维原序 rows/cols；像元 = **raw 原值**（不做 scale/offset 数学换算）；sidecar <成果名>.mdim_slice.json 记录 selected（dim/index/**坐标值**）、remaining_dims、coords（y/x 坐标数组）、unit/scale/offset/nodata、value_semantics=raw、crs_wkt/georeferenced；输出 GTiff band 同时 SetUnitType/SetScale/SetOffset/SetNoDataValue、有 SpatialRef 的数组保留 CRS。",
+        "(3) 数值验收（独立引擎重开）：temp | time=1,depth=0 → 像元[[12,13,14],[15,16,17]]（= arange(24).reshape(2,2,2,3)[1][0]，与实现无关的独立推导）；band scale=0.5/offset=1.0/unittype=Kelvin 保留；temp 无 CRS → 输出crs_epsg=None + sidecar georeferenced=False（不编造地理参考）；sst（SetSpatialRef EPSG:4326） | time=0,depth=1 → 像元 [[1006,1007,1008],[1009,1010,1011]] 且输出保留 crs_epsg=4326（单位 degC）。",
+        "(4) 拒绝矩阵（7 例全不落盘）：array 缺失→invalid_parameters；未知数组→mdim_error；未知维度 pressure→mdim_error；钉死数量不足→mdim_error；索引越界time=9→mdim_error；小数索引 time=1.5→invalid_parameters；rank<3（取坐标数组time）→mdim_error。",
+        "(5) 注册面（按 P6-01 模式七件套）：registry/gdal_index.py 新增平台能力gdal:mdim_slice（limitations 五条如实边界）；domain/capability_wiring.py 接入CONNECTED_CAPABILITIES；processing/raster_params.py 新增别名（array=mdarray/md_array、dimSelect=dim_select/dimselect/dimensions/dim_slice）与 _CAPABILITY_SUPPORT、_normalize_dim_select（k=v 文本与 dict 双形态、严格整数拒绝 1.5）。四维对账：基线 461→462、发现 454→455、可调用 249→250、平台可执行 23→24、gdal 420→421/416→417、adapter.discover 420→421；tests/unit 两文件计数同步全绿（20 项）。",
+        "(6) GUI：param_form 新增 array/dimSelect 行（占位提示+可选预填提示），可见性随 sup 隔离、能力切换状态隔离（clear）、collect 必填校验（缺 array/dimSelect 禁止提交）；测试 22 项 UI/表单回归全绿。",
+        "(7) tests/integration/test_p8_multidim.py 4 项全绿（7.65s）；受影响靶向回归（param contract/一致性/UI）43 项全绿。",
+        "(8) 官方全量闸门：scripts/test.ps1 -All -TimeoutSeconds 1800 → Ruff PASS；Mypy 88 源文件 0 错误；Clean 退出 pytest **812 passed / 0 failed / rc=0**；exit_mode=clean、clean_exit_verified=True、process_observation=job、residual=0、cleanup_complete=True、cleanup_errors=0。",
+        "限制与边界（写入 registry limitations 与 STATUS）：①本运行时 **HDF5 writer 缺失**（gdal.GetDriverByName('HDF5') 为 None），多维容器验收以 netCDF/CF 结构为准；HDF5 文件读写待运行时补齐驱动后另行验证；②complex/bool 数组显式拒绝；③无 SpatialRef 的数组不编造地理参考（矩阵视图语义由 sidecar 承载）；④netCDF 创建受 P3-02 定档限制（中文路径不可写 + chdir 相对名），读取不受限；⑤GUI 多维树面板/切片交互式预览归后续（数据层 worker/任务面已可复用）。"
+      ],
       "blocking_reason": null
     },
     {

@@ -728,6 +728,16 @@ class QtWorkerClient(QObject):
             on_error=on_error,
         )
 
+    def probe_multidim(
+        self,
+        path: Path | str,
+        timeout: float = 15.0,
+    ) -> dict[str, Any]:
+        """多维数据树（P8-01，同步）。"""
+        if not self.is_alive:
+            self.start()
+        return self._worker.probe_multidim(path, timeout=timeout)
+
     def list_subdatasets(
         self,
         path: Path | str,

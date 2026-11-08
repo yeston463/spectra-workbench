@@ -768,6 +768,19 @@ class CapabilityFormWidget(QWidget):
         self.lbl_cloud_dilate = QLabel("掩膜膨胀像素 (maskDilatePixels):")
         self.params_form.addRow(self.lbl_cloud_dilate, self.spin_cloud_dilate)
 
+        # --- P8-01 多维数组二维切片 ---
+        self.txt_mdim_array = QLineEdit()
+        self.txt_mdim_array.setPlaceholderText("多维数组名（例：temp / sst；点工具箱探测多维树后填入）")
+        self.lbl_mdim_array = QLabel("数组 (array):")
+        self.params_form.addRow(self.lbl_mdim_array, self.txt_mdim_array)
+
+        self.txt_mdim_select = QLineEdit()
+        self.txt_mdim_select.setPlaceholderText(
+            "钉死维度（dim=index，除两保留维外全部；例：time=1,depth=0）"
+        )
+        self.lbl_mdim_select = QLabel("钉死维 (dimSelect):")
+        self.params_form.addRow(self.lbl_mdim_select, self.txt_mdim_select)
+
         # --- P4-03 概览构建 ---
         self.txt_levels = QLineEdit()
         self.txt_levels.setPlaceholderText("严格递增、每个≥2；例：2,4,8")
@@ -1219,6 +1232,11 @@ class CapabilityFormWidget(QWidget):
         )
         self._set_row_visible(self.lbl_levels, self.txt_levels, "levels" in sup)
         self._set_row_visible(self.lbl_ovr_compress, self.cmb_ovr_compress, "overviewCompress" in sup)
+        # P8-01 多维切片
+        self._set_row_visible(self.lbl_mdim_array, self.txt_mdim_array, "array" in sup)
+        self._set_row_visible(
+            self.lbl_mdim_select, self.txt_mdim_select, "dimSelect" in sup
+        )
         # P4-04
         self._set_row_visible(self.lbl_calc, self.txt_calc, "calc" in sup)
         self._set_row_visible(self.lbl_stats_mode, self.cmb_stats_mode, "statisticsMode" in sup)
@@ -1449,6 +1467,10 @@ class CapabilityFormWidget(QWidget):
             self.txt_cloud_secondary_time.clear()
         if "maskDilatePixels" not in supported:
             self.spin_cloud_dilate.setValue(0)
+        if "array" not in supported:
+            self.txt_mdim_array.clear()
+        if "dimSelect" not in supported:
+            self.txt_mdim_select.clear()
         if "levels" not in supported:
             self.txt_levels.clear()
         if "overviewCompress" not in supported:
@@ -1948,6 +1970,18 @@ class CapabilityFormWidget(QWidget):
                 params["secondaryTime"] = raw_time
         if "maskDilatePixels" in supported:
             params["maskDilatePixels"] = int(self.spin_cloud_dilate.value())
+
+        # P8-01：多维切片
+        if "array" in supported:
+            arr_text = self.txt_mdim_array.text().strip()
+            if not arr_text:
+                return params, "多维切片必须填数组名 array（例：temp / sst）"
+            params["array"] = arr_text
+        if "dimSelect" in supported:
+            sel_text = self.txt_mdim_select.text().strip()
+            if not sel_text:
+                return params, "多维切片必须填 dimSelect（dim=index，除两保留维外全部）"
+            params["dimSelect"] = sel_text
 
         # P4-04：表达式计算
         if "calc" in supported:

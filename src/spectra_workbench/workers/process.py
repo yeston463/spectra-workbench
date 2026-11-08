@@ -802,6 +802,13 @@ class WorkerProcess:
         """列出容器数据集的子数据集（P3-02）。"""
         return self._simple_call("list_subdatasets", {"path": str(path)}, timeout=timeout)
 
+    def probe_multidim(self, path: Path | str, timeout: float = 15.0) -> dict[str, Any]:
+        """多维数据树（P8-01）：group/attributes/dimensions/arrays。
+
+        只读结构信息，不触发任何全量数组读取；HDF5 依赖引擎协议读写同一模型。
+        """
+        return self._simple_call("probe_multidim", {"path": str(path)}, timeout=timeout)
+
     def probe_subdataset(self, uri: str, timeout: float = 15.0) -> dict[str, Any]:
         """探测单个子数据集（P3-02）。
 
