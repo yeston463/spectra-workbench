@@ -1,4 +1,4 @@
-﻿{
+{
   "schema_version": "1.0",
   "project": "Spectra Workbench",
   "created_date": "2026-11-03",
@@ -1008,9 +1008,15 @@
         "P5-05",
         "P1-04"
       ],
-      "status": "todo",
+      "status": "done",
       "release_requirement": "core",
-      "evidence": [],
+      "evidence": [
+        "domain/paths.py：统一 VSI 虚拟文件系统规范（/vsizip/, /vsitar/, /vsicurl/, /vsis3/ 等）、路径标准化、脱敏与归档提取，杜绝 Windows Path.resolve() 导致的路径破坏与盘符污染。",
+        "本地归档读取与多栅格容器：gdal_provider adapter 支持 /vsizip/、/vsitar/ 单栅格与多栅格归档容器探测（ReadDir 枚举 + probe_dataset/read_window 提取），项目持久化 (.spectra.json) 保证远程与 VSI 路径 source_is_relative=False，重开项目无损恢复。",
+        "HTTP Range 零全量内存加载与弹性审计：构建 LocalHttpRangeServer 支持 206 Partial Content、延迟注入与 503 故障重试；实测验证 128x128 瓦片窗口读取传输字节数远低于全量文件（零全量内存下载，A13 标准闭环）；配置 GDAL_HTTP_TIMEOUT/CONNECTTIMEOUT/MAX_RETRY/RETRY_DELAY；实测网络超时与 503 瞬时故障恢复；实测 worker 异步远程读取及 2 秒内协作式取消。",
+        "GUI 集成：新增「打开远程 URL / VSI (&U)…」菜单对话框与文件选择归档扩展名（.zip, .tar, .tar.gz, .tgz）；支持直接输入远程 URL，加载图层、保存项目与跨会话重开恢复。",
+        "测试验证：tests/integration/test_p8_vsi_remote.py 12 项测试全部通过（退出码 0，clean_exit_verified=True，0 孤儿进程），全量集成测试 scripts/test.ps1 -Integration 全部 PASS。"
+      ],
       "blocking_reason": null
     },
     {

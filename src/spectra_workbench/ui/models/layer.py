@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from spectra_workbench.domain.paths import is_vsi_or_remote, normalize_vsi_path
 from spectra_workbench.domain.roi import ROI
 from spectra_workbench.rendering.display import DisplayMode, DisplaySettings
 
@@ -22,7 +23,7 @@ class LayerItem:
     """栅格影像图层。"""
 
     name: str
-    file_path: Path
+    file_path: Path | str
     metadata: dict[str, Any]
     layer_id: str = field(default_factory=lambda: uuid.uuid4().hex[:8])
     visible: bool = True
@@ -31,7 +32,10 @@ class LayerItem:
     provider_hint: str | None = None
 
     def __post_init__(self) -> None:
-        self.file_path = Path(self.file_path).resolve()
+        if is_vsi_or_remote(self.file_path):
+            self.file_path = normalize_vsi_path(self.file_path)
+        else:
+            self.file_path = Path(self.file_path).resolve()
         count = self.band_count
         if count >= 3:
             self.display.mode = DisplayMode.rgb

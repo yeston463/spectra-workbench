@@ -1,6 +1,6 @@
 # 执行状态
 
-更新：2026-11-08（第 69 轮 · P8-01 多维数据树与二维切片：worker `probe_multidim` 查询通道（group/array/dimension/attribute/unit/scale/offset/nodata 如实树）+ `gdal:mdim_slice` 能力（非地理维钉死 → 二维 GTiff，raw 像元 + sidecar 单位/坐标/缩放/偏移/CRS 状态，无参考不编造）+ 注册面七件套（registry 四维对账 462/455/250/24）+ GUI 表单行；4 项集成测试 + 官方闸门 812 passed / clean_exit_verified=True / residual=0）✅；HDF5 writer 本运行时缺失如实边界（netCDF/CF 多维验收载体）。
+更新：2026-11-08（第 70 轮 · P8-02 VSI/归档/远程数据：统一 VSI 路径规范 + 本地归档 /vsizip//vsitar/ 读取与容器子数据集探测 + HTTP Range 零全量内存加载 + 超时重试与协作式取消 + 项目持久化与跨会话重开 + GUI 远程输入菜单；12 项集成测试全部通过，clean_exit_verified=True，residual=0）✅。
 
 ## 当前里程碑
 
@@ -38,6 +38,15 @@
   - **P7-04 DAG 工作流**：**done**（第 67 轮）。`processing/workflow.py`：带版本的节点图（节点引用稳定 capability_id、缺省引擎约束 gdal→gdal-qgis/3.13.3 / rasterio→rasterio-venv/1.5.2 可覆盖、类型化端口 raster/vector）；`render_workflow_nodes` 提交前校验——环检测（Kahn，环成员精确列出）、端口错配拒绝（生产者声明 kind × 消费者期望 kind）、未知上游节点/输出键拒绝、输出 URI 冲突与「输出=他人字面输入」写穿拒绝、按引擎的节点计数汇总（不承诺估算）；`run_workflow` 拓扑串行（execute 注入 TaskStatus|TaskResult，TaskResult.error 转写报告；TaskSpec 通道与批处理/菜单共用注册表与 adapter）；**跨引擎物化** gdal→rasterio 经真实 committed 文件衔接（数值独立重开断言）；**失败/恢复**——引擎级失败下游 pending(skipped)、独立分支继续、node_key/输入/输出指纹未变的成功节点重跑 `cached`（引擎调用数 0、文件 mtime 不变）；**缓存失效**——上游参数变化重跑使产物内容变化（Float32→Byte 实测）→ 下游指纹失效自动重执行并消费新产物；指纹 fast=size+mtime / strong=sha256 记录复现等级；`workflow-cache.json` manifest 落盘。顺带修复预置缺陷：rasterio convert `commit_files` 未透传 `overwrite`（真实 worker 重跑已存在目标被误拒），与 gdal 侧语义对齐。官方闸门 **805 passed / clean_exit_verified=True / residual=0**。遗留：同进程管线优化、调度器并行、GUI 工作流面板归后续。
   - **P7-05 历史与可复现导出**：**done**（第 68 轮）。`processing/history.py`（纯 stdlib）：`HistoryStore` SQLite（schema_version 显式迁移：旧库自动升 v1、更高未知版本拒开不降级；单写入方）：`record` 登记 TaskSpec 通道真实执行——kind/group、capability/task/attempt/status/duration、**spec 引擎约束 + worker 上报真实引擎版本**（TaskResult.engine_runtime）、完整 params JSON、错误 JSON、输入（端口→URI/kind+指纹 size+mtime，strong 可选 sha256）与输出（key→URI/committed_files+指纹）；`reopen_params(run_id)` 从历史重开参数（capability/engine/params/inputs），实测真实 gdal worker 重提后数值与历史一致（[[1,2],[3,4]] 2×2）；`export_workflow_recipe(run_ids, path)` 导出**标准 workflow 文档**（P7-04 run_workflow 唯一入口）：capability/engine/params 原样回填、历史 URI 解码为本地路径（中文百分号往返）、**边自动合成**（输入 URI=他节点输出 → node 引用保 DAG 序），跨引擎链回放实测：每能力引擎恰再调用一次、final 值 [[5,6],[7,8]] 与历史一致、mid mtime 变化（真实重写非读缓）。官方闸门 **808 passed / clean_exit_verified=True / residual=0**。遗留：GUI 历史面板/重跑 UI、多写入方并发策略、远程来源稳定标识归后续。
   - **P8-01 多维数据树与二维切片**：**done**（第 69 轮）。worker `probe_multidim` 查询通道（entrypoint._SIMPLE_CALLS + mdim_ops.build_multidim_tree + client 同步封装）递归展开 group/attrs/dims（has_coordinate_array）/arrays，数组节点 dims/shape/unit/scale/offset/nodata/srs_wkt 无值如实 None；`gdal:mdim_slice`（TaskSpec 通道，可进批处理/工作流/历史）：非地理维全部显式钉死（恰 rank-2，k=v 文本或 dict 双形态且严格整型拒绝 1.5），GetView 取剩余两维原序 rows/cols，像元 raw 原值（独立推导 [[12,13,14],[15,16,17]] 断言），sidecar 记 selected（含坐标值）/remaining_dims/coords/unit/scale/offset/nodata/georeferenced，输出带 SetUnitType/SetScale/SetOffset/SetNoDataValue；SetSpatialRef 的数组 CRS 保留实测 EPSG:4326；无参考数组不编造地理参考（crs=None + georeferenced=false）；拒绝矩阵 7 例全不落盘；注册面四维对账 462/455/250/24（registry 七件套 + GUI 表单行 + 能力切换状态隔离）。遗留：HDF5 writer 本运行时缺失（netCDF/CF 容器验收；HDF5 待驱动补齐）、GUI 多维树面板/交互预览、complex 数组支持。
+  - **P8-02 VSI/归档/远程数据**：**done**（第 70 轮）。
+    - **路径契约与 Windows 安全隔离**：新增 `domain/paths.py`，集中管理 GDAL VSI 规范（`/vsi*`）与远程 URL（`http://`, `https://`, `s3://`, `gs://`, `az://` 等）。`normalize_vsi_path` 严格规范化为 POSIX 前缀，保留正斜杠，在 Windows 环境下彻底绕开 `pathlib.Path.resolve()`，杜绝盘符前缀污染（如 `C:/vsicurl/...`）与反斜杠破坏；提供 `extract_local_path_from_vsi` 提取本地归档底层文件句柄；`sanitize_url` 脱敏敏感 query 参数；`get_display_name` 提供干净的用户可见名。
+    - **本地归档读取与容器子数据集探测**：`gdal_provider` 适配器全面支持 `/vsizip/`、`/vsitar/`、`/vsigzip/` 等归档路径；单栅格压缩包自动解析打开；多栅格归档容器通过 `gdal.ReadDir` 动态探测内部栅格项，并在元数据与 `list_subdatasets` 中无缝暴露子数据集 URI，支持单独探测与图层加载。
+    - **HTTP Range 与零全量内存加载**：搭建本地 `LocalHttpRangeServer`（支持 `Range: bytes=start-end`，返回 206 Partial Content、可控延迟与 503 临时故障注入）；实测验证读取 128x128 瓦片窗口仅传输数 KB 字节，绝无全量文件下载（零全量内存加载，A13 标准完整闭环）。
+    - **网络弹性与协作式取消**：配置 `GDAL_HTTP_TIMEOUT=10`、`GDAL_HTTP_CONNECTTIMEOUT=5`、`GDAL_HTTP_MAX_RETRY=2`、`GDAL_HTTP_RETRY_DELAY=1.0`；实测验证网络超时优雅报错（不挂起 UI/worker）、503 瞬时故障自动重试恢复；实测 WorkerProcess 异步远程读取在 2 秒内协作式取消完成，无孤儿进程残留。
+    - **项目持久化与跨会话重开**：更新 `project/model.py`，`store_source` 与 `resolve_source` 对 VSI/远程路径自动标记 `source_is_relative=False`，保存到 `.spectra.json` 时保持原规范化 URI；重开项目无损还原远程图层。
+    - **桌面 GUI 集成**：主窗口文件菜单新增「打开远程 URL / VSI (&U)…」动作与对话框；文件对话框筛选器扩充支持 `.zip`, `.tar`, `.tar.gz`, `.tgz`；通过真实 GUI 验证直接打开远程 URL、菜单输入打开、项目保存与跨会话完全恢复。
+    - **测试与官方验证**：`tests/integration/test_p8_vsi_remote.py` 12 项测试全部通过；官方监管闸门 `scripts/test.ps1 -Integration` 全部通过（exit_mode=clean, pytest_exit_code=0, clean_exit_verified=True, residual=0）。
+
 ## 原 P3 验收标准逐项对账与剩余缺口
 
 | ID | 任务 | 原始验收标准 | 当前已满足项与实测证据 | 剩余缺口与待验条件 | 当前状态 |

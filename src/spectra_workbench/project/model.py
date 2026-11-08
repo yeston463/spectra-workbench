@@ -17,6 +17,11 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
+from spectra_workbench.domain.paths import (
+    extract_local_path_from_vsi,
+    is_vsi_or_remote,
+    normalize_vsi_path,
+)
 from spectra_workbench.domain.roi import ROI
 from spectra_workbench.rendering.display import DisplaySettings
 
@@ -103,20 +108,24 @@ class ProjectSpec(BaseModel):
 # ----------------------------------------------------------------------
 
 
-def store_source(project_root: Path, abs_path: Path) -> tuple[str, bool]:
-    """返回 (存储路径, 是否相对)。项目内文件用相对路径，项目外保留绝对路径。"""
+def store_source(project_root: Path, abs_path: Path | str) -> tuple[str, bool]:
+    """返回 (存储路径, 是否相对)。项目文件内相对路径优先，项目外保留绝对/VSI路径。"""
+    if is_vsi_or_remote(abs_path):
+        return (normalize_vsi_path(abs_path), False)
     project_root = Path(project_root).resolve()
-    abs_path = Path(abs_path).resolve()
+    abs_p = Path(abs_path).resolve()
     try:
-        rel = abs_path.relative_to(project_root)
+        rel = abs_p.relative_to(project_root)
         return (rel.as_posix(), True)
     except ValueError:
-        return (abs_path.as_posix(), False)
+        return (abs_p.as_posix(), False)
 
 
-def resolve_source(project_root: Path, stored: str, *, is_relative: bool = True) -> Path:
-    project_root = Path(project_root).resolve()
+def resolve_source(project_root: Path, stored: str, *, is_relative: bool = True) -> Path | str:
     raw = stored.strip()
+    if is_vsi_or_remote(raw):
+        return normalize_vsi_path(raw)
+    project_root = Path(project_root).resolve()
     if raw.startswith("file:"):
         from urllib.parse import urlparse
         from urllib.request import url2pathname
@@ -160,15 +169,16 @@ class MissingSource:
     layer_id: str
     name: str
     stored: str
-    tried: Path
+    tried: Path | str
 
 
 def find_missing(project_root: Path, spec: ProjectSpec) -> list[MissingSource]:
     out = []
     for layer in spec.layers:
         path = resolve_source(project_root, layer.source, is_relative=layer.source_is_relative)
-        if not path.exists():
-            out.append(MissingSource(layer.layer_id, layer.name, layer.source, path))
+        local_p = extract_local_path_from_vsi(path)
+        if local_p is not None and not local_p.exists():
+            out.append(MissingSource(layer.layer_id, layer.name, layer.source, local_p))
     return out
 
 

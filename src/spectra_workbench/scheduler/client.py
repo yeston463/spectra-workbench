@@ -49,6 +49,8 @@ class QtWorkerClient(QObject):
         worker_id: str | None = None,
         project_root: Path | str | None = None,
         parent: QObject | None = None,
+        custom_python: Path | str | None = None,
+        custom_env: dict[str, str] | None = None,
     ):
         super().__init__(parent)
         self.provider_id = provider_id
@@ -56,6 +58,8 @@ class QtWorkerClient(QObject):
             provider_id=provider_id,
             worker_id=worker_id,
             project_root=project_root,
+            custom_python=custom_python,
+            custom_env=custom_env,
         )
         self._worker.add_listener(self._on_worker_envelope)
         self._active_task_id: str | None = None

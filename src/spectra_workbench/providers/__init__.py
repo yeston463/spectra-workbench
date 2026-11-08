@@ -8,6 +8,7 @@ from spectra_workbench.providers.base import (
     ProviderAdapter,
     TaskCancelledError,
     resolve_dataset_path,
+    resolve_input_resource,
 )
 
 __all__ = [
@@ -18,4 +19,5 @@ __all__ = [
     "ProviderAdapter",
     "TaskCancelledError",
     "resolve_dataset_path",
+    "resolve_input_resource",
 ]

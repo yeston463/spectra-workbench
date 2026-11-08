@@ -21,6 +21,11 @@ from urllib.parse import urlparse
 from urllib.request import url2pathname
 
 from spectra_workbench.domain.models import CapabilityDescriptor, TaskResult, TaskSpec
+from spectra_workbench.domain.paths import (
+    is_archive,
+    is_vsi_or_remote,
+    normalize_vsi_path,
+)
 from spectra_workbench.processing.manifest import (
     StagingManifest,
     hash_file,
@@ -65,6 +70,13 @@ def resolve_dataset_path(uri_or_path: str, project_root: Path | str) -> Path:
     if p.is_absolute():
         return p.resolve()
     return (Path(project_root) / p).resolve()
+
+
+def resolve_input_resource(uri_or_path: str, project_root: Path | str) -> Path | str:
+    """解析输入资源路径：若是 VSI / 远程 / 归档则返回规范化 VSI 字符串，否则返回本地绝对 Path。"""
+    if is_vsi_or_remote(uri_or_path) or is_archive(uri_or_path):
+        return normalize_vsi_path(uri_or_path)
+    return resolve_dataset_path(uri_or_path, project_root)
 
 
 @dataclass

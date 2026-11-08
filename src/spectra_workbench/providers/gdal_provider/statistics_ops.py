@@ -30,6 +30,8 @@ from typing import Any
 
 import numpy as np
 
+from spectra_workbench.domain.paths import is_vsi_or_remote, normalize_vsi_path
+
 __all__ = ["compute_statistics", "write_statistics_report", "STATISTICS_MODES"]
 
 STATISTICS_MODES: tuple[str, ...] = ("sampled", "full")
@@ -105,7 +107,7 @@ def compute_statistics(
         raise ValueError("maxSamples / fullLimit 必须为正整数")
 
     gdal = _gdal()
-    in_path = Path(path)
+    target_path = normalize_vsi_path(path) if is_vsi_or_remote(path) else str(Path(path))
     # PAM 状态在 Open() 时即固定，必须在打开**之前**禁用：
     # 否则 ComputeStatistics/GetHistogram 会把统计元数据写进 .aux.xml，
     # 让「只读统计」悄悄改动用户数据（第 35 轮 GUI 验收实测复现）。
@@ -113,9 +115,9 @@ def compute_statistics(
     gdal.SetConfigOption("GDAL_PAM_ENABLED", "NO")
     ds = None
     try:
-        ds = gdal.Open(str(in_path), gdal.GA_ReadOnly)
+        ds = gdal.Open(target_path, gdal.GA_ReadOnly)
         if ds is None:
-            raise RuntimeError(f"无法打开数据集: {in_path}")
+            raise RuntimeError(f"无法打开数据集: {target_path}")
         w, h, count = int(ds.RasterXSize), int(ds.RasterYSize), int(ds.RasterCount)
         total = w * h
         if mode == "full" and total > full_limit:
@@ -136,7 +138,7 @@ def compute_statistics(
             band = ds.GetRasterBand(b_idx)
             arr = band.ReadAsArray(0, 0, w, h, buf_xsize=read_w, buf_ysize=read_h)
             if arr is None:
-                raise RuntimeError(f"无法读取波段 {b_idx}: {in_path}")
+                raise RuntimeError(f"无法读取波段 {b_idx}: {target_path}")
             data = np.asarray(arr).astype(np.float64)
             nd = float(nodata) if nodata is not None else (
                 float(band.GetNoDataValue()) if band.GetNoDataValue() is not None else None
@@ -185,7 +187,7 @@ def compute_statistics(
             out_bands.append(entry)
 
         return {
-            "path": str(in_path),
+            "path": str(target_path),
             "mode": mode,
             "stride": stride,
             "source": "full_raster" if (mode == "full" and stride == 1) else "sampled_grid",

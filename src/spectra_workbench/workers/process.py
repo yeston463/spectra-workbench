@@ -162,12 +162,12 @@ class WorkerProcess:
         except Exception:
             self.spill_dir = None
 
-        # 解析命令与环境
+        # 解析命令与环境：统一先按契约解析，再应用自定义覆盖
+        self._python_exe, self._env = resolve_worker_command(provider_id, self.project_root)
         if custom_python:
             self._python_exe = Path(custom_python)
-            self._env = custom_env or os.environ.copy()
-        else:
-            self._python_exe, self._env = resolve_worker_command(provider_id, self.project_root)
+        if custom_env:
+            self._env.update(custom_env)
 
     @property
     def is_alive(self) -> bool:

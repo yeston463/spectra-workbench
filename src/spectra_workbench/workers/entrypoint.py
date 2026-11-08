@@ -38,6 +38,7 @@ from spectra_workbench.providers.base import (
     ProviderAdapter,
     TaskCancelledError,
     resolve_dataset_path,
+    resolve_input_resource,
 )
 
 
@@ -583,7 +584,7 @@ class WorkerRuntime:
                 kwargs[key] = args[key]
         try:
             if needs_path and path_str is not None:
-                resolved = resolve_dataset_path(path_str, getattr(self, "project_root", Path.cwd()))
+                resolved = resolve_input_resource(path_str, getattr(self, "project_root", Path.cwd()))
                 data = method(resolved, **kwargs)
             else:
                 data = method(**kwargs)
@@ -616,7 +617,7 @@ class WorkerRuntime:
             )
             return
         try:
-            resolved = resolve_dataset_path(path_str, getattr(self, "project_root", Path.cwd()))
+            resolved = resolve_input_resource(path_str, getattr(self, "project_root", Path.cwd()))
             info = self.adapter.probe_dataset(resolved)
             self.send_kind(
                 Kind.result,
@@ -652,7 +653,7 @@ class WorkerRuntime:
             )
             return
         try:
-            resolved = resolve_dataset_path(path_str, getattr(self, "project_root", Path.cwd()))
+            resolved = resolve_input_resource(path_str, getattr(self, "project_root", Path.cwd()))
             x_off = int(args.get("x_off", 0))
             y_off = int(args.get("y_off", 0))
             win_w = int(args.get("win_w", 512))
@@ -767,7 +768,6 @@ class WorkerRuntime:
             task_id=spec.task_id,
         )
 
-        from spectra_workbench.providers.base import resolve_dataset_path
 
         workspace = resolve_dataset_path(spec.workspace, spec.project_root)
         staging_dir = workspace / ".staging" / spec.task_id

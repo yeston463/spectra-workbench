@@ -39,6 +39,12 @@ from spectra_workbench.domain.models import (
     TaskSpec,
     TaskStatus,
 )
+from spectra_workbench.domain.paths import (
+    get_display_name,
+    is_archive,
+    is_vsi_or_remote,
+    normalize_vsi_path,
+)
 from spectra_workbench.processing.output_formats import (
     VECTOR_OUTPUT_FORMATS,
     normalize_output_format,
@@ -126,6 +132,19 @@ def _resolve_raster_input(path: Path) -> Path:
             if candidate.exists():
                 return candidate
     return path
+
+
+def _resolve_input_str(path: Path | str) -> str:
+    """将输入路径或 VSI/远程 URI 标准化为 GDAL 可打开的路径字符串。"""
+    if is_vsi_or_remote(path) or is_archive(path):
+        return normalize_vsi_path(path)
+    p = Path(path)
+    if p.suffix.lower() == ".hdr":
+        for ext in (".dat", ".img"):
+            candidate = p.with_suffix(ext)
+            if candidate.exists():
+                return str(candidate)
+    return str(p)
 
 
 #: P4-02 能力集合：这些能力统一走多输入提取（inputs["inputs"] 列表）。
@@ -275,6 +294,13 @@ def _resample_gdal_constants() -> dict[str, Any]:
 
 class GDALProviderAdapter(ProviderAdapter):
     """GDAL 算法与格式转换适配器。"""
+
+    def __init__(self) -> None:
+        if GDAL_AVAILABLE and gdal is not None:
+            gdal.SetConfigOption("GDAL_HTTP_TIMEOUT", "10")
+            gdal.SetConfigOption("GDAL_HTTP_CONNECTTIMEOUT", "5")
+            gdal.SetConfigOption("GDAL_HTTP_MAX_RETRY", "2")
+            gdal.SetConfigOption("GDAL_HTTP_RETRY_DELAY", "1.0")
 
     @property
     def provider_id(self) -> str:
@@ -4112,12 +4138,30 @@ class GDALProviderAdapter(ProviderAdapter):
         """探测并返回数据集详细元数据（零全量内存加载）。"""
         if not GDAL_AVAILABLE or gdal is None:
             raise RuntimeError("GDAL 运行时不可用，无法探测数据集")
-        in_path = _resolve_raster_input(Path(path))
-        if not in_path.exists():
-            raise FileNotFoundError(f"数据集文件不存在: {in_path}")
-        ds = gdal.Open(str(in_path), gdal.GA_ReadOnly)
+        in_path_str = _resolve_input_str(path)
+        is_remote = is_vsi_or_remote(in_path_str)
+        if not is_remote:
+            local_p = Path(in_path_str)
+            if not local_p.exists():
+                raise FileNotFoundError(f"数据集文件不存在: {in_path_str}")
+
+        target_str = in_path_str
+        ds = None
+        try:
+            ds = gdal.Open(target_str, gdal.GA_ReadOnly)
+        except Exception:
+            ds = None
+
+        if ds is None and target_str.startswith(("/vsizip/", "/vsitar/")):
+            entries = gdal.ReadDir(target_str) or []
+            raster_exts = {".tif", ".tiff", ".img", ".dat", ".vrt", ".png", ".jpg"}
+            rasters = [e for e in entries if Path(e).suffix.lower() in raster_exts]
+            if rasters:
+                first_entry = f"{target_str.rstrip('/')}/{rasters[0]}"
+                ds = gdal.Open(first_entry, gdal.GA_ReadOnly)
+
         if ds is None:
-            raise RuntimeError(f"无法打开栅格数据集: {in_path}")
+            raise RuntimeError(f"无法打开栅格数据集: {in_path_str}")
         try:
             w = int(ds.RasterXSize)
             h = int(ds.RasterYSize)
@@ -4128,7 +4172,7 @@ class GDALProviderAdapter(ProviderAdapter):
                 # VRT 元数据可脱离源打开，但像元读取会失败。桌面打开时必须
                 # 明确报告失效的相对引用，而不是登记一个看似正常的空图层。
                 missing: list[str] = []
-                in_resolved = in_path.resolve()
+                in_resolved = Path(in_path_str).resolve() if not is_remote else None
                 for raw_source in ds.GetFileList() or []:
                     text = str(raw_source)
                     lowered = text.lower()
@@ -4211,8 +4255,8 @@ class GDALProviderAdapter(ProviderAdapter):
             elif gcp_count:
                 spatial_model = "gcp"
 
-            return {
-                "path": str(in_path),
+            res = {
+                "path": str(in_path_str),
                 "driver": driver_name,
                 "driver_long_name": driver_long,
                 "width": w,
@@ -4233,6 +4277,14 @@ class GDALProviderAdapter(ProviderAdapter):
                 "band_names": [b["description"] for b in bands_info],
                 "bands": bands_info,
             }
+            if target_str.startswith(("/vsizip/", "/vsitar/")):
+                entries = gdal.ReadDir(target_str) or []
+                raster_exts = {".tif", ".tiff", ".img", ".dat", ".vrt", ".png", ".jpg"}
+                rasters = [e for e in entries if Path(e).suffix.lower() in raster_exts]
+                if len(rasters) > 1:
+                    res["subdatasets"] = [f"{target_str.rstrip('/')}/{r}" for r in rasters]
+                res["archive_entries"] = entries
+            return res
         finally:
             del ds
 
@@ -4555,28 +4607,40 @@ class GDALProviderAdapter(ProviderAdapter):
         """
         if not GDAL_AVAILABLE or gdal is None:
             raise RuntimeError("GDAL 运行时不可用，无法枚举子数据集")
-        in_path = Path(path)
-        if not in_path.exists():
-            raise FileNotFoundError(f"数据集不存在: {in_path}")
-
-        ds = gdal.Open(str(in_path))
-        if ds is None:
-            raise RuntimeError(f"无法打开数据集: {in_path}")
-        try:
-            raw = ds.GetSubDatasets()
-        finally:
-            ds = None
+        in_path_str = _resolve_input_str(path)
+        if not is_vsi_or_remote(in_path_str) and not Path(in_path_str).exists():
+            raise FileNotFoundError(f"数据集不存在: {in_path_str}")
 
         entries: list[dict[str, Any]] = []
-        for item in raw or []:
-            if not item:
-                continue
-            uri = str(item[0])
-            desc = str(item[1]) if len(item) > 1 else ""
-            entries.append({"uri": uri, "description": desc})
+        if in_path_str.startswith(("/vsizip/", "/vsitar/")):
+            disk_entries = gdal.ReadDir(in_path_str) or []
+            raster_exts = {".tif", ".tiff", ".img", ".dat", ".vrt", ".png", ".jpg"}
+            for e in disk_entries:
+                if Path(e).suffix.lower() in raster_exts:
+                    entries.append({
+                        "uri": f"{in_path_str.rstrip('/')}/{e}",
+                        "description": e,
+                    })
+
+        if not entries:
+            try:
+                ds = gdal.Open(in_path_str)
+                if ds is not None:
+                    try:
+                        raw = ds.GetSubDatasets()
+                        for item in raw or []:
+                            if not item:
+                                continue
+                            uri = str(item[0])
+                            desc = str(item[1]) if len(item) > 1 else ""
+                            entries.append({"uri": uri, "description": desc})
+                    finally:
+                        ds = None
+            except Exception:
+                pass
 
         return {
-            "path": str(in_path),
+            "path": str(in_path_str),
             "subdataset_count": len(entries),
             "subdatasets": entries,
         }
@@ -4674,12 +4738,12 @@ class GDALProviderAdapter(ProviderAdapter):
 
         if not GDAL_AVAILABLE or gdal is None:
             raise RuntimeError("GDAL 运行时不可用")
-        in_path = _resolve_raster_input(Path(path))
-        if not in_path.exists():
-            raise FileNotFoundError(f"数据集文件不存在: {in_path}")
-        ds = gdal.Open(str(in_path), gdal.GA_ReadOnly)
+        in_path_str = _resolve_input_str(path)
+        if not is_vsi_or_remote(in_path_str) and not Path(in_path_str).exists():
+            raise FileNotFoundError(f"数据集文件不存在: {in_path_str}")
+        ds = gdal.Open(in_path_str, gdal.GA_ReadOnly)
         if ds is None:
-            raise RuntimeError(f"无法打开数据集: {in_path}")
+            raise RuntimeError(f"无法打开数据集: {in_path_str}")
         try:
             total_w = int(ds.RasterXSize)
             total_h = int(ds.RasterYSize)
@@ -4786,12 +4850,12 @@ class GDALProviderAdapter(ProviderAdapter):
 
         if not GDAL_AVAILABLE or gdal is None:
             raise RuntimeError("GDAL 运行时不可用")
-        in_path = _resolve_raster_input(Path(path))
-        if not in_path.exists():
-            raise FileNotFoundError(f"数据集文件不存在: {in_path}")
-        ds = gdal.Open(str(in_path), gdal.GA_ReadOnly)
+        in_path_str = _resolve_input_str(path)
+        if not is_vsi_or_remote(in_path_str) and not Path(in_path_str).exists():
+            raise FileNotFoundError(f"数据集文件不存在: {in_path_str}")
+        ds = gdal.Open(in_path_str, gdal.GA_ReadOnly)
         if ds is None:
-            raise RuntimeError(f"无法打开数据集: {in_path}")
+            raise RuntimeError(f"无法打开数据集: {in_path_str}")
         try:
             total_w = int(ds.RasterXSize)
             total_h = int(ds.RasterYSize)
@@ -4949,10 +5013,12 @@ class GDALProviderAdapter(ProviderAdapter):
         """查询单个像元的原值、物理值与有效性；返回像元中心/角点地图坐标。"""
         if not GDAL_AVAILABLE or gdal is None:
             raise RuntimeError("GDAL 运行时不可用")
-        in_path = _resolve_raster_input(Path(path))
-        ds = gdal.Open(str(in_path), gdal.GA_ReadOnly)
+        in_path_str = _resolve_input_str(path)
+        if not is_vsi_or_remote(in_path_str) and not Path(in_path_str).exists():
+            raise FileNotFoundError(f"数据集文件不存在: {in_path_str}")
+        ds = gdal.Open(in_path_str, gdal.GA_ReadOnly)
         if ds is None:
-            raise RuntimeError(f"无法打开数据集: {in_path}")
+            raise RuntimeError(f"无法打开数据集: {in_path_str}")
         try:
             w, h, count = int(ds.RasterXSize), int(ds.RasterYSize), int(ds.RasterCount)
             row, col = int(row), int(col)
@@ -5035,7 +5101,7 @@ class GDALProviderAdapter(ProviderAdapter):
                     "is_zero": bool(val == 0.0) if val is not None else False,
                 })
             return {
-                "path": str(in_path),
+                "path": str(in_path_str),
                 "row": row,
                 "col": col,
                 "inside": inside,
@@ -5065,10 +5131,12 @@ class GDALProviderAdapter(ProviderAdapter):
         """地图坐标 -> 行列号。同时给出中心/角点两种约定与是否在图幅内。"""
         if not GDAL_AVAILABLE or gdal is None:
             raise RuntimeError("GDAL 运行时不可用")
-        in_path = _resolve_raster_input(Path(path))
-        ds = gdal.Open(str(in_path), gdal.GA_ReadOnly)
+        in_path_str = _resolve_input_str(path)
+        if not is_vsi_or_remote(in_path_str) and not Path(in_path_str).exists():
+            raise FileNotFoundError(f"数据集文件不存在: {in_path_str}")
+        ds = gdal.Open(in_path_str, gdal.GA_ReadOnly)
         if ds is None:
-            raise RuntimeError(f"无法打开数据集: {in_path}")
+            raise RuntimeError(f"无法打开数据集: {in_path_str}")
         try:
             w, h = int(ds.RasterXSize), int(ds.RasterYSize)
             gt = ds.GetGeoTransform(can_return_null=True)
@@ -5087,7 +5155,7 @@ class GDALProviderAdapter(ProviderAdapter):
             chosen_col = col_center if convention == "center" else col_corner
             chosen_row = row_center if convention == "center" else row_corner
             return {
-                "path": str(in_path),
+                "path": str(in_path_str),
                 "view_crs_wkt": view_crs_wkt,
                 "dataset_crs_wkt": crs_wkt,
                 "map_x": float(x),
@@ -5129,7 +5197,7 @@ class GDALProviderAdapter(ProviderAdapter):
         if not GDAL_AVAILABLE or gdal is None:
             raise RuntimeError("GDAL 运行时不可用")
         report = compute_statistics(
-            _resolve_raster_input(Path(path)),
+            _resolve_input_str(path),
             mode=mode,
             band_list=bands,
             max_samples=max_samples,
@@ -5187,10 +5255,12 @@ class GDALProviderAdapter(ProviderAdapter):
         """把数据集地理范围换算到视图 CRS，用于确定显示网格。"""
         if not GDAL_AVAILABLE or gdal is None:
             raise RuntimeError("GDAL 运行时不可用")
-        in_path = _resolve_raster_input(Path(path))
-        ds = gdal.Open(str(in_path), gdal.GA_ReadOnly)
+        in_path_str = _resolve_input_str(path)
+        if not is_vsi_or_remote(in_path_str) and not Path(in_path_str).exists():
+            raise FileNotFoundError(f"数据集文件不存在: {in_path_str}")
+        ds = gdal.Open(in_path_str, gdal.GA_ReadOnly)
         if ds is None:
-            raise RuntimeError(f"无法打开数据集: {in_path}")
+            raise RuntimeError(f"无法打开数据集: {in_path_str}")
         try:
             gt = ds.GetGeoTransform(can_return_null=True)
             if not gt:
@@ -5256,10 +5326,12 @@ class GDALProviderAdapter(ProviderAdapter):
         if not GDAL_AVAILABLE or gdal is None or osr is None:
             raise RuntimeError("GDAL 运行时不可用")
 
-        in_path = _resolve_raster_input(Path(path))
-        ds = gdal.Open(str(in_path), gdal.GA_ReadOnly)
+        in_path_str = _resolve_input_str(path)
+        if not is_vsi_or_remote(in_path_str) and not Path(in_path_str).exists():
+            raise FileNotFoundError(f"数据集文件不存在: {in_path_str}")
+        ds = gdal.Open(in_path_str, gdal.GA_ReadOnly)
         if ds is None:
-            raise RuntimeError(f"无法打开数据集: {in_path}")
+            raise RuntimeError(f"无法打开数据集: {in_path_str}")
         try:
             gt = ds.GetGeoTransform(can_return_null=True)
             srs = ds.GetSpatialRef()
@@ -5380,10 +5452,12 @@ class GDALProviderAdapter(ProviderAdapter):
             raise ValueError(f"视图范围非法：({x_min},{y_min})-({x_max},{y_max})")
         out_w = max(1, min(int(out_w), 2048))
         out_h = max(1, min(int(out_h), 2048))
-        in_path = _resolve_raster_input(Path(path))
-        src = gdal.Open(str(in_path), gdal.GA_ReadOnly)
+        in_path_str = _resolve_input_str(path)
+        if not is_vsi_or_remote(in_path_str) and not Path(in_path_str).exists():
+            raise FileNotFoundError(f"数据集文件不存在: {in_path_str}")
+        src = gdal.Open(in_path_str, gdal.GA_ReadOnly)
         if src is None:
-            raise RuntimeError(f"无法打开数据集: {in_path}")
+            raise RuntimeError(f"无法打开数据集: {in_path_str}")
         try:
             total_bands = int(src.RasterCount)
             target_bands = [b for b in (bands or list(range(1, min(3, total_bands) + 1))) if 1 <= b <= total_bands]
@@ -5392,7 +5466,7 @@ class GDALProviderAdapter(ProviderAdapter):
             # 该 GDAL 构建的 WarpOptions 未暴露选波段参数，因此重投影全部波段后
             # 按源波段序号取带（顺序一致，不重排）。
             mem_name = (
-                f"/vsimem/spectra_view/{in_path.stem}_{int(time.time_ns())}_{out_w}x{out_h}"
+                f"/vsimem/spectra_view/{get_display_name(in_path_str)}_{int(time.time_ns())}_{out_w}x{out_h}"
             )
             warped = gdal.Warp(
                 mem_name,
@@ -5479,10 +5553,12 @@ class GDALProviderAdapter(ProviderAdapter):
     def dataset_overviews(self, path: Path | str) -> dict[str, Any]:
         if not GDAL_AVAILABLE or gdal is None:
             raise RuntimeError("GDAL 运行时不可用")
-        in_path = _resolve_raster_input(Path(path))
-        ds = gdal.Open(str(in_path), gdal.GA_ReadOnly)
+        in_path_str = _resolve_input_str(path)
+        if not is_vsi_or_remote(in_path_str) and not Path(in_path_str).exists():
+            raise FileNotFoundError(f"数据集文件不存在: {in_path_str}")
+        ds = gdal.Open(in_path_str, gdal.GA_ReadOnly)
         if ds is None:
-            raise RuntimeError(f"无法打开数据集: {in_path}")
+            raise RuntimeError(f"无法打开数据集: {in_path_str}")
         try:
             w = int(ds.RasterXSize)
             levels: list[dict[str, Any]] = []
@@ -5497,6 +5573,6 @@ class GDALProviderAdapter(ProviderAdapter):
                     "height": int(ov.YSize),
                     "ratio": float(w) / float(ov.XSize) if ov.XSize else 0.0,
                 })
-            return {"path": str(in_path), "width": w, "height": int(ds.RasterYSize), "overviews": levels}
+            return {"path": str(in_path_str), "width": w, "height": int(ds.RasterYSize), "overviews": levels}
         finally:
             del ds

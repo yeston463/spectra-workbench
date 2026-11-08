@@ -41,6 +41,13 @@ from PySide6.QtWidgets import (
 )
 
 from spectra_workbench.domain.models import TaskResult, TaskSpec
+from spectra_workbench.domain.paths import (
+    extract_local_path_from_vsi,
+    get_display_name,
+    is_archive,
+    is_vsi_or_remote,
+    normalize_vsi_path,
+)
 from spectra_workbench.domain.roi import ROI
 from spectra_workbench.project.model import (
     PATH_ANCHOR_PROJECT_DIR,
@@ -399,6 +406,10 @@ class MainWindow(QMainWindow):
         self.act_open_img.triggered.connect(self.open_file_dialog)
         m_file.addAction(self.act_open_img)
 
+        self.act_open_remote = QAction("打开远程 URL / VSI (&U)…", self)
+        self.act_open_remote.triggered.connect(self.open_remote_url_dialog)
+        m_file.addAction(self.act_open_remote)
+
         self.act_sample = QAction("加载合成样例 (&S)", self)
         self.act_sample.triggered.connect(self.load_default_sample)
         m_file.addAction(self.act_sample)
@@ -545,12 +556,24 @@ class MainWindow(QMainWindow):
     def open_file_dialog(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
             self,
-            "打开遥感栅格影像",
+            "打开遥感栅格影像或归档",
             str(self.project_dir),
-            "遥感栅格影像 (*.tif *.tiff *.dat *.img *.hdr *.vrt *.png *.jpg);;所有文件 (*.*)",
+            "遥感栅格与归档 (*.tif *.tiff *.dat *.img *.hdr *.vrt *.png *.jpg *.zip *.tar *.tar.gz *.tgz);;栅格影像 (*.tif *.tiff *.dat *.img *.hdr *.vrt *.png *.jpg);;归档压缩包 (*.zip *.tar *.tar.gz *.tgz);;所有文件 (*.*)",
         )
         if path:
             self.open_dataset(path)
+
+    def open_remote_url_dialog(self) -> None:
+        """弹出输入框打开远程 URL 或 GDAL VSI 路径（P8-02）。"""
+        from PySide6.QtWidgets import QInputDialog
+
+        url, ok = QInputDialog.getText(
+            self,
+            "打开远程 URL / VSI",
+            "请输入远程栅格地址（HTTP/HTTPS）或 GDAL VSI 虚拟文件系统路径：\n例如: http://.../raster.tif 或 /vsicurl/... 或 /vsizip/...",
+        )
+        if ok and url.strip():
+            self.open_dataset(url.strip())
 
     def open_dataset(
         self,
@@ -559,17 +582,24 @@ class MainWindow(QMainWindow):
         rois: list[ROI] | None = None,
         order: int | None = None,
     ) -> None:
-        p = Path(str(path)).resolve()
-        if not p.exists():
-            self._notify(QMessageBox.Icon.Critical, "文件未找到", f"指定影像文件不存在:\n{p}")
-            return
-        self.status_bar.showMessage(f"正在探测元数据: {p.name}…")
+        is_remote = is_vsi_or_remote(path) or is_archive(path)
+        if is_remote:
+            p: Path | str = normalize_vsi_path(path)
+            display_name = record.name if record else get_display_name(p)
+        else:
+            local_p = Path(str(path)).resolve()
+            if not local_p.exists():
+                self._notify(QMessageBox.Icon.Critical, "文件未找到", f"指定影像文件不存在:\n{local_p}")
+                return
+            p = local_p
+            display_name = record.name if record else p.stem
+        self.status_bar.showMessage(f"正在探测元数据: {display_name}…")
         client = self.gdal_client
         self._open_seq += 1
         seq = self._open_seq if order is None else order
 
         def _on_probed(meta: dict[str, Any]) -> None:
-            layer = LayerItem(name=(record.name if record else p.stem), file_path=p, metadata=meta)
+            layer = LayerItem(name=display_name, file_path=p, metadata=meta)
             if record is not None:
                 layer.layer_id = record.layer_id
                 layer.visible = record.visible
@@ -615,7 +645,7 @@ class MainWindow(QMainWindow):
 
     def _add_vector_layer(
         self,
-        path: Path,
+        path: Path | str,
         vector_info: dict[str, Any],
         record: object | None = None,
         rois: list[ROI] | None = None,
@@ -627,7 +657,7 @@ class MainWindow(QMainWindow):
         元数据在「数据源元数据」面板中展示。
         """
         layer = LayerItem(
-            name=(record.name if record else path.stem),  # type: ignore[attr-defined]
+            name=(record.name if record else get_display_name(path)),  # type: ignore[attr-defined]
             file_path=path,
             metadata={
                 "kind": "vector",
@@ -1298,14 +1328,16 @@ class MainWindow(QMainWindow):
             for i, rec in enumerate(spec.ordered_layers()):
                 if not rec.source_is_relative:
                     p = resolve_source(project_dir, rec.source, is_relative=False)
-                    if p.exists():
-                        self.open_dataset(
-                            p,
-                            record=rec,
-                            rois=self._project_rois.get(rec.layer_id, []),
-                            order=base_seq + i,
-                        )
-                        abs_loaded.append(rec.layer_id)
+                    local_p = extract_local_path_from_vsi(p)
+                    if local_p is not None and not local_p.exists():
+                        continue
+                    self.open_dataset(
+                        p,
+                        record=rec,
+                        rois=self._project_rois.get(rec.layer_id, []),
+                        order=base_seq + i,
+                    )
+                    abs_loaded.append(rec.layer_id)
             self._open_seq = base_seq + len(spec.layers)
             # 打开项目后，此前发起的元数据探测全部失效（上下文代际已变）
             self._open_seq += 1
@@ -1331,7 +1363,8 @@ class MainWindow(QMainWindow):
         base_seq = self._open_seq + 1
         for i, rec in enumerate(spec.ordered_layers()):
             p = resolve_source(project_dir, rec.source, is_relative=rec.source_is_relative)
-            if not p.exists():
+            local_p = extract_local_path_from_vsi(p)
+            if local_p is not None and not local_p.exists():
                 continue
             self.open_dataset(
                 p,
@@ -1390,13 +1423,14 @@ class MainWindow(QMainWindow):
         for i, rec in enumerate(spec.ordered_layers()):
             if rec.source_is_relative:
                 if rec.layer_id in mapping:
-                    p = Path(mapping[rec.layer_id]).resolve()
+                    p: Path | str = Path(mapping[rec.layer_id]).resolve()
                 else:
                     p = resolve_source(target_dir, rec.source, is_relative=True)
                 stored, is_rel = store_source(target_dir, p)
                 updated_rec = rec.model_copy(update={"source": stored, "source_is_relative": is_rel})
                 self._project_records[rec.layer_id] = updated_rec
-                if p.exists():
+                local_p = extract_local_path_from_vsi(p)
+                if local_p is None or local_p.exists():
                     self.open_dataset(
                         p,
                         record=updated_rec,
@@ -1405,11 +1439,12 @@ class MainWindow(QMainWindow):
                     )
                     loaded.append(rec.layer_id)
                 else:
-                    missing.append(MissingSource(rec.layer_id, rec.name, stored, p))
+                    missing.append(MissingSource(rec.layer_id, rec.name, stored, local_p))
             else:
                 p = resolve_source(target_dir, rec.source, is_relative=False)
-                if not p.exists() and not any(m.layer_id == rec.layer_id for m in missing):
-                    missing.append(MissingSource(rec.layer_id, rec.name, rec.source, p))
+                local_p = extract_local_path_from_vsi(p)
+                if local_p is not None and not local_p.exists() and not any(m.layer_id == rec.layer_id for m in missing):
+                    missing.append(MissingSource(rec.layer_id, rec.name, rec.source, local_p))
 
         self._open_seq = base_seq + len(spec.layers)
         self.missing_sources = missing
