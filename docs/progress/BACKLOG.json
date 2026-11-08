@@ -955,9 +955,19 @@
         "P7-02",
         "P7-04"
       ],
-      "status": "todo",
+      "status": "done",
       "release_requirement": "core",
-      "evidence": [],
+      "evidence": [
+        "第 68 轮：P7-05 历史与可复现导出转 done。新增 `processing/history.py`（纯 stdlib，GUI 进程零原生依赖）：`HistoryStore`（SQLite，单写入方，schema_version 显式迁移；>= 当前版本拒绝打开、绝不静默降级）；表：meta/runs/run_inputs/run_outputs（计划 §12 列：task/attempt/artifact/engine_runtime/迁移）。",
+        "(1) 记录（record）：TaskSpec 通道真实执行后登记——kind(task/batch_item/workflow_node)、group_id（批/工作流组）、capability/task_id/attempt/status/created_at/duration/project_root/descriptor_revision、**spec 引擎约束 + worker 上报真实引擎版本**（TaskResult.engine_runtime，实测 gdal 3.x/QGIS、rasterio 1.5.2）、完整 params JSON、error JSON；输入（端口 → URI/kind + 指纹；strong 可选 sha256）、输出（key → URI/committed_files + 指纹）；平均几 ms，不构成运行瓶颈。",
+        "(2) 从历史重开参数：`reopen_params(run_id)` 还原 capability/provider/runtime/expected_version/params/descriptor_revision/inputs(uri+kind)，测试用真实gdal worker 重提 hist-task-2：新输出路径 outA_replay.tif 数值与历史完全一致（[[1,2],[3,4]]，2×2）——「同类成果」由独立引擎重开断言。",
+        "(3) 导出执行入口：`export_workflow_recipe(run_ids, path)` 生成**标准 workflow 文档**（P7-04 run_workflow 唯一执行入口）：capability/engine/params 原样回填；历史输入 file:// URI 解码回本地路径（中文目录百分号往返）；**边自动合成**——输入 URI 命中他节点输出 URI 时改写为 [node, id, key, kind]，保住 DAG 执行序。跨引擎链（gdal:translate → rasterio:convert）回放：cache 全新 → 每能力引擎恰被再次调用一次（calls 差值实测 {gdal:translate:1, rasterio:convert:1}），final.tif 值 [[5,6],[7,8]] 与历史一致、mid.tif mtime 变化（真实重写非读缓）。",
+        "(4) schema 迁移与守门（tests/integration/test_p7_history.py::test_history_schema_migration_and_newer_version_refused）：空库建 v1 且幂等重开；人为降级 meta 到 0 → 重开自动迁移回 1、建表不变；人为抬到 99 → HistoryError「高于当前支持」拒绝打开。",
+        "(5) tests/integration/test_p7_history.py 3 项全绿（4.91s）：记录+重开重提；组记录+导出回放（真实双引擎）；schema 迁移与守门。",
+        "(6) 受影响靶向回归全绿：P7-04 workflow 3 项 + P7-03 batch 5 项 + P7-01 migration 6 项 + P7-02 scripting 5 项 + P4 rasterio contract + P1-05 staging 共 45 项（21.42s）。Ruff 干净；Mypy 87 源文件 0 错误。",
+        "(7) 官方全量闸门：scripts/test.ps1 -All -TimeoutSeconds 1800 → Ruff PASS；Mypy 87 源文件 0 错误；Clean 退出 pytest **808 passed / 0 failed / rc=0**；exit_mode=clean、clean_exit_verified=True、process_observation=job、residual=0、cleanup_complete=True、cleanup_errors=0。",
+        "限制与边界：history 只记录 TaskSpec 通道的真实执行（单写入方，多并发写由调用方串行化）；指纹默认快速，strong 按需；GUI 历史面板/重跑 UI 归后续（处理层 reopen_params/export_workflow_recipe 已可被任何入口复用）；远程/外库来源暂无稳定标识，按 URI 原样记录不入强校验。"
+      ],
       "blocking_reason": null
     },
     {

@@ -1,6 +1,6 @@
 # 执行状态
 
-更新：2026-11-08（第 67 轮 · P7-04 DAG 工作流：`processing/workflow.py::render_workflow_nodes` 提交前校验（环/端口错配/未知引用/输出冲突/写穿拒绝）+ `run_workflow`（拓扑串行、TaskSpec 通道、cached 恢复、缓存失效自动下传、strong/fast 指纹）+ 跨引擎物化（gdal→rasterio 经真实文件衔接）；3 项集成测试 + 官方闸门 805 passed / clean_exit_verified=True / residual=0）✅；顺带修复预置缺陷 rasterio convert `commit_files` 未透传 overwrite（工作流重跑暴露）。
+更新：2026-11-08（第 68 轮 · P7-05 历史与可复现导出：`processing/history.py::HistoryStore`（SQLite 任务/输入指纹/真实引擎版本/关键配置 + schema_version 迁移守门）+ `reopen_params`（从历史重开参数真实重提 → 数值同类）+ `export_workflow_recipe`（历史 → 标准 workflow 文档、边自动合成、P7-04 入口直接回放跨引擎链同类成果）；3 项测试 + 官方闸门 808 passed / clean_exit_verified=True / residual=0）✅。
 
 ## 当前里程碑
 
@@ -36,6 +36,7 @@
   - **P7-02 隔离脚本会话**：**done**（第 65 轮）。`scripting/session.py::ScriptSession`：按 engine 分别启动**真实**引擎解释器（gdal=doctor 解析的 QGIS/conda、rasterio=`.venvs/sw-rasterio`；未知 engine SessionError）；用户脚本在引擎内 exec 原生 API（`from osgeo import gdal` / `import rasterio`），GUI 进程不 import osgeo/rasterio；`stop` 幂等（proc None / poll None → 0）；stdout/stderr.log 写会话目录，每次 run 前清空；`register_artifact` 显式登记成果（artifacts.json：path/sha256/size/mtime/registered_at）；session.json 记录 engine/python_path/started_at；同 session_dir 再 run → 全新 interpreter。`scripting/__main__.py` 提供 CLI 入口。遗留：会话非线程安全（调用方自串）；scipy 未注册。
   - **P7-03 批处理**：**done**（第 66 轮）。`processing/batch.py`：模板（capability_id/engine_provider 必填校验、inputs/outputs 逐 item `{item[key]}` 展开、未知键显式 `BatchError`）→ N 份 TaskSpec；单输入 key=`input`、多输入 `list[DatasetRef]`，单输出 key=`output`、多输出 `output_0/output_1`；`overwrite` 模板参数透传 OutputPlan.overwrite，`params` 内字符串同样经模板展开（非原样透传）；`run_batch` 严格串行（execute 返回 TaskStatus），`continue_on_error=True` 失败继续并如实搜集 succeeded/failed/cancelled 终态与 duration，`False` 首败立即停止且未处置条目显式 `pending`（error=skipped，不冒充成功）；`BatchReport.summary()/all_terminal()` 供调用方审计；`write_manifest` 把 batch manifest（batch_id/summary/entries）落盘为 JSON。验收测试 `tests/integration/test_p7_batch_worker.py` 5 项全部基于真实 QGIS GDAL 3.44.15 worker 端到端（多输入/多输出展开、参数变化、同名冲突 overwrite=True 真实覆盖 stub 文件、单项失败继续、strict 停止 + manifest 汇总）。顺带诊断并修复全量回归缺陷：MainWindow 构造期 `attribute_panel.set_client(self.gdal_client)` 懒建真实 gdal client 在测试夹具换槽后无人停止（进程残留 4 个 → clean_exit_verified=false），`MainWindow._owned_clients` 登记 + closeEvent 全回收。全量 `scripts/test.ps1 -All` 恢复 **clean_exit_verified=True / residual=0**。遗留：批处理严格串行（并行与 platform:* 外部引擎不在范围）；GUI 批处理面板归后续。
   - **P7-04 DAG 工作流**：**done**（第 67 轮）。`processing/workflow.py`：带版本的节点图（节点引用稳定 capability_id、缺省引擎约束 gdal→gdal-qgis/3.13.3 / rasterio→rasterio-venv/1.5.2 可覆盖、类型化端口 raster/vector）；`render_workflow_nodes` 提交前校验——环检测（Kahn，环成员精确列出）、端口错配拒绝（生产者声明 kind × 消费者期望 kind）、未知上游节点/输出键拒绝、输出 URI 冲突与「输出=他人字面输入」写穿拒绝、按引擎的节点计数汇总（不承诺估算）；`run_workflow` 拓扑串行（execute 注入 TaskStatus|TaskResult，TaskResult.error 转写报告；TaskSpec 通道与批处理/菜单共用注册表与 adapter）；**跨引擎物化** gdal→rasterio 经真实 committed 文件衔接（数值独立重开断言）；**失败/恢复**——引擎级失败下游 pending(skipped)、独立分支继续、node_key/输入/输出指纹未变的成功节点重跑 `cached`（引擎调用数 0、文件 mtime 不变）；**缓存失效**——上游参数变化重跑使产物内容变化（Float32→Byte 实测）→ 下游指纹失效自动重执行并消费新产物；指纹 fast=size+mtime / strong=sha256 记录复现等级；`workflow-cache.json` manifest 落盘。顺带修复预置缺陷：rasterio convert `commit_files` 未透传 `overwrite`（真实 worker 重跑已存在目标被误拒），与 gdal 侧语义对齐。官方闸门 **805 passed / clean_exit_verified=True / residual=0**。遗留：同进程管线优化、调度器并行、GUI 工作流面板归后续。
+  - **P7-05 历史与可复现导出**：**done**（第 68 轮）。`processing/history.py`（纯 stdlib）：`HistoryStore` SQLite（schema_version 显式迁移：旧库自动升 v1、更高未知版本拒开不降级；单写入方）：`record` 登记 TaskSpec 通道真实执行——kind/group、capability/task/attempt/status/duration、**spec 引擎约束 + worker 上报真实引擎版本**（TaskResult.engine_runtime）、完整 params JSON、错误 JSON、输入（端口→URI/kind+指纹 size+mtime，strong 可选 sha256）与输出（key→URI/committed_files+指纹）；`reopen_params(run_id)` 从历史重开参数（capability/engine/params/inputs），实测真实 gdal worker 重提后数值与历史一致（[[1,2],[3,4]] 2×2）；`export_workflow_recipe(run_ids, path)` 导出**标准 workflow 文档**（P7-04 run_workflow 唯一入口）：capability/engine/params 原样回填、历史 URI 解码为本地路径（中文百分号往返）、**边自动合成**（输入 URI=他节点输出 → node 引用保 DAG 序），跨引擎链回放实测：每能力引擎恰再调用一次、final 值 [[5,6],[7,8]] 与历史一致、mid mtime 变化（真实重写非读缓）。官方闸门 **808 passed / clean_exit_verified=True / residual=0**。遗留：GUI 历史面板/重跑 UI、多写入方并发策略、远程来源稳定标识归后续。
 ## 原 P3 验收标准逐项对账与剩余缺口
 
 | ID | 任务 | 原始验收标准 | 当前已满足项与实测证据 | 剩余缺口与待验条件 | 当前状态 |
@@ -244,6 +245,41 @@ CRT 检测到栈状态异常后立即终止进程，这正是 `STATUS_STACK_BUFF
 |---|---|---|
 | 用合成影像完成同类验收 | 已满足 | 合成 ENVI/GTiff/GeoJSON/netCDF 样例覆盖多波段、像元数值、ROI 与对比 |
 | 保留真实数据待验状态 | **待验** | 课程原始数据位于 `C:\Users\赵航\Desktop\studio\_chaoxing_rs`（**只读**，不得运行其中的抓取/下载/OCR 脚本）；本轮全部用合成影像验收，未对课程原始 ENVI 栅格与 lena.tif 做真实打开验证 |
+
+### 第 68 轮：P7-05 历史与可复现导出（P7-05 → done）
+
+**一、实现**
+
+- 新增 `processing/history.py`（纯 stdlib sqlite3 + hashlib，GUI 进程零原生依赖）：
+  - `HistoryStore`：SQLite 单写入方；`meta.schema_version` 显式迁移（空库建 v1；旧版本自动升级；**更高未知版本拒绝打开**，绝不静默降级）；表 `runs / run_inputs / run_outputs`（计划 §12 的 task/attempt/artifact/engine_runtime/迁移列位）；
+  - `record(spec_dict, result, kind, group_id, strong)`：TaskSpec 通道真实执行后登记——能力/任务号/attempt/终态/created_at/duration/项目根/descriptor_revision；**spec 引擎约束 + worker 上报的真实引擎版本**（`TaskResult.engine_runtime`）；完整 params JSON 与错误 JSON；输入（端口 → URI/kind + 指纹 size+mtime，strong 可选 SHA-256）与输出（key → URI/committed_files + 指纹）；
+  - `reopen_params(run_id)`：从历史重开参数——capability/engine(provider/runtime/expected+actual)/params/descriptor_revision/inputs（URI+kind），可直接构造重新提交的 TaskSpec；
+  - `export_workflow_recipe(run_ids, path)`：把历史导出为**标准 workflow 文档**（P7-04 `run_workflow` 为唯一执行入口）：capability/engine/params 原样回填；记录的 file:// URI 解码回本地路径（中文百分号往返监护）；**边自动合成**——输入 URI 命中他节点输出 URI → 改写 `[node, id, key, kind]`，保住 DAG 执行序。
+
+- 验收测试 `tests/integration/test_p7_history.py`（3 项，真实双引擎）：
+  1. `test_history_records_inputs_versions_and_reopen_params`：真实 gdal 翻译 → record（strong 含 sha256、真实版本 3.x）→ reopen_params 重提新输出 → 数值一致（2×2 [[1,2],[3,4]]）；
+  2. `test_history_export_recipe_replays_cross_engine_workflow`：组记录 2 条（kind=workflow_node, group=wf-demo）→ 导出配方（rio 节点输入已合成 node 引用）→ 全新缓存目录回放 → 每能力引擎恰再调一次、final.tif 值 [[5,6],[7,8]] 与历史一致、mid.tif mtime 变化（真实重写，非读缓存）；
+  3. `test_history_schema_migration_and_newer_version_refused`：建库/migrate-回-1/拒绝-99 三态。
+
+**二、验证**
+
+- P7-05 3 项 + P7-04 workflow 3 项 + P7-03 batch 5 项 + P7-01 migration 6 项 + P7-02 scripting 5 项 + P4 rasterio contract + P1-05 staging = **45 项靶向全绿**（21.42s）。
+- Ruff 干净；Mypy 87 源文件 0 错误。
+
+**三、全量闸门**
+
+- `scripts/test.ps1 -All -TimeoutSeconds 1800` → Ruff PASS / mypy 87 文件 0 错误 /
+  **pytest 808 passed / 0 failed / rc=0** /
+  **clean_exit_verified=True, residual=0, cleanup_complete=True, cleanup_errors=0**。
+
+**四、边界与结论**
+
+- 验收「从历史重开参数；记录输入/版本/关键配置；导出的执行入口跑出同类成果」逐项满足——**P7-05 转 done**；
+  账本现为 done 39 / implemented 2（P0-02, P6-06）/ todo 14，**P7 里程碑五项全部完成**。
+- 遗留边界：SQLite 单写入方（多并发写入由调用方串行化，符合计划 §12「应用服务集中写入」）；GUI 历史面板/重跑 UI、
+  远程来源稳定标识指纹、增量落盘均归后续；指纹默认快速，strong 显式选择。
+
+
 
 ### 第 67 轮：P7-04 DAG 工作流（P7-04 → done）
 
