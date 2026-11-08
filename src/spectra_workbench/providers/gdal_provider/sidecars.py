@@ -42,6 +42,10 @@ _SIDECAR_SUFFIXES = {
     ".pca.json",
     ".pca_inverse.json",
     ".tasseledcap.json",
+    # P6-04：GCP 配准 / 差值 / 融合 sidecar。
+    ".gcpregistration.json",
+    ".rasterdiff.json",
+    ".pansharpen.json",
     ".wld",
     ".tfw",
     ".tifw",
@@ -102,6 +106,9 @@ def _suffixes_for_target(target: Path) -> set[str]:
         ".pca.json",
         ".pca_inverse.json",
         ".tasseledcap.json",
+        ".gcpregistration.json",
+        ".rasterdiff.json",
+        ".pansharpen.json",
     }
     suffix = target.suffix.lower()
     if suffix in {".tif", ".tiff"}:
@@ -127,6 +134,9 @@ def known_sidecar_candidates(target: Path) -> list[Path]:
             ".pca.json",
             ".pca_inverse.json",
             ".tasseledcap.json",
+            ".gcpregistration.json",
+            ".rasterdiff.json",
+            ".pansharpen.json",
         }:
             candidates.add(target.with_name(target.name + suffix))
         else:

@@ -158,16 +158,17 @@ def test_random_sampling_matches_official_catalog():
 
 
 def test_gdal_algorithms_count_and_structure():
-    """GDAL 结构化算法规格完整（27 项 = 18 项原生 + 9 项平台组合/受限实现）。
+    """GDAL 结构化算法规格完整（29 项 = 18 项原生 + 11 项平台组合/受限实现）。
 
     其中 `gdal:stack` / `gdal:bandmanage` / `gdal:statistics` 是平台基于
     原生 API 的组合实现，`gdal:calc` 是平台受限 AST 求值器，
     `gdal:sindex` 是平台光谱指数（numpy），`gdal:fftfilter` 是平台 FFT
     频域滤波（numpy.fft），`gdal:pca`/`gdal:tasseledcap` 是平台矩阵变换，
+    `gcpregister`/`rasterdiff`/`pansharpen` 是平台配准/差值/融合实现，
     性质与 18 项原生工具不同，已在 registry 文档串中标注。
     """
     algorithms = build_gdal_algorithms()
-    assert len(algorithms) == 27
+    assert len(algorithms) == 29
 
     algo_ids = {a.capability_id for a in algorithms}
     expected_ids = {
@@ -204,6 +205,9 @@ def test_gdal_algorithms_count_and_structure():
         # P6-03：PCA 正/逆变换与缨帽变换（平台能力，numpy 矩阵运算）
         "gdal:pca",
         "gdal:tasseledcap",
+        # P6-04：GCP 配准 / 栅格差值（pansharpen 既有条目升级为平台融合）
+        "gdal:gcpregister",
+        "gdal:rasterdiff",
     }
     assert algo_ids == expected_ids
 
@@ -371,10 +375,12 @@ def test_four_dimensional_state_independence_and_audit():
     # 第 59 轮（P6-02）：新增平台能力 gdal:fftfilter 编目并接入 form 执行器：
     # 450/445/240/13。
     # 第 60 轮（P6-03）：新增 gdal:pca 与 gdal:tasseledcap：452/447/242/15。
-    assert report["total_baseline_count"] == 452
-    assert report["discovered"]["count"] == 447
-    assert report["callable"]["count"] == 242
-    assert report["platform_executable"]["count"] == 15
+    # 第 61 轮（P6-04）：新增 gcpregister/rasterdiff 并把既有 pansharpen 升级为
+    # form 执行器：454/449/244/18。
+    assert report["total_baseline_count"] == 454
+    assert report["discovered"]["count"] == 449
+    assert report["callable"]["count"] == 244
+    assert report["platform_executable"]["count"] == 18
     assert report["verified"]["count"] == 5
     # 第 32 轮：gdal:buildvrt 由 blocked 改为 ready（平台已接入），
     # 故从缺失清单移出，缺失项 9 -> 8。其余 8 项是运行时确实不可用的
@@ -395,10 +401,11 @@ def test_four_dimensional_state_independence_and_audit():
     # 第 58 轮新增平台能力 gdal:sindex：407 -> 408、405 -> 406。
     # 第 59 轮新增平台能力 gdal:fftfilter：408 -> 409、406 -> 407。
     # 第 60 轮新增 gdal:pca / gdal:tasseledcap：409 -> 411、407 -> 409。
+    # 第 61 轮新增 gcpregister/rasterdiff（pansharpen 升级既有条目）：411 -> 413、409 -> 411。
     # gdal:buildvrt、P5-02 的 gdal:dem/rasterize/grid 由 blocked 改为 ready，
     # GDAL 缺失项 6 -> 5 -> 4 -> 3 -> 2。
-    assert gdal_rep["total_baseline_count"] == 411
-    assert gdal_rep["discovered"]["count"] == 409
+    assert gdal_rep["total_baseline_count"] == 413
+    assert gdal_rep["discovered"]["count"] == 411
     assert gdal_rep["missing"]["count"] == 2
 
     rio_rep = by_provider["rasterio"]
@@ -412,8 +419,9 @@ def test_provider_adapters_discover_baseline():
     gdal_adapter = GDALProviderAdapter()
     gdal_caps = gdal_adapter.discover()
     # 第 32/34/35 轮新增编目；第 58 轮 gdal:sindex：407 -> 408；
-    # 第 59 轮 gdal:fftfilter：408 -> 409；第 60 轮 pca/tasseledcap：409 -> 411。
-    assert len(gdal_caps) == 411
+    # 第 59 轮 gdal:fftfilter：408 -> 409；第 60 轮 pca/tasseledcap：409 -> 411；
+    # 第 61 轮 gcpregister/rasterdiff：411 -> 413。
+    assert len(gdal_caps) == 413
 
     rio_adapter = RasterioProviderAdapter()
     rio_caps = rio_adapter.discover()

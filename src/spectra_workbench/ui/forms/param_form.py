@@ -52,6 +52,10 @@ from spectra_workbench.processing.output_formats import (
     validate_vector_output_format,
 )
 from spectra_workbench.processing.raster_params import (
+    DIFF_MODES,
+    FUSION_METHODS,
+    GCP_TRANSFORMS,
+    LOCAL_RESAMPLES,
     RESAMPLE_ALGORITHM_CHOICES,
     ParameterError,
     normalize_raster_params,
@@ -489,6 +493,87 @@ class CapabilityFormWidget(QWidget):
         self.params_form.addRow(self.lbl_tc_source_title, self.lbl_tc_source)
         self._on_tc_sensor_changed()
 
+        # --- P6-04 GCP 配准 ---
+        self.cmb_gcp_transform = QComboBox()
+        for key in GCP_TRANSFORMS:
+            self.cmb_gcp_transform.addItem(
+                "仿射 affine（1 阶）" if key == "affine" else "二次多项式 polynomial2",
+                key,
+            )
+        self.lbl_gcp_transform = QLabel("GCP 变换 (gcpTransform):")
+        self.params_form.addRow(self.lbl_gcp_transform, self.cmb_gcp_transform)
+
+        self.txt_gcp_file = QLineEdit()
+        self.txt_gcp_file.setPlaceholderText("控制点 JSON（control/check 点，含 pixel/line/x/y）")
+        self.btn_browse_gcp_file = QPushButton("选择...")
+        self.btn_browse_gcp_file.clicked.connect(self._browse_gcp_file)
+        gcp_row = QHBoxLayout()
+        gcp_row.addWidget(self.txt_gcp_file, stretch=1)
+        gcp_row.addWidget(self.btn_browse_gcp_file)
+        self.lbl_gcp_file = QLabel("GCP 文件 (gcpFile):")
+        self.params_form.addRow(self.lbl_gcp_file, gcp_row)
+
+        self.txt_gcp_reference = QLineEdit()
+        self.txt_gcp_reference.setPlaceholderText("参考影像（决定输出网格/CRS）")
+        self.btn_browse_gcp_reference = QPushButton("选择...")
+        self.btn_browse_gcp_reference.clicked.connect(self._browse_gcp_reference)
+        gcp_ref_row = QHBoxLayout()
+        gcp_ref_row.addWidget(self.txt_gcp_reference, stretch=1)
+        gcp_ref_row.addWidget(self.btn_browse_gcp_reference)
+        self.lbl_gcp_reference = QLabel("参考影像 (referenceFile):")
+        self.params_form.addRow(self.lbl_gcp_reference, gcp_ref_row)
+
+        self.cmb_gcp_resample = QComboBox()
+        for alg in LOCAL_RESAMPLES:
+            self.cmb_gcp_resample.addItem(alg, alg)
+        self.lbl_gcp_resample = QLabel("GCP 重采样 (gcpResample):")
+        self.params_form.addRow(self.lbl_gcp_resample, self.cmb_gcp_resample)
+
+        # --- P6-04 栅格差值 ---
+        self.cmb_diff_mode = QComboBox()
+        for mode in DIFF_MODES:
+            self.cmb_diff_mode.addItem(mode, mode)
+        self.lbl_diff_mode = QLabel("差值模式 (diffMode):")
+        self.params_form.addRow(self.lbl_diff_mode, self.cmb_diff_mode)
+
+        self.txt_diff_reference = QLineEdit()
+        self.txt_diff_reference.setPlaceholderText("参考影像 B（必须与输入同网格）")
+        self.btn_browse_diff_reference = QPushButton("选择...")
+        self.btn_browse_diff_reference.clicked.connect(self._browse_diff_reference)
+        diff_ref_row = QHBoxLayout()
+        diff_ref_row.addWidget(self.txt_diff_reference, stretch=1)
+        diff_ref_row.addWidget(self.btn_browse_diff_reference)
+        self.lbl_diff_reference = QLabel("参考影像 B (referenceFile):")
+        self.params_form.addRow(self.lbl_diff_reference, diff_ref_row)
+
+        # --- P6-04 Brovey/HSV 融合 ---
+        self.txt_fusion_ms = QLineEdit()
+        self.txt_fusion_ms.setPlaceholderText("多光谱影像文件")
+        self.btn_browse_fusion_ms = QPushButton("选择...")
+        self.btn_browse_fusion_ms.clicked.connect(self._browse_fusion_ms)
+        fusion_ms_row = QHBoxLayout()
+        fusion_ms_row.addWidget(self.txt_fusion_ms, stretch=1)
+        fusion_ms_row.addWidget(self.btn_browse_fusion_ms)
+        self.lbl_fusion_ms = QLabel("多光谱影像 (msFile):")
+        self.params_form.addRow(self.lbl_fusion_ms, fusion_ms_row)
+
+        self.txt_fusion_ms_bands = QLineEdit()
+        self.txt_fusion_ms_bands.setPlaceholderText("3 个 MS 波段号（R,G,B），例：1,2,3")
+        self.lbl_fusion_ms_bands = QLabel("MS 波段 (msBands，3 个):")
+        self.params_form.addRow(self.lbl_fusion_ms_bands, self.txt_fusion_ms_bands)
+
+        self.cmb_fusion_method = QComboBox()
+        for method in FUSION_METHODS:
+            self.cmb_fusion_method.addItem(method, method)
+        self.lbl_fusion_method = QLabel("融合方法 (fusionMethod):")
+        self.params_form.addRow(self.lbl_fusion_method, self.cmb_fusion_method)
+
+        self.cmb_fusion_resample = QComboBox()
+        for alg in LOCAL_RESAMPLES:
+            self.cmb_fusion_resample.addItem(alg, alg)
+        self.lbl_fusion_resample = QLabel("MS 重采样 (fusionResample):")
+        self.params_form.addRow(self.lbl_fusion_resample, self.cmb_fusion_resample)
+
         # --- P4-03 概览构建 ---
         self.txt_levels = QLineEdit()
         self.txt_levels.setPlaceholderText("严格递增、每个≥2；例：2,4,8")
@@ -824,6 +909,43 @@ class CapabilityFormWidget(QWidget):
         self._set_row_visible(
             self.lbl_tc_source_title, self.lbl_tc_source, "tcSensor" in sup
         )
+        # P6-04 GCP 配准
+        self._set_row_visible(
+            self.lbl_gcp_transform, self.cmb_gcp_transform, "gcpTransform" in sup
+        )
+        self._set_row_visible(self.lbl_gcp_file, self.txt_gcp_file, "gcpFile" in sup)
+        self.btn_browse_gcp_file.setVisible("gcpFile" in sup)
+        self._set_row_visible(
+            self.lbl_gcp_reference, self.txt_gcp_reference, "referenceFile" in sup and "gcpFile" in sup
+        )
+        self.btn_browse_gcp_reference.setVisible(
+            "referenceFile" in sup and "gcpFile" in sup
+        )
+        self._set_row_visible(
+            self.lbl_gcp_resample, self.cmb_gcp_resample, "gcpResample" in sup
+        )
+        # P6-04 栅格差值
+        self._set_row_visible(
+            self.lbl_diff_mode, self.cmb_diff_mode, "diffMode" in sup
+        )
+        self._set_row_visible(
+            self.lbl_diff_reference, self.txt_diff_reference, "referenceFile" in sup and "diffMode" in sup
+        )
+        self.btn_browse_diff_reference.setVisible(
+            "referenceFile" in sup and "diffMode" in sup
+        )
+        # P6-04 融合
+        self._set_row_visible(self.lbl_fusion_ms, self.txt_fusion_ms, "msFile" in sup)
+        self.btn_browse_fusion_ms.setVisible("msFile" in sup)
+        self._set_row_visible(
+            self.lbl_fusion_ms_bands, self.txt_fusion_ms_bands, "msBands" in sup
+        )
+        self._set_row_visible(
+            self.lbl_fusion_method, self.cmb_fusion_method, "fusionMethod" in sup
+        )
+        self._set_row_visible(
+            self.lbl_fusion_resample, self.cmb_fusion_resample, "fusionResample" in sup
+        )
         self._set_row_visible(self.lbl_levels, self.txt_levels, "levels" in sup)
         self._set_row_visible(self.lbl_ovr_compress, self.cmb_ovr_compress, "overviewCompress" in sup)
         # P4-04
@@ -977,6 +1099,25 @@ class CapabilityFormWidget(QWidget):
             self.cmb_tc_sensor.setCurrentIndex(0)
         if "tcBands" not in supported:
             self.txt_tc_bands.clear()
+        if "gcpTransform" not in supported:
+            self.cmb_gcp_transform.setCurrentIndex(0)
+        if "gcpFile" not in supported:
+            self.txt_gcp_file.clear()
+        if "referenceFile" not in supported:
+            self.txt_gcp_reference.clear()
+            self.txt_diff_reference.clear()
+        if "gcpResample" not in supported:
+            self.cmb_gcp_resample.setCurrentIndex(0)
+        if "diffMode" not in supported:
+            self.cmb_diff_mode.setCurrentIndex(0)
+        if "msFile" not in supported:
+            self.txt_fusion_ms.clear()
+        if "msBands" not in supported:
+            self.txt_fusion_ms_bands.clear()
+        if "fusionMethod" not in supported:
+            self.cmb_fusion_method.setCurrentIndex(0)
+        if "fusionResample" not in supported:
+            self.cmb_fusion_resample.setCurrentIndex(0)
         if "levels" not in supported:
             self.txt_levels.clear()
         if "overviewCompress" not in supported:
@@ -1263,6 +1404,55 @@ class CapabilityFormWidget(QWidget):
                 return params, f"tcBands 必须是整数波段号，当前为：{raw_tc}"
             params["tcBands"] = bands_tc
 
+        # P6-04：GCP 配准
+        if "gcpTransform" in supported:
+            params["gcpTransform"] = self.cmb_gcp_transform.currentData()
+        if "gcpFile" in supported:
+            gcp_text = self.txt_gcp_file.text().strip()
+            if not gcp_text:
+                return params, "GCP 配准必须选择控制点 JSON 文件"
+            params["gcpFile"] = gcp_text
+            reference_text = self.txt_gcp_reference.text().strip()
+            if not reference_text:
+                return params, "GCP 配准必须选择参考影像"
+            params["referenceFile"] = reference_text
+        if "gcpResample" in supported:
+            params["gcpResample"] = self.cmb_gcp_resample.currentData()
+
+        # P6-04：栅格差值
+        if "diffMode" in supported:
+            params["diffMode"] = self.cmb_diff_mode.currentData()
+            reference_text = self.txt_diff_reference.text().strip()
+            if not reference_text:
+                return params, "栅格差值必须选择参考影像 B"
+            params["referenceFile"] = reference_text
+
+        # P6-04：Brovey/HSV 融合
+        if "msFile" in supported:
+            ms_text = self.txt_fusion_ms.text().strip()
+            if not ms_text:
+                return params, "影像融合必须选择多光谱影像文件"
+            params["msFile"] = ms_text
+        if "msBands" in supported:
+            raw_ms = self.txt_fusion_ms_bands.text().strip()
+            if not raw_ms:
+                return params, "影像融合必须给出 3 个多光谱波段号（R,G,B）"
+            parts_ms = [
+                x.strip()
+                for x in raw_ms.replace(";", ",").replace("；", ",").split(",")
+                if x.strip()
+            ]
+            if len(parts_ms) != 3:
+                return params, f"msBands 必须恰好 3 个波段号，当前为：{raw_ms}"
+            try:
+                params["msBands"] = [int(part) for part in parts_ms]
+            except ValueError:
+                return params, f"msBands 必须是整数波段号，当前为：{raw_ms}"
+        if "fusionMethod" in supported:
+            params["fusionMethod"] = self.cmb_fusion_method.currentData()
+        if "fusionResample" in supported:
+            params["fusionResample"] = self.cmb_fusion_resample.currentData()
+
         # P4-04：表达式计算
         if "calc" in supported:
             raw_expr = self.txt_calc.text().strip()
@@ -1364,6 +1554,46 @@ class CapabilityFormWidget(QWidget):
         key = self.cmb_tc_sensor.currentData()
         if key:
             self.lbl_tc_source.setText(sensor_source_line(str(key)))
+
+    def _browse_gcp_file(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "选择 GCP 控制点文件",
+            str(self._project_root),
+            "GCP JSON (*.json);;所有文件 (*)",
+        )
+        if path:
+            self.txt_gcp_file.setText(path)
+
+    def _browse_gcp_reference(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "选择 GCP 参考影像",
+            str(self._project_root),
+            "栅格影像 (*.tif *.tiff *.dat *.img *.vrt);;所有文件 (*)",
+        )
+        if path:
+            self.txt_gcp_reference.setText(path)
+
+    def _browse_diff_reference(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "选择差值参考影像 B",
+            str(self._project_root),
+            "栅格影像 (*.tif *.tiff *.dat *.img *.vrt);;所有文件 (*)",
+        )
+        if path:
+            self.txt_diff_reference.setText(path)
+
+    def _browse_fusion_ms(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "选择多光谱影像",
+            str(self._project_root),
+            "栅格影像 (*.tif *.tiff *.dat *.img *.vrt);;所有文件 (*)",
+        )
+        if path:
+            self.txt_fusion_ms.setText(path)
 
     def _browse_input(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
@@ -1485,6 +1715,33 @@ class CapabilityFormWidget(QWidget):
                 has_alpha=False,
             )
             return "；".join(tc_violations) if tc_violations else None
+        if capability_id in ("gdal:gcpregister", "gdal:rasterdiff"):
+            bands = 0
+            if self._metadata_provider is not None and in_paths:
+                try:
+                    info = self._metadata_provider(in_paths[0])
+                    bands = int(info.get("count") or len(info.get("bands") or []))
+                except Exception:
+                    bands = 0
+            if bands <= 0:
+                return None
+            violations = validate_output_format(
+                out_fmt,
+                dtype="Float32",
+                bands=bands,
+                has_nodata=True,
+                has_alpha=False,
+            )
+            return "；".join(violations) if violations else None
+        if capability_id == "gdal:pansharpen":
+            fusion_violations = validate_output_format(
+                out_fmt,
+                dtype="Float32",
+                bands=3,
+                has_nodata=True,
+                has_alpha=False,
+            )
+            return "；".join(fusion_violations) if fusion_violations else None
         has_nodata_param = any(
             params.get(key) is not None
             for key in ("srcNodata", "vrtNodata", "dstNodata", "noData")
@@ -1667,6 +1924,9 @@ class CapabilityFormWidget(QWidget):
             "gdal:fftfilter",
             "gdal:pca",
             "gdal:tasseledcap",
+            "gdal:gcpregister",
+            "gdal:rasterdiff",
+            "gdal:pansharpen",
         }:
             # 这些能力都真实消费 format；此前 sindex/fftfilter 漏发 format，
             # 会导致 GUI 里选 COG/ENVI 仍被 Worker 静默写成 GTiff。

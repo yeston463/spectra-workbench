@@ -780,9 +780,11 @@
         "P3-05",
         "P4-01"
       ],
-      "status": "todo",
+      "status": "done",
       "release_requirement": "core",
-      "evidence": [],
+      "evidence": [
+        "第 61 轮：gdal:gcpregister / gdal:rasterdiff 新增、gdal:pansharpen 升级为平台执行器，P6-04 转 done。(1) GCP 配准（providers/gdal_provider/gcp_ops.py）：GCP JSON（points 含 pixel/line/x/y，role=control/check）→ 控制点最小二乘拟合源像素→参考地图坐标（affine 1 阶 / polynomial2 2 阶）→ 单独拟合反变换（地图→源像素）→ 参考网格逐像元中心反变换 + nearest/bilinear 采样；拟合残差与独立检查点误差严格分列（地图单位与源像素单位），检查点绝不参与拟合；输出网格严格取参考影像，NoData/越界/邻域含 NoData 输出 NoData；sidecar <成果名>.gcpregistration.json 记录正/反系数、basis、控制/检查点 RMSE/max、输出网格与重采样器。合成仿射（affine 与 polynomial2）检查点 RMSE ≤1e-8、输出与解析平面 ≤1e-3；合成二次多项式 affine 检查点误差 >0.1、polynomial2 ≤1e-8 且输出与参考 ≤0.5，证明「独立检查点」与阶数选择真实生效。(2) 栅格差值（diff_ops.py）：difference=A−B、absolute=|A−B|；严格同宽高/同波段数/同 GeoTransform/同 CRS，不一致直接拒绝且不隐式重采样/重投影；逐波段 sidecar <成果名>.rasterdiff.json 记录 n_valid/min/max/mean/RMSE/mean_abs；NoData/非有限值逐波段排除。(3) 融合（fusion_ops.py）：Brovey=MS_i×Pan_scaled/sum(MS_1..3)（分母≤0→NoData），HSV=RGB→HSV→用归一化 Pan 替换 V→RGB（H/S 保留）；仅登记 Brovey/HSV，精确命名并写公式/波段/量程/适用范围；NNDiffuse/Gram-Schmidt/PCA 明确未实现、不提供入口；要求 Pan 单波段、MS 3 波段、同 CRS、Pan north-up，MS 重采样到 Pan 网格；sidecar <成果名>.pansharpen.json 记录方法与公式。(4) 契约/GUI/注册表：新增 gcpTransform/gcpFile/referenceFile/gcpResample/diffMode/msFile/msBands/fusionMethod/fusionResample 别名与支持矩阵；adapter 新增三能力门禁/执行分支/sidecar 成套提交；registry 新增 gcpregister/rasterdiff，原 pansharpen 由 CLI 条目升级为 form 平台实现；GUI 新增 GCP 文件/参考影像/变换/重采样、差值参考影像/模式、MS 文件/3 波段/方法/重采样控件与状态隔离。(5) 数值验收（独立 GDAL 重开）：GCP 仿射/二次多项式见上；差值逐像元与硬编码差值一致、统计 min/max/mean 逐项一致、NoData 排除后 n_valid=3；Brovey 常量 MS [0.2,0.4,0.6]+Pan 0.8 → [0.1333333,0.2666667,0.4]，HSV → [0.2666667,0.5333333,0.8]（≤1e-6）；MS 4×4 重采样到 Pan 8×8 后常量结果保持；缺 msFile/重复 msBands/未知方法/多波段 Pan/CRS 不一致/PNG、GCP 缺文件/未知变换/PNG、差值网格/波段/格式不匹配全部明确拒绝且不落盘。(6) 新增 tests/unit/test_p6_gcp_diff_fusion_ops.py（9 项）、tests/integration/test_p6_gcpregister.py（3 项）、test_p6_rasterdiff.py（3 项）、test_p6_pansharpen.py（4 项）、test_p6_gcp_fusion_gui.py（3 项桌面路径）；四维审计/对账/算法计数同步为 454/449/244/18、算法规格 27→29、GDAL 编目 411→413。受影响定向：294 项单测、43 项 P6-04/sidecar/表单回归全绿；Ruff 干净；Mypy 76 个源文件 0 错误；Clean 全量 771 passed / 0 failed / rc=0 / clean_exit_verified=true（476.80s，residual=0、cleanup_complete=true）。验收「合成已知变换和独立检查点验证；各融合算法准确命名」逐项满足，**P6-04 转 done**。遗留边界：GCP 当前仅 affine/polynomial2（TPS 未实现）且自定义重采样整幅读入源影像；差值要求严格同网格；融合仅 Brovey/HSV（NNDiffuse/GS/PCA 未实现），HSV 对 Float32 输入假设近似 [0,1] 反射率。"
+      ],
       "blocking_reason": null
     },
     {

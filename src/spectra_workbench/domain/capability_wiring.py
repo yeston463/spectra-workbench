@@ -68,6 +68,10 @@ CONNECTED_CAPABILITIES: frozenset[str] = frozenset(
         # P6-03：PCA 正/逆变换与缨帽变换（多波段栅格 + 来源 sidecar）
         "gdal:pca",
         "gdal:tasseledcap",
+        # P6-04：GCP 配准 / 栅格差值 / Brovey-HSV 融合
+        "gdal:gcpregister",
+        "gdal:rasterdiff",
+        "gdal:pansharpen",
     }
 )
 
@@ -131,6 +135,9 @@ FORMAT_CAPABILITIES: frozenset[str] = frozenset(
         "gdal:fftfilter",
         "gdal:pca",
         "gdal:tasseledcap",
+        "gdal:gcpregister",
+        "gdal:rasterdiff",
+        "gdal:pansharpen",
         "gdal:calc",
     }
 )

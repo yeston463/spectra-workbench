@@ -59,8 +59,11 @@ from spectra_workbench.providers.base import (
     resolve_dataset_path,
 )
 from spectra_workbench.providers.gdal_provider.calc_ops import run_calc
+from spectra_workbench.providers.gdal_provider.diff_ops import run_raster_diff
 from spectra_workbench.providers.gdal_provider.expression_ops import ExpressionError
 from spectra_workbench.providers.gdal_provider.fft_ops import fft_filter
+from spectra_workbench.providers.gdal_provider.fusion_ops import run_pansharpen
+from spectra_workbench.providers.gdal_provider.gcp_ops import run_gcp_registration
 from spectra_workbench.providers.gdal_provider.index_ops import compute_index
 from spectra_workbench.providers.gdal_provider.metadata_ops import (
     apply_nodata,
@@ -319,6 +322,10 @@ class GDALProviderAdapter(ProviderAdapter):
         # --- P6-03：PCA 正/逆变换与缨帽变换（多波段 Float32 栅格 + 来源 sidecar）---
         "gdal:pca",
         "gdal:tasseledcap",
+        # --- P6-04：GCP 配准 / 栅格差值 / Brovey-HSV 融合 ---
+        "gdal:gcpregister",
+        "gdal:rasterdiff",
+        "gdal:pansharpen",
         # --- P4-04：受限表达式计算 / 直方图与基础统计 ---
         "gdal:calc",
         P404_STATISTICS_CAPABILITY,
@@ -623,6 +630,9 @@ class GDALProviderAdapter(ProviderAdapter):
                 "gdal:fftfilter",
                 "gdal:pca",
                 "gdal:tasseledcap",
+                "gdal:gcpregister",
+                "gdal:rasterdiff",
+                "gdal:pansharpen",
             )
             and spec.capability_id not in VECTOR_OUTPUT_CAPABILITIES
         ):
@@ -689,6 +699,131 @@ class GDALProviderAdapter(ProviderAdapter):
         is_fftfilter = spec.capability_id == "gdal:fftfilter"
         is_pca = spec.capability_id == "gdal:pca"
         is_tasseledcap = spec.capability_id == "gdal:tasseledcap"
+        is_gcpregister = spec.capability_id == "gdal:gcpregister"
+        is_rasterdiff = spec.capability_id == "gdal:rasterdiff"
+        is_pansharpen = spec.capability_id == "gdal:pansharpen"
+
+        if is_gcpregister:
+            if norm.get("gcpFile") is None or norm.get("referenceFile") is None:
+                return TaskResult(
+                    task_id=spec.task_id,
+                    attempt=spec.attempt,
+                    status=TaskStatus.failed,
+                    error={
+                        "code": "invalid_parameters",
+                        "message": "gdal:gcpregister 需要 gcpFile 与 referenceFile",
+                    },
+                    duration_seconds=round(time.monotonic() - start_time, 4),
+                )
+            probe_ds = gdal.Open(str(in_path), gdal.GA_ReadOnly)
+            if probe_ds is None:
+                return TaskResult(
+                    task_id=spec.task_id,
+                    attempt=spec.attempt,
+                    status=TaskStatus.failed,
+                    error={"code": "input_not_found", "message": f"无法打开输入栅格: {in_path}"},
+                    duration_seconds=round(time.monotonic() - start_time, 4),
+                )
+            try:
+                gcp_bands = int(probe_ds.RasterCount)
+            finally:
+                del probe_ds
+            gcp_violations = validate_output_format(
+                out_format,
+                dtype="Float32",
+                bands=gcp_bands,
+                has_nodata=True,
+                has_alpha=False,
+            )
+            if gcp_violations:
+                context.log("ERROR", f"GCP 配准输出格式不受支持: {gcp_violations}")
+                return TaskResult(
+                    task_id=spec.task_id,
+                    attempt=spec.attempt,
+                    status=TaskStatus.failed,
+                    error={
+                        "code": "unsupported_format_combination",
+                        "message": "；".join(gcp_violations),
+                    },
+                    duration_seconds=round(time.monotonic() - start_time, 4),
+                )
+
+        if is_rasterdiff:
+            if norm.get("referenceFile") is None:
+                return TaskResult(
+                    task_id=spec.task_id,
+                    attempt=spec.attempt,
+                    status=TaskStatus.failed,
+                    error={
+                        "code": "invalid_parameters",
+                        "message": "gdal:rasterdiff 需要 referenceFile",
+                    },
+                    duration_seconds=round(time.monotonic() - start_time, 4),
+                )
+            probe_ds = gdal.Open(str(in_path), gdal.GA_ReadOnly)
+            if probe_ds is None:
+                return TaskResult(
+                    task_id=spec.task_id,
+                    attempt=spec.attempt,
+                    status=TaskStatus.failed,
+                    error={"code": "input_not_found", "message": f"无法打开输入栅格: {in_path}"},
+                    duration_seconds=round(time.monotonic() - start_time, 4),
+                )
+            try:
+                diff_bands = int(probe_ds.RasterCount)
+            finally:
+                del probe_ds
+            diff_violations = validate_output_format(
+                out_format,
+                dtype="Float32",
+                bands=diff_bands,
+                has_nodata=True,
+                has_alpha=False,
+            )
+            if diff_violations:
+                context.log("ERROR", f"差值输出格式不受支持: {diff_violations}")
+                return TaskResult(
+                    task_id=spec.task_id,
+                    attempt=spec.attempt,
+                    status=TaskStatus.failed,
+                    error={
+                        "code": "unsupported_format_combination",
+                        "message": "；".join(diff_violations),
+                    },
+                    duration_seconds=round(time.monotonic() - start_time, 4),
+                )
+
+        if is_pansharpen:
+            if norm.get("msFile") is None or norm.get("msBands") is None:
+                return TaskResult(
+                    task_id=spec.task_id,
+                    attempt=spec.attempt,
+                    status=TaskStatus.failed,
+                    error={
+                        "code": "invalid_parameters",
+                        "message": "gdal:pansharpen 需要 msFile 与 msBands（3 个多光谱波段号）",
+                    },
+                    duration_seconds=round(time.monotonic() - start_time, 4),
+                )
+            fusion_violations = validate_output_format(
+                out_format,
+                dtype="Float32",
+                bands=3,
+                has_nodata=True,
+                has_alpha=False,
+            )
+            if fusion_violations:
+                context.log("ERROR", f"融合输出格式不受支持: {fusion_violations}")
+                return TaskResult(
+                    task_id=spec.task_id,
+                    attempt=spec.attempt,
+                    status=TaskStatus.failed,
+                    error={
+                        "code": "unsupported_format_combination",
+                        "message": "；".join(fusion_violations),
+                    },
+                    duration_seconds=round(time.monotonic() - start_time, 4),
+                )
 
         if is_pca:
             pca_mode = str(norm.get("pcaMode") or "forward")
@@ -1305,6 +1440,101 @@ class GDALProviderAdapter(ProviderAdapter):
                     f"来源：{tc_info['source_url']}；sidecar：{tc_info['sidecar']}",
                 )
                 ds = gdal.Open(str(staged_path), gdal.GA_ReadOnly)
+            elif is_gcpregister:
+                reference_path = Path(str(norm["referenceFile"])).expanduser()
+                if not reference_path.is_absolute():
+                    reference_path = Path(spec.project_root) / reference_path
+                gcp_path = Path(str(norm["gcpFile"])).expanduser()
+                if not gcp_path.is_absolute():
+                    gcp_path = Path(spec.project_root) / gcp_path
+                gcp_info = run_gcp_registration(
+                    staged_path,
+                    in_path,  # type: ignore[arg-type]
+                    reference_path,
+                    gcp_path,
+                    transform=str(norm.get("gcpTransform") or "affine"),
+                    resample_alg=str(norm.get("gcpResample") or "bilinear"),
+                    src_nodata=(
+                        float(norm["srcNodata"])
+                        if norm.get("srcNodata") is not None
+                        else None
+                    ),
+                    dst_nodata=(
+                        float(norm["dstNodata"])
+                        if norm.get("dstNodata") is not None
+                        else -9999.0
+                    ),
+                    out_format=out_format,
+                    callback=_gdal_cb,
+                )
+                context.log(
+                    "INFO",
+                    f"GCP 配准完成：{gcp_info['transform']}（{gcp_info['control_points']} 控制点/"
+                    f"{gcp_info['check_points']} 检查点），正变换检查点 RMSE="
+                    f"{gcp_info['forward_checkpoint_rmse']:.6g}，反变换检查点 RMSE="
+                    f"{gcp_info['backward_checkpoint_rmse']:.6g} 像素；"
+                    f"sidecar：{gcp_info['sidecar']}",
+                )
+                ds = gdal.Open(str(staged_path), gdal.GA_ReadOnly)
+            elif is_rasterdiff:
+                reference_path = Path(str(norm["referenceFile"])).expanduser()
+                if not reference_path.is_absolute():
+                    reference_path = Path(spec.project_root) / reference_path
+                diff_info = run_raster_diff(
+                    staged_path,
+                    in_path,  # type: ignore[arg-type]
+                    reference_path,
+                    mode=str(norm.get("diffMode") or "difference"),
+                    src_nodata=(
+                        float(norm["srcNodata"])
+                        if norm.get("srcNodata") is not None
+                        else None
+                    ),
+                    dst_nodata=(
+                        float(norm["dstNodata"])
+                        if norm.get("dstNodata") is not None
+                        else -9999.0
+                    ),
+                    out_format=out_format,
+                    callback=_gdal_cb,
+                )
+                context.log(
+                    "INFO",
+                    f"栅格差值完成：{diff_info['mode']}，{diff_info['bands']} 波段；"
+                    f"统计：{diff_info['stats']}；sidecar：{diff_info['sidecar']}",
+                )
+                ds = gdal.Open(str(staged_path), gdal.GA_ReadOnly)
+            elif is_pansharpen:
+                ms_path = Path(str(norm["msFile"])).expanduser()
+                if not ms_path.is_absolute():
+                    ms_path = Path(spec.project_root) / ms_path
+                fusion_info = run_pansharpen(
+                    staged_path,
+                    in_path,  # type: ignore[arg-type]
+                    ms_path,
+                    method=str(norm.get("fusionMethod") or "brovey"),
+                    ms_bands=[int(v) for v in norm["msBands"]],
+                    resample_alg=str(norm.get("fusionResample") or "bilinear"),
+                    src_nodata=(
+                        float(norm["srcNodata"])
+                        if norm.get("srcNodata") is not None
+                        else None
+                    ),
+                    dst_nodata=(
+                        float(norm["dstNodata"])
+                        if norm.get("dstNodata") is not None
+                        else -9999.0
+                    ),
+                    out_format=out_format,
+                    callback=_gdal_cb,
+                )
+                context.log(
+                    "INFO",
+                    f"影像融合完成：{fusion_info['method']}，MS 波段 "
+                    f"{fusion_info['ms_bands']}；公式：{fusion_info['formula']}；"
+                    f"sidecar：{fusion_info['sidecar']}",
+                )
+                ds = gdal.Open(str(staged_path), gdal.GA_ReadOnly)
             elif is_sindex:
                 # 单输入能力：validate() 保证 input 端口存在，in_path 必已解析
                 index_info = compute_index(
@@ -1494,6 +1724,12 @@ class GDALProviderAdapter(ProviderAdapter):
                 if is_pca
                 else "TasseledCap"
                 if is_tasseledcap
+                else "GCPRegistration"
+                if is_gcpregister
+                else "RasterDiff"
+                if is_rasterdiff
+                else "Pansharpen"
+                if is_pansharpen
                 else "Warp"
                 if is_warp
                 else "Translate"
@@ -1535,6 +1771,12 @@ class GDALProviderAdapter(ProviderAdapter):
                 if is_pca
                 else "TasseledCap"
                 if is_tasseledcap
+                else "GCPRegistration"
+                if is_gcpregister
+                else "RasterDiff"
+                if is_rasterdiff
+                else "Pansharpen"
+                if is_pansharpen
                 else "Warp"
                 if is_warp
                 else "Translate"
@@ -1566,6 +1808,22 @@ class GDALProviderAdapter(ProviderAdapter):
             tc_sidecar = staged_path.with_name(staged_path.name + ".tasseledcap.json")
             if tc_sidecar.exists():
                 staged_files.append(tc_sidecar.resolve())
+        if is_gcpregister:
+            gcp_sidecar = staged_path.with_name(
+                staged_path.name + ".gcpregistration.json"
+            )
+            if gcp_sidecar.exists():
+                staged_files.append(gcp_sidecar.resolve())
+        if is_rasterdiff:
+            diff_sidecar = staged_path.with_name(staged_path.name + ".rasterdiff.json")
+            if diff_sidecar.exists():
+                staged_files.append(diff_sidecar.resolve())
+        if is_pansharpen:
+            fusion_sidecar = staged_path.with_name(
+                staged_path.name + ".pansharpen.json"
+            )
+            if fusion_sidecar.exists():
+                staged_files.append(fusion_sidecar.resolve())
         # 在 Windows 上显式关闭 dataset 释放文件锁
         del ds
 

@@ -30,8 +30,18 @@ from spectra_workbench.processing.tasseledcap_registry import sensor_keys
 PCA_MODES: tuple[str, ...] = ("forward", "inverse")
 PCA_MATRICES: tuple[str, ...] = ("covariance", "correlation")
 
+#: P6-04 GCP / 差值 / 融合的受限选择（GUI 与 Worker 共用）。
+GCP_TRANSFORMS: tuple[str, ...] = ("affine", "polynomial2")
+LOCAL_RESAMPLES: tuple[str, ...] = ("nearest", "bilinear")
+DIFF_MODES: tuple[str, ...] = ("difference", "absolute")
+FUSION_METHODS: tuple[str, ...] = ("brovey", "hsv")
+
 __all__ = [
     "DEM_PROCESSINGS",
+    "DIFF_MODES",
+    "FUSION_METHODS",
+    "GCP_TRANSFORMS",
+    "LOCAL_RESAMPLES",
     "PCA_MATRICES",
     "PCA_MODES",
     "ParameterError",
@@ -195,6 +205,16 @@ _PARAM_ALIASES: dict[str, tuple[str, ...]] = {
     "pcaTransform": ("pca_transform", "transform_file", "transformfile"),
     "tcSensor": ("tc_sensor", "tasseled_cap_sensor", "sensor"),
     "tcBands": ("tc_bands", "tasseled_cap_bands"),
+    # --- P6-04 GCP / 差值 / 融合 ---
+    "gcpTransform": ("gcp_transform", "gcp_mode"),
+    "gcpFile": ("gcp_file", "gcp_points", "gcps"),
+    "referenceFile": ("reference_file", "reference"),
+    "gcpResample": ("gcp_resample", "gcp_resampling"),
+    "diffMode": ("diff_mode", "difference_mode"),
+    "msFile": ("ms_file", "multispectral"),
+    "msBands": ("ms_bands", "multispectral_bands"),
+    "fusionMethod": ("fusion_method", "pansharpen_method"),
+    "fusionResample": ("fusion_resample", "fusion_resampling"),
     # --- P4-04 表达式 / 直方图与基础统计 ---
     "calc": ("calc_expr", "expression", "formula"),
     "statisticsMode": ("mode", "stats_mode", "statistics_mode"),
@@ -405,6 +425,32 @@ _CAPABILITY_SUPPORT: dict[str, frozenset[str]] = {
     # --- P6-03：缨帽变换（成果为 3 波段 Float32 栅格 + 来源 sidecar）---
     "gdal:tasseledcap": frozenset(
         {"tcSensor", "tcBands", "srcNodata", "dstNodata"}
+    ),
+    # --- P6-04：GCP 配准（输入源影像 + 参考影像 + GCP JSON）---
+    "gdal:gcpregister": frozenset(
+        {
+            "gcpTransform",
+            "gcpFile",
+            "referenceFile",
+            "gcpResample",
+            "srcNodata",
+            "dstNodata",
+        }
+    ),
+    # --- P6-04：栅格差值（输入 A + 参考 B，严格同网格）---
+    "gdal:rasterdiff": frozenset(
+        {"diffMode", "referenceFile", "srcNodata", "dstNodata"}
+    ),
+    # --- P6-04：Brovey/HSV 融合（Pan 输入 + MS 文件/3 波段）---
+    "gdal:pansharpen": frozenset(
+        {
+            "msFile",
+            "msBands",
+            "fusionMethod",
+            "fusionResample",
+            "srcNodata",
+            "dstNodata",
+        }
     ),
     # --- P4-04：受限表达式计算 / 直方图与基础统计 ---
     "gdal:calc": frozenset({"calc", "srcNodata", "dstNodata", "outputType"}),
@@ -949,6 +995,58 @@ def normalize_raster_params(
         if len(set(bands)) != 6:
             raise ParameterError(f"tcBands 的 6 个波段号必须互不相同，实际 {bands}")
         out["tcBands"] = bands
+
+    # 11.17) P6-04：GCP 配准 / 差值 / 融合
+    if "gcpTransform" in collected:
+        _, value = collected["gcpTransform"]
+        transform = str(value).strip().lower()
+        if transform not in GCP_TRANSFORMS:
+            raise ParameterError(
+                f"未知 GCP 变换 {value!r}；可用：{', '.join(GCP_TRANSFORMS)}"
+            )
+        out["gcpTransform"] = transform
+    for key in ("gcpFile", "referenceFile", "msFile"):
+        if key in collected:
+            _, value = collected[key]
+            text = str(value).strip()
+            if not text:
+                raise ParameterError(f"参数 {key} 必须是非空文件路径")
+            out[key] = text
+    for key in ("gcpResample", "fusionResample"):
+        if key in collected:
+            _, value = collected[key]
+            alg = str(value).strip().lower()
+            if alg not in LOCAL_RESAMPLES:
+                raise ParameterError(
+                    f"未知重采样算法 {value!r}；可用：{', '.join(LOCAL_RESAMPLES)}"
+                )
+            out[key] = alg
+    if "diffMode" in collected:
+        _, value = collected["diffMode"]
+        mode = str(value).strip().lower()
+        if mode not in DIFF_MODES:
+            raise ParameterError(
+                f"未知差值模式 {value!r}；可用：{', '.join(DIFF_MODES)}"
+            )
+        out["diffMode"] = mode
+    if "fusionMethod" in collected:
+        _, value = collected["fusionMethod"]
+        method = str(value).strip().lower()
+        if method not in FUSION_METHODS:
+            raise ParameterError(
+                f"未知融合方法 {value!r}；可用：{', '.join(FUSION_METHODS)}"
+            )
+        out["fusionMethod"] = method
+    if "msBands" in collected:
+        _, value = collected["msBands"]
+        ms_bands = _require_int_list(value, "msBands", 3)
+        if any(b < 1 for b in ms_bands):
+            raise ParameterError(
+                f"msBands 的波段号必须为正数（1-based），实际 {ms_bands}"
+            )
+        if len(set(ms_bands)) != 3:
+            raise ParameterError(f"msBands 的 3 个波段号必须互不相同，实际 {ms_bands}")
+        out["msBands"] = ms_bands
 
     # 11.12) P5-04：矢量处理 / SQL / 坐标转换
     if "sql" in collected:
