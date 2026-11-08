@@ -249,6 +249,12 @@ class MainWindow(QMainWindow):
         self._pending_legacy_spec: ProjectSpec | None = None
         self._pending_legacy_layers: list[LayerRecord] = []
         self._clients: dict[str, QtWorkerClient] = {}
+        # 本窗口亲手创建的 client（alias 到 _clients 槽位）。closeEvent 必须
+        # 无条件回收它们：测试或后续扩展可能把 _clients 槽位换成替身/stub，
+        # 若只按 _clients 回收，被替换前的真实 worker 子进程会成为孤儿
+        # （P7-03 全量回归实测：set_client(self.gdal_client) 在构造期拉起
+        # 真实 gdal client，被 Spy 换槽后无人停止 → 残留 4 个 gdal 子进程）。
+        self._owned_clients: list[QtWorkerClient] = []
         self._active_task_client: QtWorkerClient | None = None
         self._task_subscriptions: dict[str, Callable[[], None]] = {}
         # P4-05：保留最近一次提交的 TaskSpec，重试时按 next_attempt() 重发同一 task_id。
@@ -283,6 +289,8 @@ class MainWindow(QMainWindow):
         if provider_id not in self._clients:
             client = QtWorkerClient(provider_id=provider_id, project_root=self.project_root, parent=self)
             self._clients[provider_id] = client
+            # 归属登记：无论槽位日后被换成什么，closeEvent 都要回收本对象。
+            self._owned_clients.append(client)
         return self._clients[provider_id]
 
     @property
@@ -1746,6 +1754,12 @@ class MainWindow(QMainWindow):
             # 在 Windows 上随机触发 STATUS_STACK_BUFFER_OVERRUN（0xC0000409）异常退出码。
             with contextlib.suppress(Exception):
                 client.stop(timeout=1.0)
+        for client in self._owned_clients:
+            # 本窗口创建但槽位已被替换的真实 client：同样必须回收，否则其
+            # worker 子进程与读取线程会活到最后（P7-03 回归实测泄漏）。
+            with contextlib.suppress(Exception):
+                client.stop(timeout=1.0)
+        self._owned_clients.clear()
         self._cache.clear()
         super().closeEvent(event)
 

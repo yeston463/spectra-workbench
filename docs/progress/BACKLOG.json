@@ -899,9 +899,20 @@
         "P4-05",
         "P1-05"
       ],
-      "status": "todo",
+      "status": "done",
       "release_requirement": "core",
-      "evidence": [],
+      "evidence": [
+        "第 66 轮：P7-03 批处理转 done。新增 `processing/batch.py` 四个公共入口：`load_batch_document`（清单 JSON 顶层必须对象 + 非空 items，缺失/坏 JSON/结构错显式 BatchError，不静默降级）；`render_batch_specs`（模板展开成 N 份 TaskSpec：`capability_id` 必填、`engine_provider` 缺省 gdal 且非空、inputs/outputs 列表逐项以 `{item[key]}` 展开且未知键显式 BatchError；单输入 key=`input`、多输入为 `list[DatasetRef]`；单输出 key=`output`、多输出依次 `output_0/output_1`；`overwrite` 透传每个 OutputPlan.overwrite；`params` 内字符串同样经模板展开、非字符串原样透传；workspace 取输出父目录；project_root 必填；TaskSpec.model_validate 提前验证并在错误处暴露真实原因）；`run_batch`（严格串行；execute 为 dict→TaskStatus 真实 runner 约定，终态判断用 `result is TaskStatus.succeeded` 而非 isinstance；continue_on_error=True 失败继续并如实记录终态与 duration；False 首败立即停止、未处置条目显式 pending（error=skipped）且 all_terminal=False——不冒充成功不伪装完结）；`BatchReport`（entries: index/task_id/status/duration/error + summary() + all_terminal() + to_dict()）；`write_manifest`（batch manifest JSON 落盘，ensure_ascii=False，可直接审计复现）。",
+        "(1) 多输入/多输出/参数变化：双输入双输出模板逐 item 展开断言（in_a_0/in_b_0、output_0/output_1 key、overlapPriority=first/last 逐项独立）；未知模板键 `{item.missing}` → BatchError（不静默空串）。tests/integration/test_p7_batch_worker.py::test_render_batch_specs_supports_multi_io_and_params + test_render_batch_specs_unknown_template_key_rejects。",
+        "(2) 单项失败继续策略（真实 QGIS GDAL 3.44.15 worker 端到端）：第 0 条输入缺失 → failed；continue_on_error=True 时第 1 条真实 succeeded（out_1.tif 真实落盘）；manifest `has-ok.json` 断言 batch_id 与 2 条 entries 逐条终态（failed/succeeded）。（test_batch_continue_on_error_keeps_remaining）",
+        "(3) strict 停止：continue_on_error=False 第 0 条 failed 后，第 1/2 条显式 pending 未经真实执行、无文件产出，summary failed=1/pending=2、all_terminal=False。（test_batch_stop_on_first_failure）",
+        "(4) 同名冲突/覆盖语义：预置 ow_out_0.tif 为 stub，overwrite=True 经 OutputPlan→P1 commit_files 真实覆盖（文件字节 ≠ stub 原值），2 条全部 succeeded。（test_batch_overwrite_semantics_seen_by_worker）",
+        "(5) 5 项测试全绿；每条目独立 QtWorkerClient（start→submit_task_async→sig_result→stop 全链路）真实执行。",
+        "(6) 测试物理依赖修复：QtWorkerClient 为单用途对象（stop() 置 _closed 后不再转发信号），批处理夹具改为每条目全新 client，排除「复用 client 导致第二项起丢结果（90s deadline 烧穿）」，测试由 230s 降至 4-5s 全绿。",
+        "(7) 顺带修复全量闸门真实阻塞（先诊断后修复，诊断用具 work/worker_track.py 不入 git）：全量 802 项退出时残留 4 个 gdal worker 子进程（clean_exit_verified=false → exit 90）。归因：MainWindow 构造期 attribute_panel.set_client(self.gdal_client) 懒建真实 gdal client（第 54 轮起），测试夹具 win._clients[\"gdal\"]=Spy 换槽后真实对象仍被面板引用、closeEvent 只回收 _clients 现值 → stop 永不执行。修复：MainWindow 新增 _owned_clients 登记亲手创建的 client，closeEvent 对 _clients 与 _owned_clients 全量 stop(timeout=1.0) 并 clear()；复测 unstopped 仅余 2 个故意不启动的生命周期守卫用例（无子进程）。",
+        "(8) 官方闸门：scripts/test.ps1 -All -TimeoutSeconds 1800 → Ruff PASS；Mypy 85 源文件 0 错误；Clean 退出 pytest 802 passed / 0 failed / rc=0；exit_mode=clean、actual_exit_mode=clean、clean_exit_verified=True、process_observation=job、residual=0、cleanup_complete=True、cleanup_errors=0。靶向回归（P6-06 radiometric / P7-01 migration / P7-02 scripting / scheduler / staging / worker 状态机）41 项全绿。",
+        "限制：批处理严格串行（并行化留待后续，避免输出侧写冲突）；模板只承接 registry 就绪能力（platform:* 外部引擎不在范围）；manifest 落盘由调用方决定；GUI 批处理面板与历史重放集成归后续。"
+      ],
       "blocking_reason": null
     },
     {
@@ -1181,5 +1192,5 @@
       "blocking_reason": null
     }
   ],
-  "updated_at": "2026-11-07"
+  "updated_at": "2026-11-08"
 }

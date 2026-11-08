@@ -1,6 +1,6 @@
 # 执行状态
 
-更新：2026-11-09（第 65 轮 · P7-02 隔离脚本会话：`scripting/session.py::ScriptSession` 按 engine 分别启动**真实**引擎解释器（gdal=doctor 解析的 QGIS/conda、rasterio=`.venvs\sw-rasterio`）；用户脚本在引擎内 exec 原生 API，GUI 进程不 import osgeo/rasterio；stop 幂等、stdout/stderr 日志、`register_artifact` 成果登记（path/sha256/size/mtime）、session.json 可审计、同 session_dir 再 run 全新进程；P7-02 转 done）。
+更新：2026-11-08（第 66 轮 · P7-03 批处理：`processing/batch.py::render_batch_specs`（模板展开 N 份 TaskSpec：inputs/outputs 花括号模板逐项展开、多输入 lint、单/多 output key `output`/`output_0..`、params 字符串同样展开、overwrite 透传 OutputPlan）+ `run_batch`（严格串行 execute→TaskStatus 终态；continue_on_error=True 失败续跑收集全终态 / False 首败即停未处置显式 pending 不冒充）+ `BatchReport.summary/all_terminal` 审计与 `write_manifest` 落盘；5 项真实 worker 测试全绿）✅；顺带修复全量回归泄漏（MainWindow 构造期懒建真实 gdal client 被 fixture 换槽成孤儿 → `_owned_clients` 登记并在 closeEvent 全回收；test.ps1 -All 恢复 clean_exit_verified=True、residual=0）。
 
 ## 当前里程碑
 
@@ -33,7 +33,8 @@
 
 - **P7 项目、脚本、批处理与流程**：
   - **P7-01 项目保存、迁移、重定位与恢复**：**done**（第 64 轮）。`project/migrate.py`：legacy 0.9 → 当前 1.0 的显式迁移器（src/label/metadata → source/name/metadata_snapshot、comment → notes 前缀「[legacy 0.9 迁移]」、未知字段/版本显式拒绝、path_anchor=None 走 P3-01 legacy 确认流程）；`load_project` 无感迁移并把 Windows `\` 规范化为 `/`；真实子进程 `os._exit(-1)` 在写盘段崩溃 → 上次保存字节原样保留；`os.replace` 中断 → 原文件原样保留、无残留 `.tmp`；ROI 原样保留并通过 domain.ROI 校验。遗留：P3-01 已验收移动/重定位语义不变。
-  - **P7-02 隔离脚本会话**：**done**（第 65 轮）。`scripting/session.py::ScriptSession`：按 engine 分别启动**真实**引擎解释器（gdal=doctor 解析的 QGIS/conda、rasterio=`.venvs/sw-rasterio`；未知 engine SessionError）；用户脚本在引擎内 exec 原生 API（`from osgeo import gdal` / `import rasterio`），GUI 进程不 import osgeo/rasterio；`stop` 幂等（proc None / poll None → 0）；stdout/stderr.log 写会话目录，每次 run 前清空；`register_artifact` 显式登记成果（artifacts.json：path/sha256/size/mtime/registered_at）；session.json 记录 engine/python_path/started_at；同 session_dir 再 run → 全新 interpreter。`scripting/__main__.py` 提供 CLI 入口。遗留：会话非线程安全（调用方自串）không阻塞；上 scipy 未注册。
+  - **P7-02 隔离脚本会话**：**done**（第 65 轮）。`scripting/session.py::ScriptSession`：按 engine 分别启动**真实**引擎解释器（gdal=doctor 解析的 QGIS/conda、rasterio=`.venvs/sw-rasterio`；未知 engine SessionError）；用户脚本在引擎内 exec 原生 API（`from osgeo import gdal` / `import rasterio`），GUI 进程不 import osgeo/rasterio；`stop` 幂等（proc None / poll None → 0）；stdout/stderr.log 写会话目录，每次 run 前清空；`register_artifact` 显式登记成果（artifacts.json：path/sha256/size/mtime/registered_at）；session.json 记录 engine/python_path/started_at；同 session_dir 再 run → 全新 interpreter。`scripting/__main__.py` 提供 CLI 入口。遗留：会话非线程安全（调用方自串）；scipy 未注册。
+  - **P7-03 批处理**：**done**（第 66 轮）。`processing/batch.py`：模板（capability_id/engine_provider 必填校验、inputs/outputs 逐 item `{item[key]}` 展开、未知键显式 `BatchError`）→ N 份 TaskSpec；单输入 key=`input`、多输入 `list[DatasetRef]`，单输出 key=`output`、多输出 `output_0/output_1`；`overwrite` 模板参数透传 OutputPlan.overwrite，`params` 内字符串同样经模板展开（非原样透传）；`run_batch` 严格串行（execute 返回 TaskStatus），`continue_on_error=True` 失败继续并如实搜集 succeeded/failed/cancelled 终态与 duration，`False` 首败立即停止且未处置条目显式 `pending`（error=skipped，不冒充成功）；`BatchReport.summary()/all_terminal()` 供调用方审计；`write_manifest` 把 batch manifest（batch_id/summary/entries）落盘为 JSON。验收测试 `tests/integration/test_p7_batch_worker.py` 5 项全部基于真实 QGIS GDAL 3.44.15 worker 端到端（多输入/多输出展开、参数变化、同名冲突 overwrite=True 真实覆盖 stub 文件、单项失败继续、strict 停止 + manifest 汇总）。顺带诊断并修复全量回归缺陷：MainWindow 构造期 `attribute_panel.set_client(self.gdal_client)` 懒建真实 gdal client 在测试夹具换槽后无人停止（进程残留 4 个 → clean_exit_verified=false），`MainWindow._owned_clients` 登记 + closeEvent 全回收。全量 `scripts/test.ps1 -All` 恢复 **clean_exit_verified=True / residual=0**。遗留：批处理严格串行（并行与 platform:* 外部引擎不在范围）；GUI 批处理面板归后续。
 ## 原 P3 验收标准逐项对账与剩余缺口
 
 | ID | 任务 | 原始验收标准 | 当前已满足项与实测证据 | 剩余缺口与待验条件 | 当前状态 |
@@ -242,6 +243,47 @@ CRT 检测到栈状态异常后立即终止进程，这正是 `STATUS_STACK_BUFF
 |---|---|---|
 | 用合成影像完成同类验收 | 已满足 | 合成 ENVI/GTiff/GeoJSON/netCDF 样例覆盖多波段、像元数值、ROI 与对比 |
 | 保留真实数据待验状态 | **待验** | 课程原始数据位于 `C:\Users\赵航\Desktop\studio\_chaoxing_rs`（**只读**，不得运行其中的抓取/下载/OCR 脚本）；本轮全部用合成影像验收，未对课程原始 ENVI 栅格与 lena.tif 做真实打开验证 |
+
+### 第 66 轮：P7-03 批处理（P7-03 → done）
+
+**一、实现**
+
+- 新增 `processing/batch.py`（四个公共入口）：
+  - `load_batch_document`：清单 JSON 顶层必须对象且 `items` 非空列表；文件缺失/坏 JSON/结构错显式 `BatchError`（不静默降级）；
+  - `render_batch_specs(template, items)`：把一份模板展开成 N 份 TaskSpec（返回 `(spec_dict, item, index)` 序列）。模板必填 `capability_id`，缺省 `engine_provider="gdal"`（提供则须非空）。`inputs`/`outputs` 为路径模板列表，逐 item 以 `{item[key]}` 展开——未知模板键抛 `BatchError`（绝不展开成空串）；单输入挂 `inputs["input"]=DatasetRef`、多输入为 `list[DatasetRef]`；单输出 key=`output`、多输出依次 `output_0/output_1`/…（每个 OutputPlan 统一 `kind=raster`）。`overwrite` 模板字段透传到每个 OutputPlan.overwrite；`params` 值为字符串时同经 `{item[key]}` 展开、非字符串原样透传（参数变化语义）。`workspace` 取输出父目录（输出/输入的父目录，保证 commit_files 运行目录约定）；`project_root` 必填；TaskSpec.model_validate 提前验证并在错误处暴露真实原因。
+  - `run_batch(template, items, execute, *, continue_on_error=True, batch_id=None)`：严格串行按序执行；`execute: dict -> TaskStatus` 是真实 runner 约定（判断终态用 `is TaskStatus.succeeded` 而非 isinstance）。`continue_on_error=True`：失败继续下一条并如实记录 succeeded/failed/cancelled + duration；`False`：遇到首个失败后，余下条目逐条显式 `pending`（error=skipped + 原文说明），`all_terminal=False`——**不冒充成功也不伪装完结**。
+  - `BatchReport`：`entries`（index/task_id/status/duration/error）+ `summary()` 计数 + `all_terminal()` 审计 + `to_dict()`；`write_manifest(path, payload)` 把 batch manifest JSON 落盘（UTF-8 无 BOM、ensure_ascii=False，审计或人工重放均可直接读取）。
+
+- 验收测试 `tests/integration/test_p7_batch_worker.py`（5 项，全部真实 QGIS GDAL 3.44.15 worker 端到端）：
+  1. `test_render_batch_specs_supports_multi_io_and_params`：双输入双输出模板逐 item 展开断言（`in_a_0.tif/in_b_0.tif`、`output_0/output_1` key、`overlapPriority=first/last`）；
+  2. `test_render_batch_specs_unknown_template_key_rejects`：未知模板键显式 BatchError；
+  3. `test_batch_continue_on_error_keeps_remaining`：第 0 条输入缺失 → failed，第 1 条有输入 → 真实 succeeded（out_1.tif 真实产出）+ manifest 落盘可审计；
+  4. `test_batch_stop_on_first_failure`：`continue_on_error=False` 第 0 条 failed 后第 1/2 条显式 pending（failed=1/pending=2/all_terminal=False）；
+  5. `test_batch_overwrite_semantics_seen_by_worker`：预置 `ow_out_0.tif` 为 stub，`overwrite=True` 经 OutputPlan→P1 commit_files 真实覆盖（文件字节 ≠ stub），2 条全部 succeeded。
+
+**二、批处理执行实测（真实 worker）**
+
+- 每条目独立 QtWorkerClient（支出：start→submit→sig_result→stop 全链路）真实执行 `gdal:translate`，strict 批处理第 1/2 条未被触达时保持 pending（不写入任何输出文件）。
+- run_batch 内条目失败/成功/被跳过均写入 BatchReport；manifest `has-ok.json` 断言 batch_id、2 条 entries 的逐条终态（failed/succeeded），可直接作为复现审计。
+
+**三、验证**
+
+- 新增 5 项全绿（4.01–5.35s）；受影响靶向回归（P6-06 radiometric 4 项、P7-01 migration 6 项、P7-02 scripting 5 项、scheduler/staging/worker 状态机 41 项）全绿。
+- Ruff 干净；Mypy 85 源文件 0 错误。
+
+**四、全量闸门与顺带修复（重要）**
+
+- 第一次 `scripts/test.ps1 -All -TimeoutSeconds 1800` 失败（exit 90 = clean_exit_verified=false）：pytest 802 passed 全绿但 job 观察到 **4 个残留 gdal worker 子进程**。
+- 诊断（临时 `work/worker_track.py` pytest 插件，追踪 WorkerProcess init/start/stop/kill 及归属测试，work/ 下不入 git）：
+  - 全量运行 4 个 started-但-unstopped 的 gdal worker 全部源出自 `MainWindow` 构造期创建的 auto-id client（`self.attribute_panel.set_client(self.gdal_client)` 懒建，自第 54 轮 P5-03 起）；
+  - 测试夹具（P3/P4 系列）以 `win._clients["gdal"] = Spy` 换槽后真实对象由 attribute_panel 继续引用；MainWindow.closeEvent 只回收 `_clients` 现值 → 真实 client 的 stop() 永不执行；其子进程与 stdout/stderr reader 线程撑到解释器退出。
+- 修复（最小架构，不引入测试专用逻辑）：`MainWindow.__init__` 新增 `self._owned_clients: list[QtWorkerClient]`；`_get_client` 创建即登记；`closeEvent` 在停 `_clients` 现值之后**再遍历 `_owned_clients` 全量 stop(timeout=1.0)** 且 `clear()`（生产路径 _clients 与 _owned_clients 同集，语义不变；换槽场景下实现「父窗口必须回收自己spawned的全部子进程」的硬保证，对齐 AGENTS「子进程清理要有 Windows 实测证据」）。
+- 复测：全量 802 passed 后 worker_track unstopped 仅剩 2 个**故意不启动**的生命周期守卫用例（del-guard-test / hardening-join，无子进程， strands 为预期）；正式闸门 `scripts/test.ps1 -All -TimeoutSeconds 1800` → **ruff PASS / mypy 85 文件 0 错误 / pytest 802 passed / clean_exit_verified=True / residual=0 / cleanup_complete=True**。
+
+**五、边界与结论**
+
+- 验收「多输入、多输出、参数变化、同名冲突、单项失败继续策略通过」逐项满足——**P7-03 转 done**；账本现为 done 37 / implemented 2（P0-02, P6-06）/ todo 16。
+- 限制：批处理严格串行（并行化可能引发输出侧写冲突，属后续）；模板只承接 `gdal:*`/registry 就绪能力，`platform:*` 外部引擎不在范围；GUI 批处理面板与历史重放集成归后续；manifest 由调用方决定是否落盘（模块只返回 dict 与可选写出函数）。
 
 ### 第 65 轮：P7-02 隔离脚本会话（P7-02 → done）
 
