@@ -844,9 +844,11 @@
       "depends_on": [
         "P4-05"
       ],
-      "status": "todo",
+      "status": "done",
       "release_requirement": "core",
-      "evidence": [],
+      "evidence": [
+        "第 64 轮：P7-01 转 done。(1) 新增 project/migrate.py：legacy 0.9 → 当前 1.0 的显式迁移器（layers[].src/label/metadata → source/name/metadata_snapshot，comment → notes 前缀「[legacy 0.9 迁移]」显式可审计）；未知字段/未知版本（0.5、9.9）显式拒绝；path_anchor=None 走 P3-01 legacy 确认流程不自动猜测。(2) load_project 接入迁移器：读到 legacy 0.9 文档即翻译为 1.0，保留 notes/ROI/图层顺序与 source_is_relative==not looks_absolute 的 P3-01 语义，并把 Windows \\ 规范化为 / 作 Source 路径。(3) **异常退出不破坏上次保存**：真实子进程 os._exit(-1) 在写盘段模拟崩溃 → 上次保存字节原样保留（subprocess returncode!=0 + 字节对比）；monkeypatch os.replace 抛 PermissionError 模拟「替换阶段失败」 → 原文件原样保留、无残留 .tmp 原子事务语义正确。(4) ROI 字段原样保留并通过 domain.ROI 校验。(5) tests/integration/test_p7_project_migration.py 6 项全绿：translates_fields / dispatches_and_rejects / legacy_in_default_load / crash_midwrite / crash_atomic_replace / roi_survives_legacy_migration；与 P3-01 的 test_p3_persistence_regression.py （19 项）回归一起 green。受影响靶向（P3-01+P7-01）25 项全绿，Ruff 干净、Mypy 82 源文件 0 错误。验收「移动项目后重新关联；旧 schema 可迁移；异常退出不破坏上次保存」逐项满足（移动/重定位在 P3-01 已验收，本 round 补齐 legacy 迁移与 crash 安全），**P7-01 转 done**。"
+      ],
       "blocking_reason": null
     },
     {

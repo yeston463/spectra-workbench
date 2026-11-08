@@ -1,6 +1,6 @@
 # 执行状态
 
-更新：2026-11-09（第 63 轮 · P6-06 辐射处理、去云、农业及外部引擎适配拆分子项：辐射定标 gdal:calibrate（physical / TOA 反射率）、DOS1 大气校正 gdal:dos1（Chavez 1988）、多时相去云 gdal:cloudreplace（掩膜驱动替换 + 时相 sidecar）3 项实现并数值验收；FLAASH（platform:flaash_external）与农业计数（platform:agriculture_count）显式 blocked 登记且不提供假入口——**P6-06 转 implemented（不转 done）**）
+更新：2026-11-09（第 64 轮 · P7-01 项目迁移与异常退出安全：legacy 0.9 → 1.0 的显式迁移器（未知字段/版本显式拒绝，迁移前缀写在 notes）、load_project 无感迁移、``os._exit`` 真实子进程 + monkeypatch os.replace 双路 crash 验证原文件字节原样保留、ROI 字段原样保留并过 domain.ROI 校验；**P7-01 转 done**）
 
 ## 当前里程碑
 
@@ -31,6 +31,8 @@
   - **P6-05 分类与 FVC 完整流程**：**done**（第 62 轮）。`gdal:mask`：闭区间阈值 1/0 Byte 二值掩膜（显式不设 NoData、invert 仅在有效源像元内翻转、sidecar 计数审计）；`gdal:fvc`：NDVI 输入 → percentile（缺省 2%/98%）/values 端元 → FVC + 分级类别栅格 `.fvc_class.tif`，`fvc.json` 记录端元来源/像元面积/分级统计/越界质量标记，无效区与 crop 策略显式。遗留：监督式 ROI 分类（scikit-learn）与混淆矩阵未实现且不提供假入口。
   - **P6-06 辐射处理、去云、农业及外部引擎适配**：**implemented**（第 63 轮；不转 done——2 个子项 blocked）。`gdal:calibrate`：physical（DN×gain+offset 逐波段）与 toa_reflectance（π·L·d²/(ESUN·cos θz)），sidecar 明确 radiance/reflectance 单位、BT 未实现；`gdal:dos1`：Chavez 1988 暗目标减法，显式 hazeDN/ESUN/太阳天顶角/d，sidecar 独立核算；`gdal:cloudreplace`：掩膜驱动的多时相替换 + 8 邻域膨胀，sidecar 记录时相与像素来源，明确不声称「恢复原时刻真实地表」。`platform:flaash_external` 与 `platform:agriculture_count` 登记为 missing/blocked：FLAASH 明确「绝不通过简化公式宣称实现」、农业计数「方法未确定，需保留直径/尺度/阈值/重叠与人工标注对照」。
 
+- **P7 项目、脚本、批处理与流程**：
+  - **P7-01 项目保存、迁移、重定位与恢复**：**done**（第 64 轮）。`project/migrate.py`：legacy 0.9 → 当前 1.0 的显式迁移器（src/label/metadata → source/name/metadata_snapshot、comment → notes 前缀「[legacy 0.9 迁移]」、未知字段/版本显式拒绝、path_anchor=None 走 P3-01 legacy 确认流程）；`load_project` 无感迁移并把 Windows `\` 规范化为 `/`；真实子进程 `os._exit(-1)` 在写盘段崩溃 → 上次保存字节原样保留；`os.replace` 中断 → 原文件原样保留、无残留 `.tmp`；ROI 原样保留并通过 domain.ROI 校验。遗留：P3-01 已验收移动/重定位语义不变。
 ## 原 P3 验收标准逐项对账与剩余缺口
 
 | ID | 任务 | 原始验收标准 | 当前已满足项与实测证据 | 剩余缺口与待验条件 | 当前状态 |
@@ -239,6 +241,31 @@ CRT 检测到栈状态异常后立即终止进程，这正是 `STATUS_STACK_BUFF
 |---|---|---|
 | 用合成影像完成同类验收 | 已满足 | 合成 ENVI/GTiff/GeoJSON/netCDF 样例覆盖多波段、像元数值、ROI 与对比 |
 | 保留真实数据待验状态 | **待验** | 课程原始数据位于 `C:\Users\赵航\Desktop\studio\_chaoxing_rs`（**只读**，不得运行其中的抓取/下载/OCR 脚本）；本轮全部用合成影像验收，未对课程原始 ENVI 栅格与 lena.tif 做真实打开验证 |
+
+### 第 64 轮：P7-01 项目迁移与磁盘安全（P7-01 → done）
+
+**一、实现**
+
+- 新增 `project/migrate.py`：legacy 0.9 → 当前 1.0 的**显式迁移器**；`layers[].src/label/metadata` → `source/name/metadata_snapshot`，`comment` → `notes` 前缀「[legacy 0.9 迁移]」显式可审计；未知字段、未知版本（0.5/9.9）**显式拒绝**；`path_anchor=None` 保留走 P3-01 legacy 确认流程。
+- `load_project` 接入迁移器：读到 legacy 0.9 文档即翻译为 1.0，保持 Windows `\` → `/` 规范化、图层顺序与 `source_is_relative == not looks_absolute` 语义。
+- **异常退出不破坏上次保存**：真实子进程 `os._exit(-1)` 在写盘段模拟崩溃 → 上次保存字节原样保留；`monkeypatch os.replace` 模拟「替换阶段失败」 → 原文件原样保留、无残留 `.tmp`（原子事务语义正确）。
+- ROI 字段原样保留并通过 `domain.ROI` 校验（rectangle/pixel）。
+
+**二、验收（独立 GDAL 重开）**
+
+- legacy 0.9 双层翻译与 1.0 语义严格一致；未知字段/版本显式拒绝。
+- `os._exit(-1)` 子进程崩溃：save 前后字节完全一致；monkeypatch `os.replace` → 原文件完整、临时文件被清理。
+- ROI 字段可加载为 `domain.ROI.rectangle/pixel`。
+
+**三、验证**
+
+- 新增 `tests/integration/test_p7_project_migration.py`（6 项）；受影响靶向（P3-01 + P7-01）25 项全绿。
+- Ruff 干净；Mypy 82 个源文件 0 错误。
+
+**四、边界与结论**
+
+- 验收「移动项目后重新关联；旧 schema 可迁移；异常退出不破坏上次保存」逐项满足（移动/重定位 由 P3-01 既有证据覆盖，本 round 新增旧迁移与 crash 安全）——**P7-01 转 done**；账本现为 done 35 / implemented 2（P0-02, P6-06）/ todo 18。
+- 遗留边界：`P7-02~05` 批处理与历史复现等归后续。
 
 ### 第 63 轮：P6-06 辐射定标 / DOS1 / 去云（P6-06 → implemented；2 子项 blocked）
 

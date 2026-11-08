@@ -216,7 +216,11 @@ def save_project(path: Path | str, spec: ProjectSpec) -> Path:
 
 
 def load_project(path: Path | str) -> ProjectSpec:
-    """读取项目。未知版本与结构错误必须明确报错，不做静默宽容。"""
+    """读取项目。未知版本与结构错误必须明确报错，不做静默宽容。
+
+    **P7-01**：加载时先走 ``project.migrate.migrate_document``，
+    legacy 0.9 项目无感迁移到 1.0；其他未知版本仍显式拒绝，不静默宽容。
+    """
     src = Path(path)
     try:
         raw = json.loads(src.read_text(encoding="utf-8-sig"))
@@ -226,15 +230,15 @@ def load_project(path: Path | str) -> ProjectSpec:
         raise ProjectError(f"项目文件不是合法 JSON：{src}（{exc}）") from exc
     if not isinstance(raw, dict):
         raise ProjectError("项目文件顶层必须是对象")
-    version = raw.get("schema_version")
-    if version is None:
-        raise ProjectError("项目文件缺少 schema_version")
-    if version != PROJECT_SCHEMA_VERSION:
-        raise ProjectError(f"暂不支持从 {version} 迁移到 {PROJECT_SCHEMA_VERSION}，请先实现迁移器")
-    has_anchor = "path_anchor" in raw
+
+    # P7-01：显式迁移（legacy 0.9 → 当前）；未知版本仍拒绝
+    from spectra_workbench.project.migrate import migrate_document
+
+    migrated = migrate_document(raw)
+
     try:
-        spec = ProjectSpec.model_validate(raw)
-        if not has_anchor:
+        spec = ProjectSpec.model_validate(migrated)
+        if "path_anchor" not in raw:
             spec = spec.model_copy(update={"path_anchor": None})
         return spec
     except (ValidationError, ProjectError) as exc:
