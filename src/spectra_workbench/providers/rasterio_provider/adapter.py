@@ -277,8 +277,11 @@ class RasterioProviderAdapter(ProviderAdapter):
                 raise RuntimeError(f"Staging 成果栅格尺寸非法: {check_ds.width}x{check_ds.height}")
 
         # 提交文件事务
+        # overwrite 必须透传 out_plan.overwrite：工作流/重跑场景下目标已存在
+        # 是常态，吞掉该参数会导致「已存在目标 + overwrite=True」被误拒
+        # （P7-04 工作流缓存失效重跑实测暴露，与 gdal adapter 语义对齐）。
         context.progress(0.90, "committing", "提交 staging 成果至目标路径")
-        context.commit_files([(staging_out, out_path)])
+        context.commit_files([(staging_out, out_path)], overwrite=out_plan.overwrite)
 
         # 终态重开核验
         context.progress(0.95, "verifying_final", "核验已安装目标栅格")

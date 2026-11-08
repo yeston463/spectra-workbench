@@ -927,9 +927,20 @@
         "P2-04",
         "P7-01"
       ],
-      "status": "todo",
+      "status": "done",
       "release_requirement": "core",
-      "evidence": [],
+      "evidence": [
+        "第 67 轮：P7-04 DAG 工作流转 done。新增 `processing/workflow.py`：`load_workflow_document`（顶层对象 + 非空 nodes 列表，坏 JSON/缺字段显式拒绝）；`parse_node`（id 唯一、capability_id 必填、engine_provider 必须已登记（gdal→gdal-qgis/3.13.3、rasterio→rasterio-venv/1.5.2 缺省且可覆盖）、类型化端口 raster/vector）；`render_workflow_nodes` 提交前校验四件套：（1）环检测（Kahn 拓扑，剩余入度>0 即环成员，报告精确列出）；（2）端口检查（生产者声明 kind × 消费者期望 kind，错配公开拒绝；同时拒绝引用不存在的上游节点/输出键）；（3）路径冲突（两节点输出同 URI 或输出 URI==他人字面输入 URI 的「写穿」全部拒绝）；（4）资源汇总（按引擎节点计数，不承诺未实现的估算数值）。`run_workflow`（严格串行拓扑执行；execute 注入 TaskStatus|TaskResult，TaskResult.error 详情转写报告；TaskSpec 通道与批处理/菜单共用同一能力注册表 + provider 适配器——AGENTS 约束不打折）。",
+        "(1) 提交前拒绝矩阵（tests/integration/test_p7_workflow.py::test_workflow_prevalidation_rejects_cycle_port_and_conflicts，6 个拒绝样例全绿）：A→B→A 环 →「存在环（涉及节点）」；vector 输出喂默认 raster 输入 →「端口错配」；引用 ghost 节点 →「不存在的上游节点」；引用错误输出键 →「不存在的输出」；同 URI 双输出 →「产出冲突」；输出=他人字面输入 →「写穿冲突」。",
+        "(2) 跨引擎物化（真实双引擎）：n_gdal（gdal:translate，QGIS GDAL 3.44.15）→n_rio（rasterio:convert，sw-rasterio 1.5.2 venv）经 committed 文件衔接；GUI 进程零原生依赖独立重开（QGIS python）断言 final.tif 尺寸 2×2/GT(100,10,0,200,0,-10)/像元 [[1,2],[3,4]] 与源一致；两个 TaskResult 均真实 worker 产出（非路径拼接）。",
+        "(3) 失败与恢复（continue_on_error=True）：预置 corrupt.tif（非法字节）→ n_fail 引擎级真实失败；n_ds（下游）记 pending/skipped（error.code=skipped），独立分支 n_ind/n_src 正常成功；修复输入后同 workflow_id+cache_dir 重跑：未变分支 n_src/n_ind 以 `cached` 复用（dispatch.calls 差值=空——未执行的直接证据）；ind.tif mtime 无变化（cached 不重写文件）；n_fail/n_ds 重跑成功，下游数值与新真实产物一致 [[9,8],[7,6]]。",
+        "(4) 缓存失效：n_fail 参数真实变化（outputType=Float32→Byte）→ node_key 变化重跑（calls 差值={n_fail,n_ds}），n_src/n_ind 维持 cached；midB 产物变整型（dump dtype 变化）→ 下游指纹失效自动重跑，dsB 经 rasterio 重物化 [[9,8],[7,6]] 数值一致；缓存失效链逐层真实下传。",
+        "(5) 指纹/复现等级：文件指纹 fast=size+mtime_ns、strong=sha256+size（大文件默认不全文件哈希，计划 §11）；workflow-cache.json（manifest）记录 level/task_id/node_key(inputs fingerprint/outputs fp)；每轮结束整份覆写（边界：无增量写）。",
+        "(6) 顺带修复预置缺陷（先 probe 后修，不斜视）：rasterio_provider/adapter.py convert 通道 commit_files 未透传 overwrite（work/probe_rio_overwrite.py 真实 worker 复现「已存在目标 + overwrite=True → Target already exists and overwrite=false」），修复为 `commit_files(..., overwrite=out_plan.overwrite)` （与 gdal adapter 3493 行语义对齐）。P7-04 缓存失效重跑方案恰好暴露：工作流重跑目标已存在是常态。",
+        "(7) 受影响靶向回归全绿：P7-04 工作流 3 项 + P4 rasterio contract（覆盖 rasterio 通道改动）+ P7-03 批处理 5 项 + P7-01 migration 6 项 + P7-02 scripting 5 项，共 33 项（20.34s）。",
+        "(8) 官方全量闸门：scripts/test.ps1 -All -TimeoutSeconds 1800 → Ruff PASS；Mypy 86 源文件 0 错误；Clean 退出 pytest 805 passed / 0 failed / rc=0；exit_mode=clean、clean_exit_verified=True、process_observation=job、residual=0、cleanup_complete=True、cleanup_errors=0。",
+        "限制与边界：`run_workflow` 串行（同进程管线优化属后续）；工作流 manifest 与GUI 面板集成归后续（处理层已可被任何入口复用）；无调度器并行化；远程数据源无本机稳定标识，暂不入缓存；strict continue_on_error=False 与批处理同语义（首败立即全停未处置显式 pending），本轮已实现但 GUI入口 reuses 批处理模式，后续 GUI 流程再接入。"
+      ],
       "blocking_reason": null
     },
     {

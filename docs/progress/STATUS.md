@@ -1,6 +1,6 @@
 # 执行状态
 
-更新：2026-11-08（第 66 轮 · P7-03 批处理：`processing/batch.py::render_batch_specs`（模板展开 N 份 TaskSpec：inputs/outputs 花括号模板逐项展开、多输入 lint、单/多 output key `output`/`output_0..`、params 字符串同样展开、overwrite 透传 OutputPlan）+ `run_batch`（严格串行 execute→TaskStatus 终态；continue_on_error=True 失败续跑收集全终态 / False 首败即停未处置显式 pending 不冒充）+ `BatchReport.summary/all_terminal` 审计与 `write_manifest` 落盘；5 项真实 worker 测试全绿）✅；顺带修复全量回归泄漏（MainWindow 构造期懒建真实 gdal client 被 fixture 换槽成孤儿 → `_owned_clients` 登记并在 closeEvent 全回收；test.ps1 -All 恢复 clean_exit_verified=True、residual=0）。
+更新：2026-11-08（第 67 轮 · P7-04 DAG 工作流：`processing/workflow.py::render_workflow_nodes` 提交前校验（环/端口错配/未知引用/输出冲突/写穿拒绝）+ `run_workflow`（拓扑串行、TaskSpec 通道、cached 恢复、缓存失效自动下传、strong/fast 指纹）+ 跨引擎物化（gdal→rasterio 经真实文件衔接）；3 项集成测试 + 官方闸门 805 passed / clean_exit_verified=True / residual=0）✅；顺带修复预置缺陷 rasterio convert `commit_files` 未透传 overwrite（工作流重跑暴露）。
 
 ## 当前里程碑
 
@@ -35,6 +35,7 @@
   - **P7-01 项目保存、迁移、重定位与恢复**：**done**（第 64 轮）。`project/migrate.py`：legacy 0.9 → 当前 1.0 的显式迁移器（src/label/metadata → source/name/metadata_snapshot、comment → notes 前缀「[legacy 0.9 迁移]」、未知字段/版本显式拒绝、path_anchor=None 走 P3-01 legacy 确认流程）；`load_project` 无感迁移并把 Windows `\` 规范化为 `/`；真实子进程 `os._exit(-1)` 在写盘段崩溃 → 上次保存字节原样保留；`os.replace` 中断 → 原文件原样保留、无残留 `.tmp`；ROI 原样保留并通过 domain.ROI 校验。遗留：P3-01 已验收移动/重定位语义不变。
   - **P7-02 隔离脚本会话**：**done**（第 65 轮）。`scripting/session.py::ScriptSession`：按 engine 分别启动**真实**引擎解释器（gdal=doctor 解析的 QGIS/conda、rasterio=`.venvs/sw-rasterio`；未知 engine SessionError）；用户脚本在引擎内 exec 原生 API（`from osgeo import gdal` / `import rasterio`），GUI 进程不 import osgeo/rasterio；`stop` 幂等（proc None / poll None → 0）；stdout/stderr.log 写会话目录，每次 run 前清空；`register_artifact` 显式登记成果（artifacts.json：path/sha256/size/mtime/registered_at）；session.json 记录 engine/python_path/started_at；同 session_dir 再 run → 全新 interpreter。`scripting/__main__.py` 提供 CLI 入口。遗留：会话非线程安全（调用方自串）；scipy 未注册。
   - **P7-03 批处理**：**done**（第 66 轮）。`processing/batch.py`：模板（capability_id/engine_provider 必填校验、inputs/outputs 逐 item `{item[key]}` 展开、未知键显式 `BatchError`）→ N 份 TaskSpec；单输入 key=`input`、多输入 `list[DatasetRef]`，单输出 key=`output`、多输出 `output_0/output_1`；`overwrite` 模板参数透传 OutputPlan.overwrite，`params` 内字符串同样经模板展开（非原样透传）；`run_batch` 严格串行（execute 返回 TaskStatus），`continue_on_error=True` 失败继续并如实搜集 succeeded/failed/cancelled 终态与 duration，`False` 首败立即停止且未处置条目显式 `pending`（error=skipped，不冒充成功）；`BatchReport.summary()/all_terminal()` 供调用方审计；`write_manifest` 把 batch manifest（batch_id/summary/entries）落盘为 JSON。验收测试 `tests/integration/test_p7_batch_worker.py` 5 项全部基于真实 QGIS GDAL 3.44.15 worker 端到端（多输入/多输出展开、参数变化、同名冲突 overwrite=True 真实覆盖 stub 文件、单项失败继续、strict 停止 + manifest 汇总）。顺带诊断并修复全量回归缺陷：MainWindow 构造期 `attribute_panel.set_client(self.gdal_client)` 懒建真实 gdal client 在测试夹具换槽后无人停止（进程残留 4 个 → clean_exit_verified=false），`MainWindow._owned_clients` 登记 + closeEvent 全回收。全量 `scripts/test.ps1 -All` 恢复 **clean_exit_verified=True / residual=0**。遗留：批处理严格串行（并行与 platform:* 外部引擎不在范围）；GUI 批处理面板归后续。
+  - **P7-04 DAG 工作流**：**done**（第 67 轮）。`processing/workflow.py`：带版本的节点图（节点引用稳定 capability_id、缺省引擎约束 gdal→gdal-qgis/3.13.3 / rasterio→rasterio-venv/1.5.2 可覆盖、类型化端口 raster/vector）；`render_workflow_nodes` 提交前校验——环检测（Kahn，环成员精确列出）、端口错配拒绝（生产者声明 kind × 消费者期望 kind）、未知上游节点/输出键拒绝、输出 URI 冲突与「输出=他人字面输入」写穿拒绝、按引擎的节点计数汇总（不承诺估算）；`run_workflow` 拓扑串行（execute 注入 TaskStatus|TaskResult，TaskResult.error 转写报告；TaskSpec 通道与批处理/菜单共用注册表与 adapter）；**跨引擎物化** gdal→rasterio 经真实 committed 文件衔接（数值独立重开断言）；**失败/恢复**——引擎级失败下游 pending(skipped)、独立分支继续、node_key/输入/输出指纹未变的成功节点重跑 `cached`（引擎调用数 0、文件 mtime 不变）；**缓存失效**——上游参数变化重跑使产物内容变化（Float32→Byte 实测）→ 下游指纹失效自动重执行并消费新产物；指纹 fast=size+mtime / strong=sha256 记录复现等级；`workflow-cache.json` manifest 落盘。顺带修复预置缺陷：rasterio convert `commit_files` 未透传 `overwrite`（真实 worker 重跑已存在目标被误拒），与 gdal 侧语义对齐。官方闸门 **805 passed / clean_exit_verified=True / residual=0**。遗留：同进程管线优化、调度器并行、GUI 工作流面板归后续。
 ## 原 P3 验收标准逐项对账与剩余缺口
 
 | ID | 任务 | 原始验收标准 | 当前已满足项与实测证据 | 剩余缺口与待验条件 | 当前状态 |
@@ -243,6 +244,50 @@ CRT 检测到栈状态异常后立即终止进程，这正是 `STATUS_STACK_BUFF
 |---|---|---|
 | 用合成影像完成同类验收 | 已满足 | 合成 ENVI/GTiff/GeoJSON/netCDF 样例覆盖多波段、像元数值、ROI 与对比 |
 | 保留真实数据待验状态 | **待验** | 课程原始数据位于 `C:\Users\赵航\Desktop\studio\_chaoxing_rs`（**只读**，不得运行其中的抓取/下载/OCR 脚本）；本轮全部用合成影像验收，未对课程原始 ENVI 栅格与 lena.tif 做真实打开验证 |
+
+### 第 67 轮：P7-04 DAG 工作流（P7-04 → done）
+
+**一、实现**
+
+- 新增 `processing/workflow.py`（公共入口 `load_workflow_document` / `render_workflow_nodes` / `run_workflow` / `write_report`）：
+  - 文档形态：`{schema_version, project_root, nodes:[{id, capability_id, engine_provider?, engine_runtime?/engine_version?, inputs, outputs, params, driver?, task_prefix?}]}`；节点唯一 id、provider 必须已登记（缺省 gdal→gdal-qgis/3.13.3，rasterio→rasterio-venv/1.5.2，可逐节点覆盖）；
+  - **类型化端口**：输出 `{key: {uri, kind}}`（kind ∈ raster/vector，缺省 raster）；输入 `{port: ["literal", path] | ["node", node_id, output_key, expected_kind?]}`（期望 kind 缺省 raster）；
+  - **提交前校验**（计划 §11）：Kahn 环检测（环成员精确列出）；端口错配/未知上游节点/输出键拒绝；输出 URI 冲突与「输出=他人字面输入」写穿拒绝；按引擎节点计数汇总资源（不承诺未实现的估算数值）；
+  - **执行**：拓扑序严格串行；每节点构造 TaskSpec（与批处理/菜单共用注册表 + provider adapter 的唯一计算通道）；`execute` 返回 `TaskStatus | TaskResult`（TaskResult.error 详情转写报告，不吞引擎错误）；
+  - **缓存（恢复 + 失效）**：node_key = SHA-256(引擎约束+能力+完整参数+输入引用+输出键)；输入指纹 literal 现算、node 引用取上游产物指纹；输出指纹 fast=size+mtime_ns / strong=sha256（记录复现等级）；node_key/输入/输出指纹全部不变且文件仍在 → `cached`（不执行 worker），任一变化 → 失效重跑；上一轮失败节点保留 failed，修复后重跑；`workflow-cache.json` 每轮整份覆写；
+  - **失败传播**：节点引擎失败 → 直接下游显式 `pending`（error=skipped + 上游名），独立分支按 `continue_on_error` 继续（True 继续执行；False 首败后全部剩余显式 pending，与批处理同语义）。
+
+- 验收测试 `tests/integration/test_p7_workflow.py`（3 项）：
+  1. 提交前拒绝矩阵 6 样例（环×2 节点、端口错配 vector→raster、ghost 节点、错误输出键、同 URI 双输出、写穿冲突）；
+  2. 跨引擎物化 gdal:translate → rasterio:convert：数值独立重开断言 final.tif（2×2、GT、[[1,2],[3,4]]）；无变化重跑双节点 cached 且引擎调用差值 0；
+  3. 失败/恢复/缓存失效：corrupt.tif 引擎级真实失败 → n_ds pending(skipped)、独立分支成功；修复后重跑（cached 差值空、ind.tif mtime 不变、下游数值与新产物一致）；上游 outputType Float32→Byte 重跑 → midB 整型、下游自动失效重物化 [[9,8],[7,6]]。
+
+**二、顺带修复预置缺陷（先 probe 后修）**
+
+- `work/probe_rio_overwrite.py` 真实 worker 复现：rasterio convert 对「已存在目标 + overwrite=True」误报
+  `Target already exists and overwrite=false`（出自 `providers/base.py::commit_files` 守卫）。
+- 归因：`providers/rasterio_provider/adapter.py` convert 通道 `commit_files([(staging_out, out_path)])`
+  **未透传** `out_plan.overwrite`（gdal adapter 3493 行是正确写法）。工作流「缓存失效重跑」目标已存在是常态，
+  恰好暴露该缺陷。
+- 修复：`commit_files(..., overwrite=out_plan.overwrite)`，与 gdal 侧语义对齐；P4 rasterio contract 全绿背书。
+
+**三、验证**
+
+- P7-04 workflow 3 项 + P4 rasterio contract + P7-03 batch 5 + P7-01 migration 6 + P7-02 scripting 5 = **33 项靶向全绿**（20.34s）。
+- Ruff 干净；Mypy 86 源文件 0 错误。
+
+**四、全量闸门**
+
+- `scripts/test.ps1 -All -TimeoutSeconds 1800` → Ruff PASS / mypy 86 文件 0 错误 /
+  **pytest 805 passed / 0 failed / rc=0** /
+  **clean_exit_verified=True, residual=0, cleanup_complete=True, cleanup_errors=0**。
+
+**五、边界与结论**
+
+- 验收「环/端口错配拒绝；失败、恢复、缓存失效和跨引擎物化通过」逐项满足——**P7-04 转 done**；
+  账本现为 done 38 / implemented 2（P0-02, P6-06）/ todo 15。
+- 遗留边界：同进程管线优化、调度器并行执行、GUI 工作流面板、远程来源稳定标识缓存（外库/URL）均属后续；
+  strict 模式与批处理语义一致。
 
 ### 第 66 轮：P7-03 批处理（P7-03 → done）
 
