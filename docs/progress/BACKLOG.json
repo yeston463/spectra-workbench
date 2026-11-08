@@ -761,9 +761,11 @@
         "P6-01",
         "P4-04"
       ],
-      "status": "todo",
+      "status": "done",
       "release_requirement": "core",
-      "evidence": [],
+      "evidence": [
+        "第 60 轮：gdal:pca 与 gdal:tasseledcap 端到端接入，P6-03 转 done。(1) PCA 正变换（providers/gdal_provider/pca_ops.py）：多波段实数栅格读入 → 全图均值 → 协方差/相关矩阵（总体方差 ddof=0）→ numpy.linalg.eigh 特征分解 → 特征值降序、特征向量符号约定为「绝对值最大的载荷为正」；输出前 k 个主成分（缺省全部波段），sidecar <成果名>.pca.json 记录 mean/std/eigenvalues/eigenvectors/explained_variance_ratio/total_variance/discarded_variance/reconstruction_rmse/relative_rmse/matrix/components/n_valid/sign_convention；完整重建（k=n）在 float64 下 ≤1e-10，降维误差按定义 reconstruction_rmse² × 波段数 == discarded_variance（测试逐项断言）。PCA 逆变换读同一 sidecar（含 SHA256 与正交性校验），按 pcaComponents 重建原始波段数，写 <成果名>.pca_inverse.json；源/输出 NoData 像元保持 NoData；forward 拒绝 pcaTransform、inverse 拒绝 pcaMatrix 且要求 pcaTransform，越界成分数/不存在/损坏变换文件明确拒绝。(2) 缨帽变换（providers/gdal_provider/tasseledcap_ops.py + processing/tasseledcap_registry.py）：登记 Landsat 5 TM（Crist 1985，DOI 10.1016/0034-4257(85)90102-6）、Landsat 7 ETM+（Huang et al. 2002，USGS 70024815）、Landsat 8 OLI（Baig et al. 2014，DOI 10.1080/2150704X.2014.915434）三套系数，逐项记录来源、产品级别与波段顺序；调用方必须显式给出 6 个输入波段号（Blue,Green,Red,NIR,SWIR1,SWIR2），未知传感器/重复/越界/缺波段拒绝；输出 3 波段 Float32（brightness/greenness/wetness），数据集元数据与 sidecar <成果名>.tasseledcap.json 同时记录传感器、产品级别、完整系数矩阵、输入波段与来源 URL。(3) 契约/GUI/注册表：新增 pcaMode/pcaComponents/pcaMatrix/pcaTransform/tcSensor/tcBands 别名与支持矩阵；adapter 新增两能力声明、模式专属门禁、按实际波段数校验格式（PNG/JPEG 拒绝）、执行分支与 sidecar 成套提交；registry 新增两项平台能力编目（PLATFORM_ONLY）；GUI 新增 PCA 模式/成分数/矩阵/变换文件选择与缨帽传感器/6 波段输入/来源说明，状态隔离与格式预检同步。(4) 数值验收（独立 GDAL 重开）：3 波段合成图（精确线性相关，协方差秩 2）全成分正变换 sidecar 完整重建 RMSE≤1e-9、inverse 重建逐像元 ≤1e-4；1 主成分降维 sidecar 的 RMSE²×3 == discarded_variance（rel≤1e-9），inverse 实测误差与 sidecar 报告同量级；相关矩阵模式正/逆变换均完整重建；NoData 像元在正/逆变换均保持；三套缨帽系数逐像元与独立硬编码矩阵一致（≤1e-6），打乱输入波段顺序后 tcBands 映射仍正确；未知传感器/缺 tcBands/重复/越界/PNG 全部明确拒绝且不落盘。(5) 新增 tests/unit/test_p6_pca_tasseledcap_ops.py（19 项）、tests/integration/test_p6_pca.py（5 项）、tests/integration/test_p6_tasseledcap.py（6 项）、tests/integration/test_p6_transform_gui.py（2 项桌面路径）；四维审计/对账/算法计数同步为 452/447/242/15、算法规格 25→27、GDAL 编目 409→411。受影响定向：285 项单测、13 项 P6-03 集成、2 项 GUI、30 项 sidecar/表单回归全绿；Ruff 干净；Mypy 73 个源文件 0 错误；Clean 全量 749 passed / 0 failed / rc=0 / clean_exit_verified=true（484.37s，residual=0、cleanup_complete=true）。验收「PCA 完整重建与降维误差符合定义；缨帽系数来源、传感器匹配可检查」逐项满足，**P6-03 转 done**。遗留边界：PCA 统计整幅读入（分块统计/流式归后续）；缨帽仅登记三套传感器且要求输入为对应产品级别；交互式 PCA 载荷图/频谱 UI 与更多传感器归后续轮次。"
+      ],
       "blocking_reason": null
     },
     {

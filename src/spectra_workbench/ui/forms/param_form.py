@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import json
 import uuid
 from collections.abc import Callable
 from pathlib import Path
@@ -54,7 +55,12 @@ from spectra_workbench.processing.raster_params import (
     RESAMPLE_ALGORITHM_CHOICES,
     ParameterError,
     normalize_raster_params,
+    sensor_keys,
     supported_params_for,
+)
+from spectra_workbench.processing.tasseledcap_registry import (
+    get_sensor,
+    sensor_source_line,
 )
 
 if TYPE_CHECKING:
@@ -426,6 +432,63 @@ class CapabilityFormWidget(QWidget):
         self.lbl_fft_suppress = QLabel("抑制频率 bin (suppressBins):")
         self.params_form.addRow(self.lbl_fft_suppress, self.txt_fft_suppress)
 
+        # --- P6-03 PCA 正/逆变换 ---
+        self.cmb_pca_mode = QComboBox()
+        for mode, label in (
+            ("forward", "正变换 forward（输入多波段 → 主成分）"),
+            ("inverse", "逆变换 inverse（主成分 + 变换文件 → 重建）"),
+        ):
+            self.cmb_pca_mode.addItem(label, mode)
+        self.lbl_pca_mode = QLabel("PCA 模式 (pcaMode):")
+        self.params_form.addRow(self.lbl_pca_mode, self.cmb_pca_mode)
+
+        self.spin_pca_components = QSpinBox()
+        self.spin_pca_components.setRange(0, 999)
+        self.spin_pca_components.setSpecialValueText("全部波段")
+        self.spin_pca_components.setValue(0)
+        self.lbl_pca_components = QLabel("主成分数 (pcaComponents，0=全部):")
+        self.params_form.addRow(self.lbl_pca_components, self.spin_pca_components)
+
+        self.cmb_pca_matrix = QComboBox()
+        self.cmb_pca_matrix.addItem("协方差矩阵 (covariance)", "covariance")
+        self.cmb_pca_matrix.addItem("相关矩阵 (correlation)", "correlation")
+        self.lbl_pca_matrix = QLabel("PCA 矩阵类型 (pcaMatrix):")
+        self.params_form.addRow(self.lbl_pca_matrix, self.cmb_pca_matrix)
+
+        self.txt_pca_transform = QLineEdit()
+        self.txt_pca_transform.setPlaceholderText(
+            "仅 inverse 需要：选择正变换写出的 <成果名>.pca.json"
+        )
+        self.btn_browse_pca_transform = QPushButton("选择...")
+        self.btn_browse_pca_transform.clicked.connect(self._browse_pca_transform)
+        pca_transform_row = QHBoxLayout()
+        pca_transform_row.addWidget(self.txt_pca_transform, stretch=1)
+        pca_transform_row.addWidget(self.btn_browse_pca_transform)
+        self.lbl_pca_transform = QLabel("PCA 变换文件 (pcaTransform):")
+        self.params_form.addRow(self.lbl_pca_transform, pca_transform_row)
+
+        # --- P6-03 缨帽变换 ---
+        self.cmb_tc_sensor = QComboBox()
+        for key in sensor_keys():
+            self.cmb_tc_sensor.addItem(get_sensor(key).label, key)
+        self.cmb_tc_sensor.currentIndexChanged.connect(self._on_tc_sensor_changed)
+        self.lbl_tc_sensor = QLabel("缨帽传感器 (tcSensor):")
+        self.params_form.addRow(self.lbl_tc_sensor, self.cmb_tc_sensor)
+
+        self.txt_tc_bands = QLineEdit()
+        self.txt_tc_bands.setPlaceholderText(
+            "必填 6 个输入波段号，顺序 Blue,Green,Red,NIR,SWIR1,SWIR2；例：2,3,4,5,6,7"
+        )
+        self.lbl_tc_bands = QLabel("输入波段 (tcBands，6 个):")
+        self.params_form.addRow(self.lbl_tc_bands, self.txt_tc_bands)
+
+        self.lbl_tc_source_title = QLabel("系数来源与产品级别:")
+        self.lbl_tc_source = QLabel("")
+        self.lbl_tc_source.setWordWrap(True)
+        self.lbl_tc_source.setStyleSheet("color: #666; font-size: 11px;")
+        self.params_form.addRow(self.lbl_tc_source_title, self.lbl_tc_source)
+        self._on_tc_sensor_changed()
+
         # --- P4-03 概览构建 ---
         self.txt_levels = QLineEdit()
         self.txt_levels.setPlaceholderText("严格递增、每个≥2；例：2,4,8")
@@ -743,6 +806,24 @@ class CapabilityFormWidget(QWidget):
         self._set_row_visible(
             self.lbl_fft_suppress, self.txt_fft_suppress, "suppressBins" in sup
         )
+        # P6-03 PCA 正/逆变换
+        self._set_row_visible(self.lbl_pca_mode, self.cmb_pca_mode, "pcaMode" in sup)
+        self._set_row_visible(
+            self.lbl_pca_components, self.spin_pca_components, "pcaComponents" in sup
+        )
+        self._set_row_visible(
+            self.lbl_pca_matrix, self.cmb_pca_matrix, "pcaMatrix" in sup
+        )
+        self._set_row_visible(
+            self.lbl_pca_transform, self.txt_pca_transform, "pcaTransform" in sup
+        )
+        self.btn_browse_pca_transform.setVisible("pcaTransform" in sup)
+        # P6-03 缨帽变换
+        self._set_row_visible(self.lbl_tc_sensor, self.cmb_tc_sensor, "tcSensor" in sup)
+        self._set_row_visible(self.lbl_tc_bands, self.txt_tc_bands, "tcBands" in sup)
+        self._set_row_visible(
+            self.lbl_tc_source_title, self.lbl_tc_source, "tcSensor" in sup
+        )
         self._set_row_visible(self.lbl_levels, self.txt_levels, "levels" in sup)
         self._set_row_visible(self.lbl_ovr_compress, self.cmb_ovr_compress, "overviewCompress" in sup)
         # P4-04
@@ -884,6 +965,18 @@ class CapabilityFormWidget(QWidget):
             self.spin_fft_band.setValue(1)
         if "suppressBins" not in supported:
             self.txt_fft_suppress.clear()
+        if "pcaMode" not in supported:
+            self.cmb_pca_mode.setCurrentIndex(0)
+        if "pcaComponents" not in supported:
+            self.spin_pca_components.setValue(0)
+        if "pcaMatrix" not in supported:
+            self.cmb_pca_matrix.setCurrentIndex(0)
+        if "pcaTransform" not in supported:
+            self.txt_pca_transform.clear()
+        if "tcSensor" not in supported:
+            self.cmb_tc_sensor.setCurrentIndex(0)
+        if "tcBands" not in supported:
+            self.txt_tc_bands.clear()
         if "levels" not in supported:
             self.txt_levels.clear()
         if "overviewCompress" not in supported:
@@ -1133,6 +1226,43 @@ class CapabilityFormWidget(QWidget):
                 if pairs:
                     params["suppressBins"] = pairs
 
+        # P6-03：PCA 正/逆变换
+        if "pcaMode" in supported:
+            mode = str(self.cmb_pca_mode.currentData() or "forward")
+            params["pcaMode"] = mode
+            if "pcaComponents" in supported and self.spin_pca_components.value() > 0:
+                params["pcaComponents"] = int(self.spin_pca_components.value())
+            if mode == "forward":
+                if "pcaMatrix" in supported:
+                    params["pcaMatrix"] = self.cmb_pca_matrix.currentData()
+            else:
+                transform = self.txt_pca_transform.text().strip()
+                if not transform:
+                    return params, "PCA inverse 模式必须选择正变换写出的 .pca.json 变换文件"
+                params["pcaTransform"] = transform
+
+        # P6-03：缨帽变换
+        if "tcSensor" in supported:
+            params["tcSensor"] = self.cmb_tc_sensor.currentData()
+        if "tcBands" in supported:
+            raw_tc = self.txt_tc_bands.text().strip()
+            if not raw_tc:
+                return params, (
+                    "缨帽变换必须给出 6 个输入波段号（按 Blue,Green,Red,NIR,SWIR1,SWIR2 顺序）"
+                )
+            parts_tc = [
+                x.strip()
+                for x in raw_tc.replace(";", ",").replace("；", ",").split(",")
+                if x.strip()
+            ]
+            if len(parts_tc) != 6:
+                return params, f"tcBands 必须恰好 6 个波段号，当前为：{raw_tc}"
+            try:
+                bands_tc = [int(part) for part in parts_tc]
+            except ValueError:
+                return params, f"tcBands 必须是整数波段号，当前为：{raw_tc}"
+            params["tcBands"] = bands_tc
+
         # P4-04：表达式计算
         if "calc" in supported:
             raw_expr = self.txt_calc.text().strip()
@@ -1220,6 +1350,21 @@ class CapabilityFormWidget(QWidget):
 
         return params, None
 
+    def _browse_pca_transform(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "选择 PCA 变换文件",
+            str(self._project_root),
+            "PCA 变换文件 (*.json);;所有文件 (*)",
+        )
+        if path:
+            self.txt_pca_transform.setText(path)
+
+    def _on_tc_sensor_changed(self) -> None:
+        key = self.cmb_tc_sensor.currentData()
+        if key:
+            self.lbl_tc_source.setText(sensor_source_line(str(key)))
+
     def _browse_input(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
             self,
@@ -1297,6 +1442,49 @@ class CapabilityFormWidget(QWidget):
                 has_alpha=False,
             )
             return "；".join(violations) if violations else None
+        if capability_id == "gdal:pca":
+            mode = str(params.get("pcaMode") or "forward")
+            if mode == "inverse":
+                transform_text = str(params.get("pcaTransform") or "").strip()
+                if not transform_text:
+                    return "PCA inverse 模式必须选择 .pca.json 变换文件"
+                try:
+                    payload = json.loads(
+                        Path(transform_text).read_text(encoding="utf-8")
+                    )
+                except (OSError, json.JSONDecodeError) as exc:
+                    return f"无法读取 PCA 变换文件：{exc}"
+                bands = int(payload.get("band_count") or 0)
+                if bands <= 0:
+                    return "PCA 变换文件缺少有效的 band_count"
+            else:
+                bands = int(params.get("pcaComponents") or 0)
+                if bands <= 0 and self._metadata_provider is not None and in_paths:
+                    try:
+                        info = self._metadata_provider(in_paths[0])
+                        bands = int(info.get("count") or len(info.get("bands") or []))
+                    except Exception:
+                        bands = 0
+                if bands <= 0:
+                    # 输入元数据不可得时不做波段级预判；worker 仍会做权威校验
+                    return None
+            pca_violations = validate_output_format(
+                out_fmt,
+                dtype="Float32",
+                bands=bands,
+                has_nodata=True,
+                has_alpha=False,
+            )
+            return "；".join(pca_violations) if pca_violations else None
+        if capability_id == "gdal:tasseledcap":
+            tc_violations = validate_output_format(
+                out_fmt,
+                dtype="Float32",
+                bands=3,
+                has_nodata=True,
+                has_alpha=False,
+            )
+            return "；".join(tc_violations) if tc_violations else None
         has_nodata_param = any(
             params.get(key) is not None
             for key in ("srcNodata", "vrtNodata", "dstNodata", "noData")
@@ -1472,8 +1660,15 @@ class CapabilityFormWidget(QWidget):
             params["format"] = out_fmt
         elif cid == "gdal:dem":
             params["format"] = out_fmt
-        elif cid in {"gdal:rasterize", "gdal:grid", "gdal:sindex", "gdal:fftfilter"}:
-            # 这四个能力都真实消费 format；此前 sindex/fftfilter 漏发 format，
+        elif cid in {
+            "gdal:rasterize",
+            "gdal:grid",
+            "gdal:sindex",
+            "gdal:fftfilter",
+            "gdal:pca",
+            "gdal:tasseledcap",
+        }:
+            # 这些能力都真实消费 format；此前 sindex/fftfilter 漏发 format，
             # 会导致 GUI 里选 COG/ENVI 仍被 Worker 静默写成 GTiff。
             params["format"] = out_fmt
             if cid in {"gdal:rasterize", "gdal:grid"}:

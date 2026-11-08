@@ -1,6 +1,6 @@
 # 执行状态
 
-更新：2026-11-07（第 59 轮 · P6-02 FFT 频域滤波/去条纹 gdal:fftfilter 端到端：8×8/7×9 合成图往返、频率定位、厄米掩膜对称与 sidecar 复现全部数值验收；复数输入明确拒绝；修复第 58 轮 sindex 门禁回归并补齐 sindex/fftfilter 的 format 下发；**P6-02 转 done**。Clean 全量 717 项 / 0 失败 / rc=0 / clean_exit_verified=true）
+更新：2026-11-08（第 60 轮 · P6-03 PCA 正/逆变换与缨帽 gdal:pca / gdal:tasseledcap 端到端：PCA 完整重建 ≤1e-10、降维误差 RMSE²×波段数==discarded_variance、相关矩阵模式与逆变换逐像元验收；缨帽三套传感器系数来源/产品级别/6 波段显式映射与来源 sidecar 全部可检查；**P6-03 转 done**。Clean 全量 749 项 / 0 失败 / rc=0 / clean_exit_verified=true）
 
 ## 当前里程碑
 
@@ -26,6 +26,7 @@
 - **P6 遥感专题处理**：
   - **P6-01 光谱、剖面、NDVI 等指数**：**done**（第 58 轮）。`gdal:sindex`（NDVI/NDWI/NBR/SAVI，numpy 求值）：物理量 = 原值 × scale + offset（波段元数据驱动，usePhysical 可关）、无效区三源（NoData/分母零/非有限值）进输出 NoData；合成值逐像元公式断言（原值 1/3 vs 物理量 0.0/−1/3/−3.0）、SAVI L=0 退化实测并修复零值 truthiness 缺陷。架构边界：science 独立 worker 待 sw-science 环境补装（registry 已声明），EVI 三波段指数与光谱剖面曲线归后续。第 59 轮修复 P6-02 重构误伤的 sindex 门禁回归，并补齐 GUI 的 format 下发。
   - **P6-02 FFT 专用界面与去条纹**：**done**（第 59 轮）。`gdal:fftfilter`（numpy.fft）：FFT2 → 厄米对称抑制掩膜 → IFFT2 → 单波段 Float32 + 掩膜 sidecar；8×8/7×9 合成图空抑制往返、已知条纹频率定位（抑制 (0,2) 后逐像元等于剩余正弦）、对称伙伴 (0,W−2) 与 sidecar 重跑复现全部数值验收；NoData 标签/像元一致；复数输入明确拒绝；GUI 支持 fftBand/suppressBins 与 ENVI 等格式真实下发。遗留：分块/流式 FFT、频谱中心化与交互式掩膜编辑 UI 归后续。
+  - **P6-03 PCA、逆变换与缨帽**：**done**（第 60 轮）。`gdal:pca`：全图均值/协方差或相关矩阵/特征向量/主成分顺序/解释方差，正变换写可复现 `.pca.json`，逆变换按 sidecar（含 SHA256）重建；完整重建 ≤1e-10，降维误差按 `RMSE²×波段数 == discarded_variance` 定义并实测；NoData 保持；模式专属参数严格拒绝。`gdal:tasseledcap`：Landsat 5 TM / 7 ETM+ / 8 OLI 三套公开系数，显式 6 波段映射，3 波段亮度/绿度/湿度 + 来源/产品级别 sidecar。遗留：PCA 整幅读入、更多缨帽传感器与交互式载荷图 UI 归后续。
 
 ## 原 P3 验收标准逐项对账与剩余缺口
 
@@ -235,6 +236,32 @@ CRT 检测到栈状态异常后立即终止进程，这正是 `STATUS_STACK_BUFF
 |---|---|---|
 | 用合成影像完成同类验收 | 已满足 | 合成 ENVI/GTiff/GeoJSON/netCDF 样例覆盖多波段、像元数值、ROI 与对比 |
 | 保留真实数据待验状态 | **待验** | 课程原始数据位于 `C:\Users\赵航\Desktop\studio\_chaoxing_rs`（**只读**，不得运行其中的抓取/下载/OCR 脚本）；本轮全部用合成影像验收，未对课程原始 ENVI 栅格与 lena.tif 做真实打开验证 |
+
+### 第 60 轮：P6-03 PCA、逆变换与缨帽（P6-03 → done）
+
+**一、实现**
+
+- 新增 `providers/gdal_provider/pca_ops.py`：多波段实数栅格 → 全图均值 → 协方差/相关矩阵（总体方差 ddof=0）→ `numpy.linalg.eigh` → 特征值降序 + 符号约定（绝对值最大的载荷为正）；前 k 个主成分输出（缺省全部波段）。`<成果名>.pca.json` 记录 mean/std/eigenvalues/eigenvectors/explained_variance_ratio/total_variance/discarded_variance/reconstruction_rmse/relative_rmse/matrix/components/n_valid。逆变换读同一 sidecar（校验类型/版本/形状/正交性并计算 SHA256），按 `pcaComponents` 重建原始波段数，写 `<成果名>.pca_inverse.json`；正/逆变换均保持 NoData。
+- PCA 误差定义：完整重建（k=n）为浮点噪声量级；降维误差 `reconstruction_rmse = sqrt(mean((X-X_hat)^2))`（有效像元×全部波段），并满足 `RMSE² × 波段数 == discarded_variance`。模式专属参数严格：forward 拒绝 pcaTransform，inverse 拒绝 pcaMatrix 且必须提供 pcaTransform。
+- 新增 `providers/gdal_provider/tasseledcap_ops.py` + `processing/tasseledcap_registry.py`：登记 Landsat 5 TM（Crist 1985，DOI 10.1016/0034-4257(85)90102-6）、Landsat 7 ETM+（Huang et al. 2002，USGS 70024815）、Landsat 8 OLI（Baig et al. 2014，DOI 10.1080/2150704X.2014.915434）三套系数；每套记录来源、产品级别、系数矩阵与波段顺序。调用方必须显式给出 6 个输入波段号（Blue,Green,Red,NIR,SWIR1,SWIR2），未知传感器/重复/越界/缺波段拒绝。输出 3 波段 Float32（brightness/greenness/wetness），数据集元数据与 `<成果名>.tasseledcap.json` 同时记录传感器、产品级别、完整系数、输入波段与来源 URL。
+- 契约/接线：新增 `pcaMode`/`pcaComponents`/`pcaMatrix`/`pcaTransform`/`tcSensor`/`tcBands` 别名与支持矩阵；adapter 新增两能力声明、模式门禁、按实际波段数校验格式（PNG/JPEG 拒绝）、执行分支与 sidecar 成套提交；registry 新增两项平台能力编目（PLATFORM_ONLY）；GUI 新增 PCA 模式/成分数/矩阵/变换文件选择与缨帽传感器/6 波段输入/来源说明，状态隔离与格式预检同步。
+
+**二、数值验收（独立 GDAL 重开）**
+
+- PCA 3 波段合成图（精确线性相关，协方差秩 2）：全成分正变换 sidecar 完整重建 RMSE ≤ 1e-9；inverse 重建逐像元 ≤ 1e-4；1 主成分降维 sidecar 的 `RMSE²×3 == discarded_variance`（rel ≤ 1e-9），inverse 实测误差与 sidecar 报告同量级；相关矩阵模式正/逆变换均完整重建。
+- NoData 像元在正/逆变换中均保持 NoData；越界成分数、缺失/损坏变换文件、模式专属参数、PNG 输出全部明确拒绝且不落盘。
+- 缨帽三套传感器逐像元与测试侧独立硬编码系数矩阵一致（≤1e-6）；打乱输入波段顺序后 `tcBands` 角色映射仍正确；未知传感器/缺 tcBands/重复/越界/PNG 全部明确拒绝且不落盘。
+
+**三、验证**
+
+- 新增 `tests/unit/test_p6_pca_tasseledcap_ops.py`（19 项）、`tests/integration/test_p6_pca.py`（5 项）、`tests/integration/test_p6_tasseledcap.py`（6 项）、`tests/integration/test_p6_transform_gui.py`（2 项桌面路径）；四维审计/对账/算法计数同步为 **452/447/242/15**、算法规格 25→27、GDAL 编目 409→411。
+- 受影响定向：285 项单测、13 项 P6-03 集成、2 项 P6 GUI、30 项 sidecar/表单回归全绿。
+- Ruff 干净；Mypy 73 个源文件 0 错误；Clean 全量：**749 passed / 0 failed / rc=0 / clean_exit_verified=true**（484.37s，residual=0、cleanup_complete=true）。
+
+**四、边界与结论**
+
+- 验收「PCA 完整重建与降维误差符合定义；缨帽系数来源、传感器匹配可检查」逐项满足——**P6-03 转 done**；账本现为 done 32 / implemented 1（P0-02）/ todo 22。
+- 遗留边界：PCA 统计整幅读入（分块统计/流式实现归后续）；缨帽仅登记三套传感器且要求输入为对应产品级别；交互式 PCA 载荷图/频谱 UI 与更多传感器归后续轮次。
 
 ### 第 59 轮：P6-02 FFT 频域滤波 / 去条纹（P6-02 → done）
 

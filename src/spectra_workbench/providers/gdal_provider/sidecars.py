@@ -38,6 +38,10 @@ _SIDECAR_SUFFIXES = {
     # P6-02：FFT 掩膜 sidecar 与成果同名（<成果名>.fft_mask.json），
     # 覆盖旧成果时必须作为 owned sidecar 参与事务删除/替换。
     ".fft_mask.json",
+    # P6-03：PCA 变换 / 逆变换与缨帽来源 sidecar 同样与成果同名。
+    ".pca.json",
+    ".pca_inverse.json",
+    ".tasseledcap.json",
     ".wld",
     ".tfw",
     ".tifw",
@@ -95,6 +99,9 @@ def _suffixes_for_target(target: Path) -> set[str]:
         ".enp",
         ".sta",
         ".fft_mask.json",
+        ".pca.json",
+        ".pca_inverse.json",
+        ".tasseledcap.json",
     }
     suffix = target.suffix.lower()
     if suffix in {".tif", ".tiff"}:
@@ -112,7 +119,15 @@ def known_sidecar_candidates(target: Path) -> list[Path]:
     """Return existing files that follow known sidecar naming for this target."""
     candidates: set[Path] = set()
     for suffix in _suffixes_for_target(target):
-        if suffix in {".aux.xml", ".ovr", ".msk", ".fft_mask.json"}:
+        if suffix in {
+            ".aux.xml",
+            ".ovr",
+            ".msk",
+            ".fft_mask.json",
+            ".pca.json",
+            ".pca_inverse.json",
+            ".tasseledcap.json",
+        }:
             candidates.add(target.with_name(target.name + suffix))
         else:
             candidates.add(target.with_suffix(suffix))

@@ -24,14 +24,23 @@ import math
 from collections.abc import Mapping
 from typing import Any
 
+from spectra_workbench.processing.tasseledcap_registry import sensor_keys
+
+#: P6-03 PCA 模式与矩阵类型（GUI 与 Worker 共用）。
+PCA_MODES: tuple[str, ...] = ("forward", "inverse")
+PCA_MATRICES: tuple[str, ...] = ("covariance", "correlation")
+
 __all__ = [
     "DEM_PROCESSINGS",
+    "PCA_MATRICES",
+    "PCA_MODES",
     "ParameterError",
     "RESAMPLE_ALGORITHMS",
     "RESAMPLE_ALIASES",
     "canonical_param_key",
     "normalize_raster_params",
     "resample_algorithm_label",
+    "sensor_keys",
 ]
 
 
@@ -179,6 +188,13 @@ _PARAM_ALIASES: dict[str, tuple[str, ...]] = {
     # --- P6-02 FFT 滤波 / 去条纹 ---
     "fftBand": ("fft_band", "fftBand"),
     "suppressBins": ("suppress_bins", "fft_suppress"),
+    # --- P6-03 PCA / 缨帽 ---
+    "pcaMode": ("pca_mode", "pcamode"),
+    "pcaComponents": ("pca_components", "components", "n_components"),
+    "pcaMatrix": ("pca_matrix", "pcamatrix"),
+    "pcaTransform": ("pca_transform", "transform_file", "transformfile"),
+    "tcSensor": ("tc_sensor", "tasseled_cap_sensor", "sensor"),
+    "tcBands": ("tc_bands", "tasseled_cap_bands"),
     # --- P4-04 表达式 / 直方图与基础统计 ---
     "calc": ("calc_expr", "expression", "formula"),
     "statisticsMode": ("mode", "stats_mode", "statistics_mode"),
@@ -374,6 +390,21 @@ _CAPABILITY_SUPPORT: dict[str, frozenset[str]] = {
     # --- P6-02：FFT 滤波 / 去条纹（成果为单波段 Float32 栅格 + 掩膜 sidecar）---
     "gdal:fftfilter": frozenset(
         {"fftBand", "suppressBins", "srcNodata", "dstNodata"}
+    ),
+    # --- P6-03：PCA 正/逆变换（成果为多波段 Float32 栅格 + 变换 sidecar）---
+    "gdal:pca": frozenset(
+        {
+            "pcaMode",
+            "pcaComponents",
+            "pcaMatrix",
+            "pcaTransform",
+            "srcNodata",
+            "dstNodata",
+        }
+    ),
+    # --- P6-03：缨帽变换（成果为 3 波段 Float32 栅格 + 来源 sidecar）---
+    "gdal:tasseledcap": frozenset(
+        {"tcSensor", "tcBands", "srcNodata", "dstNodata"}
     ),
     # --- P4-04：受限表达式计算 / 直方图与基础统计 ---
     "gdal:calc": frozenset({"calc", "srcNodata", "dstNodata", "outputType"}),
@@ -873,6 +904,51 @@ def normalize_raster_params(
                 )
             bins.append((int(fy), int(fx)))
         out["suppressBins"] = bins
+
+    # 11.15) P6-03：PCA 正/逆变换
+    if "pcaMode" in collected:
+        _, value = collected["pcaMode"]
+        mode = str(value).strip().lower()
+        if mode not in PCA_MODES:
+            raise ParameterError(
+                f"未知 PCA 模式 {value!r}；可用：{', '.join(PCA_MODES)}"
+            )
+        out["pcaMode"] = mode
+    if "pcaComponents" in collected:
+        _, value = collected["pcaComponents"]
+        out["pcaComponents"] = _require_positive_int(value, "pcaComponents")
+    if "pcaMatrix" in collected:
+        _, value = collected["pcaMatrix"]
+        matrix = str(value).strip().lower()
+        if matrix not in PCA_MATRICES:
+            raise ParameterError(
+                f"未知 PCA 矩阵类型 {value!r}；可用：{', '.join(PCA_MATRICES)}"
+            )
+        out["pcaMatrix"] = matrix
+    if "pcaTransform" in collected:
+        _, value = collected["pcaTransform"]
+        transform = str(value).strip()
+        if not transform:
+            raise ParameterError("参数 pcaTransform 必须是非空文件路径")
+        out["pcaTransform"] = transform
+
+    # 11.16) P6-03：缨帽变换
+    if "tcSensor" in collected:
+        _, value = collected["tcSensor"]
+        sensor = str(value).strip().lower()
+        if sensor not in sensor_keys():
+            raise ParameterError(
+                f"未登记的缨帽传感器 {value!r}；可用：{', '.join(sensor_keys())}"
+            )
+        out["tcSensor"] = sensor
+    if "tcBands" in collected:
+        _, value = collected["tcBands"]
+        bands = _require_int_list(value, "tcBands", 6)
+        if any(b < 1 for b in bands):
+            raise ParameterError(f"tcBands 的波段号必须为正数（1-based），实际 {bands}")
+        if len(set(bands)) != 6:
+            raise ParameterError(f"tcBands 的 6 个波段号必须互不相同，实际 {bands}")
+        out["tcBands"] = bands
 
     # 11.12) P5-04：矢量处理 / SQL / 坐标转换
     if "sql" in collected:

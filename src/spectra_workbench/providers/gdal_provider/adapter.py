@@ -47,6 +47,8 @@ from spectra_workbench.processing.output_formats import (
     validate_vector_output_format,
 )
 from spectra_workbench.processing.raster_params import (
+    PCA_MATRICES,
+    PCA_MODES,
     ParameterError,
     normalize_raster_params,
 )
@@ -80,6 +82,11 @@ from spectra_workbench.providers.gdal_provider.mosaic_ops import (
     set_vrt_source_paths,
     stack_sources,
 )
+from spectra_workbench.providers.gdal_provider.pca_ops import (
+    load_transform,
+    run_pca_forward,
+    run_pca_inverse,
+)
 from spectra_workbench.providers.gdal_provider.sidecars import (
     SidecarOwnershipError,
     collect_protected_inputs,
@@ -89,6 +96,7 @@ from spectra_workbench.providers.gdal_provider.statistics_ops import (
     compute_statistics,
     write_statistics_report,
 )
+from spectra_workbench.providers.gdal_provider.tasseledcap_ops import run_tasseled_cap
 from spectra_workbench.providers.gdal_provider.vector_ops import inspect_vector
 from spectra_workbench.registry.gdal_index import (
     GDAL_VERSION,
@@ -308,6 +316,9 @@ class GDALProviderAdapter(ProviderAdapter):
         "gdal:sindex",
         # --- P6-02：FFT 滤波 / 去条纹（成果为单波段 Float32 栅格 + 掩膜 sidecar）---
         "gdal:fftfilter",
+        # --- P6-03：PCA 正/逆变换与缨帽变换（多波段 Float32 栅格 + 来源 sidecar）---
+        "gdal:pca",
+        "gdal:tasseledcap",
         # --- P4-04：受限表达式计算 / 直方图与基础统计 ---
         "gdal:calc",
         P404_STATISTICS_CAPABILITY,
@@ -604,7 +615,15 @@ class GDALProviderAdapter(ProviderAdapter):
             not is_p402
             and in_path is not None
             and spec.capability_id != P404_STATISTICS_CAPABILITY
-            and spec.capability_id not in ("gdal:rasterize", "gdal:grid", "gdal:sindex", "gdal:fftfilter")
+            and spec.capability_id
+            not in (
+                "gdal:rasterize",
+                "gdal:grid",
+                "gdal:sindex",
+                "gdal:fftfilter",
+                "gdal:pca",
+                "gdal:tasseledcap",
+            )
             and spec.capability_id not in VECTOR_OUTPUT_CAPABILITIES
         ):
             format_violations = self._general_format_violations(in_path, norm, out_format)
@@ -668,6 +687,166 @@ class GDALProviderAdapter(ProviderAdapter):
         is_grid = spec.capability_id == "gdal:grid"
         is_sindex = spec.capability_id == "gdal:sindex"
         is_fftfilter = spec.capability_id == "gdal:fftfilter"
+        is_pca = spec.capability_id == "gdal:pca"
+        is_tasseledcap = spec.capability_id == "gdal:tasseledcap"
+
+        if is_pca:
+            pca_mode = str(norm.get("pcaMode") or "forward")
+            if pca_mode not in PCA_MODES:
+                return TaskResult(
+                    task_id=spec.task_id,
+                    attempt=spec.attempt,
+                    status=TaskStatus.failed,
+                    error={
+                        "code": "invalid_parameters",
+                        "message": f"未知 PCA 模式 {pca_mode!r}；可用：{', '.join(PCA_MODES)}",
+                    },
+                    duration_seconds=round(time.monotonic() - start_time, 4),
+                )
+            if pca_mode == "forward":
+                if norm.get("pcaTransform") is not None:
+                    return TaskResult(
+                        task_id=spec.task_id,
+                        attempt=spec.attempt,
+                        status=TaskStatus.failed,
+                        error={
+                            "code": "invalid_parameters",
+                            "message": "PCA forward 模式不消费 pcaTransform；逆变换请显式设置 pcaMode=inverse",
+                        },
+                        duration_seconds=round(time.monotonic() - start_time, 4),
+                    )
+                if norm.get("pcaMatrix") is not None and str(norm["pcaMatrix"]) not in PCA_MATRICES:
+                    return TaskResult(
+                        task_id=spec.task_id,
+                        attempt=spec.attempt,
+                        status=TaskStatus.failed,
+                        error={
+                            "code": "invalid_parameters",
+                            "message": f"未知 PCA 矩阵类型 {norm['pcaMatrix']!r}",
+                        },
+                        duration_seconds=round(time.monotonic() - start_time, 4),
+                    )
+                probe_ds = gdal.Open(str(in_path), gdal.GA_ReadOnly)
+                if probe_ds is None:
+                    return TaskResult(
+                        task_id=spec.task_id,
+                        attempt=spec.attempt,
+                        status=TaskStatus.failed,
+                        error={"code": "input_not_found", "message": f"无法打开输入栅格: {in_path}"},
+                        duration_seconds=round(time.monotonic() - start_time, 4),
+                    )
+                try:
+                    src_bands = int(probe_ds.RasterCount)
+                finally:
+                    del probe_ds
+                pca_bands = int(norm.get("pcaComponents") or src_bands)
+                if pca_bands > src_bands:
+                    return TaskResult(
+                        task_id=spec.task_id,
+                        attempt=spec.attempt,
+                        status=TaskStatus.failed,
+                        error={
+                            "code": "invalid_parameters",
+                            "message": f"pcaComponents={pca_bands} 超过输入波段数 {src_bands}",
+                        },
+                        duration_seconds=round(time.monotonic() - start_time, 4),
+                    )
+                pca_violations = validate_output_format(
+                    out_format,
+                    dtype="Float32",
+                    bands=pca_bands,
+                    has_nodata=True,
+                    has_alpha=False,
+                )
+            else:
+                if norm.get("pcaMatrix") is not None:
+                    return TaskResult(
+                        task_id=spec.task_id,
+                        attempt=spec.attempt,
+                        status=TaskStatus.failed,
+                        error={
+                            "code": "invalid_parameters",
+                            "message": "PCA inverse 模式的矩阵类型由 pcaTransform 决定，不能再传 pcaMatrix",
+                        },
+                        duration_seconds=round(time.monotonic() - start_time, 4),
+                    )
+                transform_value = norm.get("pcaTransform")
+                if not transform_value:
+                    return TaskResult(
+                        task_id=spec.task_id,
+                        attempt=spec.attempt,
+                        status=TaskStatus.failed,
+                        error={
+                            "code": "invalid_parameters",
+                            "message": "PCA inverse 模式需要显式给出 pcaTransform（正变换写出的 .pca.json）",
+                        },
+                        duration_seconds=round(time.monotonic() - start_time, 4),
+                    )
+                transform_path = Path(str(transform_value)).expanduser()
+                if not transform_path.is_absolute():
+                    transform_path = Path(spec.project_root) / transform_path
+                try:
+                    transform_info = load_transform(transform_path)
+                except Exception as exc:
+                    return TaskResult(
+                        task_id=spec.task_id,
+                        attempt=spec.attempt,
+                        status=TaskStatus.failed,
+                        error={"code": "invalid_parameters", "message": str(exc)},
+                        duration_seconds=round(time.monotonic() - start_time, 4),
+                    )
+                pca_bands = int(transform_info["band_count"])
+                pca_violations = validate_output_format(
+                    out_format,
+                    dtype="Float32",
+                    bands=pca_bands,
+                    has_nodata=True,
+                    has_alpha=False,
+                )
+            if pca_violations:
+                context.log("ERROR", f"PCA 输出格式不受支持: {pca_violations}")
+                return TaskResult(
+                    task_id=spec.task_id,
+                    attempt=spec.attempt,
+                    status=TaskStatus.failed,
+                    error={
+                        "code": "unsupported_format_combination",
+                        "message": "；".join(pca_violations),
+                    },
+                    duration_seconds=round(time.monotonic() - start_time, 4),
+                )
+
+        if is_tasseledcap:
+            if norm.get("tcSensor") is None or norm.get("tcBands") is None:
+                return TaskResult(
+                    task_id=spec.task_id,
+                    attempt=spec.attempt,
+                    status=TaskStatus.failed,
+                    error={
+                        "code": "invalid_parameters",
+                        "message": "gdal:tasseledcap 需要 tcSensor 与 tcBands（6 个输入波段号，按系数顺序）",
+                    },
+                    duration_seconds=round(time.monotonic() - start_time, 4),
+                )
+            tc_violations = validate_output_format(
+                out_format,
+                dtype="Float32",
+                bands=3,
+                has_nodata=True,
+                has_alpha=False,
+            )
+            if tc_violations:
+                context.log("ERROR", f"缨帽变换输出格式不受支持: {tc_violations}")
+                return TaskResult(
+                    task_id=spec.task_id,
+                    attempt=spec.attempt,
+                    status=TaskStatus.failed,
+                    error={
+                        "code": "unsupported_format_combination",
+                        "message": "；".join(tc_violations),
+                    },
+                    duration_seconds=round(time.monotonic() - start_time, 4),
+                )
 
         if is_sindex or is_fftfilter:
             # 两能力输出恒为单波段 Float32 且必设 NoData；PNG/JPEG 写盘前拒绝
@@ -1034,6 +1213,98 @@ class GDALProviderAdapter(ProviderAdapter):
                     str(dem_processing),
                     options=gdal.DEMProcessingOptions(**dem_kwargs),
                 )
+            elif is_pca:
+                pca_mode = str(norm.get("pcaMode") or "forward")
+                if pca_mode == "forward":
+                    pca_info = run_pca_forward(
+                        staged_path,
+                        in_path,  # type: ignore[arg-type]
+                        components=(
+                            int(norm["pcaComponents"])
+                            if norm.get("pcaComponents") is not None
+                            else None
+                        ),
+                        matrix=str(norm.get("pcaMatrix") or "covariance"),
+                        src_nodata=(
+                            float(norm["srcNodata"])
+                            if norm.get("srcNodata") is not None
+                            else None
+                        ),
+                        dst_nodata=(
+                            float(norm["dstNodata"])
+                            if norm.get("dstNodata") is not None
+                            else -9999.0
+                        ),
+                        out_format=out_format,
+                        callback=_gdal_cb,
+                    )
+                    context.log(
+                        "INFO",
+                        f"PCA forward 完成：{pca_info['band_count']} 波段 → "
+                        f"{pca_info['components']} 主成分（{pca_info['matrix']}），"
+                        f"丢弃方差 {pca_info['discarded_variance']:.6g}，"
+                        f"重建 RMSE {pca_info['reconstruction_rmse']:.6g}；"
+                        f"变换文件：{pca_info['transform_sidecar']}",
+                    )
+                else:
+                    transform_path = Path(str(norm["pcaTransform"])).expanduser()
+                    if not transform_path.is_absolute():
+                        transform_path = Path(spec.project_root) / transform_path
+                    pca_info = run_pca_inverse(
+                        staged_path,
+                        in_path,  # type: ignore[arg-type]
+                        transform_path,
+                        components=(
+                            int(norm["pcaComponents"])
+                            if norm.get("pcaComponents") is not None
+                            else None
+                        ),
+                        src_nodata=(
+                            float(norm["srcNodata"])
+                            if norm.get("srcNodata") is not None
+                            else None
+                        ),
+                        dst_nodata=(
+                            float(norm["dstNodata"])
+                            if norm.get("dstNodata") is not None
+                            else -9999.0
+                        ),
+                        out_format=out_format,
+                        callback=_gdal_cb,
+                    )
+                    context.log(
+                        "INFO",
+                        f"PCA inverse 完成：{pca_info['components_used']} 主成分 → "
+                        f"{pca_info['band_count']} 波段（{pca_info['matrix']}）；"
+                        f"变换 SHA256={pca_info['transform_sha256'][:16]}…",
+                    )
+                ds = gdal.Open(str(staged_path), gdal.GA_ReadOnly)
+            elif is_tasseledcap:
+                tc_info = run_tasseled_cap(
+                    staged_path,
+                    in_path,  # type: ignore[arg-type]
+                    sensor_key=str(norm["tcSensor"]),
+                    bands=[int(v) for v in norm["tcBands"]],
+                    src_nodata=(
+                        float(norm["srcNodata"])
+                        if norm.get("srcNodata") is not None
+                        else None
+                    ),
+                    dst_nodata=(
+                        float(norm["dstNodata"])
+                        if norm.get("dstNodata") is not None
+                        else -9999.0
+                    ),
+                    out_format=out_format,
+                    callback=_gdal_cb,
+                )
+                context.log(
+                    "INFO",
+                    f"缨帽变换完成：{tc_info['sensor']}，输入波段 "
+                    f"{tc_info['input_bands']}，输出 {tc_info['output_bands']}；"
+                    f"来源：{tc_info['source_url']}；sidecar：{tc_info['sidecar']}",
+                )
+                ds = gdal.Open(str(staged_path), gdal.GA_ReadOnly)
             elif is_sindex:
                 # 单输入能力：validate() 保证 input 端口存在，in_path 必已解析
                 index_info = compute_index(
@@ -1219,6 +1490,10 @@ class GDALProviderAdapter(ProviderAdapter):
                 if is_sindex
                 else "FFTFilter"
                 if is_fftfilter
+                else "PCA"
+                if is_pca
+                else "TasseledCap"
+                if is_tasseledcap
                 else "Warp"
                 if is_warp
                 else "Translate"
@@ -1256,6 +1531,10 @@ class GDALProviderAdapter(ProviderAdapter):
                 if is_sindex
                 else "FFTFilter"
                 if is_fftfilter
+                else "PCA"
+                if is_pca
+                else "TasseledCap"
+                if is_tasseledcap
                 else "Warp"
                 if is_warp
                 else "Translate"
@@ -1278,6 +1557,15 @@ class GDALProviderAdapter(ProviderAdapter):
             mask_sidecar = staged_path.with_name(staged_path.name + ".fft_mask.json")
             if mask_sidecar.exists():
                 staged_files.append(mask_sidecar.resolve())
+        if is_pca:
+            for suffix in (".pca.json", ".pca_inverse.json"):
+                pca_sidecar = staged_path.with_name(staged_path.name + suffix)
+                if pca_sidecar.exists():
+                    staged_files.append(pca_sidecar.resolve())
+        if is_tasseledcap:
+            tc_sidecar = staged_path.with_name(staged_path.name + ".tasseledcap.json")
+            if tc_sidecar.exists():
+                staged_files.append(tc_sidecar.resolve())
         # 在 Windows 上显式关闭 dataset 释放文件锁
         del ds
 

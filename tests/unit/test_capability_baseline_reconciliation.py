@@ -18,9 +18,11 @@ PLATFORM_ONLY = {
     "gdal:editmeta",
     "gdal:fftfilter",
     "gdal:overview",
+    "gdal:pca",
     "gdal:sindex",
     "gdal:stack",
     "gdal:statistics",
+    "gdal:tasseledcap",
 }
 
 TARGET_VERSION_TOOLS = {
@@ -37,8 +39,8 @@ def test_baseline_reconciliation_has_no_missing_registry_entry() -> None:
 
     assert report["errors"] == []
     assert report["baseline_count"] == 443
-    # 第 58/59 轮新增平台能力 gdal:sindex / gdal:fftfilter：注册表 448 -> 450
-    assert report["registry_count"] == 450
+    # 第 58/59/60 轮新增平台能力 sindex/fftfilter/pca/tasseledcap：448 -> 452
+    assert report["registry_count"] == 452
     assert report["missing_from_registry"] == []
     assert set(report["platform_only"]) == PLATFORM_ONLY
     assert report["complete"] is True
@@ -74,6 +76,8 @@ def test_target_version_tools_are_indexed_and_gaps_have_reasons() -> None:
         "ogr:vectortranslate",
         "gdal:sindex",
         "gdal:fftfilter",
+        "gdal:pca",
+        "gdal:tasseledcap",
     ):
         cap = registry.get(cid)
         assert cap is not None and str(cap.state.availability) == "ready"
