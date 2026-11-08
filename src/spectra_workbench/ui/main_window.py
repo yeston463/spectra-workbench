@@ -564,16 +564,21 @@ class MainWindow(QMainWindow):
             self.open_dataset(path)
 
     def open_remote_url_dialog(self) -> None:
-        """弹出输入框打开远程 URL 或 GDAL VSI 路径（P8-02）。"""
+        """弹出输入框打开远程 URL 或 GDAL VSI 路径（P8-02 / P8-03）。"""
         from PySide6.QtWidgets import QInputDialog
 
         url, ok = QInputDialog.getText(
             self,
             "打开远程 URL / VSI",
-            "请输入远程栅格地址（HTTP/HTTPS）或 GDAL VSI 虚拟文件系统路径：\n例如: http://.../raster.tif 或 /vsicurl/... 或 /vsizip/...",
+            "请输入远程栅格地址（HTTP/HTTPS）或 GDAL VSI 虚拟文件系统路径：\n例如: http://.../raster.tif 或 /vsicurl/... 或 /vsizip/...\n(可选后缀以 #profile=profile_id 指定凭据)",
         )
         if ok and url.strip():
-            self.open_dataset(url.strip())
+            s = url.strip()
+            prof: str | None = None
+            if "#profile=" in s:
+                s, prof_part = s.split("#profile=", 1)
+                prof = prof_part.strip() or None
+            self.open_dataset(s, credential_profile=prof)
 
     def open_dataset(
         self,
@@ -581,6 +586,7 @@ class MainWindow(QMainWindow):
         record: LayerRecord | None = None,
         rois: list[ROI] | None = None,
         order: int | None = None,
+        credential_profile: str | None = None,
     ) -> None:
         is_remote = is_vsi_or_remote(path) or is_archive(path)
         if is_remote:
@@ -595,16 +601,23 @@ class MainWindow(QMainWindow):
             display_name = record.name if record else p.stem
         self.status_bar.showMessage(f"正在探测元数据: {display_name}…")
         client = self.gdal_client
+        prof_id = credential_profile or (record.credential_profile if record else None)
+        if prof_id:
+            with contextlib.suppress(Exception):
+                client.apply_credential_profile(prof_id)
         self._open_seq += 1
         seq = self._open_seq if order is None else order
 
         def _on_probed(meta: dict[str, Any]) -> None:
             layer = LayerItem(name=display_name, file_path=p, metadata=meta)
+            if prof_id:
+                layer.credential_profile = prof_id
             if record is not None:
                 layer.layer_id = record.layer_id
                 layer.visible = record.visible
                 layer.display = record.display.model_copy(deep=True)
                 layer.provider_hint = record.provider_hint
+                layer.credential_profile = record.credential_profile
                 layer.rois = list(rois or [])
             if layer.layer_id not in self._project_layer_order:
                 self._project_layer_order.append(layer.layer_id)
@@ -1184,6 +1197,7 @@ class MainWindow(QMainWindow):
                     order=order_idx,
                     display=layer.display.model_copy(deep=True),
                     provider_hint=layer.provider_hint,
+                    credential_profile=layer.credential_profile,
                     metadata_snapshot={
                         "width": layer.width,
                         "height": layer.height,

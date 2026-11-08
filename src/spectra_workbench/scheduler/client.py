@@ -199,18 +199,26 @@ class QtWorkerClient(QObject):
             msg = env.payload.get("message", "")
             self._enqueue("progress", r_val, phase, msg)
         elif env.kind is Kind.log:
+            from spectra_workbench.domain.credentials import sanitize_text
+
             level = env.payload.get("level", "INFO")
             msg = env.payload.get("message", "")
             stream = env.payload.get("stream", "engine")
-            self._enqueue("log", level, msg, stream)
+            self._enqueue("log", level, sanitize_text(msg), stream)
         elif env.kind is Kind.error:
             if env.payload.get("category") == "query":
                 # 只读查询失败已由 call_async / *_async 的 on_error 定向回调处理，
                 # 不再全客户端广播（否则栅格图层的矢量探测失败会污染任务面板）。
                 return
+            from spectra_workbench.domain.credentials import sanitize_text
+
             code = env.payload.get("code", "unknown_error")
             msg = env.payload.get("message", "")
-            self._enqueue("error", code, msg)
+            self._enqueue("error", code, sanitize_text(msg))
+
+    def apply_credential_profile(self, profile: Any, timeout: float = 5.0) -> dict[str, Any]:
+        """将凭据 Profile 配置推送到后台 Worker 进程（P8-03）。"""
+        return self._worker.apply_credential_profile(profile, timeout=timeout)
 
     def submit_task_async(self, spec: TaskSpec, timeout: float = 60.0) -> None:
         """异步在后台线程提交任务执行，结果通过 sig_result / sig_error 信号发射。"""

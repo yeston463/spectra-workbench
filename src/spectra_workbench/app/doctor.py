@@ -601,10 +601,12 @@ def format_console_report(report: DoctorReport) -> str:
 
 
 def save_doctor_report(report: DoctorReport, output_path: Path | str) -> None:
+    from spectra_workbench.domain.credentials import sanitize_dict
+
     p = Path(output_path)
     p.parent.mkdir(parents=True, exist_ok=True)
     with open(p, "w", encoding="utf-8") as f:
-        json.dump(report.to_dict(), f, indent=2, ensure_ascii=False)
+        json.dump(sanitize_dict(report.to_dict()), f, indent=2, ensure_ascii=False)
 
 
 def main() -> int:
@@ -630,7 +632,8 @@ def main() -> int:
     save_doctor_report(report, save_path)
 
     if args.json:
-        print(json.dumps(report.to_dict(), indent=2, ensure_ascii=False))
+        from spectra_workbench.domain.credentials import sanitize_dict
+        print(json.dumps(sanitize_dict(report.to_dict()), indent=2, ensure_ascii=False))
     else:
         print(format_console_report(report))
         print(f"报告已写入: {save_path}")

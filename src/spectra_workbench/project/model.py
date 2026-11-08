@@ -17,10 +17,12 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
+from spectra_workbench.domain.credentials import sanitize_dict
 from spectra_workbench.domain.paths import (
     extract_local_path_from_vsi,
     is_vsi_or_remote,
     normalize_vsi_path,
+    sanitize_url,
 )
 from spectra_workbench.domain.roi import ROI
 from spectra_workbench.rendering.display import DisplaySettings
@@ -45,6 +47,7 @@ class LayerRecord(BaseModel):
     order: int = Field(ge=0)
     display: DisplaySettings = Field(default_factory=DisplaySettings)
     provider_hint: str | None = None
+    credential_profile: str | None = None
     metadata_snapshot: dict = Field(default_factory=dict)
 
     @model_validator(mode="after")
@@ -109,9 +112,12 @@ class ProjectSpec(BaseModel):
 
 
 def store_source(project_root: Path, abs_path: Path | str) -> tuple[str, bool]:
-    """返回 (存储路径, 是否相对)。项目文件内相对路径优先，项目外保留绝对/VSI路径。"""
+    """返回 (存储路径, 是否相对)。项目文件内相对路径优先，项目外保留绝对/VSI路径。
+    对远程 URL 自动执行敏感信息脱敏（移除 token/key 等 query 参数及 basic auth），防止密钥入库。
+    """
     if is_vsi_or_remote(abs_path):
-        return (normalize_vsi_path(abs_path), False)
+        norm = normalize_vsi_path(abs_path)
+        return (sanitize_url(norm), False)
     project_root = Path(project_root).resolve()
     abs_p = Path(abs_path).resolve()
     try:
@@ -210,7 +216,7 @@ def save_project(path: Path | str, spec: ProjectSpec) -> Path:
     target.parent.mkdir(parents=True, exist_ok=True)
     if spec.path_anchor is None:
         spec = spec.model_copy(update={"path_anchor": PATH_ANCHOR_PROJECT_DIR})
-    payload = spec.model_dump(mode="json")
+    payload = sanitize_dict(spec.model_dump(mode="json"))
     fd, tmp = tempfile.mkstemp(prefix=target.name + ".", suffix=".tmp", dir=str(target.parent))
     try:
         with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as fh:

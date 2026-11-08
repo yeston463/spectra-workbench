@@ -1,6 +1,6 @@
 # 执行状态
 
-更新：2026-11-08（第 70 轮 · P8-02 VSI/归档/远程数据：统一 VSI 路径规范 + 本地归档 /vsizip//vsitar/ 读取与容器子数据集探测 + HTTP Range 零全量内存加载 + 超时重试与协作式取消 + 项目持久化与跨会话重开 + GUI 远程输入菜单；12 项集成测试全部通过，clean_exit_verified=True，residual=0）✅。
+更新：2026-11-08（第 71 轮 · P8-03 凭据 Profile 与脱敏：本地独立凭据存储库 CredentialStore 隔离管理 (~/.spectra/credentials.json) + 统一 CredentialProfile 支持 S3/Azure/GCS/HTTP Bearer/HTTP Basic/Header/Custom 映射至 GDAL VSI 选项与环境变量 + 动态向 Worker 下发凭据并配合 VSICurlClearCache 认证保护端点 + 项目持久化仅保存引用名绝不入库密钥 + 全链路 URL/文本/字典/诊断脱敏工具 + 离线模式零网络依赖本地数据处理；19 项集成测试全部通过，clean_exit_verified=True，residual=0）✅。
 
 ## 当前里程碑
 
@@ -46,6 +46,14 @@
     - **项目持久化与跨会话重开**：更新 `project/model.py`，`store_source` 与 `resolve_source` 对 VSI/远程路径自动标记 `source_is_relative=False`，保存到 `.spectra.json` 时保持原规范化 URI；重开项目无损还原远程图层。
     - **桌面 GUI 集成**：主窗口文件菜单新增「打开远程 URL / VSI (&U)…」动作与对话框；文件对话框筛选器扩充支持 `.zip`, `.tar`, `.tar.gz`, `.tgz`；通过真实 GUI 验证直接打开远程 URL、菜单输入打开、项目保存与跨会话完全恢复。
     - **测试与官方验证**：`tests/integration/test_p8_vsi_remote.py` 12 项测试全部通过；官方监管闸门 `scripts/test.ps1 -Integration` 全部通过（exit_mode=clean, pytest_exit_code=0, clean_exit_verified=True, residual=0）。
+  - **P8-03 凭据 Profile 与脱敏**：**done**（第 71 轮）。
+    - **凭据模型与多协议映射**：新增 `domain/credentials.py`，实现 `CredentialProfile`，统一管理 S3 (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, `AWS_DEFAULT_REGION`, `AWS_S3_ENDPOINT`)、Azure (`AZURE_STORAGE_ACCOUNT`, `AZURE_STORAGE_ACCESS_KEY`, `AZURE_STORAGE_CONNECTION_STRING`)、GCS (`GS_ACCESS_KEY_ID`, `GS_SECRET_ACCESS_KEY`)、HTTP Bearer (`GDAL_HTTP_HEADERS: Authorization: Bearer ...`)、HTTP Basic (`GDAL_HTTP_USERPWD: user:pwd`)、Header 与 Custom 映射规则；提供 `to_safe_dict()` 导出无密钥脱敏字典。
+    - **凭据存储库物理隔离与原子写入**：实现 `CredentialStore`（默认 `~/.spectra/credentials.json`，支持 `SPECTRA_CREDENTIALS_FILE` 覆盖），线程安全锁保护、原子替换写入（POSIX 0600 权限），与项目文件 `.spectra.json` 物理隔离，凭据绝不写入项目文件。
+    - **全链路敏感信息脱敏**：提供 `sanitize_url`（脱敏 Basic Auth 与敏感 Query 参数）、`sanitize_text`（正则脱敏 Bearer、Basic、AWS Secrets、密码键值等）与 `sanitize_dict`（递归脱敏字典与列表）；接入 `ExecutionContext.log`、Worker 异常捕获、`QtWorkerClient` 日志信号与 `doctor.py` 诊断报告落盘。
+    - **项目安全持久化**：`LayerRecord` 仅持久化 `credential_profile: str` 引用名；`store_source` 自动脱敏远程 URL，`save_project` 执行深度字典脱敏，杜绝任何密钥入库。
+    - **Worker 动态凭据下发与 VSI 鉴权**：WorkerProcess 支持 `apply_credential_profile`，下发环境变量与 GDAL 配置选项并调用 `gdal.VSICurlClearCache()` 清理 HTTP 缓存；实测在未配置凭据时探测 401 失败，动态下发凭据后成功通过 Bearer 鉴权并返回元数据与切片。
+    - **离线就绪与 GUI 集成**：实测无网络与无凭据文件环境下本地 GeoTIFF 与矢量探测、读取、项目保存与重开 100% 正常；主窗口远程输入支持 `#profile=...` 凭据指定与跨会话完全恢复。
+    - **测试与官方验证**：`tests/integration/test_p8_credentials.py` 19 项测试全部通过；官方监管闸门 `scripts/run_with_timeout.py` 验证 `clean_exit_verified=True, pytest_exit_code=0, residual=0`；`scripts/doctor.ps1` 自检全通过。
 
 ## 原 P3 验收标准逐项对账与剩余缺口
 

@@ -455,6 +455,8 @@ class WorkerRuntime:
                     self._handle_probe_dataset(env)
                 elif action == "probe_subdataset":
                     self._handle_probe_subdataset(env)
+                elif action == "configure_credentials":
+                    self._handle_configure_credentials(env)
                 elif action == "read_window":
                     self._handle_read_window(env)
                 elif action in self._SIMPLE_CALLS:
@@ -551,6 +553,37 @@ class WorkerRuntime:
                 request_id=env.request_id,
                 task_id=env.task_id,
                 category="query",
+            )
+
+    def _handle_configure_credentials(self, env: Envelope) -> None:
+        """动态配置环境变量与 GDAL VSI 凭据选项（P8-03）。"""
+        from spectra_workbench.domain.credentials import sanitize_text
+
+        args = env.payload.get("arguments", {}) or {}
+        env_vars = args.get("env_vars", {})
+        try:
+            for k, v in env_vars.items():
+                os.environ[str(k)] = str(v)
+            try:
+                from osgeo import gdal  # type: ignore[import-not-found]
+
+                for k, v in env_vars.items():
+                    gdal.SetConfigOption(str(k), str(v))
+                if hasattr(gdal, "VSICurlClearCache"):
+                    gdal.VSICurlClearCache()
+            except ImportError:
+                pass
+            self.send_kind(
+                Kind.result,
+                {"status": "succeeded", "artifact_ids": [], "action": "configure_credentials", "applied_keys": list(env_vars.keys())},
+                request_id=env.request_id,
+            )
+        except Exception as exc:
+            self.send_error(
+                code="configure_credentials_failed",
+                message=sanitize_text(str(exc)),
+                retryable=False,
+                request_id=env.request_id,
             )
 
     def _handle_simple_call(self, env: Envelope, action: str) -> None:
@@ -779,7 +812,9 @@ class WorkerRuntime:
             self.send_kind(Kind.progress, p_load, request_id=env.request_id, task_id=spec.task_id)
 
         def _on_log(level: str, msg: str, stream: str | None) -> None:
-            l_load: dict[str, Any] = {"level": level, "message": msg}
+            from spectra_workbench.domain.credentials import sanitize_text
+
+            l_load: dict[str, Any] = {"level": level, "message": sanitize_text(msg)}
             if stream is not None:
                 l_load["stream"] = stream
             self.send_kind(Kind.log, l_load, request_id=env.request_id, task_id=spec.task_id)

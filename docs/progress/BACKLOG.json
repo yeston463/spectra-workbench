@@ -1024,15 +1024,28 @@
       "milestone": "P8",
       "title": "凭据 profile 与脱敏",
       "acceptance": [
-        "token 不写项目/日志/诊断；离线启动可正常处理本地数据"
+        "token 不写项目/日志/诊断；仅保存 Profile 引用名",
+        "凭据 Profile 存储在本地独立配置文件（~/.spectra/credentials.json，物理隔离于项目/工作区）",
+        "支持 S3, HTTP Bearer, HTTP Basic, Azure, GCS, Header, Custom 映射到 GDAL VSI 选项与环境变量",
+        "脱敏工具：URL 脱敏（query 及 basic auth）、文本脱敏（Bearer, Basic, AWS secrets）、字典递归脱敏",
+        "离线启动可正常处理本地数据：在离线/无网络/无凭据配置文件情况下，GUI 启动、本地栅格/矢量加载、算法计算、项目保存与重开 100% 正常",
+        "Worker 动态接收 profile 配置并在读取受保护的远程 VSI 端点时成功鉴权"
       ],
       "depends_on": [
         "P8-02",
         "P7-01"
       ],
-      "status": "todo",
+      "status": "done",
       "release_requirement": "core",
-      "evidence": [],
+      "evidence": [
+        "tests/integration/test_p8_credentials.py: 19 passed with clean_exit_verified=True, zero residual processes",
+        "tests/integration/test_p8_vsi_remote.py: 12 passed with clean_exit_verified=True",
+        "docs/progress/runs/doctor_report.json: ALL OK (UI, GDAL 3.13.3, Rasterio 1.5.2, Science)",
+        "src/spectra_workbench/domain/credentials.py: CredentialProfile, CredentialStore, sanitize_url, sanitize_text, sanitize_dict",
+        "src/spectra_workbench/project/model.py: LayerRecord.credential_profile, sanitize_url in store_source, sanitize_dict in save_project",
+        "src/spectra_workbench/providers/base.py & scheduler/client.py & workers/entrypoint.py: logging and exception sanitization",
+        "src/spectra_workbench/ui/main_window.py: open_dataset with credential_profile, open_remote_url_dialog with profile support"
+      ],
       "blocking_reason": null
     },
     {

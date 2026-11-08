@@ -112,9 +112,11 @@ class ExecutionContext:
             self.progress_callback(ratio, phase, message)
 
     def log(self, level: str, message: str, stream: str | None = "engine") -> None:
-        """记录日志行。level 需为 DEBUG / INFO / WARNING / ERROR。"""
+        """记录日志行。level 需为 DEBUG / INFO / WARNING / ERROR。脱敏敏感凭据信息。"""
         if self.log_callback:
-            self.log_callback(level.upper(), message, stream)
+            from spectra_workbench.domain.credentials import sanitize_text
+
+            self.log_callback(level.upper(), sanitize_text(message), stream)
 
     def cancel(self) -> None:
         """置位取消标志。"""

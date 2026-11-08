@@ -9,7 +9,20 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from urllib.parse import urlparse, urlunparse
+from urllib.parse import urlparse
+
+from spectra_workbench.domain.credentials import sanitize_url
+
+__all__ = [
+    "ARCHIVE_EXTENSIONS",
+    "VSI_PREFIXES",
+    "extract_local_path_from_vsi",
+    "get_display_name",
+    "is_archive",
+    "is_vsi_or_remote",
+    "normalize_vsi_path",
+    "sanitize_url",
+]
 
 VSI_PREFIXES: tuple[str, ...] = (
     "/vsi",
@@ -119,30 +132,6 @@ def get_display_name(path: Path | str) -> str:
             pass
     part = norm.rstrip("/").split("/")[-1]
     return part or s
-
-
-def sanitize_url(url: str) -> str:
-    """脱敏 URL 中的敏感凭据（如 query 中的 token、key、sig 等）。"""
-    s = str(url).strip()
-    try:
-        parsed = urlparse(s)
-        if not parsed.query:
-            return s
-        sensitive_keys = {"token", "key", "sig", "signature", "secret", "auth", "access_token", "apikey"}
-        pairs = []
-        for item in parsed.query.split("&"):
-            if "=" in item:
-                k, v = item.split("=", 1)
-                if k.lower() in sensitive_keys or any(sk in k.lower() for sk in sensitive_keys):
-                    pairs.append(f"{k}=***")
-                else:
-                    pairs.append(item)
-            else:
-                pairs.append(item)
-        new_query = "&".join(pairs)
-        return urlunparse(parsed._replace(query=new_query))
-    except Exception:
-        return s
 
 
 def extract_local_path_from_vsi(path: Path | str | None) -> Path | None:

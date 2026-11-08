@@ -638,6 +638,35 @@ class WorkerProcess:
             with self._waiters_lock:
                 self._response_waiters.pop(req_id, None)
 
+    def apply_credential_profile(self, profile: Any, timeout: float = 5.0) -> dict[str, Any]:
+        """将凭据 Profile 配置发送给 Worker 进程，配置环境变量与 GDAL VSI 选项（P8-03）。"""
+        from spectra_workbench.domain.credentials import CredentialProfile, CredentialStore
+
+        if isinstance(profile, str):
+            store = CredentialStore()
+            prof = store.get_profile(profile)
+            if prof is None:
+                raise WorkerProcessError(f"Credential profile not found: {profile}")
+        elif isinstance(profile, CredentialProfile):
+            prof = profile
+        else:
+            raise TypeError(f"Expected CredentialProfile or str, got {type(profile)}")
+
+        env_vars = prof.to_env_vars()
+        self._env.update(env_vars)
+        if not self.is_alive:
+            return {"status": "ok", "deferred": True, "applied_keys": list(env_vars.keys())}
+
+        env = self.send_request(
+            "configure_credentials",
+            {"profile_id": prof.profile_id, "env_vars": env_vars},
+            timeout=timeout,
+        )
+        if env.kind is Kind.error:
+            raise RuntimeError(f"配置凭据失败: {env.payload.get('message')}")
+        res = env.payload.get("data") if "data" in env.payload else env.payload
+        return res if isinstance(res, dict) else {"status": "ok"}
+
     def probe_dataset(self, path: Path | str, timeout: float = 10.0) -> dict[str, Any]:
         """向 Worker 发送探测请求并返回元数据字典。"""
         env = self.send_request("probe_dataset", {"path": str(path)}, timeout=timeout)

@@ -30,6 +30,7 @@ class LayerItem:
     display: DisplaySettings = field(default_factory=DisplaySettings)
     rois: list[ROI] = field(default_factory=list)
     provider_hint: str | None = None
+    credential_profile: str | None = None
 
     def __post_init__(self) -> None:
         if is_vsi_or_remote(self.file_path):

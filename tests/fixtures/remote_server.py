@@ -29,6 +29,8 @@ class LocalHttpRangeServer:
         delay_seconds: float = 0.0,
         fail_count: int = 0,
         fail_status: int = 503,
+        auth_token: str | None = None,
+        auth_userpwd: str | None = None,
     ) -> None:
         self.files: dict[str, bytes] = {}
         if files:
@@ -42,6 +44,8 @@ class LocalHttpRangeServer:
         self.delay_seconds = delay_seconds
         self.fail_count = fail_count
         self.fail_status = fail_status
+        self.auth_token = auth_token
+        self.auth_userpwd = auth_userpwd
         self.requests: list[dict[str, Any]] = []
         self.total_bytes_sent = 0
         self._lock = threading.Lock()
@@ -71,9 +75,31 @@ class LocalHttpRangeServer:
                 if outer.delay_seconds > 0:
                     time.sleep(outer.delay_seconds)
 
+            def _check_auth(self) -> bool:
+                if outer.auth_token:
+                    auth = self.headers.get("Authorization", "")
+                    if auth != f"Bearer {outer.auth_token}":
+                        self.send_response(401)
+                        self.send_header("WWW-Authenticate", 'Bearer realm="Spectra"')
+                        self.end_headers()
+                        return False
+                if outer.auth_userpwd:
+                    import base64
+
+                    auth = self.headers.get("Authorization", "")
+                    expected = "Basic " + base64.b64encode(outer.auth_userpwd.encode()).decode()
+                    if auth != expected:
+                        self.send_response(401)
+                        self.send_header("WWW-Authenticate", 'Basic realm="Spectra"')
+                        self.end_headers()
+                        return False
+                return True
+
             def do_HEAD(self) -> None:
                 self._record_request("HEAD")
                 self._apply_delay()
+                if not self._check_auth():
+                    return
                 if self._handle_failure():
                     return
                 key = self.path.split("?")[0].lstrip("/")
@@ -91,6 +117,8 @@ class LocalHttpRangeServer:
             def do_GET(self) -> None:
                 self._record_request("GET")
                 self._apply_delay()
+                if not self._check_auth():
+                    return
                 if self._handle_failure():
                     return
                 key = self.path.split("?")[0].lstrip("/")
@@ -149,6 +177,13 @@ class LocalHttpRangeServer:
             self.files[key] = Path(content).read_bytes()
         else:
             self.files[key] = bytes(content)
+
+    def start(self) -> LocalHttpRangeServer:
+        """启动或返回正在运行的服务实例。"""
+        return self
+
+    def url(self, filename: str) -> str:
+        return self.url_for(filename)
 
     def url_for(self, filename: str) -> str:
         key = filename.lstrip("/").replace("\\", "/")
