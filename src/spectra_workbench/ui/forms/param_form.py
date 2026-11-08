@@ -54,6 +54,7 @@ from spectra_workbench.processing.output_formats import (
 from spectra_workbench.processing.raster_params import (
     DIFF_MODES,
     FUSION_METHODS,
+    FVC_ENDMEMBER_MODES,
     GCP_TRANSFORMS,
     LOCAL_RESAMPLES,
     RESAMPLE_ALGORITHM_CHOICES,
@@ -574,6 +575,90 @@ class CapabilityFormWidget(QWidget):
         self.lbl_fusion_resample = QLabel("MS 重采样 (fusionResample):")
         self.params_form.addRow(self.lbl_fusion_resample, self.cmb_fusion_resample)
 
+        # --- P6-05 二值掩膜 ---
+        self.spin_mask_band = QSpinBox()
+        self.spin_mask_band.setRange(1, 999)
+        self.spin_mask_band.setValue(1)
+        self.lbl_mask_band = QLabel("输入波段 (maskBand，1-based):")
+        self.params_form.addRow(self.lbl_mask_band, self.spin_mask_band)
+
+        self.txt_mask_low = QLineEdit()
+        self.txt_mask_low.setPlaceholderText("留空=不设下限；0.2 表示 value >= 0.2")
+        self.lbl_mask_low = QLabel("掩膜下限 (maskLow，可空):")
+        self.params_form.addRow(self.lbl_mask_low, self.txt_mask_low)
+
+        self.txt_mask_high = QLineEdit()
+        self.txt_mask_high.setPlaceholderText("留空=不设上限；0.9 表示 value <= 0.9")
+        self.lbl_mask_high = QLabel("掩膜上限 (maskHigh，可空):")
+        self.params_form.addRow(self.lbl_mask_high, self.txt_mask_high)
+
+        self.chk_mask_invert = QCheckBox("取反掩膜 (maskInvert)")
+        self.chk_mask_invert.setChecked(False)
+        self.lbl_mask_invert = QLabel("取反 (maskInvert):")
+        self.params_form.addRow(self.lbl_mask_invert, self.chk_mask_invert)
+
+        # --- P6-05 FVC 植被覆盖度 ---
+        self.spin_fvc_band = QSpinBox()
+        self.spin_fvc_band.setRange(1, 999)
+        self.spin_fvc_band.setValue(1)
+        self.lbl_fvc_band = QLabel("NDVI 波段 (fvcBand，1-based):")
+        self.params_form.addRow(self.lbl_fvc_band, self.spin_fvc_band)
+
+        self.cmb_fvc_mode = QComboBox()
+        for mode in FVC_ENDMEMBER_MODES:
+            self.cmb_fvc_mode.addItem(
+                "分位端元 percentile（2%/98%）" if mode == "percentile" else "显式端元 values",
+                mode,
+            )
+        self.lbl_fvc_mode = QLabel("端元模式 (endmemberMode):")
+        self.params_form.addRow(self.lbl_fvc_mode, self.cmb_fvc_mode)
+
+        self.spin_fvc_low = QDoubleSpinBox()
+        self.spin_fvc_low.setDecimals(4)
+        self.spin_fvc_low.setRange(0.0, 100.0)
+        self.spin_fvc_low.setValue(2.0)
+        self.lbl_fvc_low = QLabel("低分位 (lowPercentile，%):")
+        self.params_form.addRow(self.lbl_fvc_low, self.spin_fvc_low)
+
+        self.spin_fvc_high = QDoubleSpinBox()
+        self.spin_fvc_high.setDecimals(4)
+        self.spin_fvc_high.setRange(0.0, 100.0)
+        self.spin_fvc_high.setValue(98.0)
+        self.lbl_fvc_high = QLabel("高分位 (highPercentile，%):")
+        self.params_form.addRow(self.lbl_fvc_high, self.spin_fvc_high)
+
+        self.txt_fvc_soil = QLineEdit()
+        self.txt_fvc_soil.setPlaceholderText("仅 values 模式必填；例：0.15")
+        self.lbl_fvc_soil = QLabel("土壤端元 (fvcSoil，可空):")
+        self.params_form.addRow(self.lbl_fvc_soil, self.txt_fvc_soil)
+
+        self.txt_fvc_veg = QLineEdit()
+        self.txt_fvc_veg.setPlaceholderText("仅 values 模式必填；例：0.75")
+        self.lbl_fvc_veg = QLabel("植被端元 (fvcVeg，可空):")
+        self.params_form.addRow(self.lbl_fvc_veg, self.txt_fvc_veg)
+
+        self.txt_fvc_class_edges = QLineEdit()
+        self.txt_fvc_class_edges.setPlaceholderText(
+            "留空=缺省 0.25,0.5,0.75（4 级）；填写严格递增，例：0.3,0.6"
+        )
+        self.lbl_fvc_class_edges = QLabel("分级边界 (fvcClassEdges):")
+        self.params_form.addRow(self.lbl_fvc_class_edges, self.txt_fvc_class_edges)
+
+        self.txt_fvc_mask = QLineEdit()
+        self.txt_fvc_mask.setPlaceholderText("可选：单波段掩膜（1=有效，0=无效；可由 gdal:mask 生成）")
+        self.btn_browse_fvc_mask = QPushButton("选择...")
+        self.btn_browse_fvc_mask.clicked.connect(self._browse_fvc_mask)
+        fvc_mask_row = QHBoxLayout()
+        fvc_mask_row.addWidget(self.txt_fvc_mask, stretch=1)
+        fvc_mask_row.addWidget(self.btn_browse_fvc_mask)
+        self.lbl_fvc_mask = QLabel("掩膜文件 (maskFile，可空):")
+        self.params_form.addRow(self.lbl_fvc_mask, fvc_mask_row)
+
+        self.chk_fvc_crop = QCheckBox("夹到 [0,1]（越界标记始终写入 sidecar）")
+        self.chk_fvc_crop.setChecked(True)
+        self.lbl_fvc_crop = QLabel("裁剪 (crop):")
+        self.params_form.addRow(self.lbl_fvc_crop, self.chk_fvc_crop)
+
         # --- P4-03 概览构建 ---
         self.txt_levels = QLineEdit()
         self.txt_levels.setPlaceholderText("严格递增、每个≥2；例：2,4,8")
@@ -946,6 +1031,32 @@ class CapabilityFormWidget(QWidget):
         self._set_row_visible(
             self.lbl_fusion_resample, self.cmb_fusion_resample, "fusionResample" in sup
         )
+        # P6-05 二值掩膜
+        self._set_row_visible(
+            self.lbl_mask_band, self.spin_mask_band, "maskBand" in sup
+        )
+        self._set_row_visible(self.lbl_mask_low, self.txt_mask_low, "maskLow" in sup)
+        self._set_row_visible(self.lbl_mask_high, self.txt_mask_high, "maskHigh" in sup)
+        self._set_row_visible(
+            self.lbl_mask_invert, self.chk_mask_invert, "maskInvert" in sup
+        )
+        # P6-05 FVC
+        self._set_row_visible(self.lbl_fvc_band, self.spin_fvc_band, "fvcBand" in sup)
+        self._set_row_visible(
+            self.lbl_fvc_mode, self.cmb_fvc_mode, "endmemberMode" in sup
+        )
+        self._set_row_visible(self.lbl_fvc_low, self.spin_fvc_low, "lowPercentile" in sup)
+        self._set_row_visible(
+            self.lbl_fvc_high, self.spin_fvc_high, "highPercentile" in sup
+        )
+        self._set_row_visible(self.lbl_fvc_soil, self.txt_fvc_soil, "fvcSoil" in sup)
+        self._set_row_visible(self.lbl_fvc_veg, self.txt_fvc_veg, "fvcVeg" in sup)
+        self._set_row_visible(
+            self.lbl_fvc_class_edges, self.txt_fvc_class_edges, "fvcClassEdges" in sup
+        )
+        self._set_row_visible(self.lbl_fvc_mask, self.txt_fvc_mask, "maskFile" in sup)
+        self.btn_browse_fvc_mask.setVisible("maskFile" in sup)
+        self._set_row_visible(self.lbl_fvc_crop, self.chk_fvc_crop, "crop" in sup)
         self._set_row_visible(self.lbl_levels, self.txt_levels, "levels" in sup)
         self._set_row_visible(self.lbl_ovr_compress, self.cmb_ovr_compress, "overviewCompress" in sup)
         # P4-04
@@ -1118,6 +1229,32 @@ class CapabilityFormWidget(QWidget):
             self.cmb_fusion_method.setCurrentIndex(0)
         if "fusionResample" not in supported:
             self.cmb_fusion_resample.setCurrentIndex(0)
+        if "maskBand" not in supported:
+            self.spin_mask_band.setValue(1)
+        if "maskLow" not in supported:
+            self.txt_mask_low.clear()
+        if "maskHigh" not in supported:
+            self.txt_mask_high.clear()
+        if "maskInvert" not in supported:
+            self.chk_mask_invert.setChecked(False)
+        if "fvcBand" not in supported:
+            self.spin_fvc_band.setValue(1)
+        if "endmemberMode" not in supported:
+            self.cmb_fvc_mode.setCurrentIndex(0)
+        if "lowPercentile" not in supported:
+            self.spin_fvc_low.setValue(2.0)
+        if "highPercentile" not in supported:
+            self.spin_fvc_high.setValue(98.0)
+        if "fvcSoil" not in supported:
+            self.txt_fvc_soil.clear()
+        if "fvcVeg" not in supported:
+            self.txt_fvc_veg.clear()
+        if "fvcClassEdges" not in supported:
+            self.txt_fvc_class_edges.clear()
+        if "maskFile" not in supported:
+            self.txt_fvc_mask.clear()
+        if "crop" not in supported:
+            self.chk_fvc_crop.setChecked(True)
         if "levels" not in supported:
             self.txt_levels.clear()
         if "overviewCompress" not in supported:
@@ -1453,6 +1590,67 @@ class CapabilityFormWidget(QWidget):
         if "fusionResample" in supported:
             params["fusionResample"] = self.cmb_fusion_resample.currentData()
 
+        # P6-05：二值掩膜
+        if "maskBand" in supported:
+            params["maskBand"] = int(self.spin_mask_band.value())
+        for key, widget in (
+            ("maskLow", self.txt_mask_low),
+            ("maskHigh", self.txt_mask_high),
+        ):
+            if key in supported:
+                raw = widget.text().strip()
+                if raw:
+                    try:
+                        params[key] = float(raw)
+                    except ValueError:
+                        return params, f"{key} 必须是数值，当前为：{raw}"
+        if "maskInvert" in supported:
+            params["maskInvert"] = self.chk_mask_invert.isChecked()
+
+        # P6-05：FVC
+        if "fvcBand" in supported:
+            params["fvcBand"] = int(self.spin_fvc_band.value())
+        if "endmemberMode" in supported:
+            params["endmemberMode"] = self.cmb_fvc_mode.currentData()
+        if "lowPercentile" in supported:
+            params["lowPercentile"] = float(self.spin_fvc_low.value())
+        if "highPercentile" in supported:
+            params["highPercentile"] = float(self.spin_fvc_high.value())
+        if "fvcSoil" in supported:
+            raw_soil = self.txt_fvc_soil.text().strip()
+            if raw_soil:
+                try:
+                    params["fvcSoil"] = float(raw_soil)
+                except ValueError:
+                    return params, f"fvcSoil 必须是数值，当前为：{raw_soil}"
+        if "fvcVeg" in supported:
+            raw_veg = self.txt_fvc_veg.text().strip()
+            if raw_veg:
+                try:
+                    params["fvcVeg"] = float(raw_veg)
+                except ValueError:
+                    return params, f"fvcVeg 必须是数值，当前为：{raw_veg}"
+        if "fvcClassEdges" in supported:
+            raw_edges = self.txt_fvc_class_edges.text().strip()
+            if raw_edge := raw_edges:
+                edge_values: list[float] = []
+                for part in raw_edge.replace(";", ",").replace("；", ",").split(","):
+                    part = part.strip()
+                    if not part:
+                        continue
+                    try:
+                        edge_values.append(float(part))
+                    except ValueError:
+                        return params, f"fvcClassEdges 必须是数值，当前为：{raw_edges}"
+                if edge_values:
+                    params["fvcClassEdges"] = edge_values
+        if "maskFile" in supported:
+            mask_text = self.txt_fvc_mask.text().strip()
+            if mask_text:
+                params["maskFile"] = mask_text
+        if "crop" in supported:
+            params["crop"] = self.chk_fvc_crop.isChecked()
+
         # P4-04：表达式计算
         if "calc" in supported:
             raw_expr = self.txt_calc.text().strip()
@@ -1594,6 +1792,16 @@ class CapabilityFormWidget(QWidget):
         )
         if path:
             self.txt_fusion_ms.setText(path)
+
+    def _browse_fvc_mask(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "选择 FVC 掩膜文件",
+            str(self._project_root),
+            "栅格掩膜 (*.tif *.tiff *.dat *.img *.vrt);;所有文件 (*)",
+        )
+        if path:
+            self.txt_fvc_mask.setText(path)
 
     def _browse_input(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
@@ -1742,6 +1950,24 @@ class CapabilityFormWidget(QWidget):
                 has_alpha=False,
             )
             return "；".join(fusion_violations) if fusion_violations else None
+        if capability_id == "gdal:mask":
+            mask_violations = validate_output_format(
+                out_fmt,
+                dtype="Byte",
+                bands=1,
+                has_nodata=False,
+                has_alpha=False,
+            )
+            return "；".join(mask_violations) if mask_violations else None
+        if capability_id == "gdal:fvc":
+            fvc_violations = validate_output_format(
+                out_fmt,
+                dtype="Float32",
+                bands=2,
+                has_nodata=True,
+                has_alpha=False,
+            )
+            return "；".join(fvc_violations) if fvc_violations else None
         has_nodata_param = any(
             params.get(key) is not None
             for key in ("srcNodata", "vrtNodata", "dstNodata", "noData")
@@ -1927,6 +2153,8 @@ class CapabilityFormWidget(QWidget):
             "gdal:gcpregister",
             "gdal:rasterdiff",
             "gdal:pansharpen",
+            "gdal:mask",
+            "gdal:fvc",
         }:
             # 这些能力都真实消费 format；此前 sindex/fftfilter 漏发 format，
             # 会导致 GUI 里选 COG/ENVI 仍被 Worker 静默写成 GTiff。

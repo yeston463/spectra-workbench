@@ -46,6 +46,10 @@ _SIDECAR_SUFFIXES = {
     ".gcpregistration.json",
     ".rasterdiff.json",
     ".pansharpen.json",
+    # P6-05：掩膜 / FVC sidecar。
+    ".mask.json",
+    ".fvc.json",
+    ".fvc_class.tif",
     ".wld",
     ".tfw",
     ".tifw",
@@ -109,6 +113,9 @@ def _suffixes_for_target(target: Path) -> set[str]:
         ".gcpregistration.json",
         ".rasterdiff.json",
         ".pansharpen.json",
+        ".mask.json",
+        ".fvc.json",
+        ".fvc_class.tif",
     }
     suffix = target.suffix.lower()
     if suffix in {".tif", ".tiff"}:
@@ -137,6 +144,9 @@ def known_sidecar_candidates(target: Path) -> list[Path]:
             ".gcpregistration.json",
             ".rasterdiff.json",
             ".pansharpen.json",
+            ".mask.json",
+            ".fvc.json",
+            ".fvc_class.tif",
         }:
             candidates.add(target.with_name(target.name + suffix))
         else:

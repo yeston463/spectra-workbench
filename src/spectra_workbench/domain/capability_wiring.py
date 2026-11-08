@@ -72,6 +72,9 @@ CONNECTED_CAPABILITIES: frozenset[str] = frozenset(
         "gdal:gcpregister",
         "gdal:rasterdiff",
         "gdal:pansharpen",
+        # P6-05：二值掩膜 / FVC 植被覆盖度
+        "gdal:mask",
+        "gdal:fvc",
     }
 )
 
@@ -138,6 +141,8 @@ FORMAT_CAPABILITIES: frozenset[str] = frozenset(
         "gdal:gcpregister",
         "gdal:rasterdiff",
         "gdal:pansharpen",
+        "gdal:mask",
+        "gdal:fvc",
         "gdal:calc",
     }
 )

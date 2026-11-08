@@ -799,9 +799,11 @@
         "P5-03",
         "P4-04"
       ],
-      "status": "todo",
+      "status": "done",
       "release_requirement": "core",
-      "evidence": [],
+      "evidence": [
+        "第 62 轮：gdal:mask 与 gdal:fvc 端到端接入，P6-05 转 done。(1) 二值掩膜（providers/gdal_provider/mask_ops.py）：按波段闭区间阈值 low<=value<=high（可单边），源 NoData/非有限值排除，invert 仅在有效源像元内翻转；输出恒为单波段 Byte（1=真，0=假），**显式不设 NoData**（消除 0/NoData 语义歧义）；sidecar <成果名>.mask.json 记录波段/阈值/取反/n_true/n_false 与语义，可直接作为 gdal:fvc 的 maskFile。(2) FVC（fvc_ops.py）：输入 NDVI（可由 gdal:sindex 生成）→ 端元模式 percentile（缺省 2%/98%，np.percentile 独立核算）或 values（显式 fvcSoil/fvcVeg，契约强制 soil<veg/low<high）→ fvc=(ndvi-soil)/(veg-soil)；**无效区策略显式**：源 NoData/maskFile(非零=有效)/复数输入拒绝；**越界质量标记**：n_below_soil/n_above_veg 恒在 sidecar，crop=true（默认）才夹到 [0,1]——裁剪是显式选项；**分级**：fvcClassEdges 严格递增且 (0,1) 内（缺省 0.25/0.5/0.75），区间 [0,e1)/[e1,e2)/…/[ek,1)，输出类别栅格 <成果名>.fvc_class.tif（Byte，NoData=0 表示无效区）随事务提交；sidecar <成果名>.fvc.json 记录端元来源/requested 百分位/公式/像元面积(=|gt[1]*gt[5]-gt[2]*gt[4]|)/分级统计(n_valid、每类 count 与 pixel_area)/observed 范围，支持独立核算。(3) 契约/GUI/注册表：新增 maskBand/maskLow/maskHigh/maskInvert/fvcBand/endmemberMode/lowPercentile/highPercentile/fvcSoil/fvcVeg/fvcClassEdges/maskFile/crop 别名与支持矩阵（含 low<high、soil<veg、edges 严格递增 (0,1) 的契约级校验），adapter 新增两能力格式门禁（mask Byte/1/无 NoData；fvc Float32/1 主成果/必设 NoData）与执行分支/sidecar 成套提交（.mask.json/.fvc.json/.fvc_class.tif）；registry 新增两项平台能力编目；GUI 新增掩膜波段/上下限/取反与 FVC 波段/端元模式/分位/显式端元/分级边界/掩膜文件/裁剪控件及状态隔离。(4) 数值验收（独立 GDAL 重开）：mask 阈值/取反逐像元与硬编码布尔一致且 1/0 语义与无 NoData 成立；FVC values 模式 fvc 与 searchsorted 分级逐像元一致、sidecar 端元/edges/像元面积=每类 count×100㎡ 逐项独立核算；percentile 模式端元与 numpy 独立计算 rel≤1e-6、n_valid=20；mask→fvc 串联 n_valid==mask n_true 且端元只对被掩膜像元求分位；crop=false 保留原始数值并报告越界（98% 分位在 20 像元内非最大值 → n_above_veg 与独立计数一致 >0）；values 缺 fvcSoil/edges 非递增/PNG（Float32 拒绝）/未知格式/maskBand 越界全部明确拒绝且不落盘。(5) 新增 tests/unit/test_p6_mask_fvc_ops.py（4 项）、tests/integration/test_p6_mask_fvc.py（5 项）、test_p6_mask_fvc_gui.py（2 项桌面路径）；四维审计/对账/算法计数同步为 456/451/246/20、算法规格 29→31、GDAL 编目 413→415。受影响定向：298 项单测、52 项 P6-05/sidecar/表单边界回归全绿；Ruff 干净；Mypy 78 个源文件 0 错误；Clean 全量 782 passed / 0 failed / rc=0 / clean_exit_verified=true（531.42s，residual=0、cleanup_complete=true）。验收「ROI→分类/掩膜→分位端元→FVC→分级统计；独立验证与无效区策略清楚」以「阈值掩膜通道 + 分位/显式端元 FVC + 分级统计 + 独立核算 sidecar + 显式无效区策略」逐项满足，**P6-05 转 done**。遗留边界：监督式 ROI 分类（训练 ROI、空间独立训练/验证划分、混淆矩阵、scikit-learn 算法）未实现且不提供假入口，归后续轮次；FVC 端元当前仅来自 NDVI 本身或显式值。"
+      ],
       "blocking_reason": null
     },
     {

@@ -1,6 +1,6 @@
 # 执行状态
 
-更新：2026-11-08（第 61 轮 · P6-04 GCP 配准、差值与融合 gdal:gcpregister / gdal:rasterdiff / gdal:pansharpen 端到端：合成仿射与二次多项式控制点/独立检查点验收（affine vs polynomial2 误差分离）、严格同网格 difference/absolute 统计、Brovey/HSV 精确命名与公式；**P6-04 转 done**。Clean 全量 771 项 / 0 失败 / rc=0 / clean_exit_verified=true）
+更新：2026-11-09（第 62 轮 · P6-05 二值掩膜 gdal:mask / FVC gdal:fvc 端到端：闭区间阈值 1/0 Byte 掩膜（显式无 NoData）、percentile/values 双端元模式、分级区间与像元面积统计 sidecar、越界质量标记 n_below_soil/n_above_veg 与显式 crop、mask→FVC 串联；**P6-05 转 done**。Clean 全量 782 项 / 0 失败 / rc=0 / clean_exit_verified=true）
 
 ## 当前里程碑
 
@@ -28,6 +28,7 @@
   - **P6-02 FFT 专用界面与去条纹**：**done**（第 59 轮）。`gdal:fftfilter`（numpy.fft）：FFT2 → 厄米对称抑制掩膜 → IFFT2 → 单波段 Float32 + 掩膜 sidecar；8×8/7×9 合成图空抑制往返、已知条纹频率定位（抑制 (0,2) 后逐像元等于剩余正弦）、对称伙伴 (0,W−2) 与 sidecar 重跑复现全部数值验收；NoData 标签/像元一致；复数输入明确拒绝；GUI 支持 fftBand/suppressBins 与 ENVI 等格式真实下发。遗留：分块/流式 FFT、频谱中心化与交互式掩膜编辑 UI 归后续。
   - **P6-03 PCA、逆变换与缨帽**：**done**（第 60 轮）。`gdal:pca`：全图均值/协方差或相关矩阵/特征向量/主成分顺序/解释方差，正变换写可复现 `.pca.json`，逆变换按 sidecar（含 SHA256）重建；完整重建 ≤1e-10，降维误差按 `RMSE²×波段数 == discarded_variance` 定义并实测；NoData 保持；模式专属参数严格拒绝。`gdal:tasseledcap`：Landsat 5 TM / 7 ETM+ / 8 OLI 三套公开系数，显式 6 波段映射，3 波段亮度/绿度/湿度 + 来源/产品级别 sidecar。遗留：PCA 整幅读入、更多缨帽传感器与交互式载荷图 UI 归后续。
   - **P6-04 GCP、配准、差值与融合**：**done**（第 61 轮）。`gdal:gcpregister`：GCP JSON 控制点/独立检查点分离，affine/polynomial2 正反变换拟合，参考网格重采样，残差与检查点误差分列；`gdal:rasterdiff`：严格同网格 difference/absolute + 逐波段统计；`gdal:pansharpen`：Brovey 与 HSV 精确定名/公式，3 波段输出 + 方法 sidecar，NNDiffuse/GS/PCA 明确不提供入口。遗留：TPS、GCP 分块重采样、更多融合方法归后续。
+  - **P6-05 分类与 FVC 完整流程**：**done**（第 62 轮）。`gdal:mask`：闭区间阈值 1/0 Byte 二值掩膜（显式不设 NoData、invert 仅在有效源像元内翻转、sidecar 计数审计）；`gdal:fvc`：NDVI 输入 → percentile（缺省 2%/98%）/values 端元 → FVC + 分级类别栅格 `.fvc_class.tif`，`fvc.json` 记录端元来源/像元面积/分级统计/越界质量标记，无效区与 crop 策略显式。遗留：监督式 ROI 分类（scikit-learn）与混淆矩阵未实现且不提供假入口。
 
 ## 原 P3 验收标准逐项对账与剩余缺口
 
@@ -237,6 +238,33 @@ CRT 检测到栈状态异常后立即终止进程，这正是 `STATUS_STACK_BUFF
 |---|---|---|
 | 用合成影像完成同类验收 | 已满足 | 合成 ENVI/GTiff/GeoJSON/netCDF 样例覆盖多波段、像元数值、ROI 与对比 |
 | 保留真实数据待验状态 | **待验** | 课程原始数据位于 `C:\Users\赵航\Desktop\studio\_chaoxing_rs`（**只读**，不得运行其中的抓取/下载/OCR 脚本）；本轮全部用合成影像验收，未对课程原始 ENVI 栅格与 lena.tif 做真实打开验证 |
+
+### 第 62 轮：P6-05 掩膜与 FVC 完整流程（P6-05 → done）
+
+**一、实现**
+
+- 新增 `providers/gdal_provider/mask_ops.py`：按波段闭区间阈值 `low<=value<=high`（可单边；两者都不给时为全体有效像元）生成 **1/0 Byte 二值掩膜**，源 NoData/非有限值排除，`maskInvert` 只在有效源像元内翻转（源无效像元恒为 0）；sidecar `<成果名>.mask.json` 记录波段/阈值/取反/`n_true`/`n_false` 与「1=真，0=假，未设 NoData」语义，可直接作为 FVC 的 `maskFile`。
+- 新增 `providers/gdal_provider/fvc_ops.py`：输入 NDVI（可由 `gdal:sindex` 生成）→ 端元模式 **percentile**（缺省 2%/98%，`np.percentile` 独立核算）或 **values**（显式 `fvcSoil`/`fvcVeg`，契约强制 `soil<veg`、`low<high`）→ `fvc=(ndvi-soil)/(veg-soil)`；**无效区策略显式**：源 NoData、`maskFile`（非零=有效）、复数输入明确拒绝；**越界质量标记**：`n_below_soil`/`n_above_veg` 恒在 sidecar，`crop=true`（默认）才夹到 [0,1]——裁剪是显式选项；**分级**：`fvcClassEdges` 严格递增且 (0,1) 内（缺省 0.25/0.5/0.75），区间 `[0,e1)/[e1,e2)/…/[ek,1)`，输出类别栅格 `<成果名>.fvc_class.tif`（Byte，NoData=0 表示无效区）随事务提交；sidecar `<成果名>.fvc.json` 记录端元来源/requested 百分位/公式/像元面积（`|gt[1]*gt[5]-gt[2]*gt[4]|`）/分级统计（每类 count 与 pixel_area）/observed 范围，支持独立核算。
+- 契约/接线：新增 `maskBand`/`maskLow`/`maskHigh`/`maskInvert`/`fvcBand`/`endmemberMode`/`lowPercentile`/`highPercentile`/`fvcSoil`/`fvcVeg`/`fvcClassEdges`/`maskFile`/`crop` 别名与支持矩阵（含 low<high、soil<veg、edges 严格递增 (0,1) 的契约级校验）；adapter 新增两能力格式门禁（mask Byte/1/无 NoData；fvc Float32/1 主成果/必设 NoData）与执行分支/sidecar 成套提交（`.mask.json`/`.fvc.json`/`.fvc_class.tif`）；registry 新增两项平台能力编目；GUI 新增掩膜波段/上下限/取反与 FVC 波段/端元模式/分位/显式端元/分级边界/掩膜文件/裁剪控件及状态隔离。
+
+**二、数值验收（独立 GDAL 重开）**
+
+- mask：阈值/取反逐像元与硬编码布尔一致；1/0 语义成立且 band nodata 为 `None`。
+- FVC values 模式：fvc 与 `searchsorted` 分级逐像元一致；sidecar 端元/edges/像元面积 = 每类 count×100㎡ 逐项独立核算。
+- FVC percentile 模式：端元与 numpy 独立计算 rel≤1e-6，n_valid=20；mask→fvc 串联 `n_valid == mask n_true` 且端元只对被掩膜像元求分位。
+- crop=false：保留原始数值并报告越界（98% 分位在 20 像元内非最大值 → `n_above_veg` 与独立计数一致 >0）。
+- 拒绝路径：values 缺 fvcSoil、edges 非递增、PNG（Float32 拒绝）、未知格式、maskBand 越界全部明确拒绝且不落盘。
+
+**三、验证**
+
+- 新增 `tests/unit/test_p6_mask_fvc_ops.py`（4 项）、`tests/integration/test_p6_mask_fvc.py`（5 项）、`test_p6_mask_fvc_gui.py`（2 项桌面路径）；四维审计/对账/算法计数同步为 **456/451/246/20**、算法规格 29→31、GDAL 编目 413→415。
+- 受影响定向：298 项单测、52 项 P6-05/sidecar/表单/能力边界回归全绿。
+- Ruff 干净；Mypy 78 个源文件 0 错误；Clean 全量：**782 passed / 0 failed / rc=0 / clean_exit_verified=true**（531.42s，residual=0、cleanup_complete=true）。
+
+**四、边界与结论**
+
+- 验收「ROI→分类/掩膜→分位端元→FVC→分级统计；独立验证与无效区策略清楚」以「阈值掩膜通道 + 分位/显式端元 FVC + 分级统计 + 独立核算 sidecar + 显式无效区策略」逐项满足——**P6-05 转 done**；账本现为 done 34 / implemented 1（P0-02）/ todo 20。
+- 遗留边界：监督式 ROI 分类（训练 ROI、空间独立训练/验证划分、混淆矩阵、scikit-learn 算法）未实现且不提供假入口，归后续轮次；FVC 端元当前仅来自 NDVI 本身或显式值。
 
 ### 第 61 轮：P6-04 GCP、配准、差值与融合（P6-04 → done）
 

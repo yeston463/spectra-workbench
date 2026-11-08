@@ -17,7 +17,9 @@ PLATFORM_ONLY = {
     "gdal:bandmanage",
     "gdal:editmeta",
     "gdal:fftfilter",
+    "gdal:fvc",
     "gdal:gcpregister",
+    "gdal:mask",
     "gdal:overview",
     "gdal:pca",
     "gdal:rasterdiff",
@@ -41,8 +43,8 @@ def test_baseline_reconciliation_has_no_missing_registry_entry() -> None:
 
     assert report["errors"] == []
     assert report["baseline_count"] == 443
-    # 第 58/59/60/61 轮新增平台能力（pansharpen 升级既有条目）：448 -> 454
-    assert report["registry_count"] == 454
+    # 第 58/59/60/61/62 轮新增平台能力（pansharpen 升级既有条目）：448 -> 456
+    assert report["registry_count"] == 456
     assert report["missing_from_registry"] == []
     assert set(report["platform_only"]) == PLATFORM_ONLY
     assert report["complete"] is True
@@ -83,6 +85,8 @@ def test_target_version_tools_are_indexed_and_gaps_have_reasons() -> None:
         "gdal:gcpregister",
         "gdal:rasterdiff",
         "gdal:pansharpen",
+        "gdal:mask",
+        "gdal:fvc",
     ):
         cap = registry.get(cid)
         assert cap is not None and str(cap.state.availability) == "ready"

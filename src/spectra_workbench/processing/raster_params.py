@@ -36,10 +36,14 @@ LOCAL_RESAMPLES: tuple[str, ...] = ("nearest", "bilinear")
 DIFF_MODES: tuple[str, ...] = ("difference", "absolute")
 FUSION_METHODS: tuple[str, ...] = ("brovey", "hsv")
 
+#: P6-05 FVC 端元模式（GUI 与 Worker 共用）。
+FVC_ENDMEMBER_MODES: tuple[str, ...] = ("percentile", "values")
+
 __all__ = [
     "DEM_PROCESSINGS",
     "DIFF_MODES",
     "FUSION_METHODS",
+    "FVC_ENDMEMBER_MODES",
     "GCP_TRANSFORMS",
     "LOCAL_RESAMPLES",
     "PCA_MATRICES",
@@ -215,6 +219,20 @@ _PARAM_ALIASES: dict[str, tuple[str, ...]] = {
     "msBands": ("ms_bands", "multispectral_bands"),
     "fusionMethod": ("fusion_method", "pansharpen_method"),
     "fusionResample": ("fusion_resample", "fusion_resampling"),
+    # --- P6-05 掩膜 / FVC ---
+    "maskBand": ("mask_band", "mask_src_band"),
+    "maskLow": ("mask_low", "mask_threshold_low"),
+    "maskHigh": ("mask_high", "mask_threshold_high"),
+    "maskInvert": ("mask_invert", "invert_mask"),
+    "fvcBand": ("fvc_band", "ndvi_band"),
+    "endmemberMode": ("endmember_mode", "fvc_endmember_mode"),
+    "lowPercentile": ("low_percentile", "fvc_low_percentile"),
+    "highPercentile": ("high_percentile", "fvc_high_percentile"),
+    "fvcSoil": ("fvc_soil", "soil_endmember"),
+    "fvcVeg": ("fvc_veg", "veg_endmember"),
+    "fvcClassEdges": ("fvc_class_edges", "class_edges"),
+    "maskFile": ("mask_file", "fvc_mask_file"),
+    "crop": ("crop", "fvc_crop"),
     # --- P4-04 表达式 / 直方图与基础统计 ---
     "calc": ("calc_expr", "expression", "formula"),
     "statisticsMode": ("mode", "stats_mode", "statistics_mode"),
@@ -448,6 +466,32 @@ _CAPABILITY_SUPPORT: dict[str, frozenset[str]] = {
             "msBands",
             "fusionMethod",
             "fusionResample",
+            "srcNodata",
+            "dstNodata",
+        }
+    ),
+    # --- P6-05：掩膜（二值 Byte，无 NoData）---
+    "gdal:mask": frozenset(
+        {
+            "maskBand",
+            "maskLow",
+            "maskHigh",
+            "maskInvert",
+            "srcNodata",
+        }
+    ),
+    # --- P6-05：FVC（NDVI 输入 + 端元/分位 + 分级）---
+    "gdal:fvc": frozenset(
+        {
+            "fvcBand",
+            "endmemberMode",
+            "lowPercentile",
+            "highPercentile",
+            "fvcSoil",
+            "fvcVeg",
+            "fvcClassEdges",
+            "maskFile",
+            "crop",
             "srcNodata",
             "dstNodata",
         }
@@ -1047,6 +1091,97 @@ def normalize_raster_params(
         if len(set(ms_bands)) != 3:
             raise ParameterError(f"msBands 的 3 个波段号必须互不相同，实际 {ms_bands}")
         out["msBands"] = ms_bands
+
+    # 11.18) P6-05：掩膜 / FVC
+    if "maskBand" in collected:
+        _, value = collected["maskBand"]
+        out["maskBand"] = _require_positive_int(value, "maskBand")
+    for key in ("maskLow", "maskHigh"):
+        if key in collected:
+            _, value = collected[key]
+            out[key] = _require_finite_float(value, key)
+    if (
+        "maskLow" in out
+        and "maskHigh" in out
+        and float(out["maskLow"]) > float(out["maskHigh"])
+    ):
+        raise ParameterError(
+            "maskLow 必须小于等于 maskHigh，实际 "
+            f"{out['maskLow']} > {out['maskHigh']}"
+        )
+    if "maskInvert" in collected:
+        _, value = collected["maskInvert"]
+        if not isinstance(value, bool):
+            raise ParameterError(f"maskInvert 必须是布尔值，实际 {value!r}")
+        out["maskInvert"] = value
+    if "fvcBand" in collected:
+        _, value = collected["fvcBand"]
+        out["fvcBand"] = _require_positive_int(value, "fvcBand")
+    if "endmemberMode" in collected:
+        _, value = collected["endmemberMode"]
+        mode = str(value).strip().lower()
+        if mode not in FVC_ENDMEMBER_MODES:
+            raise ParameterError(
+                f"未知 FVC 端元模式 {value!r}；可用：{', '.join(FVC_ENDMEMBER_MODES)}"
+            )
+        out["endmemberMode"] = mode
+    for key in ("lowPercentile", "highPercentile"):
+        if key in collected:
+            _, value = collected[key]
+            out[key] = _require_finite_float(value, key)
+    if (
+        "lowPercentile" in out
+        and "highPercentile" in out
+        and float(out["lowPercentile"]) >= float(out["highPercentile"])
+    ):
+        raise ParameterError(
+            "lowPercentile 必须小于 highPercentile，实际 "
+            f"{out['lowPercentile']} >= {out['highPercentile']}"
+        )
+    for key in ("fvcSoil", "fvcVeg"):
+        if key in collected:
+            _, value = collected[key]
+            out[key] = _require_finite_float(value, key)
+    if (
+        "fvcSoil" in out
+        and "fvcVeg" in out
+        and float(out["fvcSoil"]) >= float(out["fvcVeg"])
+    ):
+        raise ParameterError(
+            "FVC 端元必须 fvcSoil < fvcVeg，实际 "
+            f"{out['fvcSoil']} >= {out['fvcVeg']}"
+        )
+    if "fvcClassEdges" in collected:
+        _, value = collected["fvcClassEdges"]
+        if not isinstance(value, (list, tuple)) or not value:
+            raise ParameterError("fvcClassEdges 必须是至少 1 个数值的列表")
+        edges: list[float] = []
+        for item in value:
+            try:
+                edges.append(float(item))
+            except (TypeError, ValueError) as exc:
+                raise ParameterError(
+                    f"fvcClassEdges 必须为数值，实际 {item!r}"
+                ) from exc
+        for item in edges:
+            if not math.isfinite(item) or not (0.0 < item < 1.0):
+                raise ParameterError(
+                    f"fvcClassEdges 必须在 (0, 1) 内且有限，实际 {item!r}"
+                )
+        if any(b <= a for a, b in zip(edges, edges[1:], strict=False)):
+            raise ParameterError("fvcClassEdges 必须严格递增")
+        out["fvcClassEdges"] = edges
+    if "maskFile" in collected:
+        _, value = collected["maskFile"]
+        text = str(value).strip()
+        if not text:
+            raise ParameterError("参数 maskFile 必须是非空文件路径")
+        out["maskFile"] = text
+    if "crop" in collected:
+        _, value = collected["crop"]
+        if not isinstance(value, bool):
+            raise ParameterError(f"crop 必须是布尔值，实际 {value!r}")
+        out["crop"] = value
 
     # 11.12) P5-04：矢量处理 / SQL / 坐标转换
     if "sql" in collected:

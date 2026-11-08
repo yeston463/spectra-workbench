@@ -63,8 +63,10 @@ from spectra_workbench.providers.gdal_provider.diff_ops import run_raster_diff
 from spectra_workbench.providers.gdal_provider.expression_ops import ExpressionError
 from spectra_workbench.providers.gdal_provider.fft_ops import fft_filter
 from spectra_workbench.providers.gdal_provider.fusion_ops import run_pansharpen
+from spectra_workbench.providers.gdal_provider.fvc_ops import run_fvc
 from spectra_workbench.providers.gdal_provider.gcp_ops import run_gcp_registration
 from spectra_workbench.providers.gdal_provider.index_ops import compute_index
+from spectra_workbench.providers.gdal_provider.mask_ops import run_mask
 from spectra_workbench.providers.gdal_provider.metadata_ops import (
     apply_nodata,
     build_overviews,
@@ -326,6 +328,9 @@ class GDALProviderAdapter(ProviderAdapter):
         "gdal:gcpregister",
         "gdal:rasterdiff",
         "gdal:pansharpen",
+        # --- P6-05：掩膜生成 / FVC ---
+        "gdal:mask",
+        "gdal:fvc",
         # --- P4-04：受限表达式计算 / 直方图与基础统计 ---
         "gdal:calc",
         P404_STATISTICS_CAPABILITY,
@@ -633,6 +638,8 @@ class GDALProviderAdapter(ProviderAdapter):
                 "gdal:gcpregister",
                 "gdal:rasterdiff",
                 "gdal:pansharpen",
+                "gdal:mask",
+                "gdal:fvc",
             )
             and spec.capability_id not in VECTOR_OUTPUT_CAPABILITIES
         ):
@@ -702,6 +709,63 @@ class GDALProviderAdapter(ProviderAdapter):
         is_gcpregister = spec.capability_id == "gdal:gcpregister"
         is_rasterdiff = spec.capability_id == "gdal:rasterdiff"
         is_pansharpen = spec.capability_id == "gdal:pansharpen"
+        is_mask = spec.capability_id == "gdal:mask"
+        is_fvc = spec.capability_id == "gdal:fvc"
+
+        if is_mask:
+            mask_violations = validate_output_format(
+                out_format,
+                dtype="Byte",
+                bands=1,
+                has_nodata=False,
+                has_alpha=False,
+            )
+            if mask_violations:
+                context.log("ERROR", f"掩膜输出格式不受支持: {mask_violations}")
+                return TaskResult(
+                    task_id=spec.task_id,
+                    attempt=spec.attempt,
+                    status=TaskStatus.failed,
+                    error={
+                        "code": "unsupported_format_combination",
+                        "message": "；".join(mask_violations),
+                    },
+                    duration_seconds=round(time.monotonic() - start_time, 4),
+                )
+
+        if is_fvc:
+            if norm.get("endmemberMode") == "values" and (
+                norm.get("fvcSoil") is None or norm.get("fvcVeg") is None
+            ):
+                return TaskResult(
+                    task_id=spec.task_id,
+                    attempt=spec.attempt,
+                    status=TaskStatus.failed,
+                    error={
+                        "code": "invalid_parameters",
+                        "message": "endmemberMode=values 需要 fvcSoil 与 fvcVeg",
+                    },
+                    duration_seconds=round(time.monotonic() - start_time, 4),
+                )
+            fvc_violations = validate_output_format(
+                out_format,
+                dtype="Float32",
+                bands=2,
+                has_nodata=True,
+                has_alpha=False,
+            )
+            if fvc_violations:
+                context.log("ERROR", f"FVC 输出格式不受支持: {fvc_violations}")
+                return TaskResult(
+                    task_id=spec.task_id,
+                    attempt=spec.attempt,
+                    status=TaskStatus.failed,
+                    error={
+                        "code": "unsupported_format_combination",
+                        "message": "；".join(fvc_violations),
+                    },
+                    duration_seconds=round(time.monotonic() - start_time, 4),
+                )
 
         if is_gcpregister:
             if norm.get("gcpFile") is None or norm.get("referenceFile") is None:
@@ -1535,6 +1599,95 @@ class GDALProviderAdapter(ProviderAdapter):
                     f"sidecar：{fusion_info['sidecar']}",
                 )
                 ds = gdal.Open(str(staged_path), gdal.GA_ReadOnly)
+            elif is_mask:
+                mask_info = run_mask(
+                    staged_path,
+                    in_path,  # type: ignore[arg-type]
+                    band=int(norm.get("maskBand") or 1),
+                    low=(
+                        float(norm["maskLow"])
+                        if norm.get("maskLow") is not None
+                        else None
+                    ),
+                    high=(
+                        float(norm["maskHigh"])
+                        if norm.get("maskHigh") is not None
+                        else None
+                    ),
+                    invert=bool(norm.get("maskInvert") or False),
+                    src_nodata=(
+                        float(norm["srcNodata"])
+                        if norm.get("srcNodata") is not None
+                        else None
+                    ),
+                    out_format=out_format,
+                    callback=_gdal_cb,
+                )
+                context.log(
+                    "INFO",
+                    f"掩膜完成：band={mask_info['band']}，n_true="
+                    f"{mask_info['n_true']}，n_false={mask_info['n_false']}；"
+                    f"sidecar：{mask_info['sidecar']}",
+                )
+                ds = gdal.Open(str(staged_path), gdal.GA_ReadOnly)
+            elif is_fvc:
+                mask_path = norm.get("maskFile")
+                fvc_info = run_fvc(
+                    staged_path,
+                    in_path,  # type: ignore[arg-type]
+                    endmember_mode=str(norm.get("endmemberMode") or "percentile"),
+                    ndvi_band=int(norm.get("fvcBand") or 1),
+                    low_percentile=(
+                        float(norm["lowPercentile"])
+                        if norm.get("lowPercentile") is not None
+                        else 2.0
+                    ),
+                    high_percentile=(
+                        float(norm["highPercentile"])
+                        if norm.get("highPercentile") is not None
+                        else 98.0
+                    ),
+                    soil=(
+                        float(norm["fvcSoil"])
+                        if norm.get("fvcSoil") is not None
+                        else None
+                    ),
+                    veg=(
+                        float(norm["fvcVeg"])
+                        if norm.get("fvcVeg") is not None
+                        else None
+                    ),
+                    class_edges=(
+                        [float(v) for v in norm["fvcClassEdges"]]
+                        if norm.get("fvcClassEdges") is not None
+                        else None
+                    ),
+                    mask_file=(
+                        Path(str(mask_path)).expanduser() if mask_path else None
+                    ),
+                    crop=bool(norm.get("crop") if norm.get("crop") is not None else True),
+                    src_nodata=(
+                        float(norm["srcNodata"])
+                        if norm.get("srcNodata") is not None
+                        else None
+                    ),
+                    dst_nodata=(
+                        float(norm["dstNodata"])
+                        if norm.get("dstNodata") is not None
+                        else -9999.0
+                    ),
+                    out_format=out_format,
+                    callback=_gdal_cb,
+                )
+                context.log(
+                    "INFO",
+                    f"FVC 完成：端元 {fvc_info['mode']}（soil="
+                    f"{fvc_info['soil']:.6g}, veg={fvc_info['veg']:.6g}），"
+                    f"有效像元 {fvc_info['n_valid']}，越界 "
+                    f"{fvc_info['n_below_soil']}/{fvc_info['n_above_veg']}；"
+                    f"sidecar：{fvc_info['sidecar']}",
+                )
+                ds = gdal.Open(str(staged_path), gdal.GA_ReadOnly)
             elif is_sindex:
                 # 单输入能力：validate() 保证 input 端口存在，in_path 必已解析
                 index_info = compute_index(
@@ -1730,6 +1883,10 @@ class GDALProviderAdapter(ProviderAdapter):
                 if is_rasterdiff
                 else "Pansharpen"
                 if is_pansharpen
+                else "Mask"
+                if is_mask
+                else "FVC"
+                if is_fvc
                 else "Warp"
                 if is_warp
                 else "Translate"
@@ -1777,6 +1934,10 @@ class GDALProviderAdapter(ProviderAdapter):
                 if is_rasterdiff
                 else "Pansharpen"
                 if is_pansharpen
+                else "Mask"
+                if is_mask
+                else "FVC"
+                if is_fvc
                 else "Warp"
                 if is_warp
                 else "Translate"
@@ -1824,6 +1985,17 @@ class GDALProviderAdapter(ProviderAdapter):
             )
             if fusion_sidecar.exists():
                 staged_files.append(fusion_sidecar.resolve())
+        if is_mask:
+            mask_sidecar = staged_path.with_name(staged_path.name + ".mask.json")
+            if mask_sidecar.exists():
+                staged_files.append(mask_sidecar.resolve())
+        if is_fvc:
+            fvc_sidecar = staged_path.with_name(staged_path.name + ".fvc.json")
+            if fvc_sidecar.exists():
+                staged_files.append(fvc_sidecar.resolve())
+            fvc_class = staged_path.with_name(staged_path.name + ".fvc_class.tif")
+            if fvc_class.exists():
+                staged_files.append(fvc_class.resolve())
         # 在 Windows 上显式关闭 dataset 释放文件锁
         del ds
 
