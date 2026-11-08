@@ -1,4 +1,4 @@
-"""P3-01 / P3-03 / P3-04 / P3-05 的界面级验收。
+﻿"""P3-01 / P3-03 / P3-04 / P3-05 的界面级验收。
 
 覆盖：打开→查询→ROI→调整显示→保存→关闭→重开 的完整流程，
 双视图联动、缓存预算与过期响应、显示不改源像元、关闭图层释放文件句柄。
@@ -571,6 +571,12 @@ def test_layer_order_follows_open_request_not_probe_arrival(
             pass
 
         def crs_wkt_async(self, *a, **kw):  # pragma: no cover
+            pass
+
+        def probe_vector_async(self, *a, **kw):  # pragma: no cover
+            pass
+
+        def list_subdatasets_async(self, *a, **kw):  # pragma: no cover
             pass
 
         def stop(self, timeout: float = 5.0) -> int:  # pragma: no cover

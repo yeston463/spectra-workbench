@@ -15,6 +15,9 @@ pytestmark = [pytest.mark.unit]
 
 PLATFORM_ONLY = {
     "gdal:bandmanage",
+    "gdal:calibrate",
+    "gdal:cloudreplace",
+    "gdal:dos1",
     "gdal:editmeta",
     "gdal:fftfilter",
     "gdal:fvc",
@@ -27,6 +30,8 @@ PLATFORM_ONLY = {
     "gdal:stack",
     "gdal:statistics",
     "gdal:tasseledcap",
+    "platform:agriculture_count",
+    "platform:flaash_external",
 }
 
 TARGET_VERSION_TOOLS = {
@@ -43,8 +48,8 @@ def test_baseline_reconciliation_has_no_missing_registry_entry() -> None:
 
     assert report["errors"] == []
     assert report["baseline_count"] == 443
-    # 第 58/59/60/61/62 轮新增平台能力（pansharpen 升级既有条目）：448 -> 456
-    assert report["registry_count"] == 456
+    # 第 58/59/60/61/62/63 轮新增平台能力（pansharpen 升级既有条目）：448 -> 461
+    assert report["registry_count"] == 461
     assert report["missing_from_registry"] == []
     assert set(report["platform_only"]) == PLATFORM_ONLY
     assert report["complete"] is True
@@ -87,6 +92,9 @@ def test_target_version_tools_are_indexed_and_gaps_have_reasons() -> None:
         "gdal:pansharpen",
         "gdal:mask",
         "gdal:fvc",
+        "gdal:calibrate",
+        "gdal:dos1",
+        "gdal:cloudreplace",
     ):
         cap = registry.get(cid)
         assert cap is not None and str(cap.state.availability) == "ready"

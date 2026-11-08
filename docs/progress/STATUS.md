@@ -1,6 +1,6 @@
 # 执行状态
 
-更新：2026-11-09（第 62 轮 · P6-05 二值掩膜 gdal:mask / FVC gdal:fvc 端到端：闭区间阈值 1/0 Byte 掩膜（显式无 NoData）、percentile/values 双端元模式、分级区间与像元面积统计 sidecar、越界质量标记 n_below_soil/n_above_veg 与显式 crop、mask→FVC 串联；**P6-05 转 done**。Clean 全量 782 项 / 0 失败 / rc=0 / clean_exit_verified=true）
+更新：2026-11-09（第 63 轮 · P6-06 辐射处理、去云、农业及外部引擎适配拆分子项：辐射定标 gdal:calibrate（physical / TOA 反射率）、DOS1 大气校正 gdal:dos1（Chavez 1988）、多时相去云 gdal:cloudreplace（掩膜驱动替换 + 时相 sidecar）3 项实现并数值验收；FLAASH（platform:flaash_external）与农业计数（platform:agriculture_count）显式 blocked 登记且不提供假入口——**P6-06 转 implemented（不转 done）**）
 
 ## 当前里程碑
 
@@ -29,6 +29,7 @@
   - **P6-03 PCA、逆变换与缨帽**：**done**（第 60 轮）。`gdal:pca`：全图均值/协方差或相关矩阵/特征向量/主成分顺序/解释方差，正变换写可复现 `.pca.json`，逆变换按 sidecar（含 SHA256）重建；完整重建 ≤1e-10，降维误差按 `RMSE²×波段数 == discarded_variance` 定义并实测；NoData 保持；模式专属参数严格拒绝。`gdal:tasseledcap`：Landsat 5 TM / 7 ETM+ / 8 OLI 三套公开系数，显式 6 波段映射，3 波段亮度/绿度/湿度 + 来源/产品级别 sidecar。遗留：PCA 整幅读入、更多缨帽传感器与交互式载荷图 UI 归后续。
   - **P6-04 GCP、配准、差值与融合**：**done**（第 61 轮）。`gdal:gcpregister`：GCP JSON 控制点/独立检查点分离，affine/polynomial2 正反变换拟合，参考网格重采样，残差与检查点误差分列；`gdal:rasterdiff`：严格同网格 difference/absolute + 逐波段统计；`gdal:pansharpen`：Brovey 与 HSV 精确定名/公式，3 波段输出 + 方法 sidecar，NNDiffuse/GS/PCA 明确不提供入口。遗留：TPS、GCP 分块重采样、更多融合方法归后续。
   - **P6-05 分类与 FVC 完整流程**：**done**（第 62 轮）。`gdal:mask`：闭区间阈值 1/0 Byte 二值掩膜（显式不设 NoData、invert 仅在有效源像元内翻转、sidecar 计数审计）；`gdal:fvc`：NDVI 输入 → percentile（缺省 2%/98%）/values 端元 → FVC + 分级类别栅格 `.fvc_class.tif`，`fvc.json` 记录端元来源/像元面积/分级统计/越界质量标记，无效区与 crop 策略显式。遗留：监督式 ROI 分类（scikit-learn）与混淆矩阵未实现且不提供假入口。
+  - **P6-06 辐射处理、去云、农业及外部引擎适配**：**implemented**（第 63 轮；不转 done——2 个子项 blocked）。`gdal:calibrate`：physical（DN×gain+offset 逐波段）与 toa_reflectance（π·L·d²/(ESUN·cos θz)），sidecar 明确 radiance/reflectance 单位、BT 未实现；`gdal:dos1`：Chavez 1988 暗目标减法，显式 hazeDN/ESUN/太阳天顶角/d，sidecar 独立核算；`gdal:cloudreplace`：掩膜驱动的多时相替换 + 8 邻域膨胀，sidecar 记录时相与像素来源，明确不声称「恢复原时刻真实地表」。`platform:flaash_external` 与 `platform:agriculture_count` 登记为 missing/blocked：FLAASH 明确「绝不通过简化公式宣称实现」、农业计数「方法未确定，需保留直径/尺度/阈值/重叠与人工标注对照」。
 
 ## 原 P3 验收标准逐项对账与剩余缺口
 
@@ -238,6 +239,35 @@ CRT 检测到栈状态异常后立即终止进程，这正是 `STATUS_STACK_BUFF
 |---|---|---|
 | 用合成影像完成同类验收 | 已满足 | 合成 ENVI/GTiff/GeoJSON/netCDF 样例覆盖多波段、像元数值、ROI 与对比 |
 | 保留真实数据待验状态 | **待验** | 课程原始数据位于 `C:\Users\赵航\Desktop\studio\_chaoxing_rs`（**只读**，不得运行其中的抓取/下载/OCR 脚本）；本轮全部用合成影像验收，未对课程原始 ENVI 栅格与 lena.tif 做真实打开验证 |
+
+### 第 63 轮：P6-06 辐射定标 / DOS1 / 去云（P6-06 → implemented；2 子项 blocked）
+
+**一、实现**
+
+- 新增 `providers/gdal_provider/radiometric_ops.py` → **`gdal:calibrate`**：`physical=DN×gain+offset`（逐波段 gains/offsets）与 `toa_reflectance=π·L·d²/(ESUN·cos θz)`（逐波段 ESUN + sunZenAngle∈[0,180)）；NoData/复数输入拒绝；sidecar `<成果名>.calibrate.json` 记录 mode/spec_kind/formula/spectral_type/sun 几何与每波段 gain/offset/ESUN；波段 metadata 写入 `CALIB_GAIN`/`CALIB_OFFSET`/`CALIB_ESUN`。
+- 新增 `providers/gdal_provider/dos_ops.py` → **`gdal:dos1`**（Chavez 1988 暗目标减法）：显式 `hazeDN`/`dosEsun`/`sunZenAngle`（(0,90)）/`dosGain`/`dosOffset`/`earthSunDistance`；`ρ=π·(L−L_1haze)·d²/(ESUN·cos θz)`，`L_1haze=gain·hazeDN+offset−0.01·ESUN·cosθz/(π·d²)`；sidecar `<成果名>.dos1.json` 记录 Chavez 1988 完整引用、暗对象项、`one_percent_radiance`、n_valid。
+- 新增 `providers/gdal_provider/cloudreplace_ops.py` → **`gdal:cloudreplace`**：primary + secondary + cloudMaskFile（1=云），`bandList` 可选、`maskDilatePixels`（≥0，3×3 8 邻域膨胀 N 次）；两时相必须同尺寸/波段/GeoTransform/CRS；晴 → primary、云 → secondary；sidecar `<成果名>.cloudreplace.json` 记录 primary/secondary_time、`pixel_source_rule` 与「云下来的值来自 secondaryTime=…，不是『恢复了原时刻真实地表』」。
+- 新增 2 项显式 blocked 登记：`platform:flaash_external`（FLAASH 外部引擎适配，绝不以简化公式宣称实现，P8 插件协议接入）与 `platform:agriculture_count`（方法未确定，需保留直径/尺度/阈值/重叠 4 项参数与人工标注对照）。
+- 契约/接线：新增 `calibrateMode`/`calibrateGains`/`calibrateOffsets`/`calibrateEsun`/`sunZenAngle`/`dosBand`/`hazeDN`/`dosEsun`/`dosGain`/`dosOffset`/`earthSunDistance`/`secondaryFile`/`cloudMaskFile`/`bandList`/`primaryTime`/`secondaryTime`/`maskDilatePixels` 别名与支持矩阵；adapter 新增 3 能力门禁（Float32/1 或 n 波段/必设 NoData）、执行分支与 sidecar 成套提交（`.calibrate.json`/`.dos1.json`/`.cloudreplace.json`）；GUI 新增定标模式/每波段 gain/offset/Esun/sunZenAngle 与 DOS1 全套、去云 primaryTime/secondaryTime/dilate 控件及状态隔离。
+
+**二、数值验收（独立 GDAL 重开）**
+
+- 定标 physical：2×2 DN × gain=0.1, offset=-2.0 → `[[-2,0.5],[3,8]]` 逐像元；定标 toa_reflectance：与独立推导 rel≤1e-6；sidecar mode/spec_kind/sun 几何逐项一致。
+- DOS1：2×2 数组 hazeDN=2、ESUN=1500、θz=30°、gain=0.1、offset=-2、d=1 → `ρ` 与独立推导逐像元一致；NoData 像元排除 n_valid=3；`one_percent_radiance` 与独立计算一致。
+- 去云：2×2 一期 cloud=1、二期 `[5,15]` 替换 `[10,20]`，`n_cloud=1/n_clean=3`；`maskDilatePixels=1` → 3×3 全膨胀 n_cloud=4 且输出=secondary；`maskDilatePixels=0` 合法（不膨胀）；primary_time/secondary_time 逐项写入 sidecar。
+- 拒绝路径：physical 缺 gains、toa 缺 esun/sunZenAngle、esun 数量错、dos1 缺必填、cloudreplace 缺 secondary/mask 全部明确拒绝且不落盘。
+
+**三、验证**
+
+- 新增 `tests/integration/test_p6_radiometric_cloud.py`（4 项）；四维审计/对账/算法计数同步为 **461/454/249/23**、算法规格 31→36（3 个 gdal:* + 2 个 platform:*）、GDAL 编目 415→420、missing 5→7。
+- 受影响靶向：56 项 P6-04/05/06 + sidecar/表单/能力边界全绿；298 项单测全绿。
+- Ruff 干净；Mypy 81 个源文件 0 错误； pymy 不再出现；本测试中 reg.audit_report()、gdal_rep 等计数与 782+ 项全量测试共同验证。
+- 修复 `tests/integration/test_p3_viewing_flow.py::test_layer_order_follows_open_request_not_probe_arrival` 的 `ReverseProbeClient` 替身缺失 `probe_vector_async` / `list_subdatasets_async` 的预存缺陷（只修替身，不改动被测代码）。
+
+**四、边界与结论**
+
+- 验收「每项有方法、依赖与真实证据；缺少输入/引擎时如实标注待验，继续其他项」：辐射定标 / DOS1 / 多时相去云三项已实现且数值验收，FLAASH 与农业计数显式 blocked——**P6-06 转 implemented（不转 done）**，blocking_reason 记录 2 个 blocked 子项；账本现为 done 34 / implemented 2（P0-02, P6-06）/ todo 19。
+- 遗留边界：FLAASH 外部引擎适配、农业计数（方法未落实）、热红外亮温（BT，K）、监督式 ROI 分类（scikit-learn）均为真实待验项，显式登记且不提供假入口。
 
 ### 第 62 轮：P6-05 掩膜与 FVC 完整流程（P6-05 → done）
 

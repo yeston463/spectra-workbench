@@ -1,4 +1,4 @@
-{
+﻿{
   "schema_version": "1.0",
   "project": "Spectra Workbench",
   "created_date": "2026-11-03",
@@ -818,10 +818,21 @@
         "P6-05",
         "P5-05"
       ],
-      "status": "todo",
+      "status": "implemented",
       "release_requirement": "conditional",
-      "evidence": [],
-      "blocking_reason": null
+      "evidence": [
+        "第 63 轮：P6-06 拆分子项逐项落地——3 个可执行新能力 + 2 个显式 blocked 登记项，本任务转 implemented（不转 done）。",
+        "(1) 辐射定标 gdal:calibrate（providers/gdal_provider/radiometric_ops.py）：calibrateMode=physical（physical=DN*gain+offset，逐波段 gains/offsets，数量必须等于波段数）与 toa_reflectance（rho=π·L·d²/(ESUN·cos θz)，逐波段 ESUN + sunZenAngle∈[0,180)，cos θz>0）；NoData/复数输入拒绝；sidecar <成果名>.calibrate.json 记录 mode/spec_kind/formula/spectral_type/sun 几何/gains/offsets/esun，波段 metadata 逐波段写入 CALIB_GAIN/OFFSET/ESUN。数值验收：physical 2×2 DN × gain=0.1, offset=-2.0 → [[-2,0.5],[3,8]] 逐像元 via GDAL 独立重开；toa_reflectance 与独立推导 rel≤1e-6。热红外亮温（BT，K）未实现且显式声明不属于本能力输出。",
+        "(2) DOS1 大气校正 gdal:dos1（dos_ops.py，Chavez 1988 暗目标减法）：显式 hazeDN/dosEsun/sunZenAngle（(0,90)）、dosGain/dosOffset/earthSunDistance；ρ=π·(L−L_1haze)·d²/(ESUN·cos θz)，L_1haze = gain·hazeDN+offset−0.01·ESUN·cosθz/(π·d²)；sidecar <成果名>.dos1.json 记录 Chavez 1988 完整引用、暗对象项、one_percent_radiance、n_valid；数值验收与独立推导 2×2 数组逐像元一致；NoData=True 时 n_valid=3。",
+        "(3) 多时相去云 gdal:cloudreplace（cloudreplace_ops.py）：primary+secondary+cloudMaskFile（1=云），bandList 可选、maskDilatePixels（≥0，N=3x3 8 邻域膨胀 N 次）；两时相必须同尺寸/波段/GeoTransform/CRS；晴 → primary、云 → secondary，双端 NoData 记 source 时间戳到 sidecar；说明「输出为 mask 驱动的两时相替换；云下来的值来自 secondaryTime=…，不是『恢复了原时刻真实地表』」。sidecar <成果名>.cloudreplace.json 显式记录 pixel_source_rule。数值验收 2×2 一期有 cloud=1、二期替换、n_cloud=1/n_clean=3；maskDilatePixels=1 → 3×3 全膨胀 → n_cloud=4 且输出=secondary；maskDilatePixels=0 合法（不膨胀）。",
+        "(4) FLAASH 外部引擎（platform:flaash_external）：Presence=missing，Availability=blocked，无 adapter 执行器、无表单入口；limitations 明确「绝不通过简化公式宣称实现」、「后续通过 P8 插件协议接入」。这一登记显式阻断「简化公式 → FLAASH」的捷径。",
+        "(5) 农业计数（platform:agriculture_count）：Presence=missing，Availability=blocked；limitations 记录「方法未确定（需要保留直径/尺度/阈值/重叠 4 项参数与人工标注对照）」——严格按计划要求，不冒充已实现。",
+        "(6) 契约/GUI/注册表：新增 calibrateMode/calibrateGains/calibrateOffsets/calibrateEsun/sunZenAngle/dosBand/hazeDN/dosEsun/dosGain/dosOffset/earthSunDistance/secondaryFile/cloudMaskFile/bandList/primaryTime/secondaryTime/maskDilatePixels 别名与支持矩阵；adapter 新增 3 能力格式门禁（Float32/1（dos1）或 n 波段（calibrate/cloudreplace）/必设 NoData）与执行分支/sidecar 成套提交；registry 新增 3 ready + 2 blocked；GUI 新增定标模式/每波段 gain/offset/Esun/sunZenAngle 控件、DOS1 波段/hazeDN/Esun/sunZen/gain/offset/d 控件、去云 primaryTime/secondaryTime/dilate 控件与状态隔离。",
+        "(7) 数值验收目标：tests/integration/test_p6_radiometric_cloud.py 4 项全绿（physical/TOA/DOS1/cloudreplace），拒绝路径（physical 缺 gains、esun 数量错、dos1 缺必填字段、cloudreplace 缺 secondary/mask）全部不落盘；同时修复 tests/integration/test_p3_viewing_flow.py::test_layer_order_follows_open_request_not_probe_arrival 的 ReverseProbeClient 替身缺失 probe_vector_async/list_subdatasets_async 的旧缺陷（预存缺陷，只修替身不改动被测代码）。",
+        "(8) 四维审计/对账/算法计数同步为 461/454/249/23、算法规格 31→36（3 个 gdal:* + 2 个 platform:*）、GDAL 编目 415→420、missing 5→7。回归：Ruff 干净、Mypy 81 源文件 0 错误；靶向 56 项全绿。",
+        "验收「每项有方法、依赖与真实证据；缺少输入/引擎时如实标注待验，继续其他项」：辐射定标 / DOS1 / 多时相去云 3 项已实现且数值验收，FLAASH 与农业计数显式 blocked——**P6-06 转 implemented（不转 done）**，blocking_reason 记录 2 个 blocked 子项。"
+      ],
+      "blocking_reason": "农业计数与 FLAASH 外部引擎适配 blocked；辐射定标 / DOS1 / 多时相去云已实现且通过数值验收"
     },
     {
       "id": "P7-01",

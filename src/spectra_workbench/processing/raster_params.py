@@ -39,8 +39,11 @@ FUSION_METHODS: tuple[str, ...] = ("brovey", "hsv")
 #: P6-05 FVC 端元模式（GUI 与 Worker 共用）。
 FVC_ENDMEMBER_MODES: tuple[str, ...] = ("percentile", "values")
 
+#: P6-06 定标模式 / DOS1（GUI 与 Worker 共用）。
+CALIBRATE_MODES: tuple[str, ...] = ("physical", "toa_reflectance")
+
 __all__ = [
-    "DEM_PROCESSINGS",
+    "CALIBRATE_MODES",
     "DIFF_MODES",
     "FUSION_METHODS",
     "FVC_ENDMEMBER_MODES",
@@ -233,6 +236,23 @@ _PARAM_ALIASES: dict[str, tuple[str, ...]] = {
     "fvcClassEdges": ("fvc_class_edges", "class_edges"),
     "maskFile": ("mask_file", "fvc_mask_file"),
     "crop": ("crop", "fvc_crop"),
+    # --- P6-06 辐射定标 / DOS1 / 去云 ---
+    "calibrateMode": ("calibrate_mode", "radiometric_mode"),
+    "calibrateGains": ("calibrate_gains", "radiance_gains"),
+    "calibrateOffsets": ("calibrate_offsets", "radiance_offsets"),
+    "calibrateEsun": ("calibrate_esun", "esun_list", "calibrate_sun_zen_esun"),
+    "sunZenAngle": ("sun_zen_angle", "sun_zenith_angle", "sun_elevation"),
+    "dosBand": ("dos_band", "dos_src_band"),
+    "hazeDN": ("haze_dn", "dark_object_dn", "haze_dn_value"),
+    "dosEsun": ("dos_esun", "esun"),
+    "earthSunDistance": ("earth_sun_distance", "d_squared"),
+    "dosGain": ("dos_gain", "linear_gain"),
+    "dosOffset": ("dos_offset", "linear_offset"),
+    "secondaryFile": ("secondary_file", "secondary"),
+    "cloudMaskFile": ("cloud_mask_file", "cloud_mask"),
+    "primaryTime": ("primary_time", "obs_time_primary"),
+    "secondaryTime": ("secondary_time", "obs_time_secondary"),
+    "maskDilatePixels": ("mask_dilate_pixels", "dilate_pixels"),
     # --- P4-04 表达式 / 直方图与基础统计 ---
     "calc": ("calc_expr", "expression", "formula"),
     "statisticsMode": ("mode", "stats_mode", "statistics_mode"),
@@ -496,6 +516,45 @@ _CAPABILITY_SUPPORT: dict[str, frozenset[str]] = {
             "dstNodata",
         }
     ),
+    # --- P6-06：辐射定标（physical / toa_reflectance）---
+    "gdal:calibrate": frozenset(
+        {
+            "calibrateMode",
+            "calibrateGains",
+            "calibrateOffsets",
+            "calibrateEsun",
+            "sunZenAngle",
+            "srcNodata",
+            "dstNodata",
+        }
+    ),
+    # --- P6-06：DOS1 大气校正（Chavez 1988 暗目标减法）---
+    "gdal:dos1": frozenset(
+        {
+            "dosBand",
+            "hazeDN",
+            "dosEsun",
+            "sunZenAngle",
+            "dosGain",
+            "dosOffset",
+            "earthSunDistance",
+            "srcNodata",
+            "dstNodata",
+        }
+    ),
+    # --- P6-06：多时相去云（掩膜驱动替换）---
+    "gdal:cloudreplace": frozenset(
+        {
+            "secondaryFile",
+            "cloudMaskFile",
+            "bandList",
+            "primaryTime",
+            "secondaryTime",
+            "maskDilatePixels",
+            "srcNodata",
+            "dstNodata",
+        }
+    ),
     # --- P4-04：受限表达式计算 / 直方图与基础统计 ---
     "gdal:calc": frozenset({"calc", "srcNodata", "dstNodata", "outputType"}),
     "gdal:statistics": frozenset(
@@ -605,6 +664,32 @@ def _require_int_list(value: Any, name: str, expected: int) -> list[int]:
     return out
 
 
+def _require_float_list_any(value: Any, name: str) -> list[float]:
+    """解析**可变长度**浮点列表（要求有限值），用于 per-band gain/offset/esun 序列。"""
+    if not isinstance(value, (list, tuple)):
+        raise ParameterError(f"参数 {name} 必须是数值列表")
+    out: list[float] = []
+    for v in value:
+        try:
+            f = float(v)
+        except (TypeError, ValueError) as exc:
+            raise ParameterError(f"参数 {name} 含非数值元素：{v!r}") from exc
+        if not math.isfinite(f):
+            raise ParameterError(f"参数 {name} 含非有限值：{v!r}")
+        out.append(f)
+    return out
+
+
+def _require_choice(value: Any, choices: tuple[str, ...], name: str) -> str:
+    """解析受限字符串选项（归一化为小写），未知值明确拒绝。"""
+    text = str(value or "").strip().lower()
+    if text not in choices:
+        raise ParameterError(
+            f"参数 {name} 必须是 {', '.join(choices)} 之一，实际 {value!r}"
+        )
+    return text
+
+
 def _require_float_list(value: Any, name: str, expected: int) -> list[float]:
     """解析定长浮点列表（要求有限值）。"""
     if not isinstance(value, (list, tuple)):
@@ -641,6 +726,15 @@ def _require_positive_int(value: Any, name: str) -> int:
     iv = int(value)
     if iv <= 0:
         raise ParameterError(f"参数 {name} 必须为正数，实际 {iv}")
+    return iv
+
+
+def _require_non_negative_int(value: Any, name: str) -> int:
+    if not _is_int_like(value):
+        raise ParameterError(f"参数 {name} 必须是整数（不接受小数截断），实际 {value!r}")
+    iv = int(value)
+    if iv < 0:
+        raise ParameterError(f"参数 {name} 必须为非负整数，实际 {iv}")
     return iv
 
 
@@ -1182,6 +1276,58 @@ def normalize_raster_params(
         if not isinstance(value, bool):
             raise ParameterError(f"crop 必须是布尔值，实际 {value!r}")
         out["crop"] = value
+    if "calibrateMode" in collected:
+        _, value = collected["calibrateMode"]
+        out["calibrateMode"] = _require_choice(value, CALIBRATE_MODES, "calibrateMode")
+    for key in ("calibrateGains", "calibrateOffsets", "calibrateEsun"):
+        if key in collected:
+            _, value = collected[key]
+            if not isinstance(value, (list, tuple)) or not value:
+                raise ParameterError(f"{key} 必须是至少 1 个数值的列表")
+            out[key] = _require_float_list_any(value, key)
+    if "sunZenAngle" in collected:
+        _, value = collected["sunZenAngle"]
+        angle = _require_finite_float(value, "sunZenAngle")
+        out["sunZenAngle"] = angle
+    if "dosBand" in collected:
+        _, value = collected["dosBand"]
+        out["dosBand"] = _require_positive_int(value, "dosBand")
+    if "hazeDN" in collected:
+        _, value = collected["hazeDN"]
+        out["hazeDN"] = _require_finite_float(value, "hazeDN")
+    if "dosEsun" in collected:
+        _, value = collected["dosEsun"]
+        out["dosEsun"] = _require_finite_float(value, "dosEsun")
+    if "earthSunDistance" in collected:
+        _, value = collected["earthSunDistance"]
+        out["earthSunDistance"] = _require_finite_float(value, "earthSunDistance")
+    if "dosGain" in collected:
+        _, value = collected["dosGain"]
+        out["dosGain"] = _require_finite_float(value, "dosGain")
+    if "dosOffset" in collected:
+        _, value = collected["dosOffset"]
+        out["dosOffset"] = _require_finite_float(value, "dosOffset")
+    if "secondaryFile" in collected:
+        _, value = collected["secondaryFile"]
+        text = str(value).strip()
+        if not text:
+            raise ParameterError("参数 secondaryFile 必须是非空文件路径")
+        out["secondaryFile"] = text
+    if "cloudMaskFile" in collected:
+        _, value = collected["cloudMaskFile"]
+        text = str(value).strip()
+        if not text:
+            raise ParameterError("参数 cloudMaskFile 必须是非空文件路径")
+        out["cloudMaskFile"] = text
+    if "primaryTime" in collected:
+        _, value = collected["primaryTime"]
+        out["primaryTime"] = str(value)
+    if "secondaryTime" in collected:
+        _, value = collected["secondaryTime"]
+        out["secondaryTime"] = str(value)
+    if "maskDilatePixels" in collected:
+        _, value = collected["maskDilatePixels"]
+        out["maskDilatePixels"] = _require_non_negative_int(value, "maskDilatePixels")
 
     # 11.12) P5-04：矢量处理 / SQL / 坐标转换
     if "sql" in collected:

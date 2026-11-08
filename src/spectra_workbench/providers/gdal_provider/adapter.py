@@ -47,6 +47,7 @@ from spectra_workbench.processing.output_formats import (
     validate_vector_output_format,
 )
 from spectra_workbench.processing.raster_params import (
+    CALIBRATE_MODES,
     PCA_MATRICES,
     PCA_MODES,
     ParameterError,
@@ -59,7 +60,9 @@ from spectra_workbench.providers.base import (
     resolve_dataset_path,
 )
 from spectra_workbench.providers.gdal_provider.calc_ops import run_calc
+from spectra_workbench.providers.gdal_provider.cloudreplace_ops import run_cloud_replace
 from spectra_workbench.providers.gdal_provider.diff_ops import run_raster_diff
+from spectra_workbench.providers.gdal_provider.dos_ops import run_dos1
 from spectra_workbench.providers.gdal_provider.expression_ops import ExpressionError
 from spectra_workbench.providers.gdal_provider.fft_ops import fft_filter
 from spectra_workbench.providers.gdal_provider.fusion_ops import run_pansharpen
@@ -92,6 +95,7 @@ from spectra_workbench.providers.gdal_provider.pca_ops import (
     run_pca_forward,
     run_pca_inverse,
 )
+from spectra_workbench.providers.gdal_provider.radiometric_ops import run_calibration
 from spectra_workbench.providers.gdal_provider.sidecars import (
     SidecarOwnershipError,
     collect_protected_inputs,
@@ -331,6 +335,10 @@ class GDALProviderAdapter(ProviderAdapter):
         # --- P6-05：掩膜生成 / FVC ---
         "gdal:mask",
         "gdal:fvc",
+        # --- P6-06：辐射定标 / DOS1 大气校正 / 掩膜驱动多时相去云 ---
+        "gdal:calibrate",
+        "gdal:dos1",
+        "gdal:cloudreplace",
         # --- P4-04：受限表达式计算 / 直方图与基础统计 ---
         "gdal:calc",
         P404_STATISTICS_CAPABILITY,
@@ -640,6 +648,9 @@ class GDALProviderAdapter(ProviderAdapter):
                 "gdal:pansharpen",
                 "gdal:mask",
                 "gdal:fvc",
+                "gdal:calibrate",
+                "gdal:dos1",
+                "gdal:cloudreplace",
             )
             and spec.capability_id not in VECTOR_OUTPUT_CAPABILITIES
         ):
@@ -711,6 +722,192 @@ class GDALProviderAdapter(ProviderAdapter):
         is_pansharpen = spec.capability_id == "gdal:pansharpen"
         is_mask = spec.capability_id == "gdal:mask"
         is_fvc = spec.capability_id == "gdal:fvc"
+        is_calibrate = spec.capability_id == "gdal:calibrate"
+        is_dos1 = spec.capability_id == "gdal:dos1"
+        is_cloudreplace = spec.capability_id == "gdal:cloudreplace"
+
+        if is_calibrate:
+            calibrate_mode = str(norm.get("calibrateMode") or "physical")
+            if calibrate_mode not in CALIBRATE_MODES:
+                return TaskResult(
+                    task_id=spec.task_id,
+                    attempt=spec.attempt,
+                    status=TaskStatus.failed,
+                    error={
+                        "code": "invalid_parameters",
+                        "message": f"未知定标模式 {calibrate_mode!r}；可用：{', '.join(CALIBRATE_MODES)}",
+                    },
+                    duration_seconds=round(time.monotonic() - start_time, 4),
+                )
+            probe_ds = gdal.Open(str(in_path), gdal.GA_ReadOnly)
+            if probe_ds is None:
+                return TaskResult(
+                    task_id=spec.task_id,
+                    attempt=spec.attempt,
+                    status=TaskStatus.failed,
+                    error={"code": "input_not_found", "message": f"无法打开输入栅格: {in_path}"},
+                    duration_seconds=round(time.monotonic() - start_time, 4),
+                )
+            try:
+                calibrate_bands = int(probe_ds.RasterCount)
+            finally:
+                del probe_ds
+            calibrate_violations = validate_output_format(
+                out_format,
+                dtype="Float32",
+                bands=calibrate_bands,
+                has_nodata=True,
+                has_alpha=False,
+            )
+            if calibrate_violations:
+                context.log("ERROR", f"定标输出格式不受支持: {calibrate_violations}")
+                return TaskResult(
+                    task_id=spec.task_id,
+                    attempt=spec.attempt,
+                    status=TaskStatus.failed,
+                    error={
+                        "code": "unsupported_format_combination",
+                        "message": "；".join(calibrate_violations),
+                    },
+                    duration_seconds=round(time.monotonic() - start_time, 4),
+                )
+            if calibrate_mode == "toa_reflectance":
+                esun_values = norm.get("calibrateEsun")
+                if esun_values is None or len(esun_values) != calibrate_bands:
+                    return TaskResult(
+                        task_id=spec.task_id,
+                        attempt=spec.attempt,
+                        status=TaskStatus.failed,
+                        error={
+                            "code": "invalid_parameters",
+                            "message": (
+                                "calibrateMode=toa_reflectance 需要 calibrateEsun 与波段数一致；"
+                                f"实际 {len(esun_values or [])} vs {calibrate_bands}"
+                            ),
+                        },
+                        duration_seconds=round(time.monotonic() - start_time, 4),
+                    )
+                if norm.get("sunZenAngle") is None:
+                    return TaskResult(
+                        task_id=spec.task_id,
+                        attempt=spec.attempt,
+                        status=TaskStatus.failed,
+                        error={
+                            "code": "invalid_parameters",
+                            "message": "calibrateMode=toa_reflectance 需要 sunZenAngle",
+                        },
+                        duration_seconds=round(time.monotonic() - start_time, 4),
+                    )
+
+        if is_dos1:
+            if norm.get("dosEsun") is None or norm.get("sunZenAngle") is None or (
+                norm.get("hazeDN") is None
+            ):
+                return TaskResult(
+                    task_id=spec.task_id,
+                    attempt=spec.attempt,
+                    status=TaskStatus.failed,
+                    error={
+                        "code": "invalid_parameters",
+                        "message": "gdal:dos1 需要 dosEsun、sunZenAngle 与 hazeDN",
+                    },
+                    duration_seconds=round(time.monotonic() - start_time, 4),
+                )
+            probe_ds = gdal.Open(str(in_path), gdal.GA_ReadOnly)
+            if probe_ds is None:
+                return TaskResult(
+                    task_id=spec.task_id,
+                    attempt=spec.attempt,
+                    status=TaskStatus.failed,
+                    error={"code": "input_not_found", "message": f"无法打开输入栅格: {in_path}"},
+                    duration_seconds=round(time.monotonic() - start_time, 4),
+                )
+            try:
+                dos_bands = int(probe_ds.RasterCount)
+            finally:
+                del probe_ds
+            dos_band_index = int(norm.get("dosBand") or 1)
+            if dos_band_index > dos_bands:
+                return TaskResult(
+                    task_id=spec.task_id,
+                    attempt=spec.attempt,
+                    status=TaskStatus.failed,
+                    error={
+                        "code": "invalid_parameters",
+                        "message": f"dosBand={dos_band_index} 超出波段数 {dos_bands}",
+                    },
+                    duration_seconds=round(time.monotonic() - start_time, 4),
+                )
+            dos_violations = validate_output_format(
+                out_format,
+                dtype="Float32",
+                bands=1,
+                has_nodata=True,
+                has_alpha=False,
+            )
+            if dos_violations:
+                context.log("ERROR", f"DOS1 输出格式不受支持: {dos_violations}")
+                return TaskResult(
+                    task_id=spec.task_id,
+                    attempt=spec.attempt,
+                    status=TaskStatus.failed,
+                    error={
+                        "code": "unsupported_format_combination",
+                        "message": "；".join(dos_violations),
+                    },
+                    duration_seconds=round(time.monotonic() - start_time, 4),
+                )
+
+        if is_cloudreplace:
+            if norm.get("secondaryFile") is None or norm.get("cloudMaskFile") is None:
+                return TaskResult(
+                    task_id=spec.task_id,
+                    attempt=spec.attempt,
+                    status=TaskStatus.failed,
+                    error={
+                        "code": "invalid_parameters",
+                        "message": "gdal:cloudreplace 需要 secondaryFile 与 cloudMaskFile",
+                    },
+                    duration_seconds=round(time.monotonic() - start_time, 4),
+                )
+            probe_ds = gdal.Open(str(in_path), gdal.GA_ReadOnly)
+            if probe_ds is None:
+                return TaskResult(
+                    task_id=spec.task_id,
+                    attempt=spec.attempt,
+                    status=TaskStatus.failed,
+                    error={"code": "input_not_found", "message": f"无法打开输入栅格: {in_path}"},
+                    duration_seconds=round(time.monotonic() - start_time, 4),
+                )
+            try:
+                cloud_bands = int(probe_ds.RasterCount)
+            finally:
+                del probe_ds
+            req_bands = norm.get("bandList")
+            planned = (
+                len(req_bands)
+                if req_bands is not None
+                else cloud_bands
+            )
+            cloud_violations = validate_output_format(
+                out_format,
+                dtype="Float32",
+                bands=max(planned, 1),
+                has_nodata=True,
+                has_alpha=False,
+            )
+            if cloud_violations:
+                context.log("ERROR", f"去云输出格式不受支持: {cloud_violations}")
+                return TaskResult(
+                    task_id=spec.task_id,
+                    attempt=spec.attempt,
+                    status=TaskStatus.failed,
+                    error={
+                        "code": "unsupported_format_combination",
+                        "message": "；".join(cloud_violations),
+                    },
+                    duration_seconds=round(time.monotonic() - start_time, 4),
+                )
 
         if is_mask:
             mask_violations = validate_output_format(
@@ -1688,6 +1885,139 @@ class GDALProviderAdapter(ProviderAdapter):
                     f"sidecar：{fvc_info['sidecar']}",
                 )
                 ds = gdal.Open(str(staged_path), gdal.GA_ReadOnly)
+            elif is_calibrate:
+                calibrate_info = run_calibration(
+                    staged_path,
+                    in_path,  # type: ignore[arg-type]
+                    mode=str(norm.get("calibrateMode") or "physical"),
+                    gains=(
+                        list(norm["calibrateGains"])
+                        if norm.get("calibrateGains") is not None
+                        else None
+                    ),
+                    offsets=(
+                        list(norm["calibrateOffsets"])
+                        if norm.get("calibrateOffsets") is not None
+                        else None
+                    ),
+                    esun=(
+                        list(norm["calibrateEsun"])
+                        if norm.get("calibrateEsun") is not None
+                        else None
+                    ),
+                    sun_zen_angle=(
+                        float(norm["sunZenAngle"])
+                        if norm.get("sunZenAngle") is not None
+                        else None
+                    ),
+                    src_nodata=(
+                        float(norm["srcNodata"])
+                        if norm.get("srcNodata") is not None
+                        else None
+                    ),
+                    dst_nodata=(
+                        float(norm["dstNodata"])
+                        if norm.get("dstNodata") is not None
+                        else -9999.0
+                    ),
+                    out_format=out_format,
+                    callback=_gdal_cb,
+                )
+                context.log(
+                    "INFO",
+                    f"定标完成：{calibrate_info['mode']}，{calibrate_info['bands']} 波段；"
+                    f"sidecar：{calibrate_info['sidecar']}",
+                )
+                ds = gdal.Open(str(staged_path), gdal.GA_ReadOnly)
+            elif is_dos1:
+                dos_info = run_dos1(
+                    staged_path,
+                    in_path,  # type: ignore[arg-type]
+                    band=int(norm.get("dosBand") or 1),
+                    haze_dn=float(norm["hazeDN"]),
+                    esun=float(norm["dosEsun"]),
+                    sun_zen_angle=float(norm["sunZenAngle"]),
+                    gain=(
+                        float(norm["dosGain"])
+                        if norm.get("dosGain") is not None
+                        else 1.0
+                    ),
+                    offset=(
+                        float(norm["dosOffset"])
+                        if norm.get("dosOffset") is not None
+                        else 0.0
+                    ),
+                    earth_sun_distance=(
+                        float(norm["earthSunDistance"])
+                        if norm.get("earthSunDistance") is not None
+                        else 1.0
+                    ),
+                    src_nodata=(
+                        float(norm["srcNodata"])
+                        if norm.get("srcNodata") is not None
+                        else None
+                    ),
+                    dst_nodata=(
+                        float(norm["dstNodata"])
+                        if norm.get("dstNodata") is not None
+                        else -9999.0
+                    ),
+                    out_format=out_format,
+                    callback=_gdal_cb,
+                )
+                context.log(
+                    "INFO",
+                    f"DOS1 完成：band={dos_info['band']}，hazeDN="
+                    f"{dos_info['haze_dn']:.6g}，esun={dos_info['esun']:.6g}，"
+                    f"sunZen={dos_info['sun_zen_angle']:.6g}°，有效像元 "
+                    f"{dos_info['n_valid']}；sidecar：{dos_info['sidecar']}",
+                )
+                ds = gdal.Open(str(staged_path), gdal.GA_ReadOnly)
+            elif is_cloudreplace:
+                secondary_path = Path(str(norm["secondaryFile"])).expanduser()
+                if not secondary_path.is_absolute():
+                    secondary_path = Path(spec.project_root) / secondary_path
+                cloud_mask_path = Path(str(norm["cloudMaskFile"])).expanduser()
+                if not cloud_mask_path.is_absolute():
+                    cloud_mask_path = Path(spec.project_root) / cloud_mask_path
+                cloud_info = run_cloud_replace(
+                    staged_path,
+                    in_path,  # type: ignore[arg-type]
+                    secondary_path,
+                    cloud_mask_path,
+                    bands=(
+                        [int(v) for v in norm["bandList"]]
+                        if norm.get("bandList") is not None
+                        else None
+                    ),
+                    primary_time=norm.get("primaryTime"),
+                    secondary_time=norm.get("secondaryTime"),
+                    mask_dilate_pixels=(
+                        int(norm["maskDilatePixels"])
+                        if norm.get("maskDilatePixels") is not None
+                        else 0
+                    ),
+                    src_nodata=(
+                        float(norm["srcNodata"])
+                        if norm.get("srcNodata") is not None
+                        else None
+                    ),
+                    dst_nodata=(
+                        float(norm["dstNodata"])
+                        if norm.get("dstNodata") is not None
+                        else -9999.0
+                    ),
+                    out_format=out_format,
+                    callback=_gdal_cb,
+                )
+                context.log(
+                    "INFO",
+                    f"去云完成：一级 {cloud_info['n_clean']} 像元、"
+                    f"云端二级替换 {cloud_info['n_cloud']} 像元、"
+                    f"双端 NoData {cloud_info['n_both_nodata']} 像元；"
+                    f"sidecar：{cloud_info['sidecar']}",
+                )
+                ds = gdal.Open(str(staged_path), gdal.GA_ReadOnly)
             elif is_sindex:
                 # 单输入能力：validate() 保证 input 端口存在，in_path 必已解析
                 index_info = compute_index(
@@ -1887,6 +2217,12 @@ class GDALProviderAdapter(ProviderAdapter):
                 if is_mask
                 else "FVC"
                 if is_fvc
+                else "Calibrate"
+                if is_calibrate
+                else "DOS1"
+                if is_dos1
+                else "CloudReplace"
+                if is_cloudreplace
                 else "Warp"
                 if is_warp
                 else "Translate"
@@ -1938,6 +2274,12 @@ class GDALProviderAdapter(ProviderAdapter):
                 if is_mask
                 else "FVC"
                 if is_fvc
+                else "Calibrate"
+                if is_calibrate
+                else "DOS1"
+                if is_dos1
+                else "CloudReplace"
+                if is_cloudreplace
                 else "Warp"
                 if is_warp
                 else "Translate"
@@ -1996,6 +2338,22 @@ class GDALProviderAdapter(ProviderAdapter):
             fvc_class = staged_path.with_name(staged_path.name + ".fvc_class.tif")
             if fvc_class.exists():
                 staged_files.append(fvc_class.resolve())
+        if is_calibrate:
+            calibrate_sidecar = staged_path.with_name(
+                staged_path.name + ".calibrate.json"
+            )
+            if calibrate_sidecar.exists():
+                staged_files.append(calibrate_sidecar.resolve())
+        if is_dos1:
+            dos_sidecar = staged_path.with_name(staged_path.name + ".dos1.json")
+            if dos_sidecar.exists():
+                staged_files.append(dos_sidecar.resolve())
+        if is_cloudreplace:
+            cloud_sidecar = staged_path.with_name(
+                staged_path.name + ".cloudreplace.json"
+            )
+            if cloud_sidecar.exists():
+                staged_files.append(cloud_sidecar.resolve())
         # 在 Windows 上显式关闭 dataset 释放文件锁
         del ds
 

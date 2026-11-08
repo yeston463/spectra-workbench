@@ -1,4 +1,4 @@
-"""P2-01 ~ P2-03 能力基准、GDAL/Rasterio 索引与覆盖审计单元测试。
+﻿"""P2-01 ~ P2-03 能力基准、GDAL/Rasterio 索引与覆盖审计单元测试。
 
 验证目标：
 1. P2-01: 目标版本固定为 GDAL 3.13.3 与 Rasterio 1.5.2，来源、版本、SHA-256 哈希完整，
@@ -158,7 +158,7 @@ def test_random_sampling_matches_official_catalog():
 
 
 def test_gdal_algorithms_count_and_structure():
-    """GDAL 结构化算法规格完整（31 项 = 18 项原生 + 13 项平台组合/受限实现）。
+    """GDAL 结构化算法规格完整（36 项 = 18 项原生 + 18 项平台组合/受限实现）。
 
     其中 `gdal:stack` / `gdal:bandmanage` / `gdal:statistics` 是平台基于
     原生 API 的组合实现，`gdal:calc` 是平台受限 AST 求值器，
@@ -169,7 +169,7 @@ def test_gdal_algorithms_count_and_structure():
     已在 registry 文档串中标注。
     """
     algorithms = build_gdal_algorithms()
-    assert len(algorithms) == 31
+    assert len(algorithms) == 36
 
     algo_ids = {a.capability_id for a in algorithms}
     expected_ids = {
@@ -212,10 +212,20 @@ def test_gdal_algorithms_count_and_structure():
         # P6-05：二值掩膜 / FVC 植被覆盖度
         "gdal:mask",
         "gdal:fvc",
+        # P6-06：辐射定标 / DOS1 大气校正 / 多时相去云
+        "gdal:calibrate",
+        "gdal:dos1",
+        "gdal:cloudreplace",
+        # P6-06 blocked：FLAASH 外部引擎 / 农业计数（方法未确定）
+        "platform:flaash_external",
+        "platform:agriculture_count",
     }
     assert algo_ids == expected_ids
 
     for a in algorithms:
+        if a.state.presence != Presence.present:
+            # blocked/missing 占位条目（platform:flaash_external 等）无真实输入端口
+            continue
         assert a.kind == CapabilityKind.algorithm
         assert len(a.inputs) >= 1
         assert len(a.outputs) >= 1
@@ -382,15 +392,15 @@ def test_four_dimensional_state_independence_and_audit():
     # 第 61 轮（P6-04）：新增 gcpregister/rasterdiff 并把既有 pansharpen 升级为
     # form 执行器：454/449/244/18。
     # 第 62 轮（P6-05）：新增 gdal:mask 与 gdal:fvc：456/451/246/20。
-    assert report["total_baseline_count"] == 456
-    assert report["discovered"]["count"] == 451
-    assert report["callable"]["count"] == 246
-    assert report["platform_executable"]["count"] == 20
+    # 第 63 轮（P6-06）：新增 calibrate/dos1/cloudreplace + blocked 的
+    # flaash_external/agriculture_count：461/454/249/23、missing 7。
+    assert report["total_baseline_count"] == 461
+    assert report["discovered"]["count"] == 454
+    assert report["callable"]["count"] == 249
+    assert report["platform_executable"]["count"] == 23
+    # 第 63 轮 blocked 新增 flaash_external 与 agriculture_count：5 -> 7
+    assert report["missing"]["count"] == 7
     assert report["verified"]["count"] == 5
-    # 第 32 轮：gdal:buildvrt 由 blocked 改为 ready（平台已接入），
-    # 故从缺失清单移出，缺失项 9 -> 8。其余 8 项是运行时确实不可用的
-    # （gdal_auth 不存在、HDF5 驱动缺失、rio cogeo/color/mbtiles 等未安装）。
-    assert report["missing"]["count"] == 5
 
     assert report["discovered"]["ratio"] > 0.90
     assert report["callable"]["ratio"] > 0.50
@@ -408,11 +418,13 @@ def test_four_dimensional_state_independence_and_audit():
     # 第 60 轮新增 gdal:pca / gdal:tasseledcap：409 -> 411、407 -> 409。
     # 第 61 轮新增 gcpregister/rasterdiff（pansharpen 升级既有条目）：411 -> 413、409 -> 411。
     # 第 62 轮新增 gdal:mask / gdal:fvc：413 -> 415、411 -> 413。
+    # 第 63 轮新增 3 个可执行 + 2 个 blocked：415 -> 420、413 -> 416、missing 5。
     # gdal:buildvrt、P5-02 的 gdal:dem/rasterize/grid 由 blocked 改为 ready，
     # GDAL 缺失项 6 -> 5 -> 4 -> 3 -> 2。
-    assert gdal_rep["total_baseline_count"] == 415
-    assert gdal_rep["discovered"]["count"] == 413
-    assert gdal_rep["missing"]["count"] == 2
+    assert gdal_rep["total_baseline_count"] == 420
+    assert gdal_rep["discovered"]["count"] == 416
+    # ? 63 ? blocked ?? flaash_external ? agriculture_count?2 -> 4
+    assert gdal_rep["missing"]["count"] == 4
 
     rio_rep = by_provider["rasterio"]
     assert rio_rep["total_baseline_count"] == 41
@@ -426,8 +438,9 @@ def test_provider_adapters_discover_baseline():
     gdal_caps = gdal_adapter.discover()
     # 第 32/34/35 轮新增编目；第 58 轮 gdal:sindex：407 -> 408；
     # 第 59 轮 gdal:fftfilter：408 -> 409；第 60 轮 pca/tasseledcap：409 -> 411；
-    # 第 61 轮 gcpregister/rasterdiff：411 -> 413；第 62 轮 mask/fvc：413 -> 415。
-    assert len(gdal_caps) == 415
+    # 第 61 轮 gcpregister/rasterdiff：411 -> 413；第 62 轮 mask/fvc：413 -> 415；
+    # 第 63 轮 calibrate/dos1/cloudreplace + 2 blocked：415 -> 420。
+    assert len(gdal_caps) == 420
 
     rio_adapter = RasterioProviderAdapter()
     rio_caps = rio_adapter.discover()

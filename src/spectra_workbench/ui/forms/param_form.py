@@ -659,6 +659,115 @@ class CapabilityFormWidget(QWidget):
         self.lbl_fvc_crop = QLabel("裁剪 (crop):")
         self.params_form.addRow(self.lbl_fvc_crop, self.chk_fvc_crop)
 
+        # --- P6-06 辐射定标 ---
+        self.cmb_calibrate_mode = QComboBox()
+        self.cmb_calibrate_mode.addItem("线性 gain/offset (physical)", "physical")
+        self.cmb_calibrate_mode.addItem("TOA 反射率 (toa_reflectance)", "toa_reflectance")
+        self.lbl_calibrate_mode = QLabel("定标模式 (calibrateMode):")
+        self.params_form.addRow(self.lbl_calibrate_mode, self.cmb_calibrate_mode)
+
+        self.txt_calibrate_gains = QLineEdit()
+        self.txt_calibrate_gains.setPlaceholderText("物理模式必填；逗号分隔每波段 gain，例：1,0.5")
+        self.lbl_calibrate_gains = QLabel("每波段 gain (calibrateGains):")
+        self.params_form.addRow(self.lbl_calibrate_gains, self.txt_calibrate_gains)
+
+        self.txt_calibrate_offsets = QLineEdit()
+        self.txt_calibrate_offsets.setPlaceholderText("可选；逗号分隔每波段 offset，例：0,-1")
+        self.lbl_calibrate_offsets = QLabel("每波段 offset (calibrateOffsets):")
+        self.params_form.addRow(self.lbl_calibrate_offsets, self.txt_calibrate_offsets)
+
+        self.txt_calibrate_esun = QLineEdit()
+        self.txt_calibrate_esun.setPlaceholderText("TOA 反射率模式必填；逗号分隔每波段 ESUN")
+        self.lbl_calibrate_esun = QLabel("每波段 ESUN (calibrateEsun):")
+        self.params_form.addRow(self.lbl_calibrate_esun, self.txt_calibrate_esun)
+
+        self.spin_calibrate_sun_zen = QDoubleSpinBox()
+        self.spin_calibrate_sun_zen.setDecimals(6)
+        self.spin_calibrate_sun_zen.setRange(0.0, 180.0)
+        self.spin_calibrate_sun_zen.setValue(0.0)
+        self.spin_calibrate_sun_zen.setSpecialValueText("未指定")
+        self.lbl_calibrate_sun_zen = QLabel("太阳天顶角 (sunZenAngle，°):")
+        self.params_form.addRow(self.lbl_calibrate_sun_zen, self.spin_calibrate_sun_zen)
+
+        # --- P6-06 DOS1 大气校正 ---
+        self.spin_dos_band = QSpinBox()
+        self.spin_dos_band.setRange(1, 999)
+        self.spin_dos_band.setValue(1)
+        self.lbl_dos_band = QLabel("输入波段 (dosBand，1-based):")
+        self.params_form.addRow(self.lbl_dos_band, self.spin_dos_band)
+
+        self.txt_haze_dn = QLineEdit()
+        self.txt_haze_dn.setPlaceholderText("必填；暗对象 DN，例：1.0")
+        self.lbl_haze_dn = QLabel("暗对象 DN (hazeDN):")
+        self.params_form.addRow(self.lbl_haze_dn, self.txt_haze_dn)
+
+        self.txt_dos_esun = QLineEdit()
+        self.txt_dos_esun.setPlaceholderText("必填；该波段 ESUN，例：2000.0")
+        self.lbl_dos_esun = QLabel("波段 ESUN (dosEsun):")
+        self.params_form.addRow(self.lbl_dos_esun, self.txt_dos_esun)
+
+        self.txt_dos_sun_zen = QLineEdit()
+        self.txt_dos_sun_zen.setPlaceholderText("必填；太阳天顶角（°），例：45.0")
+        self.lbl_dos_sun_zen = QLabel("太阳天顶角 (sunZenAngle，°):")
+        self.params_form.addRow(self.lbl_dos_sun_zen, self.txt_dos_sun_zen)
+
+        self.txt_dos_gain = QLineEdit()
+        self.txt_dos_gain.setPlaceholderText("可选；线性 gain，缺省 1.0")
+        self.lbl_dos_gain = QLabel("线性 gain (dosGain):")
+        self.params_form.addRow(self.lbl_dos_gain, self.txt_dos_gain)
+
+        self.txt_dos_offset = QLineEdit()
+        self.txt_dos_offset.setPlaceholderText("可选；线性 offset，缺省 0.0")
+        self.lbl_dos_offset = QLabel("线性 offset (dosOffset):")
+        self.params_form.addRow(self.lbl_dos_offset, self.txt_dos_offset)
+
+        self.txt_dos_dist = QLineEdit()
+        self.txt_dos_dist.setPlaceholderText("可选；日地距离 d，缺省 1.0")
+        self.lbl_dos_dist = QLabel("日地距离 (earthSunDistance):")
+        self.params_form.addRow(self.lbl_dos_dist, self.txt_dos_dist)
+
+        # --- P6-06 多时相去云 ---
+        self.txt_cloud_secondary = QLineEdit()
+        self.txt_cloud_secondary.setPlaceholderText("二期（云下源）影像文件")
+        self.btn_browse_cloud_secondary = QPushButton("选择...")
+        self.btn_browse_cloud_secondary.clicked.connect(self._browse_cloud_secondary)
+        cloud_secondary_row = QHBoxLayout()
+        cloud_secondary_row.addWidget(self.txt_cloud_secondary, stretch=1)
+        cloud_secondary_row.addWidget(self.btn_browse_cloud_secondary)
+        self.lbl_cloud_secondary = QLabel("二期影像 (secondaryFile):")
+        self.params_form.addRow(self.lbl_cloud_secondary, cloud_secondary_row)
+
+        self.txt_cloud_mask = QLineEdit()
+        self.txt_cloud_mask.setPlaceholderText("云掩膜（单波段，1=云）")
+        self.btn_browse_cloud_mask = QPushButton("选择...")
+        self.btn_browse_cloud_mask.clicked.connect(self._browse_cloud_mask)
+        cloud_mask_row = QHBoxLayout()
+        cloud_mask_row.addWidget(self.txt_cloud_mask, stretch=1)
+        cloud_mask_row.addWidget(self.btn_browse_cloud_mask)
+        self.lbl_cloud_mask = QLabel("云掩膜 (cloudMaskFile):")
+        self.params_form.addRow(self.lbl_cloud_mask, cloud_mask_row)
+
+        self.txt_cloud_band_list = QLineEdit()
+        self.txt_cloud_band_list.setPlaceholderText("可选；参与替换的波段，例：1,2,3（空=全部）")
+        self.lbl_cloud_band_list = QLabel("波段 (bandList，可空):")
+        self.params_form.addRow(self.lbl_cloud_band_list, self.txt_cloud_band_list)
+
+        self.txt_cloud_primary_time = QLineEdit()
+        self.txt_cloud_primary_time.setPlaceholderText("可选；一期时间戳，写入 sidecar")
+        self.lbl_cloud_primary_time = QLabel("一期时间 (primaryTime，可空):")
+        self.params_form.addRow(self.lbl_cloud_primary_time, self.txt_cloud_primary_time)
+
+        self.txt_cloud_secondary_time = QLineEdit()
+        self.txt_cloud_secondary_time.setPlaceholderText("可选；二期时间戳，写入 sidecar")
+        self.lbl_cloud_secondary_time = QLabel("二期时间 (secondaryTime，可空):")
+        self.params_form.addRow(self.lbl_cloud_secondary_time, self.txt_cloud_secondary_time)
+
+        self.spin_cloud_dilate = QSpinBox()
+        self.spin_cloud_dilate.setRange(0, 999)
+        self.spin_cloud_dilate.setValue(0)
+        self.lbl_cloud_dilate = QLabel("掩膜膨胀像素 (maskDilatePixels):")
+        self.params_form.addRow(self.lbl_cloud_dilate, self.spin_cloud_dilate)
+
         # --- P4-03 概览构建 ---
         self.txt_levels = QLineEdit()
         self.txt_levels.setPlaceholderText("严格递增、每个≥2；例：2,4,8")
@@ -1057,6 +1166,57 @@ class CapabilityFormWidget(QWidget):
         self._set_row_visible(self.lbl_fvc_mask, self.txt_fvc_mask, "maskFile" in sup)
         self.btn_browse_fvc_mask.setVisible("maskFile" in sup)
         self._set_row_visible(self.lbl_fvc_crop, self.chk_fvc_crop, "crop" in sup)
+        # P6-06 辐射定标
+        self._set_row_visible(
+            self.lbl_calibrate_mode, self.cmb_calibrate_mode, "calibrateMode" in sup
+        )
+        self._set_row_visible(
+            self.lbl_calibrate_gains, self.txt_calibrate_gains, "calibrateGains" in sup
+        )
+        self._set_row_visible(
+            self.lbl_calibrate_offsets, self.txt_calibrate_offsets, "calibrateOffsets" in sup
+        )
+        self._set_row_visible(
+            self.lbl_calibrate_esun, self.txt_calibrate_esun, "calibrateEsun" in sup
+        )
+        self._set_row_visible(
+            self.lbl_calibrate_sun_zen, self.spin_calibrate_sun_zen, "sunZenAngle" in sup
+        )
+        # P6-06 DOS1
+        self._set_row_visible(self.lbl_dos_band, self.spin_dos_band, "dosBand" in sup)
+        self._set_row_visible(self.lbl_haze_dn, self.txt_haze_dn, "hazeDN" in sup)
+        self._set_row_visible(self.lbl_dos_esun, self.txt_dos_esun, "dosEsun" in sup)
+        self._set_row_visible(
+            self.lbl_dos_sun_zen, self.txt_dos_sun_zen, "sunZenAngle" in sup
+        )
+        self._set_row_visible(self.lbl_dos_gain, self.txt_dos_gain, "dosGain" in sup)
+        self._set_row_visible(self.lbl_dos_offset, self.txt_dos_offset, "dosOffset" in sup)
+        self._set_row_visible(
+            self.lbl_dos_dist, self.txt_dos_dist, "earthSunDistance" in sup
+        )
+        # P6-06 去云
+        self._set_row_visible(
+            self.lbl_cloud_secondary, self.txt_cloud_secondary, "secondaryFile" in sup
+        )
+        self.btn_browse_cloud_secondary.setVisible("secondaryFile" in sup)
+        self._set_row_visible(
+            self.lbl_cloud_mask, self.txt_cloud_mask, "cloudMaskFile" in sup
+        )
+        self.btn_browse_cloud_mask.setVisible("cloudMaskFile" in sup)
+        self._set_row_visible(
+            self.lbl_cloud_band_list, self.txt_cloud_band_list, "bandList" in sup
+        )
+        self._set_row_visible(
+            self.lbl_cloud_primary_time, self.txt_cloud_primary_time, "primaryTime" in sup
+        )
+        self._set_row_visible(
+            self.lbl_cloud_secondary_time,
+            self.txt_cloud_secondary_time,
+            "secondaryTime" in sup,
+        )
+        self._set_row_visible(
+            self.lbl_cloud_dilate, self.spin_cloud_dilate, "maskDilatePixels" in sup
+        )
         self._set_row_visible(self.lbl_levels, self.txt_levels, "levels" in sup)
         self._set_row_visible(self.lbl_ovr_compress, self.cmb_ovr_compress, "overviewCompress" in sup)
         # P4-04
@@ -1255,6 +1415,40 @@ class CapabilityFormWidget(QWidget):
             self.txt_fvc_mask.clear()
         if "crop" not in supported:
             self.chk_fvc_crop.setChecked(True)
+        if "calibrateMode" not in supported:
+            self.cmb_calibrate_mode.setCurrentIndex(0)
+        if "calibrateGains" not in supported:
+            self.txt_calibrate_gains.clear()
+        if "calibrateOffsets" not in supported:
+            self.txt_calibrate_offsets.clear()
+        if "calibrateEsun" not in supported:
+            self.txt_calibrate_esun.clear()
+        if "sunZenAngle" not in supported:
+            self.spin_calibrate_sun_zen.setValue(0.0)
+        if "dosBand" not in supported:
+            self.spin_dos_band.setValue(1)
+        if "hazeDN" not in supported:
+            self.txt_haze_dn.clear()
+        if "dosEsun" not in supported:
+            self.txt_dos_esun.clear()
+        if "dosGain" not in supported:
+            self.txt_dos_gain.clear()
+        if "dosOffset" not in supported:
+            self.txt_dos_offset.clear()
+        if "earthSunDistance" not in supported:
+            self.txt_dos_dist.clear()
+        if "secondaryFile" not in supported:
+            self.txt_cloud_secondary.clear()
+        if "cloudMaskFile" not in supported:
+            self.txt_cloud_mask.clear()
+        if "bandList" not in supported:
+            self.txt_cloud_band_list.clear()
+        if "primaryTime" not in supported:
+            self.txt_cloud_primary_time.clear()
+        if "secondaryTime" not in supported:
+            self.txt_cloud_secondary_time.clear()
+        if "maskDilatePixels" not in supported:
+            self.spin_cloud_dilate.setValue(0)
         if "levels" not in supported:
             self.txt_levels.clear()
         if "overviewCompress" not in supported:
@@ -1651,6 +1845,110 @@ class CapabilityFormWidget(QWidget):
         if "crop" in supported:
             params["crop"] = self.chk_fvc_crop.isChecked()
 
+        # P6-06：辐射定标
+        if "calibrateMode" in supported:
+            params["calibrateMode"] = self.cmb_calibrate_mode.currentData()
+        if "calibrateGains" in supported:
+            raw_gains = self.txt_calibrate_gains.text().strip()
+            if raw_gains:
+                gains: list[float] = []
+                for part in raw_gains.replace(";", ",").replace("；", ",").split(","):
+                    part = part.strip()
+                    if not part:
+                        continue
+                    try:
+                        gains.append(float(part))
+                    except ValueError:
+                        return params, f"calibrateGains 必须是数值，当前为：{raw_gains}"
+                if gains:
+                    params["calibrateGains"] = gains
+        if "calibrateOffsets" in supported:
+            raw_offsets = self.txt_calibrate_offsets.text().strip()
+            if raw_offsets:
+                offsets: list[float] = []
+                for part in raw_offsets.replace(";", ",").replace("；", ",").split(","):
+                    part = part.strip()
+                    if not part:
+                        continue
+                    try:
+                        offsets.append(float(part))
+                    except ValueError:
+                        return params, f"calibrateOffsets 必须是数值，当前为：{raw_offsets}"
+                if offsets:
+                    params["calibrateOffsets"] = offsets
+        if "calibrateEsun" in supported:
+            raw_esun = self.txt_calibrate_esun.text().strip()
+            if raw_esun:
+                esun_values: list[float] = []
+                for part in raw_esun.replace(";", ",").replace("；", ",").split(","):
+                    part = part.strip()
+                    if not part:
+                        continue
+                    try:
+                        esun_values.append(float(part))
+                    except ValueError:
+                        return params, f"calibrateEsun 必须是数值，当前为：{raw_esun}"
+                if esun_values:
+                    params["calibrateEsun"] = esun_values
+        if "sunZenAngle" in supported and self.spin_calibrate_sun_zen.value() > 0.0:
+            params["sunZenAngle"] = float(self.spin_calibrate_sun_zen.value())
+
+        # P6-06：DOS1
+        if "dosBand" in supported:
+            params["dosBand"] = int(self.spin_dos_band.value())
+        for key, widget in (
+            ("hazeDN", self.txt_haze_dn),
+            ("dosEsun", self.txt_dos_esun),
+            ("sunZenAngle", self.txt_dos_sun_zen),
+            ("dosGain", self.txt_dos_gain),
+            ("dosOffset", self.txt_dos_offset),
+            ("earthSunDistance", self.txt_dos_dist),
+        ):
+            if key not in supported:
+                continue
+            raw = widget.text().strip()
+            if raw:
+                try:
+                    params[key] = float(raw)
+                except ValueError:
+                    return params, f"{key} 必须是数值，当前为：{raw}"
+
+        # P6-06：多时相去云
+        if "secondaryFile" in supported:
+            secondary_text = self.txt_cloud_secondary.text().strip()
+            if not secondary_text:
+                return params, "多时相去云必须选择二期（云下源）影像"
+            params["secondaryFile"] = secondary_text
+        if "cloudMaskFile" in supported:
+            cloud_mask_text = self.txt_cloud_mask.text().strip()
+            if not cloud_mask_text:
+                return params, "多时相去云必须选择云掩膜文件"
+            params["cloudMaskFile"] = cloud_mask_text
+        if "bandList" in supported:
+            raw_cloud_bands = self.txt_cloud_band_list.text().strip()
+            if raw_cloud_bands:
+                cloud_band_values: list[int] = []
+                for part in raw_cloud_bands.replace(";", ",").replace("；", ",").split(","):
+                    part = part.strip()
+                    if not part:
+                        continue
+                    try:
+                        cloud_band_values.append(int(part))
+                    except ValueError:
+                        return params, f"bandList 必须是整数波段号，当前为：{raw_cloud_bands}"
+                if cloud_band_values:
+                    params["bandList"] = cloud_band_values
+        if "primaryTime" in supported:
+            raw_time = self.txt_cloud_primary_time.text().strip()
+            if raw_time:
+                params["primaryTime"] = raw_time
+        if "secondaryTime" in supported:
+            raw_time = self.txt_cloud_secondary_time.text().strip()
+            if raw_time:
+                params["secondaryTime"] = raw_time
+        if "maskDilatePixels" in supported:
+            params["maskDilatePixels"] = int(self.spin_cloud_dilate.value())
+
         # P4-04：表达式计算
         if "calc" in supported:
             raw_expr = self.txt_calc.text().strip()
@@ -1802,6 +2100,26 @@ class CapabilityFormWidget(QWidget):
         )
         if path:
             self.txt_fvc_mask.setText(path)
+
+    def _browse_cloud_secondary(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "选择一期（可能带云）影像",
+            str(self._project_root),
+            "栅格影像 (*.tif *.tiff *.dat *.img *.vrt);;所有文件 (*)",
+        )
+        if path:
+            self.txt_cloud_secondary.setText(path)
+
+    def _browse_cloud_mask(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "选择云掩膜文件",
+            str(self._project_root),
+            "栅格掩膜 (*.tif *.tiff *.dat *.img *.vrt);;所有文件 (*)",
+        )
+        if path:
+            self.txt_cloud_mask.setText(path)
 
     def _browse_input(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
@@ -1968,6 +2286,44 @@ class CapabilityFormWidget(QWidget):
                 has_alpha=False,
             )
             return "；".join(fvc_violations) if fvc_violations else None
+        if capability_id == "gdal:calibrate":
+            bands = 0
+            if self._metadata_provider is not None and in_paths:
+                try:
+                    info = self._metadata_provider(in_paths[0])
+                    bands = int(info.get("count") or len(info.get("bands") or []))
+                except Exception:
+                    bands = 0
+            if bands <= 0:
+                return None
+            calibrate_violations = validate_output_format(
+                out_fmt,
+                dtype="Float32",
+                bands=bands,
+                has_nodata=True,
+                has_alpha=False,
+            )
+            return "；".join(calibrate_violations) if calibrate_violations else None
+        if capability_id in ("gdal:dos1", "gdal:cloudreplace"):
+            bands = 0
+            if self._metadata_provider is not None and in_paths:
+                try:
+                    info = self._metadata_provider(in_paths[0])
+                    bands = int(info.get("count") or len(info.get("bands") or []))
+                except Exception:
+                    bands = 0
+            if bands <= 0:
+                return None
+            if capability_id == "gdal:dos1":
+                bands = 1
+            violations = validate_output_format(
+                out_fmt,
+                dtype="Float32",
+                bands=max(bands, 1),
+                has_nodata=True,
+                has_alpha=False,
+            )
+            return "；".join(violations) if violations else None
         has_nodata_param = any(
             params.get(key) is not None
             for key in ("srcNodata", "vrtNodata", "dstNodata", "noData")
@@ -2155,6 +2511,9 @@ class CapabilityFormWidget(QWidget):
             "gdal:pansharpen",
             "gdal:mask",
             "gdal:fvc",
+            "gdal:calibrate",
+            "gdal:dos1",
+            "gdal:cloudreplace",
         }:
             # 这些能力都真实消费 format；此前 sindex/fftfilter 漏发 format，
             # 会导致 GUI 里选 COG/ENVI 仍被 Worker 静默写成 GTiff。

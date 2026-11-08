@@ -75,6 +75,10 @@ CONNECTED_CAPABILITIES: frozenset[str] = frozenset(
         # P6-05：二值掩膜 / FVC 植被覆盖度
         "gdal:mask",
         "gdal:fvc",
+        # P6-06：辐射定标 / DOS1 大气校正 / 掩膜驱动多时相去云
+        "gdal:calibrate",
+        "gdal:dos1",
+        "gdal:cloudreplace",
     }
 )
 
@@ -143,6 +147,9 @@ FORMAT_CAPABILITIES: frozenset[str] = frozenset(
         "gdal:pansharpen",
         "gdal:mask",
         "gdal:fvc",
+        "gdal:calibrate",
+        "gdal:dos1",
+        "gdal:cloudreplace",
         "gdal:calc",
     }
 )

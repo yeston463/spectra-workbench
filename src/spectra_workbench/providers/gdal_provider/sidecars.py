@@ -50,6 +50,10 @@ _SIDECAR_SUFFIXES = {
     ".mask.json",
     ".fvc.json",
     ".fvc_class.tif",
+    # P6-06：定标 / DOS1 / 去云 sidecar。
+    ".calibrate.json",
+    ".dos1.json",
+    ".cloudreplace.json",
     ".wld",
     ".tfw",
     ".tifw",
@@ -116,6 +120,9 @@ def _suffixes_for_target(target: Path) -> set[str]:
         ".mask.json",
         ".fvc.json",
         ".fvc_class.tif",
+        ".calibrate.json",
+        ".dos1.json",
+        ".cloudreplace.json",
     }
     suffix = target.suffix.lower()
     if suffix in {".tif", ".tiff"}:
@@ -147,6 +154,9 @@ def known_sidecar_candidates(target: Path) -> list[Path]:
             ".mask.json",
             ".fvc.json",
             ".fvc_class.tif",
+            ".calibrate.json",
+            ".dos1.json",
+            ".cloudreplace.json",
         }:
             candidates.add(target.with_name(target.name + suffix))
         else:
