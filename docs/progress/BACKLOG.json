@@ -863,9 +863,29 @@
         "P2-03",
         "P3-01"
       ],
-      "status": "todo",
+      "status": "done",
       "release_requirement": "core",
-      "evidence": [],
+      "evidence": [
+        "第 65 轮：P7-02 转 done。(1) 新增 `scripting/session.py::ScriptSession`（P7-02）：**按 engine 分别启动真实引擎解释器**——gdal 解析 doctor 的 QGIS/conda python（不 import 原生地理库）；rasterio 解析 `.venvs\\sw-rasterio\\Scripts\\python.exe`。未知 engine（gdal/rasterio 以外）显式 SessionError。",
+        "(2) 引擎内 bootstrap（stdlib 轻量；**不 import native**，仅脚本内显式 exec）:",
+        "- 用户脚本通过 `exec()` 在引擎环境内执行，可以 `from osgeo import gdal` / `import rasterio` 原生 API；",
+        "- GUI 进程不 import osgeo/rasterio（严格保持 P3 约束）。",
+        "(3) 停止/日志/成果登记/会话重启可复现：",
+        "- `stop()` 幂等（proc None / poll() None → 返回 0）；run 后自动清理以便下次 run 新进程；",
+        "- `logs/stdout.log` 与 `logs/stderr.log` 写到会话目录，每次 run 前清空；",
+        "- `register_artifact(path)` 显式登记成果（`artifacts.json` 含 path/sha256/size/mtime/registered_at）——**不**再靠 glob 自动捡",
+        "- `session.json` 记录 engine/python_path/started_at",
+        "- 同一 session_dir 再 run → 全新 interpreter（目录含 `session_result.json`、`artifacts.json`）。",
+        "(4) 数值/IO 验收：",
+        "- gdal 会话 `from osgeo import gdal` → Create GTiff 3x2 Float32 + GT/CRS/NoData，在独立重开断言 3×2；",
+        "- rasterio 会话 `import rasterio` → open 上述 GTiff；narrow 断言 shape/count；register_artifact 登记 GDAL 会话产物（SHA-256 精确比对）；",
+        "- stop 与 restart：同一 session_dir 内先 run『hello-1』再 run『hello-2』，stdout.log 仅为 hello-2（旧日志不残留）；",
+        "- 空 script / 非 gdal/rasterio engine → SessionError 明确拒绝。",
+        "(5) add-on CLI 校验：`scripting/__main__.py`（`python -m spectra_workbench.scripting <engine> <session_dir> <script.py>`）。",
+        "(6) tests/integration/test_p7_scripting_sessions.py 5 项全绿；受影响靶向 264 项全绿（3 个 P1-04 / P2-03 / P3-01 依赖 + 老 P3-01 regression 5 项 + P7-01 migration 6 项）。",
+        "(7) Ruff 干净；Mypy 84 源文件 0 错误。验收「GDAL/Rasterio 会话分别导入原生 API；停止、日志、成果登记和会话重启可用」逐项满足，**P7-02 转 done**。",
+        " непре边界：会话**非线程安全**（调用方自行保证串行）；`scipy` 是未注册的 engine（SessionError），需要时单独扩充 engine 集合并新增对应测试。"
+      ],
       "blocking_reason": null
     },
     {

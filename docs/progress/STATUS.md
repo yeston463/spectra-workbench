@@ -1,6 +1,6 @@
 # 执行状态
 
-更新：2026-11-09（第 64 轮 · P7-01 项目迁移与异常退出安全：legacy 0.9 → 1.0 的显式迁移器（未知字段/版本显式拒绝，迁移前缀写在 notes）、load_project 无感迁移、``os._exit`` 真实子进程 + monkeypatch os.replace 双路 crash 验证原文件字节原样保留、ROI 字段原样保留并过 domain.ROI 校验；**P7-01 转 done**）
+更新：2026-11-09（第 65 轮 · P7-02 隔离脚本会话：`scripting/session.py::ScriptSession` 按 engine 分别启动**真实**引擎解释器（gdal=doctor 解析的 QGIS/conda、rasterio=`.venvs\sw-rasterio`）；用户脚本在引擎内 exec 原生 API，GUI 进程不 import osgeo/rasterio；stop 幂等、stdout/stderr 日志、`register_artifact` 成果登记（path/sha256/size/mtime）、session.json 可审计、同 session_dir 再 run 全新进程；P7-02 转 done）。
 
 ## 当前里程碑
 
@@ -33,6 +33,7 @@
 
 - **P7 项目、脚本、批处理与流程**：
   - **P7-01 项目保存、迁移、重定位与恢复**：**done**（第 64 轮）。`project/migrate.py`：legacy 0.9 → 当前 1.0 的显式迁移器（src/label/metadata → source/name/metadata_snapshot、comment → notes 前缀「[legacy 0.9 迁移]」、未知字段/版本显式拒绝、path_anchor=None 走 P3-01 legacy 确认流程）；`load_project` 无感迁移并把 Windows `\` 规范化为 `/`；真实子进程 `os._exit(-1)` 在写盘段崩溃 → 上次保存字节原样保留；`os.replace` 中断 → 原文件原样保留、无残留 `.tmp`；ROI 原样保留并通过 domain.ROI 校验。遗留：P3-01 已验收移动/重定位语义不变。
+  - **P7-02 隔离脚本会话**：**done**（第 65 轮）。`scripting/session.py::ScriptSession`：按 engine 分别启动**真实**引擎解释器（gdal=doctor 解析的 QGIS/conda、rasterio=`.venvs/sw-rasterio`；未知 engine SessionError）；用户脚本在引擎内 exec 原生 API（`from osgeo import gdal` / `import rasterio`），GUI 进程不 import osgeo/rasterio；`stop` 幂等（proc None / poll None → 0）；stdout/stderr.log 写会话目录，每次 run 前清空；`register_artifact` 显式登记成果（artifacts.json：path/sha256/size/mtime/registered_at）；session.json 记录 engine/python_path/started_at；同 session_dir 再 run → 全新 interpreter。`scripting/__main__.py` 提供 CLI 入口。遗留：会话非线程安全（调用方自串）không阻塞；上 scipy 未注册。
 ## 原 P3 验收标准逐项对账与剩余缺口
 
 | ID | 任务 | 原始验收标准 | 当前已满足项与实测证据 | 剩余缺口与待验条件 | 当前状态 |
@@ -241,6 +242,36 @@ CRT 检测到栈状态异常后立即终止进程，这正是 `STATUS_STACK_BUFF
 |---|---|---|
 | 用合成影像完成同类验收 | 已满足 | 合成 ENVI/GTiff/GeoJSON/netCDF 样例覆盖多波段、像元数值、ROI 与对比 |
 | 保留真实数据待验状态 | **待验** | 课程原始数据位于 `C:\Users\赵航\Desktop\studio\_chaoxing_rs`（**只读**，不得运行其中的抓取/下载/OCR 脚本）；本轮全部用合成影像验收，未对课程原始 ENVI 栅格与 lena.tif 做真实打开验证 |
+
+### 第 65 轮：P7-02 隔离脚本会话（P7-02 → done）
+
+**一、实现**
+
+- 新增 `scripting/session.py::ScriptSession`：按 engine 分别启动**真实**引擎解释器——gdal 通过 `app/doctor.resolve_gdal_runtime` 解析（QGIS/conda），rasterio 使用 `.venvs\sw-rasterio\Scripts\python.exe`；未知 engine 显式 `SessionError`。
+- 用户脚本通过 `exec()` 在引擎环境内执行，可真实 `from osgeo import gdal` / `import rasterio`；**GUI 进程不 import osgeo / rasterio**（严格保持 P3 约束），且 bootstrap 只 stdlib。
+- `stop()` 幂等（proc None / poll None → 0）；`run()` 后自动清理以便下次 run 使用全新进程；`is_alive` 仅在 proc 活时 True。
+- `logs/stdout.log` / `logs/stderr.log` 写会话目录，每次 run 前清空（不残留旧日志）。
+- `register_artifact(path)` 显式登记成果（`artifacts.json` 含 path / sha256 / size / mtime / registered_at），**不**依赖自动 glob；`session.json` 记录 engine / python_path / started_at。
+- 同 session_dir 再 `run` → 全新 interpreter（产物存进同一目录）。
+- `scripting/__main__.py` 提供 CLI 入口：`python -m spectra_workbench.scripting <engine> <session_dir> <script.py>`。
+
+**二、验收（真实引擎解释器子进程）**
+
+- gdal 会话：`from osgeo import gdal` → Create 3×2 Float32 GTiff + GT/CRS/NoData，独立重开断言尺寸；产出真实 GTiff。
+- rasterio 会话：`import rasterio` → open 上述 GTiff；shape/count 校验；`register_artifact` 登记 GDAL 会话产物（SHA-256 精确比对）。
+- stop/restart：同 session_dir 内先 run 『hello-1』再 run 『hello-2』，stdout.log 仅为 hello-2（旧日志不残留）。
+- 空 script / 非 gdal/rasterio engine → `SessionError` 明确拒绝。
+
+**三、验证**
+
+- 新增 `tests/integration/test_p7_scripting_sessions.py`（5 项）；P7-01 migration / P3-01 regression 回归全绿。
+- Ruff 干净；Mypy 84 源文件 0 错误。
+
+**四、边界与结论**
+
+- 验收「GDAL/Rasterio 会话分别导入原生 API；停止、日志、成果登记和会话重启可用」逐项满足——**P7-02 转 done**；账本现为 done 36 / implemented 2（P0-02, P6-06）/ todo 17。
+- 遗留边界：会话**非线程安全**（调用方自行保证串行）；`scipy` 是未注册的 engine（SessionError），需要时单独扩充
+engine 集合并新增对应测试。
 
 ### 第 64 轮：P7-01 项目迁移与磁盘安全（P7-01 → done）
 

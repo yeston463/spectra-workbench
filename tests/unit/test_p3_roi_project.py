@@ -222,8 +222,15 @@ def test_missing_schema_version_and_unknown_version_are_refused(tmp_path: Path):
     with pytest.raises(ProjectError, match="schema_version"):
         load_project(bad1)
 
-    bad2 = root / "old.json"
-    bad2.write_text(json.dumps({"schema_version": "0.9", "layers": []}), encoding="utf-8")
+    # 第 64 轮起：0.9 是已知 legacy 版本，P7-01 会显式迁移为 1.0
+    legacy = root / "legacy.json"
+    legacy.write_text(json.dumps({"schema_version": "0.9", "layers": []}), encoding="utf-8")
+    spec = load_project(legacy)
+    assert spec.schema_version == "1.0"
+    assert spec.notes.startswith("[legacy 0.9 迁移]")
+
+    bad2 = root / "older.json"
+    bad2.write_text(json.dumps({"schema_version": "0.5", "layers": []}), encoding="utf-8")
     with pytest.raises(ProjectError, match="迁移"):
         load_project(bad2)
 
