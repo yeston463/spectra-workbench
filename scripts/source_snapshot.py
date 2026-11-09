@@ -36,7 +36,10 @@ class SourceSnapshot:
 
 
 def _git(root: Path, *args: str) -> bytes:
-    return subprocess.check_output(["git", "-C", str(root), *args])
+    return subprocess.check_output(
+        ["git", "-C", str(root), *args],
+        stderr=subprocess.DEVNULL,
+    )
 
 
 def compute_source_snapshot_details(root: Path | None = None) -> SourceSnapshot:

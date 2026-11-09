@@ -400,10 +400,12 @@ def test_four_dimensional_state_independence_and_audit():
     # 462/455/250/24。
     # 第 73 轮（P8-05）：新增 6 项可选引擎扩展登记（provider=extension，全部 missing/blocked）：
     # 基线总数 462 -> 468，missing 7 -> 13，discovered/callable/platform_executable 维持 455/250/24 不变。
+    # 第 75 轮（P9-02）：5 项清理算法（sieve/fillnodata/nearblack/proximity/viewshed）
+    # 接通 form 执行器与面板：platform_executable 24 -> 29。
     assert report["total_baseline_count"] == 468
     assert report["discovered"]["count"] == 455
     assert report["callable"]["count"] == 250
-    assert report["platform_executable"]["count"] == 24
+    assert report["platform_executable"]["count"] == 29
     # 第 63 轮 blocked 新增 flaash_external 与 agriculture_count：5 -> 7；
     # 第 73 轮（P8-05）新增 6 项未实现可选扩展：7 -> 13
     assert report["missing"]["count"] == 13

@@ -83,7 +83,7 @@ def test_p9_01_by_kind_separation_prevents_symbol_inflation() -> None:
     algo_stats = by_kind["algorithm"]
     assert algo_stats["total_count"] == 44
     assert algo_stats["discovered_count"] == 36
-    assert algo_stats["form_connected_count"] == 30
+    assert algo_stats["form_connected_count"] == 35
     assert algo_stats["missing_or_blocked_count"] == 8  # 2 platform blocked + 6 ext
 
     # CLI 工具单独统计（178 项，其中 174 项现存，4 项缺失）
@@ -127,26 +127,21 @@ def test_p9_01_five_independent_coverage_metrics() -> None:
     assert c_cov["non_driver_denominator"] == 262
     assert c_cov["callable_non_driver_count"] == 250
 
-    # 3. 图形面板覆盖率：仅以 algorithm 为分母（30 / 44 = 68.18%，在已发现算法中 30 / 36 = 83.33%）
+    # 3. 图形面板覆盖率：仅以 algorithm 为分母（35 / 44 = 79.55%，在已发现算法中 35 / 36 = 97.22%）
     f_cov = metrics["form_panel_coverage"]
     assert f_cov["total_algorithm_denominator"] == 44
     assert f_cov["present_algorithm_denominator"] == 36
-    assert f_cov["connected_form_algorithm_count"] == 30
+    assert f_cov["connected_form_algorithm_count"] == 35
     assert set(f_cov["connected_capability_ids"]).issubset(CONNECTED_CAPABILITIES)
-    assert len(f_cov["unconnected_present_algorithms"]) == 6
+    assert len(f_cov["unconnected_present_algorithms"]) == 1
     assert set(f_cov["unconnected_present_algorithms"]) == {
-        "gdal:fillnodata",
-        "gdal:nearblack",
-        "gdal:proximity",
         "gdal:retile",
-        "gdal:sieve",
-        "gdal:viewshed",
     }
 
     # 4. 验收样例覆盖率：明确声明不得把有 Python 编辑器说成所有 API 均逐项测试通过
     v_cov = metrics["validation_sample_coverage"]
     assert v_cov["verified_evidence_count"] == 5
-    assert v_cov["connected_form_count"] == 30
+    assert v_cov["connected_form_count"] == 35
     assert v_cov["script_editor_claimed_as_all_api_tested"] is False
 
     # 5. 格式/驱动覆盖率：205 / 206 = 99.51%
@@ -160,14 +155,14 @@ def test_p9_01_five_independent_coverage_metrics() -> None:
 
 
 def test_p9_01_full_parameter_contract_audit_zero_drift() -> None:
-    """全量参数审计：30 项已接通算法（含 4 项旧别名共 34 项）参数零漂移，全部 468 项能力 2000+ 参数无错误。"""
+    """全量参数审计：35 项已接通算法（含 4 项旧别名共 39 项）参数零漂移，全部 468 项能力 2000+ 参数无错误。"""
     reg = get_default_registry()
     pa = audit_parameters(reg)
 
     assert pa["compliant"] is True
     assert pa["total_capabilities_audited"] == 468
     assert pa["total_parameters_audited"] >= 2027
-    assert pa["connected_capabilities_audited"] == 34
+    assert pa["connected_capabilities_audited"] == 39
     assert pa["schema_errors"] == []
     assert pa["duplicate_key_errors"] == []
     assert pa["default_choice_errors"] == []

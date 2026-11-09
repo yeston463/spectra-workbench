@@ -1128,9 +1128,28 @@
         "P9-01",
         "P7-02"
       ],
-      "status": "todo",
+      "status": "done",
       "release_requirement": "core",
-      "evidence": [],
+      "evidence": [
+        "第 75 轮（P9-02 能力路由补齐转 done）：",
+        "(1) 5 项适合参数化的清理与地形分析算法（gdal:sieve 杂斑滤除, gdal:fillnodata 无效值填补, gdal:nearblack 近黑边归零, gdal:proximity 邻近距离计算, gdal:viewshed 视域分析）全面接通图形面板与 Worker 执行器：",
+        "  - 新增 `src/spectra_workbench/providers/gdal_provider/cleanup_ops.py` 实现 GDAL 原生算法调用与暂存事务；针对 Windows 中文用户名/路径 UTF-8 解码异常（CPLGenerateTempFilename 崩溃），内置 `_scoped_cpl_tmpdir` 在执行期间自动重定向 CPL_TMPDIR 到纯 ASCII 临时目录；写盘前执行 `plan_cleanup_output` 格式矩阵预检；",
+        "  - `adapter.py` 将 5 项能力纳入 SUPPORTED_CAPABILITIES，打通 validate、plan_output、execute 与暂存提交；",
+        "  - `domain/capability_wiring.py` 将 5 项算法追加进 CONNECTED_CAPABILITIES 与 FORMAT_CAPABILITIES（已接通规范能力扩充至 35 项，含 4 项别名共 39 项）；",
+        "  - `processing/raster_params.py` 补充 13 项新参数定义、别名映射与规范化（threshold, fillDistance, smoothIterations, near, white, values, distunits, maxDist, ox, oy, observerHeight, targetHeight, viewDistance）；全量参数审计保持 2033 项参数零漂移、零 schema 错误、零别名冲突；",
+        "  - `ui/forms/param_form.py`（CapabilityFormWidget）动态显示 5 项算法参数控件，支持参数采集、重置与格式预检；",
+        "(2) 复杂 API 与批量算法可运行会话入口（41 项：24 项 GDAL API + 16 项 Rasterio API + 1 项 gdal:retile）全面闭环：",
+        "  - 新增 `src/spectra_workbench/scripting/api_snippets.py`，提供 `generate_api_session_snippet`，为全部 41 项复杂能力生成带原生符号反射、文档签名与带断言的最小可运行 demo 模板（level='demo'）；",
+        "  - 在真实受管解释器（QGIS GDAL 3.13 与 .venvs/sw-rasterio）中通过 `ScriptSession` 执行批处理验证，GDAL 25 项与 Rasterio 16 项全部 41 项模板执行通过，断言无一失败（100% 成功率）；",
+        "  - `build_batch_script` 过滤 C 级原生进度输出，`session.py` 注入 PYTHONIOENCODING=utf-8 与 PYTHONUTF8=1，彻底杜绝 Windows 控制台编码干扰；",
+        "(3) gdal:retile 明确目录输出限制说明：因其产生切片目录多文件而不适合单栅格图形表单，元数据标记 entrypoints[form].available=False, entrypoints[script].available=True，并在 limitations 明确指引通过 Python 脚本会话运行；",
+        "(4) 自动化验证与质量门禁：",
+        "  - 新增 `tests/integration/test_p9_capability_routing.py`（4 项集成测试通过，覆盖真实 Worker 执行数值验证、GUI 参数表单采集、41 项会话模板真实执行、retile 限制说明）；",
+        "  - 更新 `tests/integration/test_p9_baseline_param_audit.py`（5 项全通，图形面板算法数由 30 项增至 35 项，未接通仅余 retile 1 项，参数契约审计 39 项已接通能力零漂移）；",
+        "  - 更新 `tests/unit/test_capabilities_baseline.py`（18 项全通，platform_executable 增至 29 项）；",
+        "  - `scripts/audit-capabilities.ps1` 校验通过，`scripts/run_with_timeout.py` + `scripts/pytest_runner.py` 27 项测试 clean exit 全部通过（rc=0, residual=0）；",
+        "  - Ruff 代码检查 0 告警，Mypy 99 个源文件 0 错误。"
+      ],
       "blocking_reason": null
     },
     {
@@ -1263,4 +1282,4 @@
     }
   ],
   "updated_at": "2026-11-09"
-}
+}

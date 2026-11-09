@@ -11,8 +11,8 @@
     "ratio": 0.5342
   },
   "platform_executable": {
-    "count": 24,
-    "ratio": 0.0513
+    "count": 29,
+    "ratio": 0.062
   },
   "verified": {
     "count": 5,
@@ -341,8 +341,8 @@
         "ratio": 0.5036
       },
       "platform_executable": {
-        "count": 23,
-        "ratio": 0.0546
+        "count": 28,
+        "ratio": 0.0665
       },
       "verified": {
         "count": 4,
@@ -743,8 +743,8 @@
       "discovered_ratio": 0.8182,
       "callable_count": 36,
       "callable_ratio": 0.8182,
-      "form_connected_count": 30,
-      "form_connected_ratio": 0.6818,
+      "form_connected_count": 35,
+      "form_connected_ratio": 0.7955,
       "verified_count": 3,
       "verified_ratio": 0.0682,
       "missing_or_blocked_count": 8
@@ -818,9 +818,9 @@
     "form_panel_coverage": {
       "total_algorithm_denominator": 44,
       "present_algorithm_denominator": 36,
-      "connected_form_algorithm_count": 30,
-      "ratio_of_all_algorithms": 0.6818,
-      "ratio_of_present_algorithms": 0.8333,
+      "connected_form_algorithm_count": 35,
+      "ratio_of_all_algorithms": 0.7955,
+      "ratio_of_present_algorithms": 0.9722,
       "connected_capability_ids": [
         "gdal:bandmanage",
         "gdal:buildvrt",
@@ -832,41 +832,41 @@
         "gdal:dos1",
         "gdal:editmeta",
         "gdal:fftfilter",
+        "gdal:fillnodata",
         "gdal:fvc",
         "gdal:gcpregister",
         "gdal:grid",
         "gdal:mask",
         "gdal:mdim_slice",
         "gdal:merge",
+        "gdal:nearblack",
         "gdal:overview",
         "gdal:pansharpen",
         "gdal:pca",
         "gdal:polygonize",
+        "gdal:proximity",
         "gdal:rasterdiff",
         "gdal:rasterize",
+        "gdal:sieve",
         "gdal:sindex",
         "gdal:stack",
         "gdal:statistics",
         "gdal:tasseledcap",
         "gdal:translate",
+        "gdal:viewshed",
         "gdal:warp",
         "ogr:vectortranslate",
         "rasterio:convert"
       ],
       "unconnected_present_algorithms": [
-        "gdal:fillnodata",
-        "gdal:nearblack",
-        "gdal:proximity",
-        "gdal:retile",
-        "gdal:sieve",
-        "gdal:viewshed"
+        "gdal:retile"
       ]
     },
     "validation_sample_coverage": {
       "total_registry_denominator": 468,
       "verified_evidence_count": 5,
       "ratio_of_total": 0.0107,
-      "connected_form_count": 30,
+      "connected_form_count": 35,
       "script_editor_claimed_as_all_api_tested": false
     },
     "driver_coverage": {
@@ -883,8 +883,8 @@
   },
   "parameter_audit": {
     "total_capabilities_audited": 468,
-    "total_parameters_audited": 2027,
-    "connected_capabilities_audited": 34,
+    "total_parameters_audited": 2033,
+    "connected_capabilities_audited": 39,
     "schema_errors": [],
     "duplicate_key_errors": [],
     "default_choice_errors": [],
@@ -1030,6 +1030,19 @@
         "is_vector_output": false
       },
       {
+        "capability_id": "gdal:fillnodata",
+        "parameter_count": 4,
+        "canonical_parameters": [
+          "band",
+          "fillDistance",
+          "smoothIterations",
+          "srcNodata"
+        ],
+        "supports_output_format": true,
+        "is_multi_input": false,
+        "is_vector_output": false
+      },
+      {
         "capability_id": "gdal:fvc",
         "parameter_count": 11,
         "canonical_parameters": [
@@ -1124,6 +1137,17 @@
         "is_vector_output": false
       },
       {
+        "capability_id": "gdal:nearblack",
+        "parameter_count": 2,
+        "canonical_parameters": [
+          "near",
+          "white"
+        ],
+        "supports_output_format": true,
+        "is_multi_input": false,
+        "is_vector_output": false
+      },
+      {
         "capability_id": "gdal:overview",
         "parameter_count": 3,
         "canonical_parameters": [
@@ -1178,6 +1202,19 @@
         "is_vector_output": true
       },
       {
+        "capability_id": "gdal:proximity",
+        "parameter_count": 4,
+        "canonical_parameters": [
+          "band",
+          "distunits",
+          "maxDist",
+          "values"
+        ],
+        "supports_output_format": true,
+        "is_multi_input": false,
+        "is_vector_output": false
+      },
+      {
         "capability_id": "gdal:rasterdiff",
         "parameter_count": 4,
         "canonical_parameters": [
@@ -1204,6 +1241,18 @@
           "width",
           "xRes",
           "yRes"
+        ],
+        "supports_output_format": true,
+        "is_multi_input": false,
+        "is_vector_output": false
+      },
+      {
+        "capability_id": "gdal:sieve",
+        "parameter_count": 3,
+        "canonical_parameters": [
+          "band",
+          "connectedness",
+          "threshold"
         ],
         "supports_output_format": true,
         "is_multi_input": false,
@@ -1282,6 +1331,21 @@
           "width",
           "xRes",
           "yRes"
+        ],
+        "supports_output_format": true,
+        "is_multi_input": false,
+        "is_vector_output": false
+      },
+      {
+        "capability_id": "gdal:viewshed",
+        "parameter_count": 6,
+        "canonical_parameters": [
+          "band",
+          "observerHeight",
+          "ox",
+          "oy",
+          "targetHeight",
+          "viewDistance"
         ],
         "supports_output_format": true,
         "is_multi_input": false,

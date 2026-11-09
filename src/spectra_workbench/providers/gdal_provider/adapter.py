@@ -66,6 +66,12 @@ from spectra_workbench.providers.base import (
     resolve_dataset_path,
 )
 from spectra_workbench.providers.gdal_provider.calc_ops import run_calc
+from spectra_workbench.providers.gdal_provider.cleanup_ops import (
+    CLEANUP_CAPABILITIES,
+    CleanupError,
+    plan_cleanup_output,
+    run_cleanup,
+)
 from spectra_workbench.providers.gdal_provider.cloudreplace_ops import run_cloud_replace
 from spectra_workbench.providers.gdal_provider.diff_ops import run_raster_diff
 from spectra_workbench.providers.gdal_provider.dos_ops import run_dos1
@@ -375,6 +381,12 @@ class GDALProviderAdapter(ProviderAdapter):
         P404_STATISTICS_CAPABILITY,
         # --- P8-01：多维数组二维切片（netCDF/HDF 按 GDAL multidim 模型）---
         "gdal:mdim_slice",
+        # --- P9-02：杂斑滤除 / 无效值填补 / 近黑边清理 / 邻近距离 / 视域 ---
+        "gdal:sieve",
+        "gdal:fillnodata",
+        "gdal:nearblack",
+        "gdal:proximity",
+        "gdal:viewshed",
     }
 
     #: 需要多个输入源的能力（至少 2 个）。
@@ -686,6 +698,7 @@ class GDALProviderAdapter(ProviderAdapter):
                 "gdal:cloudreplace",
                 "gdal:mdim_slice",
             )
+            and spec.capability_id not in CLEANUP_CAPABILITIES
             and spec.capability_id not in VECTOR_OUTPUT_CAPABILITIES
         ):
             format_violations = self._general_format_violations(in_path, norm, out_format)
@@ -760,6 +773,43 @@ class GDALProviderAdapter(ProviderAdapter):
         is_dos1 = spec.capability_id == "gdal:dos1"
         is_cloudreplace = spec.capability_id == "gdal:cloudreplace"
         is_mdim_slice = spec.capability_id == "gdal:mdim_slice"
+        is_cleanup = spec.capability_id in CLEANUP_CAPABILITIES
+
+        if is_cleanup:
+            # P9-02：先按算法语义推断输出 dtype/波段/NoData，再走共享格式矩阵预检
+            try:
+                cleanup_plan = plan_cleanup_output(
+                    spec.capability_id,
+                    in_path,  # type: ignore[arg-type]
+                    norm,
+                )
+            except CleanupError as plan_err:
+                return TaskResult(
+                    task_id=spec.task_id,
+                    attempt=spec.attempt,
+                    status=TaskStatus.failed,
+                    error={"code": "invalid_parameters", "message": str(plan_err)},
+                    duration_seconds=round(time.monotonic() - start_time, 4),
+                )
+            cleanup_violations = validate_output_format(
+                out_format,
+                dtype=str(cleanup_plan["dtype"]),
+                bands=int(cleanup_plan["bands"]),
+                has_nodata=bool(cleanup_plan["has_nodata"]),
+                has_alpha=False,
+            )
+            if cleanup_violations:
+                context.log("ERROR", f"清理类算法输出格式不受支持: {cleanup_violations}")
+                return TaskResult(
+                    task_id=spec.task_id,
+                    attempt=spec.attempt,
+                    status=TaskStatus.failed,
+                    error={
+                        "code": "unsupported_format_combination",
+                        "message": "；".join(cleanup_violations),
+                    },
+                    duration_seconds=round(time.monotonic() - start_time, 4),
+                )
 
         if is_calibrate:
             calibrate_mode = str(norm.get("calibrateMode") or "physical")
@@ -2111,6 +2161,31 @@ class GDALProviderAdapter(ProviderAdapter):
                     f"georeferenced={mdim_info['georeferenced']}",
                 )
                 ds = gdal.Open(str(staged_path), gdal.GA_ReadOnly)
+            elif is_cleanup:
+                # P9-02：五项原生清理/邻近/视域算法（单输出文件、无 sidecar）
+                try:
+                    cleanup_info = run_cleanup(
+                        spec.capability_id,
+                        staged_path,
+                        in_path,  # type: ignore[arg-type]
+                        params=norm,
+                        out_format=out_format,
+                        creation_options=creation_options,
+                        callback=_gdal_cb,
+                    )
+                except CleanupError as cleanup_err:
+                    return TaskResult(
+                        task_id=spec.task_id,
+                        attempt=spec.attempt,
+                        status=TaskStatus.failed,
+                        error={"code": "cleanup_error", "message": str(cleanup_err)},
+                        duration_seconds=round(time.monotonic() - start_time, 4),
+                    )
+                context.log(
+                    "INFO",
+                    f"{spec.capability_id} 完成：{cleanup_info}",
+                )
+                ds = gdal.Open(str(staged_path), gdal.GA_ReadOnly)
             elif is_sindex:
                 # 单输入能力：validate() 保证 input 端口存在，in_path 必已解析
                 index_info = compute_index(
@@ -2316,6 +2391,8 @@ class GDALProviderAdapter(ProviderAdapter):
                 if is_dos1
                 else "CloudReplace"
                 if is_cloudreplace
+                else "Cleanup"
+                if is_cleanup
                 else "Warp"
                 if is_warp
                 else "Translate"
@@ -2373,6 +2450,8 @@ class GDALProviderAdapter(ProviderAdapter):
                 if is_dos1
                 else "CloudReplace"
                 if is_cloudreplace
+                else "Cleanup"
+                if is_cleanup
                 else "Warp"
                 if is_warp
                 else "Translate"

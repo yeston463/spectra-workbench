@@ -81,6 +81,12 @@ CONNECTED_CAPABILITIES: frozenset[str] = frozenset(
         "gdal:cloudreplace",
         # P8-01：多维数组二维切片（netCDF/HDF 按 GDAL multidim 模型）
         "gdal:mdim_slice",
+        # P9-02：杂斑滤除 / 无效值填补 / 近黑边清理 / 邻近距离 / 视域（成果为单个栅格）
+        "gdal:sieve",
+        "gdal:fillnodata",
+        "gdal:nearblack",
+        "gdal:proximity",
+        "gdal:viewshed",
     }
 )
 
@@ -153,6 +159,11 @@ FORMAT_CAPABILITIES: frozenset[str] = frozenset(
         "gdal:dos1",
         "gdal:cloudreplace",
         "gdal:calc",
+        "gdal:sieve",
+        "gdal:fillnodata",
+        "gdal:nearblack",
+        "gdal:proximity",
+        "gdal:viewshed",
     }
 )
 

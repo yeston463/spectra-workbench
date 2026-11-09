@@ -262,6 +262,20 @@ _PARAM_ALIASES: dict[str, tuple[str, ...]] = {
     "histogramBins": ("bins", "histogram_bins", "n_bins"),
     "maxSamples": ("max_samples", "sample_budget"),
     "fullLimit": ("full_limit", "full_pixel_limit"),
+    # --- P9-02 杂斑滤除 / 无效值填补 / 近黑边清理 / 邻近距离 / 视域 ---
+    "threshold": ("sieve_threshold", "min_patch_size"),
+    "fillDistance": ("fill_distance", "max_search_distance"),
+    "smoothIterations": ("smooth_iterations", "smoothing_iterations"),
+    "near": ("near_dist", "near_distance"),
+    "white": ("search_white", "near_white"),
+    "values": ("target_values", "proximity_values"),
+    "distunits": ("dist_units", "distance_units"),
+    "maxDist": ("max_dist", "proximity_max_distance"),
+    "ox": ("observer_x", "viewshed_x"),
+    "oy": ("observer_y", "viewshed_y"),
+    "observerHeight": ("observer_height",),
+    "targetHeight": ("target_height",),
+    "viewDistance": ("view_distance", "viewshed_distance"),
 }
 
 #: 重叠区的取值来源优先级。
@@ -560,6 +574,16 @@ _CAPABILITY_SUPPORT: dict[str, frozenset[str]] = {
     ),
     # --- P8-01：多维数组二维切片（netCDF/HDF 按 GDAL multidim 模型）---
     "gdal:mdim_slice": frozenset({"array", "dimSelect"}),
+    # --- P9-02：杂斑滤除 / 无效值填补 / 近黑边清理 / 邻近距离 / 视域 ---
+    "gdal:sieve": frozenset({"threshold", "connectedness", "band"}),
+    "gdal:fillnodata": frozenset(
+        {"fillDistance", "smoothIterations", "band", "srcNodata"}
+    ),
+    "gdal:nearblack": frozenset({"near", "white"}),
+    "gdal:proximity": frozenset({"values", "distunits", "maxDist", "band"}),
+    "gdal:viewshed": frozenset(
+        {"ox", "oy", "observerHeight", "targetHeight", "viewDistance", "band"}
+    ),
     # --- P4-04：受限表达式计算 / 直方图与基础统计 ---
     "gdal:calc": frozenset({"calc", "srcNodata", "dstNodata", "outputType"}),
     "gdal:statistics": frozenset(
@@ -1513,6 +1537,60 @@ def normalize_raster_params(
                 f"参数 histogramBins 必须在 2..4096 之间，实际 {n_bins}"
             )
         out["histogramBins"] = n_bins
+
+    # 11.20) P9-02：杂斑滤除 / 无效值填补 / 近黑边清理 / 邻近距离 / 视域
+    if "threshold" in collected:
+        _, value = collected["threshold"]
+        out["threshold"] = _require_positive_int(value, "threshold")
+    if "fillDistance" in collected:
+        _, value = collected["fillDistance"]
+        out["fillDistance"] = _require_positive_float(value, "fillDistance")
+    if "smoothIterations" in collected:
+        _, value = collected["smoothIterations"]
+        out["smoothIterations"] = _require_non_negative_int(value, "smoothIterations")
+    if "near" in collected:
+        _, value = collected["near"]
+        near_value = _require_non_negative_int(value, "near")
+        if near_value > 255:
+            raise ParameterError(f"参数 near 必须在 0..255，实际 {near_value}")
+        out["near"] = near_value
+    if "white" in collected:
+        _, value = collected["white"]
+        if not isinstance(value, bool):
+            raise ParameterError(f"white 必须是布尔值，实际 {value!r}")
+        out["white"] = value
+    if "values" in collected:
+        _, value = collected["values"]
+        if isinstance(value, str):
+            parts = [s.strip() for s in value.split(",") if s.strip()]
+            if not parts:
+                raise ParameterError("参数 values 必须包含至少一个有效像元值")
+            value = parts
+        elif isinstance(value, (int, float)):
+            value = [value]
+        if not isinstance(value, (list, tuple)) or not value:
+            raise ParameterError("参数 values 必须是非空的目标像元值列表")
+        out["values"] = _require_float_list_any(value, "values")
+    if "distunits" in collected:
+        _, value = collected["distunits"]
+        out["distunits"] = _require_choice(value, ("pixel", "geo"), "distunits").upper()
+    if "maxDist" in collected:
+        _, value = collected["maxDist"]
+        out["maxDist"] = _require_positive_float(value, "maxDist")
+    for key in ("ox", "oy"):
+        if key in collected:
+            _, value = collected[key]
+            out[key] = _require_finite_float(value, key)
+    for key in ("observerHeight", "targetHeight"):
+        if key in collected:
+            _, value = collected[key]
+            height_value = _require_finite_float(value, key)
+            if height_value < 0.0:
+                raise ParameterError(f"参数 {key} 不能为负，实际 {height_value}")
+            out[key] = height_value
+    if "viewDistance" in collected:
+        _, value = collected["viewDistance"]
+        out["viewDistance"] = _require_positive_float(value, "viewDistance")
 
     # 12) 互斥组合：分辨率与输出尺寸不能同时指定
     # （GDAL 侧表现为 "-outsize 与 -tr 冲突"，但那是在引擎里才发现；

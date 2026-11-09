@@ -20,6 +20,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import time
 import uuid
@@ -247,6 +248,9 @@ class ScriptSession:
         stderr_path = self.session_dir / "logs" / "stderr.log"
         stdout_path.write_text("", encoding="utf-8")
         stderr_path.write_text("", encoding="utf-8")
+        child_env = dict(os.environ)
+        child_env["PYTHONIOENCODING"] = "utf-8"
+        child_env["PYTHONUTF8"] = "1"
         try:
             with stdout_path.open("ab") as out_fh, stderr_path.open("ab") as err_fh:
                 self._proc = subprocess.Popen(
@@ -261,6 +265,7 @@ class ScriptSession:
                     stderr=err_fh,
                     cwd=str(self.session_dir),
                     stdin=subprocess.DEVNULL,
+                    env=child_env,
                 )
                 try:
                     exit_code = self._proc.wait(timeout=timeout)

@@ -597,6 +597,88 @@ class CapabilityFormWidget(QWidget):
         self.lbl_mask_invert = QLabel("取反 (maskInvert):")
         self.params_form.addRow(self.lbl_mask_invert, self.chk_mask_invert)
 
+        # --- P9-02 杂斑滤除 / 无效值填补 / 近黑边清理 / 邻近距离 / 视域 ---
+        self.spin_sieve_threshold = QSpinBox()
+        self.spin_sieve_threshold.setRange(1, 100_000_000)
+        self.spin_sieve_threshold.setValue(4)
+        self.lbl_sieve_threshold = QLabel("最小保留斑块 (threshold，像元数):")
+        self.params_form.addRow(self.lbl_sieve_threshold, self.spin_sieve_threshold)
+
+        self.spin_fill_distance = QDoubleSpinBox()
+        self.spin_fill_distance.setRange(0.5, 1_000_000.0)
+        self.spin_fill_distance.setDecimals(2)
+        self.spin_fill_distance.setValue(10.0)
+        self.lbl_fill_distance = QLabel("最大填补搜索距离 (fillDistance，像元):")
+        self.params_form.addRow(self.lbl_fill_distance, self.spin_fill_distance)
+
+        self.spin_fill_smooth = QSpinBox()
+        self.spin_fill_smooth.setRange(0, 100)
+        self.spin_fill_smooth.setValue(0)
+        self.lbl_fill_smooth = QLabel("平滑迭代次数 (smoothIterations):")
+        self.params_form.addRow(self.lbl_fill_smooth, self.spin_fill_smooth)
+
+        self.spin_near = QSpinBox()
+        self.spin_near.setRange(0, 255)
+        self.spin_near.setValue(15)
+        self.lbl_near = QLabel("接近阈值 (near，0..255):")
+        self.params_form.addRow(self.lbl_near, self.spin_near)
+
+        self.chk_white = QCheckBox("搜索近白而非近黑 (white)")
+        self.chk_white.setChecked(False)
+        self.lbl_white = QLabel("近白模式 (white):")
+        self.params_form.addRow(self.lbl_white, self.chk_white)
+
+        self.txt_prox_values = QLineEdit()
+        self.txt_prox_values.setPlaceholderText("例：1,2；留空=所有非零像元")
+        self.lbl_prox_values = QLabel("目标像元值 (values，可空):")
+        self.params_form.addRow(self.lbl_prox_values, self.txt_prox_values)
+
+        self.cmb_distunits = QComboBox()
+        self.cmb_distunits.addItem("像元 (PIXEL)", "PIXEL")
+        self.cmb_distunits.addItem("地图单位 (GEO)", "GEO")
+        self.lbl_distunits = QLabel("距离单位 (distunits):")
+        self.params_form.addRow(self.lbl_distunits, self.cmb_distunits)
+
+        self.spin_prox_maxdist = QDoubleSpinBox()
+        self.spin_prox_maxdist.setRange(0.0, 1e12)
+        self.spin_prox_maxdist.setDecimals(4)
+        self.spin_prox_maxdist.setValue(0.0)
+        self.spin_prox_maxdist.setSpecialValueText("不限")
+        self.lbl_prox_maxdist = QLabel("最大计算距离 (maxDist，0=不限):")
+        self.params_form.addRow(self.lbl_prox_maxdist, self.spin_prox_maxdist)
+
+        self.txt_view_ox = QLineEdit()
+        self.txt_view_ox.setPlaceholderText("栅格 CRS 的 X 坐标")
+        self.lbl_view_ox = QLabel("观察点 X (ox):")
+        self.params_form.addRow(self.lbl_view_ox, self.txt_view_ox)
+
+        self.txt_view_oy = QLineEdit()
+        self.txt_view_oy.setPlaceholderText("栅格 CRS 的 Y 坐标")
+        self.lbl_view_oy = QLabel("观察点 Y (oy):")
+        self.params_form.addRow(self.lbl_view_oy, self.txt_view_oy)
+
+        self.spin_view_obs_h = QDoubleSpinBox()
+        self.spin_view_obs_h.setRange(0.0, 100000.0)
+        self.spin_view_obs_h.setDecimals(3)
+        self.spin_view_obs_h.setValue(2.0)
+        self.lbl_view_obs_h = QLabel("观察点附加高度 (observerHeight):")
+        self.params_form.addRow(self.lbl_view_obs_h, self.spin_view_obs_h)
+
+        self.spin_view_tgt_h = QDoubleSpinBox()
+        self.spin_view_tgt_h.setRange(0.0, 100000.0)
+        self.spin_view_tgt_h.setDecimals(3)
+        self.spin_view_tgt_h.setValue(0.0)
+        self.lbl_view_tgt_h = QLabel("目标点附加高度 (targetHeight):")
+        self.params_form.addRow(self.lbl_view_tgt_h, self.spin_view_tgt_h)
+
+        self.spin_view_dist = QDoubleSpinBox()
+        self.spin_view_dist.setRange(0.0, 1e12)
+        self.spin_view_dist.setDecimals(3)
+        self.spin_view_dist.setValue(0.0)
+        self.spin_view_dist.setSpecialValueText("覆盖全图")
+        self.lbl_view_dist = QLabel("最大通视半径 (viewDistance，0=覆盖全图):")
+        self.params_form.addRow(self.lbl_view_dist, self.spin_view_dist)
+
         # --- P6-05 FVC 植被覆盖度 ---
         self.spin_fvc_band = QSpinBox()
         self.spin_fvc_band.setRange(1, 999)
@@ -1175,6 +1257,23 @@ class CapabilityFormWidget(QWidget):
         self._set_row_visible(
             self.lbl_mask_invert, self.chk_mask_invert, "maskInvert" in sup
         )
+        # P9-02 杂斑滤除 / 无效值填补 / 近黑边清理 / 邻近距离 / 视域
+        for row_lbl, row_wgt, param_k in (
+            (self.lbl_sieve_threshold, self.spin_sieve_threshold, "threshold"),
+            (self.lbl_fill_distance, self.spin_fill_distance, "fillDistance"),
+            (self.lbl_fill_smooth, self.spin_fill_smooth, "smoothIterations"),
+            (self.lbl_near, self.spin_near, "near"),
+            (self.lbl_white, self.chk_white, "white"),
+            (self.lbl_prox_values, self.txt_prox_values, "values"),
+            (self.lbl_distunits, self.cmb_distunits, "distunits"),
+            (self.lbl_prox_maxdist, self.spin_prox_maxdist, "maxDist"),
+            (self.lbl_view_ox, self.txt_view_ox, "ox"),
+            (self.lbl_view_oy, self.txt_view_oy, "oy"),
+            (self.lbl_view_obs_h, self.spin_view_obs_h, "observerHeight"),
+            (self.lbl_view_tgt_h, self.spin_view_tgt_h, "targetHeight"),
+            (self.lbl_view_dist, self.spin_view_dist, "viewDistance"),
+        ):
+            self._set_row_visible(row_lbl, row_wgt, param_k in sup)
         # P6-05 FVC
         self._set_row_visible(self.lbl_fvc_band, self.spin_fvc_band, "fvcBand" in sup)
         self._set_row_visible(
@@ -1484,6 +1583,33 @@ class CapabilityFormWidget(QWidget):
             self.txt_mdim_array.clear()
         if "dimSelect" not in supported:
             self.txt_mdim_select.clear()
+        # P9-02 控件的状态隔离
+        if "threshold" not in supported:
+            self.spin_sieve_threshold.setValue(4)
+        if "fillDistance" not in supported:
+            self.spin_fill_distance.setValue(10.0)
+        if "smoothIterations" not in supported:
+            self.spin_fill_smooth.setValue(0)
+        if "near" not in supported:
+            self.spin_near.setValue(15)
+        if "white" not in supported:
+            self.chk_white.setChecked(False)
+        if "values" not in supported:
+            self.txt_prox_values.clear()
+        if "distunits" not in supported:
+            self.cmb_distunits.setCurrentIndex(0)
+        if "maxDist" not in supported:
+            self.spin_prox_maxdist.setValue(0.0)
+        if "ox" not in supported:
+            self.txt_view_ox.clear()
+        if "oy" not in supported:
+            self.txt_view_oy.clear()
+        if "observerHeight" not in supported:
+            self.spin_view_obs_h.setValue(2.0)
+        if "targetHeight" not in supported:
+            self.spin_view_tgt_h.setValue(0.0)
+        if "viewDistance" not in supported:
+            self.spin_view_dist.setValue(0.0)
         if "levels" not in supported:
             self.txt_levels.clear()
         if "overviewCompress" not in supported:
@@ -1996,6 +2122,52 @@ class CapabilityFormWidget(QWidget):
                 return params, "多维切片必须填 dimSelect（dim=index，除两保留维外全部）"
             params["dimSelect"] = sel_text
 
+        # P9-02：杂斑滤除 / 无效值填补 / 近黑边清理 / 邻近距离 / 视域
+        if "threshold" in supported:
+            params["threshold"] = int(self.spin_sieve_threshold.value())
+        if "fillDistance" in supported:
+            params["fillDistance"] = float(self.spin_fill_distance.value())
+        if "smoothIterations" in supported:
+            params["smoothIterations"] = int(self.spin_fill_smooth.value())
+        if "near" in supported:
+            params["near"] = int(self.spin_near.value())
+        if "white" in supported:
+            params["white"] = self.chk_white.isChecked()
+        if "values" in supported:
+            raw_values = self.txt_prox_values.text().strip()
+            if raw_values:
+                values_out: list[float] = []
+                for part in raw_values.replace(";", ",").replace("；", ",").replace("，", ",").split(","):
+                    part = part.strip()
+                    if not part:
+                        continue
+                    try:
+                        values_out.append(float(part))
+                    except ValueError:
+                        return params, f"values 需要逗号分隔的数值，当前为：{raw_values}"
+                if values_out:
+                    params["values"] = values_out
+        if "distunits" in supported:
+            params["distunits"] = self.cmb_distunits.currentData()
+        if "maxDist" in supported and self.spin_prox_maxdist.value() > 0.0:
+            params["maxDist"] = float(self.spin_prox_maxdist.value())
+        for key, widget in (("ox", self.txt_view_ox), ("oy", self.txt_view_oy)):
+            if key not in supported:
+                continue
+            raw_coord = widget.text().strip()
+            if not raw_coord:
+                return params, f"视域分析必须填写观察点坐标 {key}（栅格 CRS 的地图坐标）"
+            try:
+                params[key] = float(raw_coord)
+            except ValueError:
+                return params, f"{key} 必须是数值，当前为：{raw_coord}"
+        if "observerHeight" in supported:
+            params["observerHeight"] = float(self.spin_view_obs_h.value())
+        if "targetHeight" in supported:
+            params["targetHeight"] = float(self.spin_view_tgt_h.value())
+        if "viewDistance" in supported and self.spin_view_dist.value() > 0.0:
+            params["viewDistance"] = float(self.spin_view_dist.value())
+
         # P4-04：表达式计算
         if "calc" in supported:
             raw_expr = self.txt_calc.text().strip()
@@ -2371,6 +2543,18 @@ class CapabilityFormWidget(QWidget):
                 has_alpha=False,
             )
             return "；".join(violations) if violations else None
+        if capability_id in ("gdal:sieve", "gdal:fillnodata", "gdal:nearblack"):
+            # 输出 dtype/波段取决于输入栅格，GUI 不猜测；Worker 做权威校验
+            return None
+        if capability_id in ("gdal:proximity", "gdal:viewshed"):
+            fixed_violations = validate_output_format(
+                out_fmt,
+                dtype="Float32" if capability_id == "gdal:proximity" else "Byte",
+                bands=1,
+                has_nodata=capability_id == "gdal:proximity",
+                has_alpha=False,
+            )
+            return "；".join(fixed_violations) if fixed_violations else None
         has_nodata_param = any(
             params.get(key) is not None
             for key in ("srcNodata", "vrtNodata", "dstNodata", "noData")
@@ -2561,6 +2745,11 @@ class CapabilityFormWidget(QWidget):
             "gdal:calibrate",
             "gdal:dos1",
             "gdal:cloudreplace",
+            "gdal:sieve",
+            "gdal:fillnodata",
+            "gdal:nearblack",
+            "gdal:proximity",
+            "gdal:viewshed",
         }:
             # 这些能力都真实消费 format；此前 sindex/fftfilter 漏发 format，
             # 会导致 GUI 里选 COG/ENVI 仍被 Worker 静默写成 GTiff。
