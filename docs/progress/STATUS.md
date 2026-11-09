@@ -1,6 +1,6 @@
 # 执行状态
 
-更新：2026-11-09（第 72 轮 · P8-04 插件协议与示范插件：PluginManifest/PluginManager 全生命周期管理 + 本地目录/zip 安装卸载与零原生依赖发现 + CapabilityRegistry 动态注册/注销 + 连续 3 次失败自动熔断隔离与重置恢复 + 真实示范插件 spectra_plugin_sample_stats (sample_stats:zscore) 独立 Worker 执行 + 三层防卡死看门狗机制并定位修复 Windows 后台线程首次导入 numpy 原生扩展死锁；9 项插件集成测试与 44 项 P8 全量集成测试全部通过，clean_exit_verified=True，residual=0）✅。
+更新：2026-11-09（第 73 轮 · P8-05 可选引擎扩展登记收官，P8 里程碑全部完成：新增 `plugins/extensions.py` 结构化登记 Xarray/Dask、scikit-learn、PDAL、GeoPandas、外部大气校正 6S/FLAASH、外部 GIS WhiteboxTools/SAGA/GRASS 六类可选引擎扩展的范围、不承诺边界、核心替代、依赖、规划入口与缺口；模型防虚标校验器与 `audit_optional_extensions()` 强制保证 `implemented_count=0, falsely_advertised=[]`；接入全局注册表对账、PluginProviderAdapter 专有拦截码与 GUI 工具箱/表单只读缺口展示；38 项测试 100% 通过，clean_exit_verified=True，residual=0）✅。
 
 ## 当前里程碑
 
@@ -60,6 +60,11 @@
     - **真实示范插件与独立 Worker 执行隔离**：新增 `plugins/sample/`（`spectra_plugin_sample_stats`，提供 `sample_stats:zscore` 栅格 Z-score 标准化计算 $z=(x-\mu)/\sigma$ 与 `fail_mode` 故障注入）及 `plugins/adapter.py`（`PluginProviderAdapter`），接入 `workers/entrypoint.py` 与 `workers/process.py`。
     - **三层防卡死看门狗与 Windows 后台线程原生导入死锁根因修复**：① Worker `entrypoint.py` 接入 `faulthandler.dump_traceback_later(SPECTRA_WORKER_WATCHDOG_SECONDS)` 任务看门狗，超期自动向 `stderr` 转储全线程调用栈；② 客户端 `WorkerTimeoutError` 自动附带 worker `stderr` 尾部；③ `pyproject.toml` 启用 `faulthandler_timeout = 120`。通过看门狗一举定位此前插件子进程超时根因：Windows 下主线程阻塞于 `stdin.readline()` 时，后台 `worker-executor` 线程首次动态导入 `numpy` 原生扩展引发底层的死锁；通过在 `PluginProviderAdapter` 主线程初始化阶段（进入 `stdin` 循环前）预导入原生依赖与已启用插件入口模块彻底根治。
     - **测试与官方验证**：`tests/integration/test_p8_plugins.py` 9 项集成测试（2.32s）及 P8 全量 44 项集成测试（31.97s）在 `scripts/run_with_timeout.py` 下全部通过（`clean_exit_verified=True, pytest_exit_code=0, residual=0`）；`scripts/test.ps1 -Unit`（298 passed）与 `scripts/doctor.ps1`（`ALL OK`）全部通过。
+  - **P8-05 可选引擎扩展登记**：**done**（第 73 轮，**P8 里程碑 P8-01~05 全部 done**）。
+    - **六类可选扩展契约化登记**：新增 `plugins/extensions.py`（纯 Python，GUI 进程安全导入），定义 `OptionalExtensionSpec` 与 `OPTIONAL_EXTENSION_SPECS`，完整覆盖开发方案 §1.2 / §10.1 / §10.2 要求的 `ext:xarray_dask`、`ext:sklearn_classify`、`ext:pdal_pointcloud`、`ext:geopandas_vector`、`ext:external_atmospheric`、`ext:external_gis` 六项可选扩展。
+    - **范围、依赖、入口与缺口透明披露**：每项扩展明确登记能力范围（`scope`）、不承诺边界（`non_goals`）、平台已实现核心替代（`core_alternatives`）、依赖包/二进制版本约束（`requirements`）、规划 Worker 与入口（`planned_entrypoints`，全部 `available=False`）及具体缺口（`gaps`）。
+    - **防虚标硬约束（绝不作为已实现宣传）**：模型校验器严禁未实现扩展声明 `implemented=True`、`availability=ready` 或 `entrypoint.available=True`；纳入全局 `CapabilityRegistry` 后 `total_baseline_count` 462→468、`missing` 7→13，而 `discovered=455`、`callable=250`、`platform_executable=24` 维持不变；`PluginProviderAdapter.validate` 返回 `optional_extension_not_implemented` 拦截执行；GUI 工具箱新增「扩展引擎」分类节点，参数表单展示依赖要求、规划入口与缺口说明并禁用提交按钮。
+    - **测试与官方验证**：`tests/integration/test_p8_optional_extensions.py` 及注册表/UI 单测共 38 项通过（13.95s, `clean_exit_verified=True, residual=0`）；Ruff、Mypy（96 源文件 0 错误）与 `scripts/audit-capabilities.ps1` 全部通过。
 
 ## 原 P3 验收标准逐项对账与剩余缺口
 

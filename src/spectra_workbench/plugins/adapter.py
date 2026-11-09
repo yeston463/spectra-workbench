@@ -22,6 +22,7 @@ from spectra_workbench.domain.models import (
     TaskSpec,
     TaskStatus,
 )
+from spectra_workbench.plugins.extensions import get_optional_extension_spec
 from spectra_workbench.plugins.manager import PluginManager
 from spectra_workbench.plugins.manifest import PluginStatus
 from spectra_workbench.providers.base import ExecutionContext, ProviderAdapter
@@ -119,6 +120,20 @@ class PluginProviderAdapter(ProviderAdapter):
                 break
 
         if not found_cap or not found_plugin:
+            ext_spec = get_optional_extension_spec(cid)
+            if ext_spec is not None:
+                deps = ", ".join(
+                    f"{r.name}{r.constraint or ''}" for r in ext_spec.requirements
+                )
+                gaps = "；".join(ext_spec.gaps)
+                return {
+                    "valid": False,
+                    "code": "optional_extension_not_implemented",
+                    "errors": [
+                        f"可选引擎扩展 '{ext_spec.name}' ({cid}) 当前仅登记范围与依赖，尚未实现（严禁作为已实现功能执行）；"
+                        f"所需依赖：{deps}；缺口说明：{gaps}"
+                    ],
+                }
             return {"valid": False, "code": "capability_not_found", "errors": [f"Plugin capability {cid} not found"]}
 
         if found_plugin.status != PluginStatus.enabled:

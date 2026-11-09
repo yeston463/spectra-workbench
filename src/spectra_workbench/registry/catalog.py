@@ -27,6 +27,9 @@ from spectra_workbench.domain.models import (
     Presence,
     Validation,
 )
+from spectra_workbench.plugins.extensions import (
+    build_optional_extension_descriptors,
+)
 from spectra_workbench.registry.baseline import (
     load_baseline_from_file,
     serialize_baseline,
@@ -413,6 +416,10 @@ def get_default_registry() -> CapabilityRegistry:
     # 2. 载入 Rasterio 1.5.2 基准
     rasterio_items = build_rasterio_baseline()
     registry.register_batch(rasterio_items, alias_map=RASTERIO_ALIASES)
+
+    # 3. 载入可选引擎扩展登记（P8-05：明确范围、依赖、入口与缺口，绝不作为已实现宣传）
+    extension_items = build_optional_extension_descriptors()
+    registry.register_batch(extension_items)
 
     _GLOBAL_REGISTRY = registry
     return registry

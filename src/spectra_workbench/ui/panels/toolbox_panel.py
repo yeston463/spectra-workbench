@@ -55,7 +55,7 @@ class ToolboxPanel(QWidget):
         search_row.addWidget(self.txt_search, stretch=1)
 
         self.cmb_provider = QComboBox()
-        self.cmb_provider.addItems(["全部引擎", "GDAL", "Rasterio"])
+        self.cmb_provider.addItems(["全部引擎", "GDAL", "Rasterio", "扩展引擎"])
         self.cmb_provider.currentTextChanged.connect(self._on_filter_changed)
         search_row.addWidget(self.cmb_provider)
 
@@ -85,6 +85,8 @@ class ToolboxPanel(QWidget):
             target_prov = "gdal"
         elif prov_filter == "Rasterio":
             target_prov = "rasterio"
+        elif prov_filter == "扩展引擎":
+            target_prov = "extension"
         else:
             target_prov = None
 
@@ -106,6 +108,7 @@ class ToolboxPanel(QWidget):
         node_gdal_algo = QTreeWidgetItem(["📦 GDAL 算法与经典 CLI (GDAL)"])
         node_rio_algo = QTreeWidgetItem(["🔧 Rasterio 算法与 rio CLI (Rasterio)"])
         node_drivers = QTreeWidgetItem(["💾 栅格与矢量驱动 (Drivers)"])
+        node_extensions = QTreeWidgetItem(["🔌 可选引擎扩展登记 (未实现/待接入)"])
 
         total_shown = len(filtered)
         connected_count = 0
@@ -118,6 +121,8 @@ class ToolboxPanel(QWidget):
             if is_conn:
                 state_str = "🟢 已接通"
                 connected_count += 1
+            elif c.engine.provider_id == "extension":
+                state_str = "🔴 扩展未实现"
             elif c.state.availability.value == "blocked":
                 state_str = "🟡 仅CLI/未桥接"
             elif c.state.availability.value == "missing_dependency":
@@ -128,6 +133,8 @@ class ToolboxPanel(QWidget):
 
             if is_conn:
                 node_connected.addChild(item)
+            elif c.engine.provider_id == "extension":
+                node_extensions.addChild(item)
             elif c.kind.value == "driver":
                 node_drivers.addChild(item)
             elif c.engine.provider_id == "gdal":
@@ -143,6 +150,8 @@ class ToolboxPanel(QWidget):
             self.tree.addTopLevelItem(node_rio_algo)
         if node_drivers.childCount() > 0:
             self.tree.addTopLevelItem(node_drivers)
+        if node_extensions.childCount() > 0:
+            self.tree.addTopLevelItem(node_extensions)
 
         # 展开包含搜索结果的节点
         if query:

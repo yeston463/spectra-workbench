@@ -968,10 +968,23 @@ class CapabilityFormWidget(QWidget):
             self.grp_params.setEnabled(False)
             self.lbl_unsupported_banner.setVisible(True)
             reasons = "; ".join(cap.limitations) if cap.limitations else "平台适配器当前尚未接入该算法执行通道。"
+            req_lines = [
+                f"{r.name}{r.constraint or ''} ({r.reason})"
+                for r in cap.requirements
+            ]
+            ep_lines = [
+                f"{e.kind}: {e.target} (available={e.available})"
+                for e in cap.entrypoints
+            ]
+            extra_details = ""
+            if req_lines:
+                extra_details += f"\n依赖要求: {'; '.join(req_lines)}"
+            if ep_lines:
+                extra_details += f"\n规划入口: {'; '.join(ep_lines)}"
             self.lbl_unsupported_banner.setText(
                 f"⚠️ 未接入平台执行器（禁止提交）：\n"
                 f"该能力在当前基准中已编目，但未桥接至后台工作线程。\n"
-                f"限制说明: {reasons}"
+                f"限制与缺口说明: {reasons}{extra_details}"
             )
             self.btn_submit.setEnabled(False)
             self.btn_submit.setText("🚫 暂未接入平台，禁止提交")

@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from spectra_workbench.plugins.extensions import (
+    audit_optional_extensions,
+    build_optional_extension_descriptors,
+)
 from spectra_workbench.registry.baseline import (
     BaselineMetadata,
     compute_capabilities_sha256,
@@ -39,11 +43,13 @@ __all__ = [
     "GDAL_VERSION",
     "RASTERIO_ALIASES",
     "RASTERIO_VERSION",
+    "audit_optional_extensions",
     "build_gdal_algorithms",
     "build_gdal_baseline",
     "build_gdal_cli_programs",
     "build_gdal_drivers",
     "build_gdal_python_api_index",
+    "build_optional_extension_descriptors",
     "build_rasterio_baseline",
     "build_rasterio_python_api",
     "build_rio_cli_commands",

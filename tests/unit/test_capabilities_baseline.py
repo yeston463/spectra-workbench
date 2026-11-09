@@ -1,4 +1,4 @@
-﻿"""P2-01 ~ P2-03 能力基准、GDAL/Rasterio 索引与覆盖审计单元测试。
+"""P2-01 ~ P2-03 能力基准、GDAL/Rasterio 索引与覆盖审计单元测试。
 
 验证目标：
 1. P2-01: 目标版本固定为 GDAL 3.13.3 与 Rasterio 1.5.2，来源、版本、SHA-256 哈希完整，
@@ -397,13 +397,16 @@ def test_four_dimensional_state_independence_and_audit():
     # 第 63 轮（P6-06）：新增 calibrate/dos1/cloudreplace + blocked 的
     # flaash_external/agriculture_count：461/454/249/23、missing 7。
     # 第 69 轮（P8-01）：新增平台能力 gdal:mdim_slice（form 执行器）：
-    # 469/455/250/24。
-    assert report["total_baseline_count"] == 462
+    # 462/455/250/24。
+    # 第 73 轮（P8-05）：新增 6 项可选引擎扩展登记（provider=extension，全部 missing/blocked）：
+    # 基线总数 462 -> 468，missing 7 -> 13，discovered/callable/platform_executable 维持 455/250/24 不变。
+    assert report["total_baseline_count"] == 468
     assert report["discovered"]["count"] == 455
     assert report["callable"]["count"] == 250
     assert report["platform_executable"]["count"] == 24
-    # 第 63 轮 blocked 新增 flaash_external 与 agriculture_count：5 -> 7
-    assert report["missing"]["count"] == 7
+    # 第 63 轮 blocked 新增 flaash_external 与 agriculture_count：5 -> 7；
+    # 第 73 轮（P8-05）新增 6 项未实现可选扩展：7 -> 13
+    assert report["missing"]["count"] == 13
     assert report["verified"]["count"] == 5
 
     assert report["discovered"]["ratio"] > 0.90

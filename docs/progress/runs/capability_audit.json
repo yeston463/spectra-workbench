@@ -1,27 +1,121 @@
 {
   "provider_filter": "all",
   "completeness": "partial",
-  "total_baseline_count": 448,
+  "total_baseline_count": 468,
   "discovered": {
-    "count": 443,
-    "ratio": 0.9888
+    "count": 455,
+    "ratio": 0.9722
   },
   "callable": {
-    "count": 238,
-    "ratio": 0.5312
+    "count": 250,
+    "ratio": 0.5342
   },
   "platform_executable": {
-    "count": 8,
-    "ratio": 0.0179
+    "count": 24,
+    "ratio": 0.0513
   },
   "verified": {
     "count": 5,
-    "ratio": 0.0112
+    "ratio": 0.0107
   },
   "missing": {
-    "count": 5,
-    "ratio": 0.0112,
+    "count": 13,
+    "ratio": 0.0278,
     "items": [
+      {
+        "capability_id": "ext:external_atmospheric",
+        "name": "外部物理辐射传输大气校正引擎扩展 (6S / Py6S / MODTRAN-FLAASH)（未实现）",
+        "provider": "extension",
+        "kind": "algorithm",
+        "presence": "missing",
+        "availability": "blocked",
+        "binding": "none",
+        "limitations": [
+          "未实现：缺少外部 6S 二进制或商业授权 MODTRAN/FLAASH 引擎及插件适配器，严禁以经验公式冒充已实现",
+          "当前仅作为可选外部校正引擎登记范围、依赖与入口契约；平台内置可用方法为 gdal:calibrate 与 gdal:dos1",
+          "平台核心替代边界：显式 gain/offset 辐射定标与 TOA 表观反射率已由 gdal:calibrate 实现，Chavez 1988 DOS1 暗目标减法已由 gdal:dos1 实现（P6-06）",
+          "平台核心替代边界：平台内同时保留 platform:flaash_external 阻断占位项以防误用",
+          "不承诺边界：绝不以简化经验公式或暗目标减法（DOS1）冒充 FLAASH 或 6S 物理辐射传输模型已实现",
+          "不承诺边界：不捆绑受商业许可限制的 MODTRAN / ENVI FLAASH 专有二进制程序"
+        ]
+      },
+      {
+        "capability_id": "ext:external_gis",
+        "name": "外部开源 GIS 引擎桥接扩展 (WhiteboxTools / SAGA / GRASS)（未实现）",
+        "provider": "extension",
+        "kind": "algorithm",
+        "presence": "missing",
+        "availability": "missing_dependency",
+        "binding": "none",
+        "limitations": [
+          "未实现：未捆绑 WhiteboxTools / SAGA / GRASS 外部运行时，也未编写 CLI 桥接插件，严禁作为已实现功能宣传",
+          "后续由用户按需配置外部 GIS 引擎路径并通过插件 manifest 接入",
+          "平台核心替代边界：基础 DEM 坡度、坡向、山体阴影、TPI、TRI、粗糙度已由 gdal:dem 实现，等值线与视域分析已由 gdal:contour / gdal:viewshed 提供",
+          "不承诺边界：不在核心安装包内强制捆绑数百 MB 的 SAGA / GRASS 完整桌面运行时"
+        ]
+      },
+      {
+        "capability_id": "ext:geopandas_vector",
+        "name": "GeoPandas 批量矢量表格与空间连接分析扩展（未实现）",
+        "provider": "extension",
+        "kind": "algorithm",
+        "presence": "missing",
+        "availability": "missing_dependency",
+        "binding": "none",
+        "limitations": [
+          "未实现：GeoPandas 在开发方案中定位为表格/批量矢量可选插件，当前未预装且未接入表单执行器，严禁作为已实现功能宣传",
+          "核心矢量处理请使用已验证的 ogr:vectortranslate；批量 GeoDataFrame 插件待独立环境锁文件完成后接入",
+          "平台核心替代边界：矢量格式转换、重投影、属性 WHERE 过滤、空间 BBOX 裁剪及 OGR SQL 查询已由核心能力 ogr:vectortranslate 实现（P5-04）",
+          "不承诺边界：绝不将 geopandas、fiona 或 pyogrio 导入 GUI 主进程（严格遵守进程隔离红线）"
+        ]
+      },
+      {
+        "capability_id": "ext:pdal_pointcloud",
+        "name": "PDAL 点云数据处理与三维地形派生扩展（未实现）",
+        "provider": "extension",
+        "kind": "algorithm",
+        "presence": "missing",
+        "availability": "missing_dependency",
+        "binding": "none",
+        "limitations": [
+          "未实现：当前受管运行时未安装 PDAL 原生库与 CLI，点云读写、地面滤波与三维点云视图均未实现，严禁作为已实现功能宣传",
+          "需在独立 conda-forge 点云环境分发 PDAL 二进制并通过插件协议接入",
+          "平台核心替代边界：二维规则栅格 DEM 地形分析已由 gdal:dem 实现，离散矢量高程点插值栅格化已由 gdal:grid 实现（P5-02）",
+          "不承诺边界：当前版本不提供三维点云体渲染视图或实时三维地球画布（列为平台远期扩展）"
+        ]
+      },
+      {
+        "capability_id": "ext:sklearn_classify",
+        "name": "scikit-learn 监督式机器学习分类与精度评价扩展（未实现）",
+        "provider": "extension",
+        "kind": "algorithm",
+        "presence": "missing",
+        "availability": "missing_dependency",
+        "binding": "none",
+        "limitations": [
+          "未实现：当前受管环境未安装 scikit-learn，未实现训练/验证 ROI 空间独立划分、分类器训练及混淆矩阵报告，严禁作为已实现功能宣传",
+          "后续通过 P8-04 插件机制以明确算法名（如 RandomForest / SVM）独立交付",
+          "平台核心替代边界：单波段阈值/区间二值掩膜分类已由 gdal:mask 实现，二分像元植被覆盖度及分级已由 gdal:fvc 实现（P6-05）",
+          "不承诺边界：不声称等价实现 ENVI 全部传统分类器或深度学习分割框架",
+          "不承诺边界：严禁将训练集重代入精度当作独立验证精度报告"
+        ]
+      },
+      {
+        "capability_id": "ext:xarray_dask",
+        "name": "Xarray / Rioxarray / Dask 多维分块延迟计算扩展（未实现）",
+        "provider": "extension",
+        "kind": "algorithm",
+        "presence": "missing",
+        "availability": "missing_dependency",
+        "binding": "none",
+        "limitations": [
+          "未实现：当前受管环境未安装 xarray、rioxarray、dask 依赖，也未接入 Dask 分块图计算执行器，严禁作为已实现功能宣传",
+          "需要独立插件环境解析 win-64 锁文件并通过 P8-04 插件 manifest 注册算子后方可启用",
+          "平台核心替代边界：多维容器二维切片已由 GDAL multidim API 核心能力 gdal:mdim_slice 实现并验证（P8-01）",
+          "不承诺边界：当前版本不内置 Dask 分布式集群调度器，也不将 Xarray/Dask 作为已实现功能宣传",
+          "不承诺边界：不在 GUI 进程导入 xarray、rioxarray 或 dask"
+        ]
+      },
       {
         "capability_id": "gdal:cli:gdal_auth",
         "name": "GDAL CLI (缺失): gdal_auth",
@@ -44,6 +138,34 @@
         "binding": "none",
         "limitations": [
           "当前 Windows QGIS GDAL 运行时未链接 HDF5 动态库；部分 HDF5 文件可通过 netCDF 驱动尝试读取"
+        ]
+      },
+      {
+        "capability_id": "platform:agriculture_count",
+        "name": "农业计数（直径/尺度/阈值/重叠 + 人工标注对照）",
+        "provider": "gdal",
+        "kind": "algorithm",
+        "presence": "missing",
+        "availability": "blocked",
+        "binding": "none",
+        "limitations": [
+          "方法未确定（需要保留直径/尺度/阈值/重叠 4 项参数与人工标注对照）",
+          "当前登记为 blocked，没有 adapter 执行器也没有 form 入口",
+          "未与人工标注对照的算法不可验证，保持待实现状态"
+        ]
+      },
+      {
+        "capability_id": "platform:flaash_external",
+        "name": "FLAASH 大气校正（外部引擎适配）",
+        "provider": "gdal",
+        "kind": "algorithm",
+        "presence": "missing",
+        "availability": "blocked",
+        "binding": "none",
+        "limitations": [
+          "FLAASH 由外部引擎提供，绝不通过简化公式宣称实现",
+          "当前仅登记为 blocked，无 adapter 执行器、无表单入口",
+          "后续通过 P8 插件协议接入"
         ]
       },
       {
@@ -85,29 +207,150 @@
     ]
   },
   "by_provider": {
+    "extension": {
+      "provider_filter": "extension",
+      "completeness": "partial",
+      "total_baseline_count": 6,
+      "discovered": {
+        "count": 0,
+        "ratio": 0.0
+      },
+      "callable": {
+        "count": 0,
+        "ratio": 0.0
+      },
+      "platform_executable": {
+        "count": 0,
+        "ratio": 0.0
+      },
+      "verified": {
+        "count": 0,
+        "ratio": 0.0
+      },
+      "missing": {
+        "count": 6,
+        "ratio": 1.0,
+        "items": [
+          {
+            "capability_id": "ext:external_atmospheric",
+            "name": "外部物理辐射传输大气校正引擎扩展 (6S / Py6S / MODTRAN-FLAASH)（未实现）",
+            "provider": "extension",
+            "kind": "algorithm",
+            "presence": "missing",
+            "availability": "blocked",
+            "binding": "none",
+            "limitations": [
+              "未实现：缺少外部 6S 二进制或商业授权 MODTRAN/FLAASH 引擎及插件适配器，严禁以经验公式冒充已实现",
+              "当前仅作为可选外部校正引擎登记范围、依赖与入口契约；平台内置可用方法为 gdal:calibrate 与 gdal:dos1",
+              "平台核心替代边界：显式 gain/offset 辐射定标与 TOA 表观反射率已由 gdal:calibrate 实现，Chavez 1988 DOS1 暗目标减法已由 gdal:dos1 实现（P6-06）",
+              "平台核心替代边界：平台内同时保留 platform:flaash_external 阻断占位项以防误用",
+              "不承诺边界：绝不以简化经验公式或暗目标减法（DOS1）冒充 FLAASH 或 6S 物理辐射传输模型已实现",
+              "不承诺边界：不捆绑受商业许可限制的 MODTRAN / ENVI FLAASH 专有二进制程序"
+            ]
+          },
+          {
+            "capability_id": "ext:external_gis",
+            "name": "外部开源 GIS 引擎桥接扩展 (WhiteboxTools / SAGA / GRASS)（未实现）",
+            "provider": "extension",
+            "kind": "algorithm",
+            "presence": "missing",
+            "availability": "missing_dependency",
+            "binding": "none",
+            "limitations": [
+              "未实现：未捆绑 WhiteboxTools / SAGA / GRASS 外部运行时，也未编写 CLI 桥接插件，严禁作为已实现功能宣传",
+              "后续由用户按需配置外部 GIS 引擎路径并通过插件 manifest 接入",
+              "平台核心替代边界：基础 DEM 坡度、坡向、山体阴影、TPI、TRI、粗糙度已由 gdal:dem 实现，等值线与视域分析已由 gdal:contour / gdal:viewshed 提供",
+              "不承诺边界：不在核心安装包内强制捆绑数百 MB 的 SAGA / GRASS 完整桌面运行时"
+            ]
+          },
+          {
+            "capability_id": "ext:geopandas_vector",
+            "name": "GeoPandas 批量矢量表格与空间连接分析扩展（未实现）",
+            "provider": "extension",
+            "kind": "algorithm",
+            "presence": "missing",
+            "availability": "missing_dependency",
+            "binding": "none",
+            "limitations": [
+              "未实现：GeoPandas 在开发方案中定位为表格/批量矢量可选插件，当前未预装且未接入表单执行器，严禁作为已实现功能宣传",
+              "核心矢量处理请使用已验证的 ogr:vectortranslate；批量 GeoDataFrame 插件待独立环境锁文件完成后接入",
+              "平台核心替代边界：矢量格式转换、重投影、属性 WHERE 过滤、空间 BBOX 裁剪及 OGR SQL 查询已由核心能力 ogr:vectortranslate 实现（P5-04）",
+              "不承诺边界：绝不将 geopandas、fiona 或 pyogrio 导入 GUI 主进程（严格遵守进程隔离红线）"
+            ]
+          },
+          {
+            "capability_id": "ext:pdal_pointcloud",
+            "name": "PDAL 点云数据处理与三维地形派生扩展（未实现）",
+            "provider": "extension",
+            "kind": "algorithm",
+            "presence": "missing",
+            "availability": "missing_dependency",
+            "binding": "none",
+            "limitations": [
+              "未实现：当前受管运行时未安装 PDAL 原生库与 CLI，点云读写、地面滤波与三维点云视图均未实现，严禁作为已实现功能宣传",
+              "需在独立 conda-forge 点云环境分发 PDAL 二进制并通过插件协议接入",
+              "平台核心替代边界：二维规则栅格 DEM 地形分析已由 gdal:dem 实现，离散矢量高程点插值栅格化已由 gdal:grid 实现（P5-02）",
+              "不承诺边界：当前版本不提供三维点云体渲染视图或实时三维地球画布（列为平台远期扩展）"
+            ]
+          },
+          {
+            "capability_id": "ext:sklearn_classify",
+            "name": "scikit-learn 监督式机器学习分类与精度评价扩展（未实现）",
+            "provider": "extension",
+            "kind": "algorithm",
+            "presence": "missing",
+            "availability": "missing_dependency",
+            "binding": "none",
+            "limitations": [
+              "未实现：当前受管环境未安装 scikit-learn，未实现训练/验证 ROI 空间独立划分、分类器训练及混淆矩阵报告，严禁作为已实现功能宣传",
+              "后续通过 P8-04 插件机制以明确算法名（如 RandomForest / SVM）独立交付",
+              "平台核心替代边界：单波段阈值/区间二值掩膜分类已由 gdal:mask 实现，二分像元植被覆盖度及分级已由 gdal:fvc 实现（P6-05）",
+              "不承诺边界：不声称等价实现 ENVI 全部传统分类器或深度学习分割框架",
+              "不承诺边界：严禁将训练集重代入精度当作独立验证精度报告"
+            ]
+          },
+          {
+            "capability_id": "ext:xarray_dask",
+            "name": "Xarray / Rioxarray / Dask 多维分块延迟计算扩展（未实现）",
+            "provider": "extension",
+            "kind": "algorithm",
+            "presence": "missing",
+            "availability": "missing_dependency",
+            "binding": "none",
+            "limitations": [
+              "未实现：当前受管环境未安装 xarray、rioxarray、dask 依赖，也未接入 Dask 分块图计算执行器，严禁作为已实现功能宣传",
+              "需要独立插件环境解析 win-64 锁文件并通过 P8-04 插件 manifest 注册算子后方可启用",
+              "平台核心替代边界：多维容器二维切片已由 GDAL multidim API 核心能力 gdal:mdim_slice 实现并验证（P8-01）",
+              "不承诺边界：当前版本不内置 Dask 分布式集群调度器，也不将 Xarray/Dask 作为已实现功能宣传",
+              "不承诺边界：不在 GUI 进程导入 xarray、rioxarray 或 dask"
+            ]
+          }
+        ]
+      }
+    },
     "gdal": {
       "provider_filter": "gdal",
       "completeness": "partial",
-      "total_baseline_count": 407,
+      "total_baseline_count": 421,
       "discovered": {
-        "count": 405,
-        "ratio": 0.9951
+        "count": 417,
+        "ratio": 0.9905
       },
       "callable": {
-        "count": 200,
-        "ratio": 0.4914
+        "count": 212,
+        "ratio": 0.5036
       },
       "platform_executable": {
-        "count": 7,
-        "ratio": 0.0172
+        "count": 23,
+        "ratio": 0.0546
       },
       "verified": {
         "count": 4,
-        "ratio": 0.0098
+        "ratio": 0.0095
       },
       "missing": {
-        "count": 2,
-        "ratio": 0.0049,
+        "count": 4,
+        "ratio": 0.0095,
         "items": [
           {
             "capability_id": "gdal:cli:gdal_auth",
@@ -131,6 +374,34 @@
             "binding": "none",
             "limitations": [
               "当前 Windows QGIS GDAL 运行时未链接 HDF5 动态库；部分 HDF5 文件可通过 netCDF 驱动尝试读取"
+            ]
+          },
+          {
+            "capability_id": "platform:agriculture_count",
+            "name": "农业计数（直径/尺度/阈值/重叠 + 人工标注对照）",
+            "provider": "gdal",
+            "kind": "algorithm",
+            "presence": "missing",
+            "availability": "blocked",
+            "binding": "none",
+            "limitations": [
+              "方法未确定（需要保留直径/尺度/阈值/重叠 4 项参数与人工标注对照）",
+              "当前登记为 blocked，没有 adapter 执行器也没有 form 入口",
+              "未与人工标注对照的算法不可验证，保持待实现状态"
+            ]
+          },
+          {
+            "capability_id": "platform:flaash_external",
+            "name": "FLAASH 大气校正（外部引擎适配）",
+            "provider": "gdal",
+            "kind": "algorithm",
+            "presence": "missing",
+            "availability": "blocked",
+            "binding": "none",
+            "limitations": [
+              "FLAASH 由外部引擎提供，绝不通过简化公式宣称实现",
+              "当前仅登记为 blocked，无 adapter 执行器、无表单入口",
+              "后续通过 P8 插件协议接入"
             ]
           }
         ]
@@ -207,17 +478,125 @@
       "C:\\Users\\赵航\\Desktop\\studio\\spectra-workbench\\contracts\\baselines\\rasterio-1.5.2.json"
     ],
     "baseline_count": 443,
-    "registry_count": 448,
+    "registry_count": 468,
     "missing_from_registry": [],
     "platform_only": [
+      "ext:external_atmospheric",
+      "ext:external_gis",
+      "ext:geopandas_vector",
+      "ext:pdal_pointcloud",
+      "ext:sklearn_classify",
+      "ext:xarray_dask",
       "gdal:bandmanage",
+      "gdal:calibrate",
+      "gdal:cloudreplace",
+      "gdal:dos1",
       "gdal:editmeta",
+      "gdal:fftfilter",
+      "gdal:fvc",
+      "gdal:gcpregister",
+      "gdal:mask",
+      "gdal:mdim_slice",
       "gdal:overview",
+      "gdal:pca",
+      "gdal:rasterdiff",
+      "gdal:sindex",
       "gdal:stack",
-      "gdal:statistics"
+      "gdal:statistics",
+      "gdal:tasseledcap",
+      "platform:agriculture_count",
+      "platform:flaash_external"
     ],
-    "gap_count": 5,
+    "gap_count": 13,
     "missing_or_blocked": [
+      {
+        "capability_id": "ext:external_atmospheric",
+        "name": "外部物理辐射传输大气校正引擎扩展 (6S / Py6S / MODTRAN-FLAASH)（未实现）",
+        "provider": "extension",
+        "presence": "missing",
+        "availability": "blocked",
+        "binding": "none",
+        "limitations": [
+          "未实现：缺少外部 6S 二进制或商业授权 MODTRAN/FLAASH 引擎及插件适配器，严禁以经验公式冒充已实现",
+          "当前仅作为可选外部校正引擎登记范围、依赖与入口契约；平台内置可用方法为 gdal:calibrate 与 gdal:dos1",
+          "平台核心替代边界：显式 gain/offset 辐射定标与 TOA 表观反射率已由 gdal:calibrate 实现，Chavez 1988 DOS1 暗目标减法已由 gdal:dos1 实现（P6-06）",
+          "平台核心替代边界：平台内同时保留 platform:flaash_external 阻断占位项以防误用",
+          "不承诺边界：绝不以简化经验公式或暗目标减法（DOS1）冒充 FLAASH 或 6S 物理辐射传输模型已实现",
+          "不承诺边界：不捆绑受商业许可限制的 MODTRAN / ENVI FLAASH 专有二进制程序"
+        ]
+      },
+      {
+        "capability_id": "ext:external_gis",
+        "name": "外部开源 GIS 引擎桥接扩展 (WhiteboxTools / SAGA / GRASS)（未实现）",
+        "provider": "extension",
+        "presence": "missing",
+        "availability": "missing_dependency",
+        "binding": "none",
+        "limitations": [
+          "未实现：未捆绑 WhiteboxTools / SAGA / GRASS 外部运行时，也未编写 CLI 桥接插件，严禁作为已实现功能宣传",
+          "后续由用户按需配置外部 GIS 引擎路径并通过插件 manifest 接入",
+          "平台核心替代边界：基础 DEM 坡度、坡向、山体阴影、TPI、TRI、粗糙度已由 gdal:dem 实现，等值线与视域分析已由 gdal:contour / gdal:viewshed 提供",
+          "不承诺边界：不在核心安装包内强制捆绑数百 MB 的 SAGA / GRASS 完整桌面运行时"
+        ]
+      },
+      {
+        "capability_id": "ext:geopandas_vector",
+        "name": "GeoPandas 批量矢量表格与空间连接分析扩展（未实现）",
+        "provider": "extension",
+        "presence": "missing",
+        "availability": "missing_dependency",
+        "binding": "none",
+        "limitations": [
+          "未实现：GeoPandas 在开发方案中定位为表格/批量矢量可选插件，当前未预装且未接入表单执行器，严禁作为已实现功能宣传",
+          "核心矢量处理请使用已验证的 ogr:vectortranslate；批量 GeoDataFrame 插件待独立环境锁文件完成后接入",
+          "平台核心替代边界：矢量格式转换、重投影、属性 WHERE 过滤、空间 BBOX 裁剪及 OGR SQL 查询已由核心能力 ogr:vectortranslate 实现（P5-04）",
+          "不承诺边界：绝不将 geopandas、fiona 或 pyogrio 导入 GUI 主进程（严格遵守进程隔离红线）"
+        ]
+      },
+      {
+        "capability_id": "ext:pdal_pointcloud",
+        "name": "PDAL 点云数据处理与三维地形派生扩展（未实现）",
+        "provider": "extension",
+        "presence": "missing",
+        "availability": "missing_dependency",
+        "binding": "none",
+        "limitations": [
+          "未实现：当前受管运行时未安装 PDAL 原生库与 CLI，点云读写、地面滤波与三维点云视图均未实现，严禁作为已实现功能宣传",
+          "需在独立 conda-forge 点云环境分发 PDAL 二进制并通过插件协议接入",
+          "平台核心替代边界：二维规则栅格 DEM 地形分析已由 gdal:dem 实现，离散矢量高程点插值栅格化已由 gdal:grid 实现（P5-02）",
+          "不承诺边界：当前版本不提供三维点云体渲染视图或实时三维地球画布（列为平台远期扩展）"
+        ]
+      },
+      {
+        "capability_id": "ext:sklearn_classify",
+        "name": "scikit-learn 监督式机器学习分类与精度评价扩展（未实现）",
+        "provider": "extension",
+        "presence": "missing",
+        "availability": "missing_dependency",
+        "binding": "none",
+        "limitations": [
+          "未实现：当前受管环境未安装 scikit-learn，未实现训练/验证 ROI 空间独立划分、分类器训练及混淆矩阵报告，严禁作为已实现功能宣传",
+          "后续通过 P8-04 插件机制以明确算法名（如 RandomForest / SVM）独立交付",
+          "平台核心替代边界：单波段阈值/区间二值掩膜分类已由 gdal:mask 实现，二分像元植被覆盖度及分级已由 gdal:fvc 实现（P6-05）",
+          "不承诺边界：不声称等价实现 ENVI 全部传统分类器或深度学习分割框架",
+          "不承诺边界：严禁将训练集重代入精度当作独立验证精度报告"
+        ]
+      },
+      {
+        "capability_id": "ext:xarray_dask",
+        "name": "Xarray / Rioxarray / Dask 多维分块延迟计算扩展（未实现）",
+        "provider": "extension",
+        "presence": "missing",
+        "availability": "missing_dependency",
+        "binding": "none",
+        "limitations": [
+          "未实现：当前受管环境未安装 xarray、rioxarray、dask 依赖，也未接入 Dask 分块图计算执行器，严禁作为已实现功能宣传",
+          "需要独立插件环境解析 win-64 锁文件并通过 P8-04 插件 manifest 注册算子后方可启用",
+          "平台核心替代边界：多维容器二维切片已由 GDAL multidim API 核心能力 gdal:mdim_slice 实现并验证（P8-01）",
+          "不承诺边界：当前版本不内置 Dask 分布式集群调度器，也不将 Xarray/Dask 作为已实现功能宣传",
+          "不承诺边界：不在 GUI 进程导入 xarray、rioxarray 或 dask"
+        ]
+      },
       {
         "capability_id": "gdal:cli:gdal_auth",
         "name": "GDAL CLI (缺失): gdal_auth",
@@ -238,6 +617,32 @@
         "binding": "none",
         "limitations": [
           "当前 Windows QGIS GDAL 运行时未链接 HDF5 动态库；部分 HDF5 文件可通过 netCDF 驱动尝试读取"
+        ]
+      },
+      {
+        "capability_id": "platform:agriculture_count",
+        "name": "农业计数（直径/尺度/阈值/重叠 + 人工标注对照）",
+        "provider": "gdal",
+        "presence": "missing",
+        "availability": "blocked",
+        "binding": "none",
+        "limitations": [
+          "方法未确定（需要保留直径/尺度/阈值/重叠 4 项参数与人工标注对照）",
+          "当前登记为 blocked，没有 adapter 执行器也没有 form 入口",
+          "未与人工标注对照的算法不可验证，保持待实现状态"
+        ]
+      },
+      {
+        "capability_id": "platform:flaash_external",
+        "name": "FLAASH 大气校正（外部引擎适配）",
+        "provider": "gdal",
+        "presence": "missing",
+        "availability": "blocked",
+        "binding": "none",
+        "limitations": [
+          "FLAASH 由外部引擎提供，绝不通过简化公式宣称实现",
+          "当前仅登记为 blocked，无 adapter 执行器、无表单入口",
+          "后续通过 P8 插件协议接入"
         ]
       },
       {
@@ -277,18 +682,47 @@
     "unexplained_gaps": [],
     "errors": [],
     "by_provider": {
+      "extension": {
+        "baseline_count": 0,
+        "registry_count": 6,
+        "missing_from_registry": [],
+        "platform_only": [
+          "ext:external_atmospheric",
+          "ext:external_gis",
+          "ext:geopandas_vector",
+          "ext:pdal_pointcloud",
+          "ext:sklearn_classify",
+          "ext:xarray_dask"
+        ],
+        "gap_count": 6,
+        "unexplained_gap_count": 0
+      },
       "gdal": {
         "baseline_count": 402,
-        "registry_count": 407,
+        "registry_count": 421,
         "missing_from_registry": [],
         "platform_only": [
           "gdal:bandmanage",
+          "gdal:calibrate",
+          "gdal:cloudreplace",
+          "gdal:dos1",
           "gdal:editmeta",
+          "gdal:fftfilter",
+          "gdal:fvc",
+          "gdal:gcpregister",
+          "gdal:mask",
+          "gdal:mdim_slice",
           "gdal:overview",
+          "gdal:pca",
+          "gdal:rasterdiff",
+          "gdal:sindex",
           "gdal:stack",
-          "gdal:statistics"
+          "gdal:statistics",
+          "gdal:tasseledcap",
+          "platform:agriculture_count",
+          "platform:flaash_external"
         ],
-        "gap_count": 2,
+        "gap_count": 4,
         "unexplained_gap_count": 0
       },
       "rasterio": {

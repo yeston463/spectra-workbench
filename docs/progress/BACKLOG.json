@@ -1082,9 +1082,15 @@
         "P8-04",
         "P8-01"
       ],
-      "status": "todo",
+      "status": "done",
       "release_requirement": "core",
-      "evidence": [],
+      "evidence": [
+        "第 73 轮：P8-05 可选引擎扩展登记转 done（P8 里程碑 P8-01~05 全部完成）。新增 `src/spectra_workbench/plugins/extensions.py`（纯 Python 契约模型，零原生地理/科学计算导入，满足 GUI 进程隔离）：定义 `OptionalExtensionSpec` 与 `OPTIONAL_EXTENSION_SPECS`，结构化登记 `ext:xarray_dask`（Xarray/Rioxarray/Dask 多维分块延迟计算）、`ext:sklearn_classify`（scikit-learn 监督式分类与独立验证混淆矩阵）、`ext:pdal_pointcloud`（PDAL 点云读写/滤波/DSM-DTM 派生）、`ext:geopandas_vector`（GeoPandas 批量矢量空间连接与拓扑叠加）、`ext:external_atmospheric`（外部 6S/Py6S/MODTRAN-FLAASH 物理辐射传输校正）、`ext:external_gis`（WhiteboxTools/SAGA/GRASS 外部开源 GIS 引擎桥接）共 6 类可选引擎扩展。",
+        "(1) 四要素与边界完备：每项扩展显式声明能力范围（scope）、不承诺边界（non_goals）、平台核心已实现替代边界（core_alternatives，如 gdal:mdim_slice、gdal:mask/fvc、gdal:dem/grid、ogr:vectortranslate、gdal:calibrate/dos1）、精确依赖与版本约束（requirements）、规划执行环境与入口（planned_worker / planned_entrypoints，全部 available=False）以及当前具体缺口（gaps/limitations）。",
+        "(2) 防虚标硬守卫（绝不作为已实现宣传）：`OptionalExtensionSpec` 模型校验器强制拦截任何将未实现扩展设为 `implemented=True`、`availability=ready` 或 `entrypoint.available=True` 的构造；`audit_optional_extensions()` 审计确认 `extension_count=6, implemented_count=0, falsely_advertised=[], compliant=True`；全部 6 项扩展统一注册入 `get_default_registry()`（provider=extension，presence=missing，binding=none，availability=missing_dependency/blocked），全局对账 `registry_count` 462→468、`missing` 7→13，而 `discovered=455`、`callable=250`、`platform_executable=24`、`CONNECTED_CAPABILITIES` 维持零增加。",
+        "(3) 执行器与 UI 守卫：`PluginProviderAdapter.validate` 对未实现可选扩展返回专有错误码 `optional_extension_not_implemented` 并附带所需依赖与缺口说明，GDAL/Rasterio Adapter 同步拒绝；GUI `ToolboxPanel` 新增「扩展引擎」筛选与「🔌 可选引擎扩展登记 (未实现/待接入)」树节点（标注「🔴 扩展未实现」），`CapabilityFormWidget` 载入扩展时展示限制与缺口、依赖要求与规划入口，并严格禁用提交按钮。",
+        "(4) 自动化验证通过：`tests/integration/test_p8_optional_extensions.py`（6 项集成测试）及注册表/基线对账/UI 组件单测共 38 项在 `scripts/run_with_timeout.py` + `scripts/pytest_runner.py` 下全部通过（13.95s, `clean_exit_verified=True, pytest_exit_code=0, residual=0`）；Ruff 0 错误、Mypy 96 源文件 0 错误；`scripts/audit-capabilities.ps1` 对账通过（`complete=True, unexplained_gaps=[]`）。"
+      ],
       "blocking_reason": null
     },
     {
