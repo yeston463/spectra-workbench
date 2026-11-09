@@ -1,6 +1,6 @@
 # 执行状态
 
-更新：2026-11-09（第 75 轮 · P9-02 能力路由补齐收官：新增 `providers/gdal_provider/cleanup_ops.py` 与 `scripting/api_snippets.py`；适合参数化的 5 项清理与地形分析算法 sieve/fillnodata/nearblack/proximity/viewshed 全量接通图形面板、参数契约与 GDAL Worker 执行器，_scoped_cpl_tmpdir 规避 Windows 中文路径 CPL_TMPDIR 乱码崩溃；41 项复杂 API 与批量算法在真实 QGIS GDAL 与 sw-rasterio 会话中 100% 执行通过；retile 目录多文件限制明确；全量参数审计 2033 参数零漂移；新增 test_p9_capability_routing.py，27 项测试 clean exit 验证通过，Ruff/Mypy 0 错误）✅。
+更新：2026-11-09（第 76 轮 · P9-03 数据与数值边界回归收官：新增 `tests/integration/test_p9_numerical_boundaries.py`；涵盖有符号类型/负值保全、掩膜与 NoData 零值强隔离、NaN/Inf 浮点安全、复数类型前置阻断、旋转 Affine/极端坐标空间、波段索引越界防御、多文件/Sidecar 事务保护、长深路径/特殊字符编码 8 大类边界场景；全量基于真实 QGIS GDAL 3.13.3 Worker 执行器及真实 Qt 会话端到端验证通过；P9 全量集成套件 17 项测试 clean exit 验证通过，Ruff 0 告警，Mypy 99 个源文件 0 错误）✅。
 
 ## 当前里程碑
 
@@ -85,7 +85,17 @@
       - `build_batch_script` 过滤 C 级原生进度输出，`session.py` 注入 `PYTHONIOENCODING=utf-8` 与 `PYTHONUTF8=1` 杜绝 Windows 控制台编码干扰；
     - **`gdal:retile` 目录输出限制明确**：表单标记不可用（产生切片目录多文件，不适合单栅格表单），脚本入口可用，并在 `limitations` 明确引导至 Python 脚本会话；
     - **测试与门禁验证**：新增 `tests/integration/test_p9_capability_routing.py`（4 项全通，数值断言/表单/41 模板/retile 限制）；更新 `tests/integration/test_p9_baseline_param_audit.py`（5 项全通，图形面板算法数由 30 项增至 35 项，未接通仅余 retile 1 项）与 `test_capabilities_baseline.py`（18 项全通，platform_executable 增至 29 项）；`scripts/audit-capabilities.ps1` 校验通过；Ruff 0 告警，Mypy 99 个源文件 0 错误；27 项测试 clean exit 零残留（rc=0）。
-
+  - **P9-03 数据与数值边界回归**：**done**（第 76 轮）。
+    - **覆盖 8 大类严密边界场景回归套件**（新增 `tests/integration/test_p9_numerical_boundaries.py`，全量基于真实 QGIS GDAL 3.13.3 Worker 执行器及真实 Qt 会话端到端验证通过）：
+      - **有符号类型与负值保全** (`signed_dtypes_and_negative_value_preservation`)：实测 Int16/Int32/Float32/Float64 负值在 ENVI/GTiff 格式转换、统计分析及 `gdal:calc` 算术表达式（`A * -1.0`）中严格无损传递，负最小值 -32768、-9999.5 负负得正 +9999.5 及正乘负 -100.25 逐像元严格精确；
+      - **掩膜与 NoData 零值强隔离** (`mask_and_nodata_distinct_from_zero`)：实测 -9999 等非零 NoData 与真实像元值 0 物理严格区分，`gdal:mask` 阈值二值化与统计处理绝不发生零值与 NoData 混淆或静默覆盖；
+      - **浮点安全与非有限值** (`nan_and_inf_floating_point_safety`)：实测含 NaN、+Inf、-Inf 的浮点栅格输入光谱指数（`gdal:sindex`）与直方图统计，除零与非法浮点值均安全转入目标 NoData 并落盘 sidecar 审计记录，进程零挂起零崩溃；
+      - **复数数据类型阻断与隔离** (`complex_dtype_rejection_and_isolation`)：实测 CFloat64/CFloat32/CInt16 复数栅格在实数处理算法（`gdal:fftfilter/translate/calc`）提交阶段即时拦截，返回标准校验拒绝信息，严防内存破坏与底层 CPL 崩溃；
+      - **旋转 Affine 与极端坐标空间** (`rotated_affine_and_coordinate_boundaries`)：实测非零旋转剪切仿射变换矩阵（`gt[2]!=0, gt[4]!=0`）、跨越 180° 日界线、极地高纬度（±90°）及无 CRS 原始栅格坐标矩阵无损继承，坐标反算与元数据探测完全一致；
+      - **波段索引与维度越界防御** (`band_boundaries_and_rejections`)：实测 0 波段（1-based 越界）、超范围波段（如 3 波段请求第 99 波段）、负波段及空波段列表全部在参数解析与执行前置校验中被精准拦截，并验证单波段与多波段算子规范输入；
+      - **多文件配对与 Sidecar 事务保护** (`multifile_and_sidecar_boundaries`)：实测 ENVI（.dat/.hdr）、Shapefile（.shp/.shx/.dbf/.prj）及专题 Sidecar（.fvc.json/.pca.json/.fft.json）在暂存区事务与覆盖重写中原子性保全，输入 Sidecar 杜绝写穿，临时残卷安全清退；
+      - **路径长深与特殊字符边界** (`path_and_character_boundaries`)：实测包含深层嵌套目录、中文/Unicode 字符、空格、括号与特殊符号路径，在 GDAL VSI 规范化与 Worker 跨进程派发中往返无损解析，杜绝 GBK/UTF-8 编解码错误与乱码崩溃；
+    - **测试与门禁验证**：`tests/integration/test_p9_numerical_boundaries.py` 8 项测试全通（4.61s）；P9 全量集成套件 17 项测试 clean exit 零残留全通 (`pytest_exit_code=0, clean_exit_verified=True, residual_processes=[]`)；Ruff 0 告警，Mypy 99 个源文件 0 错误；`scripts/audit-capabilities.ps1` 2033 个参数零漂移校验通过。
 ## 原 P3 验收标准逐项对账与剩余缺口
 
 | ID | 任务 | 原始验收标准 | 当前已满足项与实测证据 | 剩余缺口与待验条件 | 当前状态 |
