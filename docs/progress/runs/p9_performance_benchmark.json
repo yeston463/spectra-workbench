@@ -1,0 +1,258 @@
+{
+  "schema_version": "spectra.p9_performance_benchmark.v1",
+  "benchmark_title": "Spectra Workbench P9-04 性能基准与资源治理评测报告",
+  "measured_at": "2026-11-09T12:43:06.736530+00:00",
+  "summary": {
+    "all_targets_met": true,
+    "cold_startup_seconds": 0.686,
+    "warm_startup_seconds": 0.703,
+    "first_frame_seconds": 1.554,
+    "event_loop_p95_ms": 39.68,
+    "cooperative_cancel_seconds": 0.123,
+    "lru_eviction_triggered": true,
+    "cache_budget_strictly_obeyed": true,
+    "zero_full_load_verified": true
+  },
+  "device_profile": {
+    "os_platform": "Windows-11-10.0.26200-SP0",
+    "os_release": "11",
+    "os_version": "10.0.26200",
+    "machine": "AMD64",
+    "processor": "Intel64 Family 6 Model 186 Stepping 2, GenuineIntel",
+    "cpu_logical_cores": 16,
+    "ram_total_gib": 15.7,
+    "ram_available_gib": 2.6,
+    "screen_resolution": "1707x960",
+    "disk_drive": "C:",
+    "disk_total_gib": 475.72,
+    "disk_free_gib": 40.3,
+    "python_executable": "C:\\Users\\赵航\\Desktop\\studio\\spectra-workbench\\.venv\\Scripts\\python.exe",
+    "python_version": "3.12.10",
+    "gdal_runtime": {
+      "available": true,
+      "version": "3.13.3",
+      "python": "C:\\Program Files\\QGIS 3.44.15\\apps\\Python312\\python.exe"
+    },
+    "rasterio_runtime": {
+      "available": true,
+      "version": "1.5.2",
+      "python": "3.12.10"
+    }
+  },
+  "startup_time": {
+    "cold_startup_seconds": 0.686,
+    "cold_target_seconds": 10.0,
+    "cold_compliant": true,
+    "warm_startup_seconds": 0.703,
+    "warm_target_seconds": 5.0,
+    "warm_compliant": true
+  },
+  "first_frame_render": {
+    "sample_raster": "p3_big_6144.tif",
+    "sample_size_bytes": 303177878,
+    "dimensions": "6144x6144",
+    "bands": [
+      {
+        "band": 1,
+        "dtype": "UInt16",
+        "nodata": 65535.0,
+        "color_interp": "Gray",
+        "overviews": 6,
+        "overview_sizes": [
+          {
+            "level": 0,
+            "width": 3072,
+            "height": 3072
+          },
+          {
+            "level": 1,
+            "width": 1536,
+            "height": 1536
+          },
+          {
+            "level": 2,
+            "width": 768,
+            "height": 768
+          },
+          {
+            "level": 3,
+            "width": 384,
+            "height": 384
+          },
+          {
+            "level": 4,
+            "width": 192,
+            "height": 192
+          },
+          {
+            "level": 5,
+            "width": 96,
+            "height": 96
+          }
+        ],
+        "mask_flags": 8,
+        "has_alpha": false,
+        "all_valid": false,
+        "has_nodata_flag": true,
+        "scale": null,
+        "offset": null,
+        "unit": null,
+        "description": null
+      },
+      {
+        "band": 2,
+        "dtype": "UInt16",
+        "nodata": 65535.0,
+        "color_interp": "Undefined",
+        "overviews": 6,
+        "overview_sizes": [
+          {
+            "level": 0,
+            "width": 3072,
+            "height": 3072
+          },
+          {
+            "level": 1,
+            "width": 1536,
+            "height": 1536
+          },
+          {
+            "level": 2,
+            "width": 768,
+            "height": 768
+          },
+          {
+            "level": 3,
+            "width": 384,
+            "height": 384
+          },
+          {
+            "level": 4,
+            "width": 192,
+            "height": 192
+          },
+          {
+            "level": 5,
+            "width": 96,
+            "height": 96
+          }
+        ],
+        "mask_flags": 8,
+        "has_alpha": false,
+        "all_valid": false,
+        "has_nodata_flag": true,
+        "scale": null,
+        "offset": null,
+        "unit": null,
+        "description": null
+      },
+      {
+        "band": 3,
+        "dtype": "UInt16",
+        "nodata": 65535.0,
+        "color_interp": "Undefined",
+        "overviews": 6,
+        "overview_sizes": [
+          {
+            "level": 0,
+            "width": 3072,
+            "height": 3072
+          },
+          {
+            "level": 1,
+            "width": 1536,
+            "height": 1536
+          },
+          {
+            "level": 2,
+            "width": 768,
+            "height": 768
+          },
+          {
+            "level": 3,
+            "width": 384,
+            "height": 384
+          },
+          {
+            "level": 4,
+            "width": 192,
+            "height": 192
+          },
+          {
+            "level": 5,
+            "width": 96,
+            "height": 96
+          }
+        ],
+        "mask_flags": 8,
+        "has_alpha": false,
+        "all_valid": false,
+        "has_nodata_flag": true,
+        "scale": null,
+        "offset": null,
+        "unit": null,
+        "description": null
+      }
+    ],
+    "has_overviews": true,
+    "overview_levels": [
+      2,
+      4,
+      8,
+      16,
+      32,
+      64
+    ],
+    "first_frame_seconds": 1.554,
+    "target_seconds": 2.0,
+    "compliant": true,
+    "initial_cache_entries": 1,
+    "initial_cache_bytes": 2229171
+  },
+  "ui_event_loop_responsiveness": {
+    "duration_seconds": 5.0,
+    "total_samples": 204,
+    "p50_ms": 1.17,
+    "p90_ms": 27.26,
+    "p95_ms": 39.68,
+    "p99_ms": 65.45,
+    "max_ms": 1532.92,
+    "target_p95_ms": 100.0,
+    "compliant": true
+  },
+  "cooperative_cancellation": {
+    "task_id": "bench-cancel-df454a17",
+    "capability_id": "gdal:calc",
+    "cancel_response_seconds": 0.123,
+    "final_status": "cancelled",
+    "target_seconds": 2.0,
+    "compliant": true
+  },
+  "large_logical_data_protection": {
+    "dataset_logical_dimensions": "6144x6144x3",
+    "dataset_full_uncompressed_mib": 216.0,
+    "requested_window": "256x256x3",
+    "window_data_bytes": 393216,
+    "window_data_kib": 384.0,
+    "read_duration_seconds": 0.415,
+    "rss_delta_mib": 3.44,
+    "no_full_load_verified": true,
+    "compliant": true
+  },
+  "memory_and_cache_governance": {
+    "configured_budget_mib": 10,
+    "configured_budget_bytes": 10485760,
+    "gui_rss_start_mib": 292.29,
+    "gui_rss_peak_mib": 386.2,
+    "gui_rss_after_pans_mib": 385.52,
+    "worker_rss_mib": 80.1,
+    "cache_peak_bytes": 9908507,
+    "cache_bytes_after_removal": 0,
+    "total_cache_hits": 7,
+    "total_cache_misses": 67,
+    "total_cache_evictions": 30,
+    "eviction_triggered": true,
+    "budget_strictly_obeyed": true,
+    "compliant": true
+  }
+}

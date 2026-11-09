@@ -1201,10 +1201,24 @@
         "P3-03",
         "P7-04"
       ],
-      "status": "todo",
+      "status": "done",
       "release_requirement": "core",
       "evidence": [
-        "部分证据（第 46 轮，状态仍为 todo）：scripts/stress_worker_lifecycle.py 复用同一 WorkerProcess 连续 200 轮 start/probe/stop，并每 10 轮执行真实 gdal:translate（共 20 个任务成功），耗时 111.2s；父进程句柄 160→167（+7，最大 +7）、Worker 线程残留 0、私有内存 +96 KB、失败 0。报告 docs/progress/runs/worker_long_run.json。该结果覆盖短中期生命周期压力，不替代数小时级桌面会话、真实大影像与多显示器场景；P9-04 的完整性能/资源验收仍未开始。"
+        "第 77 轮：P9-04 性能基准与资源治理全面验收转 done：",
+        "新增 scripts/benchmark_performance.py 性能评测套件与机器可读报告 docs/progress/runs/p9_performance_benchmark.json，全量满足 docs/plan/02_里程碑与验收.md 性能约定；新增 tests/integration/test_p9_performance_governance.py 自动化门禁测试（7 项全绿）：",
+        "(1) 实际设备与环境清单完整记录：Windows 11 x64 (Build 26200), GenuineIntel 16 逻辑核心, 15.7 GiB RAM (可用 2.6~3.6 GiB), 1707x960 显示分辨率, 本地 NVMe (C: 475.7 GiB, 剩余 40+ GiB), Python 3.12.10, QGIS GDAL 3.13.3, Rasterio 1.5.2；",
+        "(2) 启动耗时严格达标：冷启动独立进程实测 0.686s（目标 <= 10.0s，裕量 93%），热启动实测 0.703s（目标 <= 5.0s，裕量 85%）；",
+        "(3) 首屏加载耗时达标：使用 6144x6144 3-band UInt16 (~289.1 MiB) 本地分块带概览真实栅格，从 open_dataset 到首屏瓦片完成渲染实测 1.554s（目标 <= 2.0s）；",
+        "(4) 长任务下界面响应极度平滑：高负载并发平移缩放刷新与定时采样下，Qt 主事件循环延迟 p50=1.17ms, p90=27.26ms, p95=39.68ms（目标 <= 100.0ms），主线程零卡死零卡顿；",
+        "(5) 协作式取消高速响应且无孤儿残留：实测对大栅格三角函数复杂表达式运算（gdal:calc）发起取消，终态响应耗时 0.123s（目标 <= 2.0s），任务进入 TaskStatus.cancelled，Worker 进程健康且零孤儿残留；",
+        "(6) 内存稳定性与缓存预算严格受限：在 10 MiB（10485760 字节）严苛预算下，执行 24 次大跨度多级缩放平移，实测触发 30 次 LRU 淘汰（evictions > 0），峰值缓存 9.45 MiB 严格 <= 10.0 MiB 预算（budget_strictly_obeyed=True）；GUI 内存平稳趋稳（385 MiB 保持稳定），移除图层后缓存字节数精确归零；",
+        "(7) 大逻辑数据零全量加载内存防护：逻辑展开为 216.0 MiB 的 6144x6144 影像，读取 256x256 瓦片时仅传输 384 KiB 字节，GUI 进程内存增量仅 3.44 MiB（远小于 50 MiB 防护上限，绝无 216 MiB 全量加载）；",
+        "(8) 修复图层与缓存释放链路：修复 LayerPanel.remove_layer 编程式移除漏发 sig_layer_removed 及 MainWindow._on_layer_removed 直接打开文件时图层源路径定位丢失缺陷，保证图层移除与关窗时缓存与句柄彻底释放。",
+        "官方自动化验收：",
+        "  - tests/integration/test_p9_performance_governance.py 7 项测试全部通过（17.02s）；",
+        "  - P9 全量集成套件（test_p9_baseline_param_audit + test_p9_capability_routing + test_p9_numerical_boundaries + test_p9_performance_governance）共 24 项测试通过，clean_exit_verified=True, pytest_exit_code=0, residual_processes=[]；",
+        "  - Ruff 代码检查 0 告警，Mypy 99 个源文件 0 错误；",
+        "  - scripts/audit-capabilities.ps1 校验全量基准与 2033 个参数零漂移。"
       ],
       "blocking_reason": null
     },

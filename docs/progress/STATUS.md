@@ -1,6 +1,6 @@
 # 执行状态
 
-更新：2026-11-09（第 76 轮 · P9-03 数据与数值边界回归收官：新增 `tests/integration/test_p9_numerical_boundaries.py`；涵盖有符号类型/负值保全、掩膜与 NoData 零值强隔离、NaN/Inf 浮点安全、复数类型前置阻断、旋转 Affine/极端坐标空间、波段索引越界防御、多文件/Sidecar 事务保护、长深路径/特殊字符编码 8 大类边界场景；全量基于真实 QGIS GDAL 3.13.3 Worker 执行器及真实 Qt 会话端到端验证通过；P9 全量集成套件 17 项测试 clean exit 验证通过，Ruff 0 告警，Mypy 99 个源文件 0 错误）✅。
+更新：2026-11-09（第 77 轮 · P9-04 性能基准与资源治理收官：新增 `scripts/benchmark_performance.py` 评测套件与 `docs/progress/runs/p9_performance_benchmark.json` 机器可读报告；实测冷启动 0.686s（≤10s）、热启动 0.703s（≤5s）、首屏 1.554s（≤2s）、事件循环延迟 p95=39.68ms（≤100ms）、协作取消 0.123s（≤2s）、LRU 淘汰真实触发且峰值严格受限 <= 10 MiB 预算、大逻辑数据单瓦片读取内存增量仅 3.44 MiB 零整幅加载；修复 LayerPanel 编程式移除漏发信号与 MainWindow 裸开文件图层移除缓存清退缺陷；新增 `tests/integration/test_p9_performance_governance.py`，P9 全量 24 项集成测试 clean exit 零残留通过，Ruff 0 告警，Mypy 99 个源文件 0 错误）✅。
 
 ## 当前里程碑
 
@@ -96,6 +96,17 @@
       - **多文件配对与 Sidecar 事务保护** (`multifile_and_sidecar_boundaries`)：实测 ENVI（.dat/.hdr）、Shapefile（.shp/.shx/.dbf/.prj）及专题 Sidecar（.fvc.json/.pca.json/.fft.json）在暂存区事务与覆盖重写中原子性保全，输入 Sidecar 杜绝写穿，临时残卷安全清退；
       - **路径长深与特殊字符边界** (`path_and_character_boundaries`)：实测包含深层嵌套目录、中文/Unicode 字符、空格、括号与特殊符号路径，在 GDAL VSI 规范化与 Worker 跨进程派发中往返无损解析，杜绝 GBK/UTF-8 编解码错误与乱码崩溃；
     - **测试与门禁验证**：`tests/integration/test_p9_numerical_boundaries.py` 8 项测试全通（4.61s）；P9 全量集成套件 17 项测试 clean exit 零残留全通 (`pytest_exit_code=0, clean_exit_verified=True, residual_processes=[]`)；Ruff 0 告警，Mypy 99 个源文件 0 错误；`scripts/audit-capabilities.ps1` 2033 个参数零漂移校验通过。
+  - **P9-04 性能基准与资源治理**：**done**（第 77 轮）。
+    - **性能基准评测套件与机器可读报告**（`scripts/benchmark_performance.py` 与 `docs/progress/runs/p9_performance_benchmark.json`，全面对齐 docs/plan/02_里程碑与验收.md 性能目标与测量约定）：
+      - **实际硬件与环境清单记录**：如实采集并记录 Windows 11 x64 (Build 26200), GenuineIntel 16 逻辑核心, 15.7 GiB RAM (可用 2.6~3.6 GiB), 1707x960 分辨率, 本地 NVMe (C: 475.7 GiB, 剩余 40+ GiB), Python 3.12.10, QGIS GDAL 3.13.3, Rasterio 1.5.2；
+      - **启动耗时测量**：冷启动（全新子进程从拉起到 MainWindow 可交互）实测 0.686s（目标 <= 10.0s，裕量 93%），热启动实测 0.703s（目标 <= 5.0s，裕量 85%）；
+      - **首屏渲染耗时**：使用 6144x6144 3-band UInt16 (~289.1 MiB) 本地分块带概览真实栅格，从 open_dataset 到首屏瓦片完成渲染实测 1.554s（目标 <= 2.0s）；
+      - **长任务下界面响应极度平滑**：高负载并发平移缩放刷新与定时采样下，Qt 主事件循环延迟 p50=1.17ms, p90=27.26ms, p95=39.68ms（目标 <= 100.0ms），主线程零卡死零卡顿；
+      - **协作式取消高速响应且无孤儿残留**：实测对大栅格三角函数复杂表达式运算（gdal:calc）发起取消，终态响应耗时 0.123s（目标 <= 2.0s），任务进入 TaskStatus.cancelled，Worker 进程健康且零孤儿残留；
+      - **内存稳定性与缓存预算严格受限**：在 10 MiB（10485760 字节）严苛预算下，执行 24 次大跨度多级缩放平移，实测触发 30 次 LRU 淘汰（evictions > 0），峰值缓存 9.45 MiB 严格 <= 10.0 MiB 预算（budget_strictly_obeyed=True）；GUI 内存平稳趋稳（385 MiB 保持稳定），移除图层后缓存字节数精确归零；
+      - **大逻辑数据零全量加载内存防护**：逻辑展开为 216.0 MiB 的 6144x6144 影像，读取 256x256 瓦片时仅传输 384 KiB 字节，GUI 进程内存增量仅 3.44 MiB（远小于 50 MiB 防护上限，绝无 216 MiB 全量加载）；
+      - **修复图层与缓存释放链路**：修复 LayerPanel.remove_layer 编程式移除漏发 sig_layer_removed 及 MainWindow._on_layer_removed 直接打开文件时图层源路径定位丢失缺陷，保证图层移除与关窗时缓存与句柄彻底释放；
+    - **测试与门禁验证**：`tests/integration/test_p9_performance_governance.py` 7 项测试全通（17.02s）；P9 全量集成套件 24 项测试 clean exit 零残留全通 (`pytest_exit_code=0, clean_exit_verified=True, residual_processes=[]`)；Ruff 0 告警，Mypy 99 个源文件 0 错误；`scripts/audit-capabilities.ps1` 2033 个参数零漂移校验通过。
 ## 原 P3 验收标准逐项对账与剩余缺口
 
 | ID | 任务 | 原始验收标准 | 当前已满足项与实测证据 | 剩余缺口与待验条件 | 当前状态 |

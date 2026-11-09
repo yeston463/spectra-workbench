@@ -195,9 +195,10 @@ class LayerPanel(QWidget):
                 break
 
     def remove_layer(self, layer_id: str) -> None:
+        target = None
         for idx in range(len(self._layers)):
             if self._layers[idx].layer_id == layer_id:
-                self._layers.pop(idx)
+                target = self._layers.pop(idx)
                 break
         for idx in range(self.list_widget.count()):
             item = self.list_widget.item(idx)
@@ -208,6 +209,8 @@ class LayerPanel(QWidget):
             self._selected_layer = None
             self._update_details()
             self.sig_layer_selected.emit(None)
+        if target is not None:
+            self.sig_layer_removed.emit(layer_id)
 
     def set_missing_layers(self, missing: list[MissingSource]) -> None:
         """更新缺失数据源列表与可见性。"""
@@ -275,7 +278,6 @@ class LayerPanel(QWidget):
         if self._selected_layer:
             lid = self._selected_layer.layer_id
             self.remove_layer(lid)
-            self.sig_layer_removed.emit(lid)
 
     def _on_mode_toggled(self, btn_id: int, checked: bool) -> None:
         if not checked:

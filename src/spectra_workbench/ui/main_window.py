@@ -918,16 +918,22 @@ class MainWindow(QMainWindow):
             self._project_layer_order.remove(layer_id)
         self.missing_sources = [m for m in self.missing_sources if m.layer_id != layer_id]
         self.layer_panel.set_missing_layers(self.missing_sources)
-        layer = None
+        removed_source = None
         for cand in self.layer_panel.layers:
             if cand.layer_id == layer_id:
-                layer = cand
+                removed_source = str(cand.file_path)
                 break
-        if layer is not None:
-            # 源变化即失效该源的全部缓存，避免删除后仍显示旧块
-            self._cache.invalidate_source(str(layer.file_path))
-        elif rec is not None:
-            self._cache.invalidate_source(rec.source)
+        if not removed_source and self.canvas.current_layer and self.canvas.current_layer.layer_id == layer_id:
+            removed_source = str(self.canvas.current_layer.file_path)
+        if not removed_source and self.canvas_b.current_layer and self.canvas_b.current_layer.layer_id == layer_id:
+            removed_source = str(self.canvas_b.current_layer.file_path)
+        if not removed_source and rec is not None:
+            removed_source = str(rec.source)
+
+        if removed_source:
+            self._cache.invalidate_source(removed_source)
+        if not self.layer_panel.layers:
+            self._cache.clear()
         if self.canvas.current_layer and self.canvas.current_layer.layer_id == layer_id:
             self.canvas.clear()
         if self.canvas_b.current_layer and self.canvas_b.current_layer.layer_id == layer_id:
