@@ -1,6 +1,6 @@
 # 执行状态
 
-更新：2026-11-09（第 77 轮 · P9-04 性能基准与资源治理收官：新增 `scripts/benchmark_performance.py` 评测套件与 `docs/progress/runs/p9_performance_benchmark.json` 机器可读报告；实测冷启动 0.686s（≤10s）、热启动 0.703s（≤5s）、首屏 1.554s（≤2s）、事件循环延迟 p95=39.68ms（≤100ms）、协作取消 0.123s（≤2s）、LRU 淘汰真实触发且峰值严格受限 <= 10 MiB 预算、大逻辑数据单瓦片读取内存增量仅 3.44 MiB 零整幅加载；修复 LayerPanel 编程式移除漏发信号与 MainWindow 裸开文件图层移除缓存清退缺陷；新增 `tests/integration/test_p9_performance_governance.py`，P9 全量 24 项集成测试 clean exit 零残留通过，Ruff 0 告警，Mypy 99 个源文件 0 错误）✅。
+更新：2026-11-09（第 78 轮 · P9-05 故障注入与恢复审计全面收官，P9 全能力审计与性能可靠性里程碑 100% 完成！新增 `tests/integration/test_p9_fault_injection_and_recovery.py` 覆盖 Worker 崩溃与自动重启恢复、磁盘满 ENOSPC 原子回滚与数据保全、无权限/已存在标准错误拦截、网络 404 与超时阻断、协作取消快速终态与立即复用、损坏项目文件安全恢复与原子保存韧性共 6 大类故障注入矩阵；实测全部 6 项测试通过，P9 全量 5 套集成测试 30 项测试在 scripts/run_with_timeout.py 监管下 97.89s clean exit 零残留通过，Ruff 0 告警，Mypy 99 个源文件 0 错误，scripts/audit-capabilities.ps1 2033 个参数零漂移对齐）✅。
 
 ## 当前里程碑
 
@@ -107,6 +107,15 @@
       - **大逻辑数据零全量加载内存防护**：逻辑展开为 216.0 MiB 的 6144x6144 影像，读取 256x256 瓦片时仅传输 384 KiB 字节，GUI 进程内存增量仅 3.44 MiB（远小于 50 MiB 防护上限，绝无 216 MiB 全量加载）；
       - **修复图层与缓存释放链路**：修复 LayerPanel.remove_layer 编程式移除漏发 sig_layer_removed 及 MainWindow._on_layer_removed 直接打开文件时图层源路径定位丢失缺陷，保证图层移除与关窗时缓存与句柄彻底释放；
     - **测试与门禁验证**：`tests/integration/test_p9_performance_governance.py` 7 项测试全通（17.02s）；P9 全量集成套件 24 项测试 clean exit 零残留全通 (`pytest_exit_code=0, clean_exit_verified=True, residual_processes=[]`)；Ruff 0 告警，Mypy 99 个源文件 0 错误；`scripts/audit-capabilities.ps1` 2033 个参数零漂移校验通过。
+  - **P9-05 故障注入与恢复审计**：**done**（第 78 轮，**P9 里程碑 P9-01~05 全部 100% done**）。
+    - **覆盖 6 大核心故障注入与恢复场景**（新增 `tests/integration/test_p9_fault_injection_and_recovery.py`，全量基于真实环境端到端验证通过）：
+      - **Worker 崩溃注入与自动重启恢复** (`test_p9_05_worker_crash_injection_detection_and_auto_restart`)：在长耗时密集计算期间对底层 WorkerProcess 注入子进程强杀（`proc.kill()`），QtWorkerClient 精准捕获进程异常退出并置位 `is_alive=False`，主线程不挂起；随后在同一个 Client 实例上提交新任务，客户端感知 Worker 崩溃自动拉起全新健康 Worker 进程，并在超时前成功完成后续计算；
+      - **磁盘满 ENOSPC 故障注入与原子回滚** (`test_p9_05_disk_full_enospc_injection_and_rollback`)：在安装新成果（`shutil.move`）阶段注入底层磁盘空间耗尽异常（`OSError(28, "No space left on device")`），`ExecutionContext` 事务精确捕获并在抛出异常前执行逆向原子回滚，manifest 记录 `state="failed"` 与 `error={"code": "commit_failed", ...}`，原重要目标文件内容字节完好无损，零脏临时备份文件遗留；
+      - **无权限与访问受阻故障注入** (`test_p9_05_permission_denied_fault_injection`)：输入文件物理不存在时立即返回标准前置拒绝 `input_not_found`；输出文件已存在且声明 `overwrite=False` 时准确拦截返回 `output_already_exists`，受阻文件内容零破坏；
+      - **网络失败与远程 VSI 异常注入** (`test_p9_05_network_vsi_failures_and_timeout_injection`)：本地 `LocalHttpRangeServer` 注入 404 Not Found 与可配置超时（delay 4.0s，客户端探测 1.0s），远程 `/vsicurl/` 请求受控失败并快速触发 `WorkerTimeoutError`，Worker 进程不挂死、保持健康，后续本地栅格元数据探测立即成功；
+      - **任务协作取消与立即复用恢复** (`test_p9_05_cancellation_and_resubmission_recovery`)：长计算中途发起 `cancel_task`，0.12s（目标 <= 2.0s）内协同取消并进入 `TaskStatus.cancelled` 终态，未完成成果物理清理，且在同一个 Client 和同一个未重启的 Worker 进程中立即提交新任务成功执行完成；
+      - **损坏项目文件安全恢复与原子保存韧性** (`test_p9_05_corrupt_project_file_handling_and_atomic_save_resilience`)：截断畸变 JSON 工程安全拦截返回 False 且不污染图层模型；工程包含物理被删数据源时打开进入 `missing_sources` 隔离并支持重关联/显式移除；工程原子保存（`save_project`）在同卷替换前模拟注入崩溃，原工程文件字节原样保留，零残留 `.tmp` 临时文件；
+    - **测试与门禁验证**：`tests/integration/test_p9_fault_injection_and_recovery.py` 6 项测试全通（21.45s）；P9 全量 5 套集成测试套件共 30 项测试 clean exit 零残留全通（97.89s, `pytest_exit_code=0, clean_exit_verified=True, residual_processes=[]`）；Ruff 0 告警，Mypy 99 个源文件 0 错误；`scripts/audit-capabilities.ps1` 校验全量基准与 2033 个参数零漂移通过。
 ## 原 P3 验收标准逐项对账与剩余缺口
 
 | ID | 任务 | 原始验收标准 | 当前已满足项与实测证据 | 剩余缺口与待验条件 | 当前状态 |

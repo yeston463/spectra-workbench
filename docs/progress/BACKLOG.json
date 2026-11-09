@@ -1234,10 +1234,22 @@
         "P1-05",
         "P8-03"
       ],
-      "status": "todo",
+      "status": "done",
       "release_requirement": "core",
       "evidence": [
-        "部分证据（第 46 轮，状态仍为 todo）：通过轮询 WER Temp 捕获受控 os.abort() 的 native minidump（1,783,483 字节，SHA-256 e8df873d…58a7857），解析确认 0xC0000409 / ucrtbase.dll+0xa527e / fastfail 7（fatal-app-exit）；历史项目 pytest 进程的 WER Report.wer 签名完全一致，确认历史异常为 CRT abort/fatal-app-exit 路径，但调用方未定位。另确认 tests/conftest.py 的 SIGABRT handler 拦截不到该 fastfail 路径。分析报告 docs/progress/runs/controlled_abort_dump_analysis.json。worker 崩溃、磁盘满、无权限、网络失败、损坏项目等完整故障注入矩阵仍未执行，状态保持 todo。"
+        "第 78 轮验收（P9-05 故障注入与恢复审计全面闭环，P9 里程碑 100% 收官）：",
+        "1. 新增全覆盖故障注入与恢复回归套件 tests/integration/test_p9_fault_injection_and_recovery.py，实测 6 大类故障场景 100% 通过（21.45s，clean_exit_verified=True，residual_processes=[]）：",
+        "  - worker 崩溃（test_p9_05_worker_crash_injection_detection_and_auto_restart）：在长耗时计算期间对底层的 Worker 进程注入强杀（proc.kill()），客户端精准捕获进程异常退出并置位 is_alive=False，后续对同一个 Client 提交新任务时自动拉起全新健康 Worker 进程并成功执行完成；",
+        "  - 磁盘满 ENOSPC（test_p9_05_disk_full_enospc_injection_and_rollback）：在提交（shutil.move）阶段模拟底层磁盘空间不足（OSError 28 No space left on device），ExecutionContext 事务精确捕获并回滚，manifest 记录 commit_failed，原目标文件（important_data.tif）字节数据完好无损，零临时文件残留；",
+        "  - 无权限与路径受阻（test_p9_05_permission_denied_fault_injection）：输入文件不存在返回 input_not_found，输出文件已存在且 overwrite=False 返回 output_already_exists 阻断，原文件数据零破坏；",
+        "  - 网络失败与超时（test_p9_05_network_vsi_failures_and_timeout_injection）：LocalHttpRangeServer 注入 404 与持续延迟，/vsicurl/ 探测受控失败与快速阻断（WorkerTimeoutError，1.0s 超时严格受限），Worker 进程不挂死、保持健康，后续本地探测立即成功；",
+        "  - 协作取消与立即复用（test_p9_05_cancellation_and_resubmission_recovery）：计算中途协同取消在 2s 内进入 TaskStatus.cancelled 终态且零残留半成品，同一个 Client 与同一个 Worker 进程不重启直接承接并成功完成后续计算任务；",
+        "  - 损坏项目文件安全恢复（test_p9_05_corrupt_project_file_handling_and_atomic_save_resilience）：截断畸变 JSON 项目安全拦截不污染图层；含物理丢失数据源的工程打开进入 missing_sources 重关联与移除流程；工程原子保存（save_project）中途模拟崩溃注入，原工程文件字节完好无损，零脏 .tmp 文件残留。",
+        "2. 代码质量与门禁审计：",
+        "  - P9 全量 5 套集成测试套件共 30 项测试通过 scripts/run_with_timeout.py 统一监管执行通过（97.89s，pytest_exit_code=0，clean_exit_verified=True，residual_processes=[]）；",
+        "  - Ruff 代码检查 0 告警；",
+        "  - Mypy 类型检查 99 个源文件 0 错误（Success: no issues found in 99 source files）；",
+        "  - scripts/audit-capabilities.ps1 校验全量基准与 2033 个参数零漂移。"
       ],
       "blocking_reason": null
     },
