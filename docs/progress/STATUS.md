@@ -1,6 +1,6 @@
 # 执行状态
 
-更新：2026-11-08（第 71 轮 · P8-03 凭据 Profile 与脱敏：本地独立凭据存储库 CredentialStore 隔离管理 (~/.spectra/credentials.json) + 统一 CredentialProfile 支持 S3/Azure/GCS/HTTP Bearer/HTTP Basic/Header/Custom 映射至 GDAL VSI 选项与环境变量 + 动态向 Worker 下发凭据并配合 VSICurlClearCache 认证保护端点 + 项目持久化仅保存引用名绝不入库密钥 + 全链路 URL/文本/字典/诊断脱敏工具 + 离线模式零网络依赖本地数据处理；19 项集成测试全部通过，clean_exit_verified=True，residual=0）✅。
+更新：2026-11-09（第 72 轮 · P8-04 插件协议与示范插件：PluginManifest/PluginManager 全生命周期管理 + 本地目录/zip 安装卸载与零原生依赖发现 + CapabilityRegistry 动态注册/注销 + 连续 3 次失败自动熔断隔离与重置恢复 + 真实示范插件 spectra_plugin_sample_stats (sample_stats:zscore) 独立 Worker 执行 + 三层防卡死看门狗机制并定位修复 Windows 后台线程首次导入 numpy 原生扩展死锁；9 项插件集成测试与 44 项 P8 全量集成测试全部通过，clean_exit_verified=True，residual=0）✅。
 
 ## 当前里程碑
 
@@ -54,6 +54,12 @@
     - **Worker 动态凭据下发与 VSI 鉴权**：WorkerProcess 支持 `apply_credential_profile`，下发环境变量与 GDAL 配置选项并调用 `gdal.VSICurlClearCache()` 清理 HTTP 缓存；实测在未配置凭据时探测 401 失败，动态下发凭据后成功通过 Bearer 鉴权并返回元数据与切片。
     - **离线就绪与 GUI 集成**：实测无网络与无凭据文件环境下本地 GeoTIFF 与矢量探测、读取、项目保存与重开 100% 正常；主窗口远程输入支持 `#profile=...` 凭据指定与跨会话完全恢复。
     - **测试与官方验证**：`tests/integration/test_p8_credentials.py` 19 项测试全部通过；官方监管闸门 `scripts/run_with_timeout.py` 验证 `clean_exit_verified=True, pytest_exit_code=0, residual=0`；`scripts/doctor.ps1` 自检全通过。
+  - **P8-04 插件协议与示范插件**：**done**（第 72 轮）。
+    - **插件清单契约与兼容性判定**：新增 `plugins/manifest.py`，定义 `PluginManifest`、`PluginCapabilitySpec`、`WorkerSpec`、`PluginStatus`（`discovered`/`enabled`/`disabled`/`incompatible`/`failed`）与 `PluginInfo`；支持 `provider_api_version` 与 `min_platform_version`/`max_platform_version` 语义化版本校验，自动生成标准 `CapabilityDescriptor`。
+    - **插件管理器与全生命周期状态机**：新增 `plugins/manager.py` 并扩展 `CapabilityRegistry.unregister`；支持从目录或 `.zip` 归档安装与卸载、本地目录扫描与 Python `entry_points` 发现（GUI 进程零 `osgeo`/`rasterio` 原生模块导入）、启用/禁用状态切换并与 `CapabilityRegistry` 实时同步注册/注销、不兼容插件隔离阻止启用、连续 3 次执行失败自动熔断隔离为 `failed` 并提供 `reset_plugin_failure` 恢复入口，状态原子持久化至 `plugins_state.json`。
+    - **真实示范插件与独立 Worker 执行隔离**：新增 `plugins/sample/`（`spectra_plugin_sample_stats`，提供 `sample_stats:zscore` 栅格 Z-score 标准化计算 $z=(x-\mu)/\sigma$ 与 `fail_mode` 故障注入）及 `plugins/adapter.py`（`PluginProviderAdapter`），接入 `workers/entrypoint.py` 与 `workers/process.py`。
+    - **三层防卡死看门狗与 Windows 后台线程原生导入死锁根因修复**：① Worker `entrypoint.py` 接入 `faulthandler.dump_traceback_later(SPECTRA_WORKER_WATCHDOG_SECONDS)` 任务看门狗，超期自动向 `stderr` 转储全线程调用栈；② 客户端 `WorkerTimeoutError` 自动附带 worker `stderr` 尾部；③ `pyproject.toml` 启用 `faulthandler_timeout = 120`。通过看门狗一举定位此前插件子进程超时根因：Windows 下主线程阻塞于 `stdin.readline()` 时，后台 `worker-executor` 线程首次动态导入 `numpy` 原生扩展引发底层的死锁；通过在 `PluginProviderAdapter` 主线程初始化阶段（进入 `stdin` 循环前）预导入原生依赖与已启用插件入口模块彻底根治。
+    - **测试与官方验证**：`tests/integration/test_p8_plugins.py` 9 项集成测试（2.32s）及 P8 全量 44 项集成测试（31.97s）在 `scripts/run_with_timeout.py` 下全部通过（`clean_exit_verified=True, pytest_exit_code=0, residual=0`）；`scripts/test.ps1 -Unit`（298 passed）与 `scripts/doctor.ps1`（`ALL OK`）全部通过。
 
 ## 原 P3 验收标准逐项对账与剩余缺口
 

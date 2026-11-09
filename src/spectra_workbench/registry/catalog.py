@@ -92,6 +92,16 @@ class CapabilityRegistry:
                     self._alias_to_id[alias] = target_id
                     self._id_to_aliases[target_id].add(alias)
 
+    def unregister(self, capability_id: str) -> bool:
+        """注销一个能力描述符及其关联别名。成功返回 True，不存在返回 False。"""
+        if capability_id not in self._capabilities:
+            return False
+        del self._capabilities[capability_id]
+        aliases = self._id_to_aliases.pop(capability_id, set())
+        for a in aliases:
+            self._alias_to_id.pop(a, None)
+        return True
+
     def get(self, capability_id_or_alias: str) -> CapabilityDescriptor | None:
         """根据 ID 或别名获取能力描述符。"""
         if capability_id_or_alias in self._capabilities:

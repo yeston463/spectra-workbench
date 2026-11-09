@@ -33,6 +33,7 @@ markers = [
     "slow: large data or long runtime",
 ]
 addopts = "-ra --strict-markers"
+faulthandler_timeout = 120
 
 [tool.ruff]
 line-length = 100

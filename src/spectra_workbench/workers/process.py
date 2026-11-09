@@ -76,11 +76,13 @@ def resolve_worker_command(
     existing_pp = base_env.get("PYTHONPATH", "")
     base_env["PYTHONPATH"] = f"{src_dir};{existing_pp}" if existing_pp else src_dir
 
-    if provider_id == "gdal":
+    if provider_id in {"gdal", "plugin"}:
         gdal_info = resolve_gdal_runtime(root)
-        py_path = Path(gdal_info["python"])
-        base_env.update(gdal_info["env"])
-        return py_path, base_env
+        if gdal_info.get("python"):
+            py_path = Path(gdal_info["python"])
+            base_env.update(gdal_info.get("env", {}))
+            return py_path, base_env
+        return Path(sys.executable), base_env
 
     if provider_id == "rasterio":
         py_path = root / ".venvs" / "sw-rasterio" / "Scripts" / "python.exe"
@@ -599,7 +601,10 @@ class WorkerProcess:
                         error={"code": code, "message": msg},
                     )
 
-            raise WorkerTimeoutError(f"任务 {spec.task_id} 执行超时 ({timeout}s)")
+            stderr_tail = "".join(self.stderr_lines[-60:])[-4000:]
+            raise WorkerTimeoutError(
+                f"任务 {spec.task_id} 执行超时 ({timeout}s)；worker stderr 尾部:\n{stderr_tail}"
+            )
         finally:
             with self._waiters_lock:
                 self._response_waiters.pop(req_id, None)

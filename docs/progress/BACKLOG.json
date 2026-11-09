@@ -1060,9 +1060,15 @@
         "P7-02",
         "P1-04"
       ],
-      "status": "todo",
+      "status": "done",
       "release_requirement": "core",
-      "evidence": [],
+      "evidence": [
+        "插件协议与清单契约：src/spectra_workbench/plugins/manifest.py（PluginManifest、PluginCapabilitySpec、WorkerSpec、PluginStatus、PluginInfo，含 provider_api_version 与 min/max_platform_version 兼容性判定及 CapabilityDescriptor 映射）",
+        "插件管理器与生命周期状态机：src/spectra_workbench/plugins/manager.py + src/spectra_workbench/registry/catalog.py（CapabilityRegistry.unregister），支持目录与 .zip 压缩包安装/卸载、本地目录扫描与 entry points 发现（GUI 进程零 osgeo/rasterio 原生导入）、启用/禁用状态切换、不兼容隔离（incompatible）、连续 3 次失败自动熔断隔离（failed）与 reset_plugin_failure 重置恢复，状态持久化至 plugins_state.json",
+        "真实示范统计插件与独立 Worker 执行隔离：src/spectra_workbench/plugins/sample/（spectra_plugin_sample_stats，sample_stats:zscore 栅格 Z-score 标准化 z=(x-mean)/std 及 fail_mode 受控故障注入）+ src/spectra_workbench/plugins/adapter.py（PluginProviderAdapter）+ src/spectra_workbench/workers/entrypoint.py & process.py",
+        "防卡死看门狗与 Windows 后台线程原生扩展死锁修复：entrypoint.py 接入 faulthandler.dump_traceback_later(SPECTRA_WORKER_WATCHDOG_SECONDS) 看门狗、process.py 超时异常附带 worker stderr 尾部、pyproject.toml 配置 faulthandler_timeout=120；定位并修复 Windows 下主线程阻塞于 stdin.readline() 时后台执行线程首次导入 numpy 原生扩展引发的 Loader Lock 死锁（PluginProviderAdapter 在主线程进入 stdin 循环前完成原生扩展与入口模块预导入）",
+        "自动化验证通过：.venv\\Scripts\\python.exe scripts/run_with_timeout.py 托管执行 tests/integration/test_p8_plugins.py（9 passed in 2.32s, clean_exit_verified=True, pytest_exit_code=0, residual=0）及 P8 全量集成套件（44 passed in 31.97s, clean_exit_verified=True, residual=0）；scripts/test.ps1 -Unit（298 passed, clean_exit_verified=True, residual=0）；scripts/doctor.ps1 -> ALL OK (rc=0)"
+      ],
       "blocking_reason": null
     },
     {

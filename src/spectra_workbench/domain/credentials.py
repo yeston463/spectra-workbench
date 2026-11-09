@@ -14,6 +14,7 @@ import contextlib
 import json
 import os
 import re
+import tempfile
 import threading
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -285,6 +286,14 @@ class CredentialProfile:
         )
 
 
+def _safe_home() -> Path:
+    try:
+        return Path.home()
+    except Exception:
+        u = os.environ.get("USERPROFILE") or os.environ.get("HOME")
+        return Path(u) if u else Path(tempfile.gettempdir())
+
+
 class CredentialStore:
     """凭据存储库。
 
@@ -292,7 +301,7 @@ class CredentialStore:
     完全隔离于项目文件与工作区。
     """
 
-    DEFAULT_STORE_DIR = Path.home() / ".spectra"
+    DEFAULT_STORE_DIR = _safe_home() / ".spectra"
     DEFAULT_STORE_FILE = DEFAULT_STORE_DIR / "credentials.json"
 
     def __init__(self, store_path: Path | str | None = None) -> None:

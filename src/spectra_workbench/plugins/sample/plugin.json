@@ -1,0 +1,57 @@
+{
+  "schema_version": "1.0",
+  "id": "spectra_plugin_sample_stats",
+  "name": "Sample Raster Statistics Plugin",
+  "version": "1.0.0",
+  "provider_api_version": "1.0",
+  "min_platform_version": "0.1.0",
+  "description": "示范统计插件：提供栅格 Z-score 标准化与快速统计分析",
+  "author": "Spectra Workbench Core Team",
+  "entry_point": "spectra_workbench.plugins.sample",
+  "worker_spec": {
+    "engine": "plugin",
+    "dependencies": [
+      "numpy"
+    ]
+  },
+  "capabilities": [
+    {
+      "capability_id": "sample_stats:zscore",
+      "name": "Raster Z-Score Normalization",
+      "kind": "algorithm",
+      "category": [
+        "statistics",
+        "normalization",
+        "plugin"
+      ],
+      "description": "逐像元标准化变换：z = (x - mean) / std",
+      "entrypoint": "spectra_workbench.plugins.sample.zscore_op:run_zscore",
+      "inputs": [
+        {
+          "key": "input",
+          "data_type": "raster",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "key": "output",
+          "data_type": "raster",
+          "required": true
+        }
+      ],
+      "parameters": [
+        {
+          "name": "band",
+          "type": "int",
+          "default": 1
+        },
+        {
+          "name": "fail_mode",
+          "type": "bool",
+          "default": false
+        }
+      ]
+    }
+  ]
+}

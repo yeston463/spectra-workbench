@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import faulthandler
 import os
 import queue
 import shutil
@@ -42,6 +43,14 @@ from spectra_workbench.providers.base import (
 )
 
 
+def _watchdog_seconds() -> float:
+    """任务卡死看门狗期限（秒）；SPECTRA_WORKER_WATCHDOG_SECONDS=0 关闭。"""
+    try:
+        return float(os.environ.get("SPECTRA_WORKER_WATCHDOG_SECONDS", "60"))
+    except ValueError:
+        return 60.0
+
+
 def _create_adapter(provider_id: str) -> ProviderAdapter:
     """按 provider_id 动态加载对应引擎适配器。"""
     if provider_id == "gdal":
@@ -52,6 +61,10 @@ def _create_adapter(provider_id: str) -> ProviderAdapter:
         from spectra_workbench.providers.rasterio_provider.adapter import RasterioProviderAdapter
 
         return RasterioProviderAdapter()
+    if provider_id == "plugin":
+        from spectra_workbench.plugins.adapter import PluginProviderAdapter
+
+        return PluginProviderAdapter()
     if provider_id == "dummy":
         return _create_dummy_adapter()
     raise ValueError(f"未知或未配置的 provider_id: {provider_id}")
@@ -829,6 +842,11 @@ class WorkerRuntime:
         )
         self._active_context = ctx
 
+        # 卡死看门狗：任务超过期限仍未返回时，把所有线程栈打到 stderr（不终止进程），
+        # 客户端超时报错会附带 stderr 尾部，从而直接定位卡死位置。
+        watchdog_s = _watchdog_seconds()
+        if watchdog_s > 0:
+            faulthandler.dump_traceback_later(watchdog_s, repeat=False, file=sys.stderr)
         try:
             result = self.adapter.execute(spec, ctx)
         except TaskCancelledError:
@@ -850,6 +868,7 @@ class WorkerRuntime:
                 error={"code": "execution_uncaught_exception", "message": str(exc)},
             )
         finally:
+            faulthandler.cancel_dump_traceback_later()
             self._active_context = None
             self._active_task_id = None
 
