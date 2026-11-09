@@ -1105,9 +1105,16 @@
         "P8-05",
         "P2-05"
       ],
-      "status": "todo",
+      "status": "done",
       "release_requirement": "core",
-      "evidence": [],
+      "evidence": [
+        "第 74 轮：P9-01 基准全量对账与参数审计转 done。新增 `src/spectra_workbench/registry/parameter_audit.py`（纯静态契约审计，零原生地理/科学计算导入，满足 GUI 进程隔离）：实现 `audit_by_kind`、`audit_five_coverage_metrics`、`audit_parameters` 与 `build_full_audit_report`，并接入 `CapabilityRegistry.full_audit_report()` 及 `scripts/audit-capabilities.ps1`。",
+        "(1) 公开目标清单 100% 四维状态与零静默排除：核对契约基准 443 条全部在全局注册表（468 条，含平台专题与 6 项可选扩展）中登记（`baseline_registration.ratio == 1.0, missing_from_catalog == 0, runtime_subset_used_as_denominator == False, silently_excluded_count == 0, stateless_capability_ids == []`）；全部 13 项缺口（6 项 `ext:*`、2 项 `platform:*`、3 项 `rio:cli:*`、`gdal:cli:gdal_auth`、`gdal:driver:HDF5`）均保留在分母中且每项附具体 `limitations`，`unexplained_gaps == []`。",
+        "(2) 按 CapabilityKind 严格分列防虚标：`audit_by_kind()` 将 `algorithm`（44 项：36 已发现、30 图形面板接通、8 缺失/阻断）、`cli`（178 项：174 已发现、4 缺失）、`function`（27 项，`form_connected_count=0`）、`class`（13 项，`form_connected_count=0`）、`driver`（206 项：205 已发现、1 缺失 HDF5，`form_connected_count=0`）分开统计，绝不把 API 符号或驱动总数当作算法总数。",
+        "(3) 五项独立覆盖率指标：`audit_five_coverage_metrics()` 独立报告基准登记率（443/443=100%）、可调用率（250/468=53.42%，非驱动 250/262=95.42%）、图形面板覆盖率（专门以公开 algorithm 为分母：30/44=68.18%，已发现算法中 30/36=83.33%，明确列出 6 项未接通面板的现存算法 `gdal:fillnodata/nearblack/proximity/retile/sieve/viewshed` 供 P9-02 补齐）、验收样例覆盖率（`script_editor_claimed_as_all_api_tested=False`）、格式/驱动覆盖率（205/206=99.51%，栅格 138、矢量 80）。",
+        "(4) 全量参数契约审计与零漂移对齐：补齐 `src/spectra_workbench/registry/gdal_index.py` 中 `gdal:translate`、`gdal:warp`、`gdal:grid`、`gdal:buildvrt`、`gdal:stack`、`gdal:bandmanage`、`gdal:rasterize`、`gdal:merge`、`gdal:sindex` 共 9 项能力的注册表 `ParameterSpec` 定义，使全部 34 项已接通能力（30 项规范 ID + 4 项旧命令别名）在 `CapabilityDescriptor.parameters` 与 `processing/raster_params.py::supported_params_for` 之间实现零漂移（`connected_parameter_drift == []`）；修复 `raster_params.py` 中 `src_nodata` 同时映射 `noData` 与 `srcNodata` 的别名冲突（`param_alias_collisions == []`）；审计全部 468 项能力、2027 项 `ParameterSpec` 的字段非空、合法类型枚举、`default in choices` 与无重复键（`schema_errors == [], duplicate_key_errors == [], default_choice_errors == [], compliant == True`）。",
+        "(5) 自动化验证通过：`tests/integration/test_p9_baseline_param_audit.py`（5 项集成验收测试）及基线对账/配线一致性单测共 46 项在 `scripts/run_with_timeout.py` + `scripts/pytest_runner.py` 下全部通过（14.16s, `clean_exit_verified=True, pytest_exit_code=0, residual=0`）；Ruff 0 错误、Mypy 0 错误；`scripts/audit-capabilities.ps1` 生成完整报告 `docs/progress/runs/capability_audit.json`（`p9_01_compliant=True`）。"
+      ],
       "blocking_reason": null
     },
     {
@@ -1255,5 +1262,5 @@
       "blocking_reason": null
     }
   ],
-  "updated_at": "2026-11-08"
-}
+  "updated_at": "2026-11-09"
+}

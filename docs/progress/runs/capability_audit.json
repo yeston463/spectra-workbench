@@ -735,5 +735,1021 @@
       }
     },
     "complete": true
-  }
+  },
+  "by_kind": {
+    "algorithm": {
+      "total_count": 44,
+      "discovered_count": 36,
+      "discovered_ratio": 0.8182,
+      "callable_count": 36,
+      "callable_ratio": 0.8182,
+      "form_connected_count": 30,
+      "form_connected_ratio": 0.6818,
+      "verified_count": 3,
+      "verified_ratio": 0.0682,
+      "missing_or_blocked_count": 8
+    },
+    "cli": {
+      "total_count": 178,
+      "discovered_count": 174,
+      "discovered_ratio": 0.9775,
+      "callable_count": 174,
+      "callable_ratio": 0.9775,
+      "form_connected_count": 0,
+      "form_connected_ratio": 0.0,
+      "verified_count": 0,
+      "verified_ratio": 0.0,
+      "missing_or_blocked_count": 4
+    },
+    "function": {
+      "total_count": 27,
+      "discovered_count": 27,
+      "discovered_ratio": 1.0,
+      "callable_count": 27,
+      "callable_ratio": 1.0,
+      "form_connected_count": 0,
+      "form_connected_ratio": 0.0,
+      "verified_count": 0,
+      "verified_ratio": 0.0,
+      "missing_or_blocked_count": 0
+    },
+    "class": {
+      "total_count": 13,
+      "discovered_count": 13,
+      "discovered_ratio": 1.0,
+      "callable_count": 13,
+      "callable_ratio": 1.0,
+      "form_connected_count": 0,
+      "form_connected_ratio": 0.0,
+      "verified_count": 0,
+      "verified_ratio": 0.0,
+      "missing_or_blocked_count": 0
+    },
+    "driver": {
+      "total_count": 206,
+      "discovered_count": 205,
+      "discovered_ratio": 0.9951,
+      "callable_count": 0,
+      "callable_ratio": 0.0,
+      "form_connected_count": 0,
+      "form_connected_ratio": 0.0,
+      "verified_count": 2,
+      "verified_ratio": 0.0097,
+      "missing_or_blocked_count": 1
+    }
+  },
+  "coverage_metrics": {
+    "baseline_registration": {
+      "baseline_denominator": 443,
+      "registered_in_catalog": 443,
+      "missing_from_catalog": 0,
+      "ratio": 1.0,
+      "runtime_subset_used_as_denominator": false,
+      "silently_excluded_count": 0
+    },
+    "callable_coverage": {
+      "total_registry_denominator": 468,
+      "callable_count": 250,
+      "ratio_of_total": 0.5342,
+      "non_driver_denominator": 262,
+      "callable_non_driver_count": 250,
+      "ratio_of_non_driver": 0.9542
+    },
+    "form_panel_coverage": {
+      "total_algorithm_denominator": 44,
+      "present_algorithm_denominator": 36,
+      "connected_form_algorithm_count": 30,
+      "ratio_of_all_algorithms": 0.6818,
+      "ratio_of_present_algorithms": 0.8333,
+      "connected_capability_ids": [
+        "gdal:bandmanage",
+        "gdal:buildvrt",
+        "gdal:calc",
+        "gdal:calibrate",
+        "gdal:cloudreplace",
+        "gdal:contour",
+        "gdal:dem",
+        "gdal:dos1",
+        "gdal:editmeta",
+        "gdal:fftfilter",
+        "gdal:fvc",
+        "gdal:gcpregister",
+        "gdal:grid",
+        "gdal:mask",
+        "gdal:mdim_slice",
+        "gdal:merge",
+        "gdal:overview",
+        "gdal:pansharpen",
+        "gdal:pca",
+        "gdal:polygonize",
+        "gdal:rasterdiff",
+        "gdal:rasterize",
+        "gdal:sindex",
+        "gdal:stack",
+        "gdal:statistics",
+        "gdal:tasseledcap",
+        "gdal:translate",
+        "gdal:warp",
+        "ogr:vectortranslate",
+        "rasterio:convert"
+      ],
+      "unconnected_present_algorithms": [
+        "gdal:fillnodata",
+        "gdal:nearblack",
+        "gdal:proximity",
+        "gdal:retile",
+        "gdal:sieve",
+        "gdal:viewshed"
+      ]
+    },
+    "validation_sample_coverage": {
+      "total_registry_denominator": 468,
+      "verified_evidence_count": 5,
+      "ratio_of_total": 0.0107,
+      "connected_form_count": 30,
+      "script_editor_claimed_as_all_api_tested": false
+    },
+    "driver_coverage": {
+      "total_driver_denominator": 206,
+      "present_driver_count": 205,
+      "missing_driver_count": 1,
+      "ratio": 0.9951,
+      "raster_driver_count": 138,
+      "vector_driver_count": 80,
+      "missing_driver_ids": [
+        "gdal:driver:HDF5"
+      ]
+    }
+  },
+  "parameter_audit": {
+    "total_capabilities_audited": 468,
+    "total_parameters_audited": 2027,
+    "connected_capabilities_audited": 34,
+    "schema_errors": [],
+    "duplicate_key_errors": [],
+    "default_choice_errors": [],
+    "connected_parameter_drift": [],
+    "param_alias_collisions": [],
+    "connected_capabilities_matrix": [
+      {
+        "capability_id": "gdal:bandmanage",
+        "parameter_count": 2,
+        "canonical_parameters": [
+          "bandList",
+          "outputType"
+        ],
+        "supports_output_format": true,
+        "is_multi_input": false,
+        "is_vector_output": false
+      },
+      {
+        "capability_id": "gdal:buildvrt",
+        "parameter_count": 6,
+        "canonical_parameters": [
+          "overlapPriority",
+          "relativePaths",
+          "resolution",
+          "separate",
+          "srcNodata",
+          "vrtNodata"
+        ],
+        "supports_output_format": false,
+        "is_multi_input": true,
+        "is_vector_output": false
+      },
+      {
+        "capability_id": "gdal:calc",
+        "parameter_count": 4,
+        "canonical_parameters": [
+          "calc",
+          "dstNodata",
+          "outputType",
+          "srcNodata"
+        ],
+        "supports_output_format": true,
+        "is_multi_input": true,
+        "is_vector_output": false
+      },
+      {
+        "capability_id": "gdal:calibrate",
+        "parameter_count": 7,
+        "canonical_parameters": [
+          "calibrateEsun",
+          "calibrateGains",
+          "calibrateMode",
+          "calibrateOffsets",
+          "dstNodata",
+          "srcNodata",
+          "sunZenAngle"
+        ],
+        "supports_output_format": true,
+        "is_multi_input": false,
+        "is_vector_output": false
+      },
+      {
+        "capability_id": "gdal:cloudreplace",
+        "parameter_count": 8,
+        "canonical_parameters": [
+          "bandList",
+          "cloudMaskFile",
+          "dstNodata",
+          "maskDilatePixels",
+          "primaryTime",
+          "secondaryFile",
+          "secondaryTime",
+          "srcNodata"
+        ],
+        "supports_output_format": true,
+        "is_multi_input": false,
+        "is_vector_output": false
+      },
+      {
+        "capability_id": "gdal:contour",
+        "parameter_count": 4,
+        "canonical_parameters": [
+          "band",
+          "fixedLevels",
+          "interval",
+          "offset"
+        ],
+        "supports_output_format": true,
+        "is_multi_input": false,
+        "is_vector_output": true
+      },
+      {
+        "capability_id": "gdal:dem",
+        "parameter_count": 3,
+        "canonical_parameters": [
+          "processing",
+          "scale",
+          "zFactor"
+        ],
+        "supports_output_format": true,
+        "is_multi_input": false,
+        "is_vector_output": false
+      },
+      {
+        "capability_id": "gdal:dos1",
+        "parameter_count": 9,
+        "canonical_parameters": [
+          "dosBand",
+          "dosEsun",
+          "dosGain",
+          "dosOffset",
+          "dstNodata",
+          "earthSunDistance",
+          "hazeDN",
+          "srcNodata",
+          "sunZenAngle"
+        ],
+        "supports_output_format": true,
+        "is_multi_input": false,
+        "is_vector_output": false
+      },
+      {
+        "capability_id": "gdal:editmeta",
+        "parameter_count": 1,
+        "canonical_parameters": [
+          "srcNodata"
+        ],
+        "supports_output_format": false,
+        "is_multi_input": false,
+        "is_vector_output": false
+      },
+      {
+        "capability_id": "gdal:fftfilter",
+        "parameter_count": 4,
+        "canonical_parameters": [
+          "dstNodata",
+          "fftBand",
+          "srcNodata",
+          "suppressBins"
+        ],
+        "supports_output_format": true,
+        "is_multi_input": false,
+        "is_vector_output": false
+      },
+      {
+        "capability_id": "gdal:fvc",
+        "parameter_count": 11,
+        "canonical_parameters": [
+          "crop",
+          "dstNodata",
+          "endmemberMode",
+          "fvcBand",
+          "fvcClassEdges",
+          "fvcSoil",
+          "fvcVeg",
+          "highPercentile",
+          "lowPercentile",
+          "maskFile",
+          "srcNodata"
+        ],
+        "supports_output_format": true,
+        "is_multi_input": false,
+        "is_vector_output": false
+      },
+      {
+        "capability_id": "gdal:gcpregister",
+        "parameter_count": 6,
+        "canonical_parameters": [
+          "dstNodata",
+          "gcpFile",
+          "gcpResample",
+          "gcpTransform",
+          "referenceFile",
+          "srcNodata"
+        ],
+        "supports_output_format": true,
+        "is_multi_input": false,
+        "is_vector_output": false
+      },
+      {
+        "capability_id": "gdal:grid",
+        "parameter_count": 7,
+        "canonical_parameters": [
+          "algorithm",
+          "height",
+          "noData",
+          "outputBounds",
+          "outputType",
+          "width",
+          "zField"
+        ],
+        "supports_output_format": true,
+        "is_multi_input": false,
+        "is_vector_output": false
+      },
+      {
+        "capability_id": "gdal:mask",
+        "parameter_count": 5,
+        "canonical_parameters": [
+          "maskBand",
+          "maskHigh",
+          "maskInvert",
+          "maskLow",
+          "srcNodata"
+        ],
+        "supports_output_format": true,
+        "is_multi_input": false,
+        "is_vector_output": false
+      },
+      {
+        "capability_id": "gdal:mdim_slice",
+        "parameter_count": 2,
+        "canonical_parameters": [
+          "array",
+          "dimSelect"
+        ],
+        "supports_output_format": false,
+        "is_multi_input": false,
+        "is_vector_output": false
+      },
+      {
+        "capability_id": "gdal:merge",
+        "parameter_count": 9,
+        "canonical_parameters": [
+          "dstNodata",
+          "outputBounds",
+          "outputType",
+          "overlapPriority",
+          "resolution",
+          "srcNodata",
+          "vrtNodata",
+          "xRes",
+          "yRes"
+        ],
+        "supports_output_format": true,
+        "is_multi_input": true,
+        "is_vector_output": false
+      },
+      {
+        "capability_id": "gdal:overview",
+        "parameter_count": 3,
+        "canonical_parameters": [
+          "levels",
+          "overviewCompress",
+          "resampleAlg"
+        ],
+        "supports_output_format": false,
+        "is_multi_input": false,
+        "is_vector_output": false
+      },
+      {
+        "capability_id": "gdal:pansharpen",
+        "parameter_count": 6,
+        "canonical_parameters": [
+          "dstNodata",
+          "fusionMethod",
+          "fusionResample",
+          "msBands",
+          "msFile",
+          "srcNodata"
+        ],
+        "supports_output_format": true,
+        "is_multi_input": false,
+        "is_vector_output": false
+      },
+      {
+        "capability_id": "gdal:pca",
+        "parameter_count": 6,
+        "canonical_parameters": [
+          "dstNodata",
+          "pcaComponents",
+          "pcaMatrix",
+          "pcaMode",
+          "pcaTransform",
+          "srcNodata"
+        ],
+        "supports_output_format": true,
+        "is_multi_input": false,
+        "is_vector_output": false
+      },
+      {
+        "capability_id": "gdal:polygonize",
+        "parameter_count": 3,
+        "canonical_parameters": [
+          "band",
+          "connectedness",
+          "fieldName"
+        ],
+        "supports_output_format": true,
+        "is_multi_input": false,
+        "is_vector_output": true
+      },
+      {
+        "capability_id": "gdal:rasterdiff",
+        "parameter_count": 4,
+        "canonical_parameters": [
+          "diffMode",
+          "dstNodata",
+          "referenceFile",
+          "srcNodata"
+        ],
+        "supports_output_format": true,
+        "is_multi_input": false,
+        "is_vector_output": false
+      },
+      {
+        "capability_id": "gdal:rasterize",
+        "parameter_count": 10,
+        "canonical_parameters": [
+          "allTouched",
+          "attribute",
+          "burnValues",
+          "height",
+          "noData",
+          "outputBounds",
+          "outputType",
+          "width",
+          "xRes",
+          "yRes"
+        ],
+        "supports_output_format": true,
+        "is_multi_input": false,
+        "is_vector_output": false
+      },
+      {
+        "capability_id": "gdal:sindex",
+        "parameter_count": 7,
+        "canonical_parameters": [
+          "bandA",
+          "bandB",
+          "dstNodata",
+          "saviL",
+          "sindex",
+          "srcNodata",
+          "usePhysical"
+        ],
+        "supports_output_format": true,
+        "is_multi_input": false,
+        "is_vector_output": false
+      },
+      {
+        "capability_id": "gdal:stack",
+        "parameter_count": 6,
+        "canonical_parameters": [
+          "outputBounds",
+          "outputType",
+          "srcNodata",
+          "vrtNodata",
+          "xRes",
+          "yRes"
+        ],
+        "supports_output_format": true,
+        "is_multi_input": true,
+        "is_vector_output": false
+      },
+      {
+        "capability_id": "gdal:statistics",
+        "parameter_count": 6,
+        "canonical_parameters": [
+          "bandList",
+          "fullLimit",
+          "histogramBins",
+          "maxSamples",
+          "srcNodata",
+          "statisticsMode"
+        ],
+        "supports_output_format": false,
+        "is_multi_input": false,
+        "is_vector_output": false
+      },
+      {
+        "capability_id": "gdal:tasseledcap",
+        "parameter_count": 4,
+        "canonical_parameters": [
+          "dstNodata",
+          "srcNodata",
+          "tcBands",
+          "tcSensor"
+        ],
+        "supports_output_format": true,
+        "is_multi_input": false,
+        "is_vector_output": false
+      },
+      {
+        "capability_id": "gdal:translate",
+        "parameter_count": 11,
+        "canonical_parameters": [
+          "height",
+          "noData",
+          "outputBounds",
+          "outputType",
+          "projWin",
+          "resampleAlg",
+          "srcWin",
+          "width",
+          "xRes",
+          "yRes"
+        ],
+        "supports_output_format": true,
+        "is_multi_input": false,
+        "is_vector_output": false
+      },
+      {
+        "capability_id": "gdal:warp",
+        "parameter_count": 13,
+        "canonical_parameters": [
+          "dstNodata",
+          "dstSRS",
+          "height",
+          "outputBounds",
+          "outputType",
+          "projWin",
+          "resampleAlg",
+          "srcSRS",
+          "srcWin",
+          "targetAlignedPixels",
+          "width",
+          "xRes",
+          "yRes"
+        ],
+        "supports_output_format": true,
+        "is_multi_input": false,
+        "is_vector_output": false
+      },
+      {
+        "capability_id": "gdal_merge",
+        "parameter_count": 9,
+        "canonical_parameters": [
+          "dstNodata",
+          "outputBounds",
+          "outputType",
+          "overlapPriority",
+          "resolution",
+          "srcNodata",
+          "vrtNodata",
+          "xRes",
+          "yRes"
+        ],
+        "supports_output_format": true,
+        "is_multi_input": true,
+        "is_vector_output": false
+      },
+      {
+        "capability_id": "gdal_translate",
+        "parameter_count": 11,
+        "canonical_parameters": [
+          "height",
+          "noData",
+          "outputBounds",
+          "outputType",
+          "projWin",
+          "resampleAlg",
+          "srcWin",
+          "width",
+          "xRes",
+          "yRes"
+        ],
+        "supports_output_format": true,
+        "is_multi_input": false,
+        "is_vector_output": false
+      },
+      {
+        "capability_id": "gdalbuildvrt",
+        "parameter_count": 6,
+        "canonical_parameters": [
+          "overlapPriority",
+          "relativePaths",
+          "resolution",
+          "separate",
+          "srcNodata",
+          "vrtNodata"
+        ],
+        "supports_output_format": false,
+        "is_multi_input": true,
+        "is_vector_output": false
+      },
+      {
+        "capability_id": "gdalwarp",
+        "parameter_count": 13,
+        "canonical_parameters": [
+          "dstNodata",
+          "dstSRS",
+          "height",
+          "outputBounds",
+          "outputType",
+          "projWin",
+          "resampleAlg",
+          "srcSRS",
+          "srcWin",
+          "targetAlignedPixels",
+          "width",
+          "xRes",
+          "yRes"
+        ],
+        "supports_output_format": true,
+        "is_multi_input": false,
+        "is_vector_output": false
+      },
+      {
+        "capability_id": "ogr:vectortranslate",
+        "parameter_count": 6,
+        "canonical_parameters": [
+          "dstSRS",
+          "select",
+          "spat",
+          "sql",
+          "where"
+        ],
+        "supports_output_format": true,
+        "is_multi_input": false,
+        "is_vector_output": true
+      },
+      {
+        "capability_id": "rasterio:convert",
+        "parameter_count": 1,
+        "canonical_parameters": [],
+        "supports_output_format": true,
+        "is_multi_input": false,
+        "is_vector_output": false
+      }
+    ],
+    "compliant": true
+  },
+  "optional_extensions_audit": {
+    "baseline_id": "optional-extensions-1.0",
+    "verified_date": "2026-11-09",
+    "extension_count": 6,
+    "implemented_count": 0,
+    "falsely_advertised": [],
+    "incomplete_specs": [],
+    "compliant": true,
+    "extensions": [
+      {
+        "extension_id": "ext:external_atmospheric",
+        "name": "外部物理辐射传输大气校正引擎扩展 (6S / Py6S / MODTRAN-FLAASH)（未实现）",
+        "native_name": "6S / Py6S / ENVI FLAASH (External Radiative Transfer)",
+        "tier": "extension",
+        "planned_worker": "plugin",
+        "version_constraint": "Py6S>=1.9,sixs>=1.1",
+        "scope": "通过桥接外部物理辐射传输模型（Second Simulation of a Satellite Signal in the Solar Spectrum 6S、Py6S 或商业授权 MODTRAN/FLAASH 引擎）执行气溶胶反演、水汽吸收校正与地表反射率精确反演。",
+        "non_goals": [
+          "绝不以简化经验公式或暗目标减法（DOS1）冒充 FLAASH 或 6S 物理辐射传输模型已实现",
+          "不捆绑受商业许可限制的 MODTRAN / ENVI FLAASH 专有二进制程序"
+        ],
+        "core_alternatives": [
+          "显式 gain/offset 辐射定标与 TOA 表观反射率已由 gdal:calibrate 实现，Chavez 1988 DOS1 暗目标减法已由 gdal:dos1 实现（P6-06）",
+          "平台内同时保留 platform:flaash_external 阻断占位项以防误用"
+        ],
+        "requirements": [
+          {
+            "kind": "service",
+            "name": "sixs / MODTRAN / FLAASH 外部引擎",
+            "reason": "物理大气辐射传输查找表（LUT）计算需外部编译的 6S 或授权 MODTRAN 可执行程序"
+          },
+          {
+            "kind": "package",
+            "name": "Py6S",
+            "reason": "6S 辐射传输模型 Python 参数封装与输出解析接口",
+            "constraint": ">=1.9",
+            "optional": true
+          }
+        ],
+        "planned_entrypoints": [
+          {
+            "kind": "specialized",
+            "target": "spectra_workbench.extensions.external_atmospheric:run_radiative_transfer",
+            "available": false,
+            "notes": "外部辐射传输引擎桥接插件入口，需用户配置合规的外部引擎路径，当前未实现"
+          }
+        ],
+        "gaps": [
+          "未实现：缺少外部 6S 二进制或商业授权 MODTRAN/FLAASH 引擎及插件适配器，严禁以经验公式冒充已实现",
+          "当前仅作为可选外部校正引擎登记范围、依赖与入口契约；平台内置可用方法为 gdal:calibrate 与 gdal:dos1"
+        ],
+        "presence": "missing",
+        "binding": "none",
+        "availability": "blocked",
+        "implemented": false
+      },
+      {
+        "extension_id": "ext:external_gis",
+        "name": "外部开源 GIS 引擎桥接扩展 (WhiteboxTools / SAGA / GRASS)（未实现）",
+        "native_name": "WhiteboxTools / SAGA GIS / GRASS GIS CLI Bridge",
+        "tier": "extension",
+        "planned_worker": "plugin",
+        "version_constraint": "whitebox>=2.3",
+        "scope": "桥接外部专业 GIS 命令行引擎（WhiteboxTools、SAGA GIS saga_cmd、GRASS GIS），扩展水文填洼（Breach/Fill Depressions）、D8/D-Infinity 流向与汇流累积量、流域盆地提取及专业地貌形态学分析工具。",
+        "non_goals": [
+          "不在核心安装包内强制捆绑数百 MB 的 SAGA / GRASS 完整桌面运行时"
+        ],
+        "core_alternatives": [
+          "基础 DEM 坡度、坡向、山体阴影、TPI、TRI、粗糙度已由 gdal:dem 实现，等值线与视域分析已由 gdal:contour / gdal:viewshed 提供"
+        ],
+        "requirements": [
+          {
+            "kind": "native_extension",
+            "name": "whitebox_tools / saga_cmd / grass",
+            "reason": "需外部独立编译的 WhiteboxTools 或 SAGA/GRASS 命令行可执行程序",
+            "constraint": ">=2.3"
+          },
+          {
+            "kind": "package",
+            "name": "whitebox",
+            "reason": "WhiteboxTools Python 命令行包装接口",
+            "constraint": ">=2.3",
+            "optional": true
+          }
+        ],
+        "planned_entrypoints": [
+          {
+            "kind": "cli",
+            "target": "whitebox_tools",
+            "available": false,
+            "notes": "未随核心包分发 whitebox_tools / saga_cmd 外部可执行程序"
+          },
+          {
+            "kind": "specialized",
+            "target": "spectra_workbench.extensions.external_gis:run_external_gis_cli",
+            "available": false,
+            "notes": "规划通过 P8-04 插件协议桥接外部 GIS CLI，当前未实现"
+          }
+        ],
+        "gaps": [
+          "未实现：未捆绑 WhiteboxTools / SAGA / GRASS 外部运行时，也未编写 CLI 桥接插件，严禁作为已实现功能宣传",
+          "后续由用户按需配置外部 GIS 引擎路径并通过插件 manifest 接入"
+        ],
+        "presence": "missing",
+        "binding": "none",
+        "availability": "missing_dependency",
+        "implemented": false
+      },
+      {
+        "extension_id": "ext:geopandas_vector",
+        "name": "GeoPandas 批量矢量表格与空间连接分析扩展（未实现）",
+        "native_name": "geopandas + shapely + pyproj + pyogrio",
+        "tier": "spatial_optional",
+        "planned_worker": "plugin",
+        "version_constraint": "geopandas>=1.0,shapely>=2.0,pyproj>=3.6,pyogrio>=0.9",
+        "scope": "基于 GeoDataFrame 的批量矢量空间连接（sjoin / sjoin_nearest）、多图层拓扑叠加（overlay: union / intersection / difference / symmetric_difference）、批量缓冲区融合（buffer + dissolve）与复杂属性透视统计。",
+        "non_goals": [
+          "绝不将 geopandas、fiona 或 pyogrio 导入 GUI 主进程（严格遵守进程隔离红线）"
+        ],
+        "core_alternatives": [
+          "矢量格式转换、重投影、属性 WHERE 过滤、空间 BBOX 裁剪及 OGR SQL 查询已由核心能力 ogr:vectortranslate 实现（P5-04）"
+        ],
+        "requirements": [
+          {
+            "kind": "package",
+            "name": "geopandas",
+            "reason": "提供 GeoDataFrame 批量空间叠加、连接与表格统计",
+            "constraint": ">=1.0"
+          },
+          {
+            "kind": "package",
+            "name": "pyogrio",
+            "reason": "基于 GDAL/OGR 的高性能矢量化批量读写后端",
+            "constraint": ">=0.9"
+          },
+          {
+            "kind": "package",
+            "name": "shapely",
+            "reason": "GEOS 平面几何谓词与拓扑运算",
+            "constraint": ">=2.0"
+          },
+          {
+            "kind": "package",
+            "name": "pyproj",
+            "reason": "PROJ 坐标参考系定义与批量坐标变换",
+            "constraint": ">=3.6"
+          }
+        ],
+        "planned_entrypoints": [
+          {
+            "kind": "specialized",
+            "target": "spectra_workbench.extensions.geopandas_vector:run_geopandas_overlay",
+            "available": false,
+            "notes": "规划作为表格/批量矢量可选插件在独立 Worker 中运行，当前未实现"
+          },
+          {
+            "kind": "script",
+            "target": "geopandas.read_file",
+            "available": false,
+            "notes": "待独立插件环境安装 geopandas 后在脚本会话中开放"
+          }
+        ],
+        "gaps": [
+          "未实现：GeoPandas 在开发方案中定位为表格/批量矢量可选插件，当前未预装且未接入表单执行器，严禁作为已实现功能宣传",
+          "核心矢量处理请使用已验证的 ogr:vectortranslate；批量 GeoDataFrame 插件待独立环境锁文件完成后接入"
+        ],
+        "presence": "missing",
+        "binding": "none",
+        "availability": "missing_dependency",
+        "implemented": false
+      },
+      {
+        "extension_id": "ext:pdal_pointcloud",
+        "name": "PDAL 点云数据处理与三维地形派生扩展（未实现）",
+        "native_name": "PDAL (Point Data Abstraction Library)",
+        "tier": "extension",
+        "planned_worker": "plugin",
+        "version_constraint": "pdal>=2.6,python-pdal>=3.2",
+        "scope": "LAS/LAZ/COPC 机载激光雷达点云读写、PDAL Pipeline JSON 流式滤波（SMRF/PMF 地面点分类、统计离群点去噪）、高程归一化（Height Above Ground）及点云栅格化生成 DSM/DTM/CHM。",
+        "non_goals": [
+          "当前版本不提供三维点云体渲染视图或实时三维地球画布（列为平台远期扩展）"
+        ],
+        "core_alternatives": [
+          "二维规则栅格 DEM 地形分析已由 gdal:dem 实现，离散矢量高程点插值栅格化已由 gdal:grid 实现（P5-02）"
+        ],
+        "requirements": [
+          {
+            "kind": "native_extension",
+            "name": "pdal",
+            "reason": "PDAL C++ 点云流式处理核心库与 pdal pipeline CLI",
+            "constraint": ">=2.6"
+          },
+          {
+            "kind": "package",
+            "name": "python-pdal",
+            "reason": "Python 与 PDAL Pipeline 数组桥接绑定",
+            "constraint": ">=3.2",
+            "optional": true
+          }
+        ],
+        "planned_entrypoints": [
+          {
+            "kind": "cli",
+            "target": "pdal",
+            "available": false,
+            "notes": "本机受管运行时未捆绑 pdal.exe 与点云驱动"
+          },
+          {
+            "kind": "specialized",
+            "target": "spectra_workbench.extensions.pdal_pointcloud:run_pdal_pipeline",
+            "available": false,
+            "notes": "规划通过插件 Worker 调用独立 PDAL 运行时执行管线，当前未实现"
+          }
+        ],
+        "gaps": [
+          "未实现：当前受管运行时未安装 PDAL 原生库与 CLI，点云读写、地面滤波与三维点云视图均未实现，严禁作为已实现功能宣传",
+          "需在独立 conda-forge 点云环境分发 PDAL 二进制并通过插件协议接入"
+        ],
+        "presence": "missing",
+        "binding": "none",
+        "availability": "missing_dependency",
+        "implemented": false
+      },
+      {
+        "extension_id": "ext:sklearn_classify",
+        "name": "scikit-learn 监督式机器学习分类与精度评价扩展（未实现）",
+        "native_name": "sklearn.ensemble / sklearn.svm / confusion_matrix",
+        "tier": "extension",
+        "planned_worker": "plugin",
+        "version_constraint": "scikit-learn>=1.4,joblib>=1.3",
+        "scope": "基于训练 ROI 与地物类别标签的监督式分类插件（随机森林 RandomForest、支持向量机 SVM、最大似然近似等明确命名算法）、空间上独立的训练/验证样本划分，以及混淆矩阵（总体精度 OA、Kappa 系数、制图精度 PA、用户精度 UA）独立精度评价报告。",
+        "non_goals": [
+          "不声称等价实现 ENVI 全部传统分类器或深度学习分割框架",
+          "严禁将训练集重代入精度当作独立验证精度报告"
+        ],
+        "core_alternatives": [
+          "单波段阈值/区间二值掩膜分类已由 gdal:mask 实现，二分像元植被覆盖度及分级已由 gdal:fvc 实现（P6-05）"
+        ],
+        "requirements": [
+          {
+            "kind": "package",
+            "name": "scikit-learn",
+            "reason": "提供 RandomForestClassifier、SVC 等监督分类器及 confusion_matrix / cohen_kappa_score",
+            "constraint": ">=1.4"
+          },
+          {
+            "kind": "package",
+            "name": "joblib",
+            "reason": "训练模型持久化与分块预测并行化",
+            "constraint": ">=1.3"
+          }
+        ],
+        "planned_entrypoints": [
+          {
+            "kind": "form",
+            "target": "ext:sklearn_classify",
+            "available": false,
+            "notes": "规划通过 P8-04 插件协议提供训练 ROI 选择、独立验证集划分与分类表单，当前未实现"
+          },
+          {
+            "kind": "specialized",
+            "target": "spectra_workbench.extensions.sklearn_classify:run_supervised_classify",
+            "available": false,
+            "notes": "待插件 Worker 安装 scikit-learn 并完成空间独立样本划分契约后启用"
+          }
+        ],
+        "gaps": [
+          "未实现：当前受管环境未安装 scikit-learn，未实现训练/验证 ROI 空间独立划分、分类器训练及混淆矩阵报告，严禁作为已实现功能宣传",
+          "后续通过 P8-04 插件机制以明确算法名（如 RandomForest / SVM）独立交付"
+        ],
+        "presence": "missing",
+        "binding": "none",
+        "availability": "missing_dependency",
+        "implemented": false
+      },
+      {
+        "extension_id": "ext:xarray_dask",
+        "name": "Xarray / Rioxarray / Dask 多维分块延迟计算扩展（未实现）",
+        "native_name": "xarray + rioxarray + dask.array",
+        "tier": "extension",
+        "planned_worker": "plugin",
+        "version_constraint": "xarray>=2024.1,rioxarray>=0.15,dask>=2024.1",
+        "scope": "面向超大规模 NetCDF/Zarr/HDF 多维时空立方体的延迟加载（Lazy Loading）、Dask Array 分块有向无环图（DAG）并行调度、跨时间维逐像元统计聚合与时空重采样。",
+        "non_goals": [
+          "当前版本不内置 Dask 分布式集群调度器，也不将 Xarray/Dask 作为已实现功能宣传",
+          "不在 GUI 进程导入 xarray、rioxarray 或 dask"
+        ],
+        "core_alternatives": [
+          "多维容器二维切片已由 GDAL multidim API 核心能力 gdal:mdim_slice 实现并验证（P8-01）"
+        ],
+        "requirements": [
+          {
+            "kind": "package",
+            "name": "xarray",
+            "reason": "多维命名坐标数组（DataArray / Dataset）建模与 CF 元数据解析",
+            "constraint": ">=2024.1"
+          },
+          {
+            "kind": "package",
+            "name": "rioxarray",
+            "reason": "Xarray 与 Rasterio CRS/Affine 空间访问器桥接",
+            "constraint": ">=0.15"
+          },
+          {
+            "kind": "package",
+            "name": "dask",
+            "reason": "超内存多维数组分块延迟计算与并行图调度",
+            "constraint": ">=2024.1"
+          },
+          {
+            "kind": "package",
+            "name": "netCDF4",
+            "reason": "NetCDF4/HDF5 底层分块流式读取后端",
+            "constraint": ">=1.6",
+            "optional": true
+          }
+        ],
+        "planned_entrypoints": [
+          {
+            "kind": "specialized",
+            "target": "spectra_workbench.extensions.xarray_dask:run_xarray_dask_cube",
+            "available": false,
+            "notes": "规划通过 P8-04 插件协议在独立科学/插件 Worker 中接入，当前未实现"
+          },
+          {
+            "kind": "script",
+            "target": "xarray.open_dataset",
+            "available": false,
+            "notes": "待目标 Worker 环境安装 xarray/rioxarray/dask 后开放脚本会话"
+          }
+        ],
+        "gaps": [
+          "未实现：当前受管环境未安装 xarray、rioxarray、dask 依赖，也未接入 Dask 分块图计算执行器，严禁作为已实现功能宣传",
+          "需要独立插件环境解析 win-64 锁文件并通过 P8-04 插件 manifest 注册算子后方可启用"
+        ],
+        "presence": "missing",
+        "binding": "none",
+        "availability": "missing_dependency",
+        "implemented": false
+      }
+    ]
+  },
+  "stateless_capability_ids": [],
+  "p9_01_compliant": true
 }

@@ -154,7 +154,7 @@ _PARAM_ALIASES: dict[str, tuple[str, ...]] = {
     "xRes": ("x_res", "x_resolution", "xresolution"),
     "yRes": ("y_res", "y_resolution", "yresolution"),
     "outputType": ("output_type", "dtype", "data_type"),
-    "noData": ("no_data", "nodata", "src_nodata"),
+    "noData": ("no_data", "nodata"),
     "dstNodata": ("dst_nodata", "dstnodata", "dst_no_data"),
     "dstSRS": ("dst_srs", "dst_crs", "dstcrs", "target_crs"),
     "srcSRS": ("src_srs", "src_crs", "srccrs", "source_crs"),

@@ -28,6 +28,13 @@ from spectra_workbench.registry.gdal_index import (
     build_gdal_drivers,
     build_gdal_python_api_index,
 )
+from spectra_workbench.registry.parameter_audit import (
+    ALLOWED_PARAMETER_TYPES,
+    audit_by_kind,
+    audit_five_coverage_metrics,
+    audit_parameters,
+    build_full_audit_report,
+)
 from spectra_workbench.registry.rasterio_index import (
     RASTERIO_ALIASES,
     RASTERIO_VERSION,
@@ -37,13 +44,18 @@ from spectra_workbench.registry.rasterio_index import (
 )
 
 __all__ = [
+    "ALLOWED_PARAMETER_TYPES",
     "BaselineMetadata",
     "CapabilityRegistry",
     "GDAL_ALIASES",
     "GDAL_VERSION",
     "RASTERIO_ALIASES",
     "RASTERIO_VERSION",
+    "audit_by_kind",
+    "audit_five_coverage_metrics",
     "audit_optional_extensions",
+    "audit_parameters",
+    "build_full_audit_report",
     "build_gdal_algorithms",
     "build_gdal_baseline",
     "build_gdal_cli_programs",

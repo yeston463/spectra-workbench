@@ -36,8 +36,7 @@ provider = sys.argv[1] if len(sys.argv) > 1 and sys.argv[1] not in ('', 'all') e
 out_file = sys.argv[2] if len(sys.argv) > 2 and sys.argv[2] else None
 
 reg = get_default_registry()
-report = reg.audit_report(provider=provider)
-report['baseline_reconciliation'] = reg.reconcile_baseline(provider=provider)
+report = reg.full_audit_report(provider=provider)
 
 if out_file:
     p = Path(out_file)
@@ -110,6 +109,14 @@ if (-not $Provider -and $data.by_provider) {
         $sub = $prop.Value
         Write-Host ("  - {0,-10} 总基准: {1,3} | 已发现: {2,3} | 可调用: {3,3} | 已验证: {4,3} | 缺失: {5,2}" -f $prop.Name, $sub.total_baseline_count, $sub.discovered.count, $sub.callable.count, $sub.verified.count, $sub.missing.count)
     }
+}
+
+if ($data.parameter_audit) {
+    $pa = $data.parameter_audit
+    Write-Host ""
+    Write-Host ">>> 参数契约全量审计（P9-01）：" -ForegroundColor Yellow
+    Write-Host ("  审计能力数: {0} | 审计参数总数: {1} | 已接通表单能力: {2}" -f $pa.total_capabilities_audited, $pa.total_parameters_audited, $pa.connected_capabilities_audited)
+    Write-Host ("  参数漂移数: {0} | Schema错误: {1} | 别名冲突: {2} | 合规结论: {3}" -f @($pa.connected_parameter_drift).Count, @($pa.schema_errors).Count, @($pa.param_alias_collisions).Count, $pa.compliant)
 }
 
 Write-Host ""

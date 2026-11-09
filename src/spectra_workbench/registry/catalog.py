@@ -384,6 +384,20 @@ class CapabilityRegistry:
             and not unexplained,
         }
 
+    def full_audit_report(
+        self,
+        baseline_files: Sequence[Path | str] | None = None,
+        provider: str | None = None,
+    ) -> dict[str, Any]:
+        """生成 P9-01 基准全量对账、分维度覆盖率与参数契约综合审计报告。"""
+        from spectra_workbench.registry.parameter_audit import build_full_audit_report
+
+        return build_full_audit_report(
+            self,
+            baseline_files=baseline_files,
+            provider=provider,
+        )
+
     def load_baseline_file(self, path: Path | str) -> None:
         """从 JSON 基准文件中载入并合并能力条目。"""
         _, descriptors = load_baseline_from_file(path)
