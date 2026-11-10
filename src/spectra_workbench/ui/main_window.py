@@ -16,7 +16,7 @@ from typing import Any
 from urllib.parse import urlparse
 from urllib.request import url2pathname
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (
     QApplication,
@@ -63,11 +63,17 @@ from spectra_workbench.project.model import (
     store_source,
 )
 from spectra_workbench.rendering.cache import TileCache
-from spectra_workbench.rendering.display import DisplaySettings, stats_source_label
+from spectra_workbench.rendering.display import (
+    DisplayMode,
+    DisplaySettings,
+    StretchMode,
+    stats_source_label,
+)
 from spectra_workbench.scheduler.client import QtWorkerClient
 from spectra_workbench.ui.canvas.image_canvas import ImageCanvas
 from spectra_workbench.ui.fonts import ensure_application_fonts
 from spectra_workbench.ui.forms.param_form import CapabilityFormWidget
+from spectra_workbench.ui.icons import get_icon
 from spectra_workbench.ui.models.layer import LayerItem
 from spectra_workbench.ui.panels.attribute_panel import AttributePanel
 from spectra_workbench.ui.panels.display_panel import DisplayPanel
@@ -452,6 +458,14 @@ class MainWindow(QMainWindow):
         act_exit.triggered.connect(self.close)
         m_file.addAction(act_exit)
 
+        # 为文件与项目操作注入矢量图标
+        self.act_open_img.setIcon(get_icon("open_raster"))
+        self.act_open_remote.setIcon(get_icon("open_remote"))
+        self.act_sample.setIcon(get_icon("open_project"))
+        self.act_proj_new.setIcon(get_icon("new_project"))
+        self.act_proj_open.setIcon(get_icon("open_project"))
+        self.act_proj_save.setIcon(get_icon("save_project"))
+
         m_task = mb.addMenu("任务 (&T)")
         self.act_cancel_task = QAction("取消当前任务 (&C)", self)
         self.act_cancel_task.triggered.connect(lambda: self._on_cancel_task())
@@ -461,31 +475,126 @@ class MainWindow(QMainWindow):
         self.act_retry_task.triggered.connect(lambda: self._on_retry_task())
         m_task.addAction(self.act_retry_task)
 
+        # -------------------------------------------------------------- 视图与导航
         m_view = mb.addMenu("视图 (&V)")
-        act_fit = QAction("适应全图", self)
-        act_fit.triggered.connect(self.canvas.fit_extent)
-        m_view.addAction(act_fit)
-        act_in = QAction("放大", self)
-        act_in.triggered.connect(self.canvas.zoom_in)
-        m_view.addAction(act_in)
-        act_out = QAction("缩小", self)
-        act_out.triggered.connect(self.canvas.zoom_out)
-        m_view.addAction(act_out)
 
-        self.act_dual = QAction("双视图 (&D)", self)
+        self.act_pan = QAction(get_icon("pan"), "平移 (Pan)", self)
+        self.act_pan.setToolTip("平移画布 (Pan Tool) - 鼠标左键拖拽平移影像")
+        self.act_pan.triggered.connect(lambda: self.status_bar.showMessage("平移模式：鼠标左键按住拖映画布"))
+        m_view.addAction(self.act_pan)
+
+        self.act_fit = QAction(get_icon("zoom_full"), "适应全图 (&F)", self)
+        self.act_fit.setToolTip("缩放至图层完整地理范围 (Zoom to Full Extent)")
+        self.act_fit.triggered.connect(self.canvas.fit_extent)
+        m_view.addAction(self.act_fit)
+
+        self.act_in = QAction(get_icon("zoom_in"), "放大 (&I)", self)
+        self.act_in.setShortcut(QKeySequence.StandardKey.ZoomIn)
+        self.act_in.setToolTip("放大影像视图 (Zoom In)")
+        self.act_in.triggered.connect(self.canvas.zoom_in)
+        m_view.addAction(self.act_in)
+
+        self.act_out = QAction(get_icon("zoom_out"), "缩小 (&O)", self)
+        self.act_out.setShortcut(QKeySequence.StandardKey.ZoomOut)
+        self.act_out.setToolTip("缩小影像视图 (Zoom Out)")
+        self.act_out.triggered.connect(self.canvas.zoom_out)
+        m_view.addAction(self.act_out)
+
+        self.act_zoom_100 = QAction(get_icon("zoom_100"), "1:1 实际像元", self)
+        self.act_zoom_100.setToolTip("以 1:1 实际像元分辨率显示 (1 屏幕像素 = 1 影像像元)")
+        self.act_zoom_100.triggered.connect(self.canvas.zoom_to_100)
+        m_view.addAction(self.act_zoom_100)
+
+        self.act_refresh = QAction(get_icon("refresh"), "刷新视图 (&R)", self)
+        self.act_refresh.setShortcut(QKeySequence.StandardKey.Refresh)
+        self.act_refresh.setToolTip("重新请求并重绘当前视口 (Refresh View)")
+        self.act_refresh.triggered.connect(self._on_refresh_views)
+        m_view.addAction(self.act_refresh)
+
+        m_view.addSeparator()
+
+        self.act_dual = QAction(get_icon("dual_view"), "双视图对比 (&D)", self)
+        self.act_dual.setToolTip("开启/关闭双视口并排对比模式")
         self.act_dual.setCheckable(True)
         self.act_dual.toggled.connect(self.set_dual_view)
         m_view.addAction(self.act_dual)
 
-        self.act_sync = QAction("双视图联动 (&L)", self)
+        self.act_sync = QAction(get_icon("sync_link"), "双视图联动 (&L)", self)
+        self.act_sync.setToolTip("双视口空间坐标与缩放联动同步")
         self.act_sync.setCheckable(True)
         self.act_sync.setChecked(True)
         self.act_sync.toggled.connect(self._on_sync_toggled)
         m_view.addAction(self.act_sync)
 
+        # -------------------------------------------------------------- ENVI 经典拉伸与显示增强动作
+        self.act_stretch_linear = QAction(get_icon("stretch_linear"), "线性 2% 拉伸", self)
+        self.act_stretch_linear.setToolTip("ENVI 经典线性 2%~98% 分位数拉伸 (Linear 2% Stretch)")
+        self.act_stretch_linear.triggered.connect(lambda: self.apply_stretch_mode(StretchMode.percentile))
+
+        self.act_stretch_minmax = QAction(get_icon("stretch_minmax"), "极值全范围拉伸", self)
+        self.act_stretch_minmax.setToolTip("全范围极值拉伸 (Min-Max Full Stretch)")
+        self.act_stretch_minmax.triggered.connect(lambda: self.apply_stretch_mode(StretchMode.min_max))
+
+        self.act_stretch_stddev = QAction(get_icon("stretch_stddev"), "标准差 2σ 拉伸", self)
+        self.act_stretch_stddev.setToolTip("标准差 2σ 高斯拉伸 (Gaussian StdDev Stretch)")
+        self.act_stretch_stddev.triggered.connect(lambda: self.apply_stretch_mode(StretchMode.stddev))
+
+        self.act_display_rgb = QAction(get_icon("display_rgb"), "RGB 彩色合成", self)
+        self.act_display_rgb.setToolTip("切换为 RGB 多波段彩色合成显示 (RGB Composite)")
+        self.act_display_rgb.triggered.connect(lambda: self.apply_display_mode(DisplayMode.rgb))
+
+        self.act_display_pseudo = QAction(get_icon("display_pseudo"), "伪彩色增强", self)
+        self.act_display_pseudo.setToolTip("切换为单波段伪彩色增强显示 (Pseudocolor)")
+        self.act_display_pseudo.triggered.connect(lambda: self.apply_display_mode(DisplayMode.pseudo))
+
+        # -------------------------------------------------------------- ROI 与矢量标定动作
+        self.act_roi_probe = QAction(get_icon("roi_probe"), "像元光标探针", self)
+        self.act_roi_probe.setToolTip("像元探针 (Pixel Probe / Cursor Location Value) - 查看当前鼠标位置像元值")
+        self.act_roi_probe.triggered.connect(
+            lambda: self.status_bar.showMessage("像元探针：移动鼠标即可在底部状态栏与信息面板实时查看像元值")
+        )
+
+        self.act_roi_rect = QAction(get_icon("roi_rect"), "矩形 ROI 标定", self)
+        self.act_roi_rect.setToolTip("标定矩形兴趣区 (Rectangle ROI) - 在画布上生成可拖拽形变矩形")
+        self.act_roi_rect.triggered.connect(lambda: self.canvas.begin_rect_roi())
+
+        self.act_roi_poly = QAction(get_icon("roi_polygon"), "多边形 ROI 绘制", self)
+        self.act_roi_poly.setToolTip("绘制多边形兴趣区 (Polygon ROI) - 鼠标左键逐点标定，右键闭合")
+        self.act_roi_poly.triggered.connect(lambda: self.canvas.begin_polygon_roi())
+
+        self.act_roi_del = QAction(get_icon("roi_delete"), "删除选中 ROI", self)
+        self.act_roi_del.setToolTip("删除当前选中的 ROI 图形项")
+        self.act_roi_del.triggered.connect(lambda: self._on_roi_delete(self.canvas.delete_selected_roi() or ""))
+
+        # -------------------------------------------------------------- 遥感专题快捷算法动作
+        self.act_tool_ndvi = QAction(get_icon("tool_ndvi"), "植被指数 (NDVI)", self)
+        self.act_tool_ndvi.setToolTip("计算归一化植被指数 NDVI / 光谱指数 (gdal:sindex)")
+        self.act_tool_ndvi.triggered.connect(lambda: self.quick_launch_capability("gdal:sindex"))
+
+        self.act_tool_dem = QAction(get_icon("tool_dem"), "DEM 地形分析", self)
+        self.act_tool_dem.setToolTip("DEM 山体阴影、坡度与坡向地形分析 (gdal:dem)")
+        self.act_tool_dem.triggered.connect(lambda: self.quick_launch_capability("gdal:dem"))
+
+        self.act_tool_warp = QAction(get_icon("tool_warp"), "空间重投影 (Warp)", self)
+        self.act_tool_warp.setToolTip("严密地图投影坐标系转换 (gdal:warp)")
+        self.act_tool_warp.triggered.connect(lambda: self.quick_launch_capability("gdal:warp"))
+
+        self.act_tool_pca = QAction(get_icon("tool_pca"), "主成分分析 (PCA)", self)
+        self.act_tool_pca.setToolTip("多波段主成分分析与降维变换 (gdal:pca)")
+        self.act_tool_pca.triggered.connect(lambda: self.quick_launch_capability("gdal:pca"))
+
+        self.act_tool_fft = QAction(get_icon("tool_fft"), "2D FFT 频域去条纹", self)
+        self.act_tool_fft.setToolTip("二维快速傅里叶变换频域滤波与周期性条纹抑制 (gdal:fftfilter)")
+        self.act_tool_fft.triggered.connect(lambda: self.quick_launch_capability("gdal:fftfilter"))
+
+        self.act_tool_stats = QAction(get_icon("tool_stats"), "统计与直方图", self)
+        self.act_tool_stats.setToolTip("栅格逐波段极值、均值与直方图统计 (gdal:statistics)")
+        self.act_tool_stats.triggered.connect(lambda: self.quick_launch_capability("gdal:statistics"))
+
+        # -------------------------------------------------------------- 视图 CRS 下拉控件
         crs_row = QWidget()
         lay = QHBoxLayout(crs_row)
-        lay.setContentsMargins(12, 0, 12, 0)
+        lay.setContentsMargins(6, 0, 6, 0)
         lay.addWidget(QLabel("视图 CRS："))
         self.cmb_view_crs = QComboBox()
         for label, epsg in _VIEW_CRS_PRESETS:
@@ -502,19 +611,98 @@ class MainWindow(QMainWindow):
         act_about.triggered.connect(self._show_about)
         m_help.addAction(act_about)
 
-        tb = QToolBar("主快捷栏", self)
-        tb.setObjectName("main_toolbar")
-        self.addToolBar(Qt.ToolBarArea.TopToolBarArea, tb)
-        tb.addAction(self.act_open_img)
-        tb.addAction(self.act_sample)
-        tb.addSeparator()
-        tb.addAction(self.act_proj_save)
-        tb.addAction(act_fit)
-        tb.addAction(act_in)
-        tb.addAction(act_out)
-        tb.addSeparator()
-        tb.addAction(self.act_dual)
-        tb.addWidget(holder)
+        # -------------------------------------------------------------- ENVI / QGIS 风格多专业工具栏组装
+        icon_size = QSize(22, 22)
+
+        # 1. 项目与数据工具栏 (Project & Data Toolbar)
+        self.tb_project = QToolBar("项目与数据 (&P)", self)
+        self.tb_project.setObjectName("toolbar_project")
+        self.tb_project.setIconSize(icon_size)
+        self.addToolBar(Qt.ToolBarArea.TopToolBarArea, self.tb_project)
+        self.tb_project.addAction(self.act_proj_new)
+        self.tb_project.addAction(self.act_proj_open)
+        self.tb_project.addAction(self.act_proj_save)
+        self.tb_project.addSeparator()
+        self.tb_project.addAction(self.act_open_img)
+        self.tb_project.addAction(self.act_open_remote)
+        self.tb_project.addAction(self.act_sample)
+        self.tb_project.addSeparator()
+        self.tb_project.addAction(self.act_export_view)
+        self.tb_project.addAction(self.act_export_layer)
+
+        # 2. 地图浏览与导航工具栏 (Map Navigation Toolbar)
+        self.tb_nav = QToolBar("地图导航 (&N)", self)
+        self.tb_nav.setObjectName("toolbar_nav")
+        self.tb_nav.setIconSize(icon_size)
+        self.addToolBar(Qt.ToolBarArea.TopToolBarArea, self.tb_nav)
+        self.tb_nav.addAction(self.act_pan)
+        self.tb_nav.addAction(self.act_in)
+        self.tb_nav.addAction(self.act_out)
+        self.tb_nav.addAction(self.act_fit)
+        self.tb_nav.addAction(self.act_zoom_100)
+        self.tb_nav.addAction(self.act_refresh)
+
+        # 3. ENVI 经典显示增强与拉伸工具栏 (Stretch & Display Toolbar)
+        self.tb_stretch = QToolBar("显示增强与拉伸 (&S)", self)
+        self.tb_stretch.setObjectName("toolbar_stretch")
+        self.tb_stretch.setIconSize(icon_size)
+        self.addToolBar(Qt.ToolBarArea.TopToolBarArea, self.tb_stretch)
+        self.tb_stretch.addAction(self.act_stretch_linear)
+        self.tb_stretch.addAction(self.act_stretch_minmax)
+        self.tb_stretch.addAction(self.act_stretch_stddev)
+        self.tb_stretch.addSeparator()
+        self.tb_stretch.addAction(self.act_display_rgb)
+        self.tb_stretch.addAction(self.act_display_pseudo)
+        self.tb_stretch.addSeparator()
+        self.tb_stretch.addAction(self.act_dual)
+        self.tb_stretch.addAction(self.act_sync)
+
+        # 换行排布：第二行排布 ROI、遥感算法与空间参考工具栏
+        self.addToolBarBreak(Qt.ToolBarArea.TopToolBarArea)
+
+        # 4. ROI 与矢量标定工具栏 (ROI & Vector Toolbar)
+        self.tb_roi = QToolBar("ROI 与标定 (&R)", self)
+        self.tb_roi.setObjectName("toolbar_roi")
+        self.tb_roi.setIconSize(icon_size)
+        self.addToolBar(Qt.ToolBarArea.TopToolBarArea, self.tb_roi)
+        self.tb_roi.addAction(self.act_roi_probe)
+        self.tb_roi.addAction(self.act_roi_rect)
+        self.tb_roi.addAction(self.act_roi_poly)
+        self.tb_roi.addAction(self.act_roi_del)
+
+        # 5. 遥感专题与核心算法快捷工具栏 (Remote Sensing Analysis Toolbar)
+        self.tb_analysis = QToolBar("遥感专题算法 (&A)", self)
+        self.tb_analysis.setObjectName("toolbar_analysis")
+        self.tb_analysis.setIconSize(icon_size)
+        self.addToolBar(Qt.ToolBarArea.TopToolBarArea, self.tb_analysis)
+        self.tb_analysis.addAction(self.act_tool_ndvi)
+        self.tb_analysis.addAction(self.act_tool_dem)
+        self.tb_analysis.addAction(self.act_tool_warp)
+        self.tb_analysis.addAction(self.act_tool_pca)
+        self.tb_analysis.addAction(self.act_tool_fft)
+        self.tb_analysis.addAction(self.act_tool_stats)
+
+        # 6. 视图空间参考工具栏 (CRS Toolbar)
+        self.tb_crs = QToolBar("空间参考 CRS (&C)", self)
+        self.tb_crs.setObjectName("toolbar_crs")
+        self.tb_crs.setIconSize(icon_size)
+        self.addToolBar(Qt.ToolBarArea.TopToolBarArea, self.tb_crs)
+        self.tb_crs.addWidget(holder)
+
+        # 向后兼容主工具栏别名
+        self.main_toolbar = self.tb_project
+
+        # 在视图菜单中增加「工具栏」子菜单，支持用户随时查看与勾选显隐
+        m_toolbars = m_view.addMenu("工具栏 (&T)")
+        for tb_item in [
+            self.tb_project,
+            self.tb_nav,
+            self.tb_stretch,
+            self.tb_roi,
+            self.tb_analysis,
+            self.tb_crs,
+        ]:
+            m_toolbars.addAction(tb_item.toggleViewAction())
 
     def _wire_signals(self) -> None:
         self.toolbox_panel.sig_capability_selected.connect(self._on_capability_selected)
@@ -996,6 +1184,58 @@ class MainWindow(QMainWindow):
             self.canvas_b.set_display(settings)
         self._mark_dirty()
 
+    def apply_stretch_mode(self, stretch: StretchMode) -> None:
+        """从工具栏快速切换拉伸模式（线性 2%、全范围极值、标准差 2σ）。"""
+        layer = self.canvas.current_layer or self._selected_layer()
+        if layer is None:
+            self.status_bar.showMessage("请先选择或打开图层")
+            return
+        settings = layer.display.model_copy(deep=True)
+        settings.stretch = stretch
+        if stretch == StretchMode.percentile:
+            settings.percentiles = (2.0, 98.0)
+        elif stretch == StretchMode.stddev:
+            settings.stddev_k = 2.0
+        self.display_panel.set_layer(layer.band_count, settings)
+        self._on_display_changed(settings)
+        stretch_names = {
+            StretchMode.percentile: "线性 2%~98% 拉伸",
+            StretchMode.min_max: "极值全范围拉伸",
+            StretchMode.stddev: "标准差 2σ 拉伸",
+            StretchMode.none: "无拉伸",
+        }
+        self.status_bar.showMessage(f"已应用拉伸模式：{stretch_names.get(stretch, stretch.value)}")
+
+    def apply_display_mode(self, mode: DisplayMode) -> None:
+        """从工具栏快速切换显示模式（RGB 彩色合成、单波段伪彩色）。"""
+        layer = self.canvas.current_layer or self._selected_layer()
+        if layer is None:
+            self.status_bar.showMessage("请先选择或打开图层")
+            return
+        if mode == DisplayMode.rgb and layer.band_count < 3:
+            self.status_bar.showMessage(
+                f"当前图层仅有 {layer.band_count} 个波段，无法进行 RGB 合成（需要至少 3 个波段）"
+            )
+            return
+        settings = layer.display.model_copy(deep=True)
+        settings.mode = mode
+        self.display_panel.set_layer(layer.band_count, settings)
+        self._on_display_changed(settings)
+        self.status_bar.showMessage(f"已切换显示模式：{mode.value}")
+
+    def quick_launch_capability(self, capability_id: str) -> None:
+        """从工具栏一键快捷启动遥感专题算法（NDVI、DEM、Warp、PCA、FFT、统计）。"""
+        self.toolbox_panel.select_capability(capability_id)
+        cap = self.toolbox_panel._registry.get(capability_id)
+        if cap is not None:
+            self._on_capability_selected(cap)
+        self.tab_right.setCurrentWidget(self.form_widget)
+        if hasattr(self, "dock_right"):
+            self.dock_right.show()
+            self.dock_right.raise_()
+        cap_name = cap.name if cap else capability_id
+        self.status_bar.showMessage(f"已激活算法工具：{cap_name}")
+
     # ------------------------------------------------------------------ 查询
     def _on_hover_pixel(self, col: int, row: int, layer_id: str) -> None:
         layer = self.canvas.current_layer
@@ -1090,7 +1330,12 @@ class MainWindow(QMainWindow):
         self.info_panel.set_rois([])
         self._mark_dirty()
 
-    # ---------------------------------------------------------------- 双视图
+    # ---------------------------------------------------------------- 视图与双视图
+    def _on_refresh_views(self) -> None:
+        self.canvas.refresh()
+        if self.canvas_b.isVisible():
+            self.canvas_b.refresh()
+
     def set_dual_view(self, enabled: bool) -> None:
         self.canvas_b.setVisible(bool(enabled))
         if enabled:

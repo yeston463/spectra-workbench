@@ -247,7 +247,10 @@ def capture_feature_screenshots(output_dir: Path) -> dict[str, str]:
     saved_shots["desktop_ui_preview"] = str(p1)
 
     # 2. 双视图并排联动对比视图 (Dual View Canvas)
-    if hasattr(win, "split_view_action") and win.split_view_action:
+    if hasattr(win, "act_dual") and win.act_dual:
+        win.act_dual.setChecked(True)
+        app.processEvents()
+    elif hasattr(win, "split_view_action") and win.split_view_action:
         win.split_view_action.trigger()
         app.processEvents()
     p2 = output_dir / "desktop_ui_dual_view.png"

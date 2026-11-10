@@ -270,6 +270,24 @@ class ImageCanvas(QWidget):
         self.plot_item.getViewBox().scaleBy((1.33, 1.33))
         self.refresh()
 
+    def zoom_to_100(self) -> None:
+        """缩放至 1:1 实际像元分辨率（1 屏幕像素 = 1 影像像元）。"""
+        layer = self._layer
+        if layer is None:
+            return
+        self._throttle.stop()
+        vb = self.plot_item.getViewBox()
+        vr = vb.viewRange()
+        cx = (vr[0][0] + vr[0][1]) / 2.0
+        cy = (vr[1][0] + vr[1][1]) / 2.0
+        sg = vb.screenGeometry()
+        w = float(sg.width()) if sg.isValid() and sg.width() > 0 else float(self.width())
+        h = float(sg.height()) if sg.isValid() and sg.height() > 0 else float(self.height())
+        half_w = max(5.0, w / 2.0)
+        half_h = max(5.0, h / 2.0)
+        vb.setRange(xRange=(cx - half_w, cx + half_w), yRange=(cy + half_h, cy - half_h), padding=0.0)
+        self.refresh()
+
     def _on_range_changed(self, *args: Any) -> None:
         if self._sync_guard:
             return
