@@ -1351,6 +1351,177 @@
         "集成发布审计测试 tests/integration/test_p10_release_audit.py 4 项测试在 scripts/run_with_timeout.py 监管下全过（clean_exit_verified=True, 0 残留进程）"
       ],
       "blocking_reason": null
+    },
+    {
+      "id": "P11-01",
+      "milestone": "P11",
+      "title": "查看交互层增强：Swipe 卷帘对比、波段自动浏览、光谱剖面曲线、折线测距",
+      "acceptance": [
+        "Swipe 卷帘支持水平与垂直方向平滑滑动对比，双图层在交界处切片渲染无闪烁、无错位；",
+        "波段自动浏览（Band Player）支持播放/暂停、帧率调节（1~10 FPS）、跳帧与循环播放；",
+        "点击像元弹出像元光谱剖面折线图（波长/波段 vs 物理值），支持多像元曲线叠加对比与平滑；",
+        "折线测距交互支持多点拾取，在有 CRS 影像上输出实际地理/投影距离（米/千米），无 CRS 影像输出像素距离。"
+      ],
+      "depends_on": [
+        "P3-04",
+        "P3-05"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P11-02",
+      "milestone": "P11",
+      "title": "分类整链闭环：非监督分类（ISODATA/K-Means）与监督分类（ROI样本+Mask背景防污染+混淆矩阵精度评估）",
+      "acceptance": [
+        "提供纯科学计算无外置依赖的 ISODATA/K-Means 轻量聚类兜底实现，类别调大时能有效区分薄云与水体；",
+        "通过 P8-04 插件机制接入 ext:sklearn_classify 高级分类器（支持随机森林、SVM 与最大似然）；",
+        "监督分类管线完整接收 P3-05 绘制的 ROI 作为训练样本，并支持传入 Mask 排除背景污染像元；",
+        "推断生成单波段分类栅格，并伴随输出包含混淆矩阵、生产者精度、用户精度与 Kappa 系数的精度评估报告。"
+      ],
+      "depends_on": [
+        "P8-04",
+        "P8-05",
+        "P3-05",
+        "P4-04"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": "ext:sklearn_classify 扩展环境待 P8-04 插件机制接入；纯科学计算轻量 ISODATA 作为基础兜底通道"
+    },
+    {
+      "id": "P11-03",
+      "milestone": "P11",
+      "title": "图像镶嵌高级化：直方图匹配消色差、接边羽化过渡（Feathering 50px）、有效接缝线（Seamline）",
+      "acceptance": [
+        "直方图匹配算法（Histogram Matching）支持以基准影像为参考规格化待拼图像，消除曝光与时相色差；",
+        "支持重叠带基于距离变换的羽化渐变过渡（默认 50 像元带宽），消除硬接边导致的突变阶跃；",
+        "支持最小差值累积成本路径算法自动寻找有效接缝线（Seamline），绕开独立云影与高反差建筑物；",
+        "输出无缝镶嵌结果与重叠带辐射差异量化对比报告。"
+      ],
+      "depends_on": [
+        "P4-02",
+        "P6-06"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P11-04",
+      "milestone": "P11",
+      "title": "频率域 FFT 滤波器高级化：0/1 二值突变到边缘渐变羽化（过渡宽度）、交互式频域掩膜绘制与实时预览",
+      "acceptance": [
+        "频域滤波掩膜引入高斯/余弦过渡滚降宽度参数（transition_width，如 10px），消除二值硬截断导致的吉布斯环状擦痕；",
+        "空间域逆变换结果在保留主频细节的同时完全抑制周期性条纹噪声，空间域残差符合平滑指标；",
+        "UI 侧支持双击频谱图交互添加中心矩形/扇形/楔形陷波（Notch filter），并提供小尺寸快速频域预览。"
+      ],
+      "depends_on": [
+        "P6-02"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P11-05",
+      "milestone": "P11",
+      "title": "高光谱与多光谱分析链：剖面曲线平滑/叠加、水汽吸收带估计、光谱库匹配、ROI 交互端元采集",
+      "acceptance": [
+        "ROI 端元采集器支持从用户已选高植被/裸土多边形中统计特征均值与分位数，一键回填到 FVC / 混合像元分解表单；",
+        "自动根据波长元数据检测识别强水汽吸收谷（如 1350~1450nm、1800~2000nm）并提供一键屏蔽 Mask；",
+        "对接标准光谱库（支持 USGS / ASTER ASCII/CSV 格式），提供光谱角制图（SAM）与拟合度度量；",
+        "支持 Savitzky-Golay 滤波器对离散波段光谱剖面进行连续平滑处理。"
+      ],
+      "depends_on": [
+        "P6-05",
+        "P8-01",
+        "P3-05"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P11-06",
+      "milestone": "P11",
+      "title": "空间统计高级化：基于掩膜（maskFile）的分地类统计与分位数提取、交互式密度分割区间编辑",
+      "acceptance": [
+        "gdal:statistics 算法新增 maskFile / maskBand / maskValue 可选参数，仅对指定掩膜有效区像元执行快速统计；",
+        "精确输出掩膜区域内的均值、标准差、极值以及 2% / 98% 特征分位数；",
+        "提供密度分割（Density Slice）交互面板，根据像元直方图自动划分区间并支持可视化色阶编辑；",
+        "一键输出多级专题分类栅格与各区间面积/像元占比统计表。"
+      ],
+      "depends_on": [
+        "P4-04",
+        "P6-05"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P11-07",
+      "milestone": "P11",
+      "title": "几何裁剪管线桥：基于绘制/图层 ROI 多边形及矢量图层的掩膜裁剪执行桥",
+      "acceptance": [
+        "构建基于多边形 ROI 及矢量 Shapefile/GeoJSON 的掩膜裁剪执行桥（gdal:clip_mask / gdal.Warp cutline）；",
+        "突破现有 translate 仅限矩形窗口的限制，多边形外部像元精确赋为指定 NoData 值；",
+        "图层面板或 ROI 工具栏提供'使用当前 ROI 裁剪图层'一键操作，自动生成 TaskSpec 并派发至 GDAL Worker；",
+        "裁剪结果自动更新空间参考与 GeoTransform，并同步挂载至图层树。"
+      ],
+      "depends_on": [
+        "P3-05",
+        "P5-01",
+        "P4-01"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P11-08",
+      "milestone": "P11",
+      "title": "多维高光谱坏波段标注与元数据读取展示",
+      "acceptance": [
+        "元数据领域模型扩充 bad_bands 列表字段，完整解析 ENVI .hdr 中的 bbl 属性与 NetCDF 质量标识；",
+        "UI 图层树、波段切换下拉列表与高光谱工具箱中对坏波段增加黄色警示标记（⚠️）；",
+        "波段运算、指数计算与光谱分析链中默认提供'自动跳过坏波段'过滤机制，避免畸变像元参与运算。"
+      ],
+      "depends_on": [
+        "P8-01",
+        "P3-02"
+      ],
+      "status": "todo",
+      "release_requirement": "core",
+      "evidence": [],
+      "blocking_reason": null
+    },
+    {
+      "id": "P11-09",
+      "milestone": "P11",
+      "title": "次级空间分析工具：矢量缓冲区（Buffer）、DEM 区域采样、PC 散点图分布",
+      "acceptance": [
+        "基于 OGR Geometry 实现 ogr:buffer 空间缓冲区构建能力，支持指定投影单位（米）生成缓冲多边形；",
+        "结合多边形 ROI 对 DEM 栅格执行区域高程平均采样与坡度汇总；",
+        "PCA 主成分分析后提供 PC1 vs PC2 二维特征像元散点投影图，直观辅助地物聚类分布观察。"
+      ],
+      "depends_on": [
+        "P5-03",
+        "P6-03"
+      ],
+      "status": "todo",
+      "release_requirement": "optional",
+      "evidence": [],
+      "blocking_reason": null
     }
   ],
   "updated_at": "2026-11-10"

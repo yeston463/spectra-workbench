@@ -9,6 +9,15 @@
 | 协调者 | P0-01 | `AGENTS.md`、`README.md`、`pyproject.toml`、`.gitignore`、`docs/plan/`、`contracts/`、`docs/progress/STATUS.md`、`docs/progress/WORKPACKAGES.md`、BACKLOG 全量裁定 | 骨架已建 |
 | ENV | P0-02（为 P0-03/P0-05 供环境） | `environments/`、`scripts/bootstrap.ps1`、`.tooling/`、`docs/adr/0001-*`、`docs/progress/runs/ENV.md`、`env_report.json` | 运行中 |
 | DOMAIN | P1-01、P1-02 | `src/spectra_workbench/domain/`、`protocol/`、`tests/unit/test_domain_*`、`test_protocol_*`、`runs/DOMAIN.md` | 运行中 |
+| UI / PROC | P11-01 (交互查看: 卷帘/波段播放/光谱剖面/测距) | `src/spectra_workbench/ui/`, `rendering/` | 排期建账 (todo) |
+| PROC / EXT | P11-02 (分类整链: ISODATA/监督分类/精度混淆矩阵) | `src/spectra_workbench/processing/`, `plugins/` | 排期建账 (todo, ext:sklearn_classify 插件接入) |
+| PROC | P11-03 (镶嵌高级化: 直方图匹配/羽化/接缝线) | `src/spectra_workbench/processing/` | 排期建账 (todo) |
+| PROC / UI | P11-04 (FFT 滤波器羽化过渡与交互编辑) | `src/spectra_workbench/processing/`, `ui/` | 排期建账 (todo) |
+| DOMAIN / UI | P11-05 (光谱分析链: 端元采集/水吸收/光谱库) | `src/spectra_workbench/ui/`, `domain/` | 排期建账 (todo) |
+| PROC / UI | P11-06 (空间统计: 掩膜分地类统计/密度分割) | `src/spectra_workbench/processing/`, `ui/` | 排期建账 (todo) |
+| PROC / UI | P11-07 (几何裁剪管线桥: ROI/矢量多边形掩膜裁剪) | `src/spectra_workbench/processing/`, `ui/` | 排期建账 (todo) |
+| DOMAIN / UI | P11-08 (多维高光谱坏波段标注与元数据读取) | `src/spectra_workbench/domain/`, `ui/` | 排期建账 (todo) |
+| PROC | P11-09 (次级分析: 矢量缓冲区/DEM采样/PC散点图) | `src/spectra_workbench/processing/` | 排期建账 (todo) |
 | DOCTOR | P0-03、P0-04 | `scripts/doctor.ps1`、`scripts/test.ps1`、`app/doctor*`、`tests/fixtures/`、`work/`、`runs/DOCTOR.md`、`doctor.json`、`test_summary.txt` | 运行中 |
 
 并行前提：三者写路径互不相交。`docs/progress/BACKLOG.json` 例外——每个包只允许改自己的任务条目，协调者合并时检查是否越界。
