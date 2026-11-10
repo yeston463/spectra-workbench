@@ -339,7 +339,14 @@ class MainWindow(QMainWindow):
     # -------------------------------------------------------------------- UI
     def _init_ui(self) -> None:
         self.setWindowTitle("Spectra Workbench · 遥感与光谱计算工作台 (P3)")
-        self.resize(1600, 900)
+        screen = QApplication.primaryScreen()
+        if screen is not None:
+            avail = screen.availableGeometry()
+            w = min(1600, max(1024, int(avail.width() * 0.95)))
+            h = min(960, max(700, int(avail.height() * 0.90)))
+            self.resize(w, h)
+        else:
+            self.resize(1600, 900)
 
         self.canvas = ImageCanvas(view_id="V1", cache=self._cache)
         self.canvas_b = ImageCanvas(view_id="V2", cache=self._cache)
@@ -400,6 +407,11 @@ class MainWindow(QMainWindow):
         self.task_panel = TaskPanel()
         self.dock_bottom.setWidget(self.task_panel)
         self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self.dock_bottom)
+
+        # 初始分配左右停靠栏比例并设定保护下限，避免打开图像或窗口缩放时布局跳变
+        self.resizeDocks([self.dock_left, self.dock_right], [350, 360], Qt.Orientation.Horizontal)
+        self.dock_left.setMinimumWidth(260)
+        self.dock_right.setMinimumWidth(280)
 
         self._create_menus_and_toolbars()
 
@@ -809,7 +821,6 @@ class MainWindow(QMainWindow):
                 layer.rois = list(rois or [])
             if layer.layer_id not in self._project_layer_order:
                 self._project_layer_order.append(layer.layer_id)
-            client = self._client_for(layer)
             self._layer_seq[layer.layer_id] = seq
             # 顺序按“发起打开的先后”确定：探测响应谁先回来不影响图层顺序
             index = sum(1 for ly in self.layer_panel.layers if self._layer_seq.get(ly.layer_id, 0) < seq)
@@ -819,9 +830,6 @@ class MainWindow(QMainWindow):
                 index=index,
             )
             self._mark_dirty()
-            if record is None:
-                self.canvas.set_layer(layer, client)
-                self.display_panel.set_layer(layer.band_count, layer.display)
 
         def _on_probe_err(err: str) -> None:
             if client._closed:

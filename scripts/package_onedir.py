@@ -147,9 +147,11 @@ namespace SpectraWorkbenchLauncher
 """
 
 LAUNCHER_BAT_TEMPLATE = r"""@echo off
+chcp 65001 >nul
 setlocal
 set "BASE_DIR=%~dp0"
 if "%BASE_DIR:~-1%"=="\" set "BASE_DIR=%BASE_DIR:~0,-1%"
+cd /d "%BASE_DIR%"
 
 set "PYTHONUTF8=1"
 set "PYTHONIOENCODING=utf-8"
@@ -164,7 +166,7 @@ set "PATH=%BASE_DIR%\runtimes\gdal\bin;%BASE_DIR%\app;%PATH%"
 set "PYTHONPATH=%BASE_DIR%\app\src;%BASE_DIR%\app\Lib\site-packages;%PYTHONPATH%"
 
 "%BASE_DIR%\app\python.exe" -m spectra_workbench.ui.app %*
-if errorlevel 1 (
+if %ERRORLEVEL% neq 0 (
     echo.
     echo ========================================================
     echo Spectra Workbench 异常退出，退出代码: %ERRORLEVEL%

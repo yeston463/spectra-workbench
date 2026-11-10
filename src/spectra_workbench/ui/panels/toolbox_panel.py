@@ -63,10 +63,13 @@ class ToolboxPanel(QWidget):
 
         # 树形展示控件
         self.tree = QTreeWidget()
-        self.tree.setHeaderLabels(["能力名称 / 标识符", "引擎", "状态"])
+        self.tree.setHeaderLabels(["算法工具名称 / 标识符", "状态"])
         self.tree.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self.tree.header().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
-        self.tree.header().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        self.tree.header().setStretchLastSection(False)
+        self.tree.setIndentation(14)
+        self.tree.setTextElideMode(Qt.TextElideMode.ElideMiddle)
+        self.tree.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.tree.itemSelectionChanged.connect(self._on_tree_selection_changed)
 
         layout.addWidget(self.tree, stretch=1)
@@ -128,8 +131,10 @@ class ToolboxPanel(QWidget):
             elif c.state.availability.value == "missing_dependency":
                 state_str = "🔴 依赖缺失"
 
-            item = QTreeWidgetItem([f"{c.name} ({c.capability_id})", c.engine.provider_id.upper(), state_str])
+            item = QTreeWidgetItem([f"{c.name} ({c.capability_id})", state_str])
             item.setData(0, Qt.ItemDataRole.UserRole, c)
+            item.setToolTip(0, f"【{c.name}】\n标识符: {c.capability_id}\n引擎: {c.engine.provider_id.upper()}\n状态: {state_str}\n\n{c.description or '暂无详细描述'}")
+            item.setToolTip(1, f"引擎: {c.engine.provider_id.upper()}\n状态: {state_str}")
 
             if is_conn:
                 node_connected.addChild(item)

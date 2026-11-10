@@ -72,6 +72,8 @@ class MetadataPanel(QWidget):
 
         row = QVBoxLayout()
         self.cmb_subdataset = QComboBox()
+        self.cmb_subdataset.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        self.cmb_subdataset.setMinimumContentsLength(18)
         self.cmb_subdataset.currentIndexChanged.connect(self._on_subdataset_combo_changed)
         row.addWidget(self.cmb_subdataset)
         self.btn_probe_subdataset = QPushButton("探测选中子数据集")
