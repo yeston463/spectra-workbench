@@ -1366,9 +1366,16 @@
         "P3-04",
         "P3-05"
       ],
-      "status": "todo",
+      "status": "done",
       "release_requirement": "core",
-      "evidence": [],
+      "evidence": [
+        "tests/unit/test_p11_interactive_tools.py 5 项全部通过（耗时 0.71s，无泄漏，0 残留进程）；",
+        "Swipe 卷帘：支持左右（垂直线）与上下（水平线）双向卷帘对比，可拖拽分割线与滑动条联动，交界处切片实时平滑裁剪无错位；",
+        "折线测距：支持基于图层 GeoTransform/CRS 的地理大地线（Haversine）与投影平面（米/千米）多段累积距离换算，动态橡皮筋与顶点标签实时标注；",
+        "波段播放器：在 DisplayPanel 内置 1~10 FPS 自动轮播控制器，支持暂停、前后步进与循环播放；",
+        "像元光谱剖面：实现 SpectralProfileDialog，支持多像元多波段光谱叠加（Hold On）、移动平均平滑滤波与完整 CSV 导出；",
+        "Ruff 0 告警，Mypy 22 个源文件 0 错误；发布包 dist/SpectraWorkbench 同步生效。"
+      ],
       "blocking_reason": null
     },
     {

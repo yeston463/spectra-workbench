@@ -5,13 +5,17 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import QTimer, Signal
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QDoubleSpinBox,
     QFormLayout,
     QGroupBox,
+    QHBoxLayout,
     QLabel,
+    QPushButton,
+    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
@@ -96,6 +100,53 @@ class DisplayPanel(QWidget):
         form.addRow("透明度", self.spin_opacity)
 
         root.addWidget(box)
+
+        # ---------------- 波段自动浏览播放器 (P11-01)
+        box_player = QGroupBox("波段自动浏览 (Band Player)")
+        player_layout = QVBoxLayout(box_player)
+        player_layout.setContentsMargins(6, 6, 6, 6)
+        player_layout.setSpacing(4)
+
+        row_ctrl = QHBoxLayout()
+        self.btn_prev_band = QPushButton("◀")
+        self.btn_prev_band.setToolTip("前一波段")
+        self.btn_prev_band.clicked.connect(self._step_prev_band)
+        row_ctrl.addWidget(self.btn_prev_band)
+
+        self.btn_play_pause = QPushButton("▶ 播放")
+        self.btn_play_pause.setToolTip("以设定帧率自动轮播所有波段")
+        self.btn_play_pause.clicked.connect(self.toggle_playback)
+        row_ctrl.addWidget(self.btn_play_pause, stretch=1)
+
+        self.btn_next_band = QPushButton("▶")
+        self.btn_next_band.setToolTip("后一波段")
+        self.btn_next_band.clicked.connect(self._step_next_band)
+        row_ctrl.addWidget(self.btn_next_band)
+        player_layout.addLayout(row_ctrl)
+
+        row_settings = QHBoxLayout()
+        row_settings.addWidget(QLabel("帧率:"))
+        self.spin_fps = QSpinBox()
+        self.spin_fps.setRange(1, 10)
+        self.spin_fps.setValue(2)
+        self.spin_fps.setSuffix(" FPS")
+        self.spin_fps.valueChanged.connect(self._on_fps_changed)
+        row_settings.addWidget(self.spin_fps)
+
+        self.chk_loop = QCheckBox("循环")
+        self.chk_loop.setChecked(True)
+        row_settings.addWidget(self.chk_loop)
+        player_layout.addLayout(row_settings)
+
+        self.lbl_player_status = QLabel("待机 (单波段/未加载)")
+        self.lbl_player_status.setStyleSheet("color: #666; font-size: 11px;")
+        player_layout.addWidget(self.lbl_player_status)
+
+        root.addWidget(box_player)
+
+        self._player_timer = QTimer(self)
+        self._player_timer.timeout.connect(self._step_next_band)
+
         self.lbl_note = QLabel("说明：拉伸区间来自当前视图窗口的抽样统计，状态栏会标注来源。")
         self.lbl_note.setWordWrap(True)
         root.addWidget(self.lbl_note)
@@ -108,6 +159,60 @@ class DisplayPanel(QWidget):
         if settings is not None:
             self._settings = settings.model_copy(deep=True)
         self._sync_widgets_from_settings()
+
+    # ------------------------------------------------------------------ 波段播放器 (P11-01)
+    def toggle_playback(self) -> None:
+        if self._player_timer.isActive():
+            self.pause_playback()
+        else:
+            self.start_playback()
+
+    def start_playback(self) -> None:
+        if self._band_count <= 1:
+            self.lbl_player_status.setText("单波段影像无需播放")
+            return
+        # 自动切换到单波段灰度或伪彩模式以便轮播
+        if self._settings.mode is DisplayMode.rgb:
+            self.cmb_mode.setCurrentIndex(0)
+        self._player_timer.setInterval(int(1000 / max(1, self.spin_fps.value())))
+        self._player_timer.start()
+        self.btn_play_pause.setText("⏸ 暂停")
+        curr = self.cmb_band.currentIndex() + 1
+        self.lbl_player_status.setText(f"播放中: 波段 {curr} / {self._band_count}")
+
+    def pause_playback(self) -> None:
+        self._player_timer.stop()
+        self.btn_play_pause.setText("▶ 播放")
+        curr = self.cmb_band.currentIndex() + 1
+        self.lbl_player_status.setText(f"已暂停: 波段 {curr} / {self._band_count}")
+
+    def _step_next_band(self) -> None:
+        if self._band_count <= 1:
+            return
+        curr = self.cmb_band.currentIndex()
+        nxt = curr + 1
+        if nxt >= self._band_count:
+            if self.chk_loop.isChecked():
+                nxt = 0
+            else:
+                self.pause_playback()
+                return
+        self.cmb_band.setCurrentIndex(nxt)
+        self.lbl_player_status.setText(f"当前: 波段 {nxt + 1} / {self._band_count}")
+
+    def _step_prev_band(self) -> None:
+        if self._band_count <= 1:
+            return
+        curr = self.cmb_band.currentIndex()
+        prv = curr - 1
+        if prv < 0:
+            prv = self._band_count - 1 if self.chk_loop.isChecked() else 0
+        self.cmb_band.setCurrentIndex(prv)
+        self.lbl_player_status.setText(f"当前: 波段 {prv + 1} / {self._band_count}")
+
+    def _on_fps_changed(self, fps: int) -> None:
+        if self._player_timer.isActive():
+            self._player_timer.setInterval(int(1000 / max(1, fps)))
 
     def clear(self) -> None:
         self._band_count = 0

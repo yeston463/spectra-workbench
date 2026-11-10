@@ -283,6 +283,7 @@ class MainWindow(QMainWindow):
         self._dirty = False
         self._hover_layer_id: str | None = None
         self._notifications: list[QMessageBox] = []
+        self._spectral_profile_dialog: Any = None
         self._open_seq = 0
         # 子数据集请求代际：同一容器内先后选中 A/B 时，
         # (项目代际, 图层 ID, 源文件) 三项完全相同，无法区分；
@@ -337,6 +338,42 @@ class MainWindow(QMainWindow):
             self._notifications.remove(box)
 
     # -------------------------------------------------------------------- UI
+    def _on_canvas_pixel_clicked(self, col: int, row: int, layer_id: str) -> None:
+        """P11-01 点击像元查看多波段连续反射光谱曲线。"""
+        if not self.act_profile.isChecked():
+            return
+        layer = next((ly for ly in self.layer_panel.layers if ly.layer_id == layer_id), None)
+        if layer is None:
+            return
+        client = self._client_for(layer)
+
+        def _on_pixel_success(payload: dict[str, Any]) -> None:
+            if self._spectral_profile_dialog is None:
+                from spectra_workbench.ui.dialogs.spectral_profile_dialog import (
+                    SpectralProfileDialog,
+                )
+                self._spectral_profile_dialog = SpectralProfileDialog(self)
+
+            bands_info = payload.get("bands") or []
+            values = [float(b.get("physical", b.get("raw", 0.0))) for b in bands_info]
+            meta = getattr(layer, "metadata", None) or {}
+            wavelengths = meta.get("wavelengths")
+            self._spectral_profile_dialog.add_profile(
+                col=col,
+                row=row,
+                values=values,
+                wavelengths=wavelengths,
+                layer_name=layer.name,
+            )
+
+        client.query_pixel_async(
+            layer.file_path,
+            row=row,
+            col=col,
+            on_success=_on_pixel_success,
+            on_error=lambda err: self.status_bar.showMessage(f"提取像元光谱失败：{err}", 5000),
+        )
+
     def _init_ui(self) -> None:
         self.setWindowTitle("Spectra Workbench · 遥感与光谱计算工作台 (P3)")
         screen = QApplication.primaryScreen()
@@ -350,6 +387,7 @@ class MainWindow(QMainWindow):
 
         self.canvas = ImageCanvas(view_id="V1", cache=self._cache)
         self.canvas_b = ImageCanvas(view_id="V2", cache=self._cache)
+        self.canvas.sig_pixel_clicked.connect(self._on_canvas_pixel_clicked)
         self.splitter = QSplitter(Qt.Orientation.Horizontal)
         self.splitter.addWidget(self.canvas)
         self.splitter.addWidget(self.canvas_b)
@@ -372,6 +410,8 @@ class MainWindow(QMainWindow):
         self.tab_left = QTabWidget()
         self.toolbox_panel = ToolboxPanel()
         self.layer_panel = LayerPanel()
+        self.canvas.set_available_layers_provider(lambda: self.layer_panel.layers)
+        self.canvas_b.set_available_layers_provider(lambda: self.layer_panel.layers)
         self.tab_left.addTab(self.layer_panel, "图层管理")
         self.tab_left.addTab(self.toolbox_panel, "算法工具箱")
         self.dock_left.setWidget(self.tab_left)
@@ -538,6 +578,26 @@ class MainWindow(QMainWindow):
         self.act_sync.toggled.connect(self._on_sync_toggled)
         m_view.addAction(self.act_sync)
 
+        # ---------------- P11-01 高级交互查看动作 (Swipe / 测距 / 光谱剖面)
+        self.act_swipe = QAction(get_icon("tool_swipe"), "卷帘对比 (&W)", self)
+        self.act_swipe.setToolTip("开启双图层左右/上下卷帘实时对比 (Swipe)")
+        self.act_swipe.setCheckable(True)
+        self.act_swipe.toggled.connect(self.canvas.btn_swipe.setChecked)
+        self.canvas.btn_swipe.toggled.connect(self.act_swipe.setChecked)
+        m_view.addAction(self.act_swipe)
+
+        self.act_measure = QAction(get_icon("tool_measure"), "折线测距 (&M)", self)
+        self.act_measure.setToolTip("在影像上连续点击测量地表折线距离与累积长度 (Measure Distance)")
+        self.act_measure.setCheckable(True)
+        self.act_measure.toggled.connect(self.canvas.btn_measure.setChecked)
+        self.canvas.btn_measure.toggled.connect(self.act_measure.setChecked)
+        m_view.addAction(self.act_measure)
+
+        self.act_profile = QAction(get_icon("tool_profile"), "像元光谱剖面 (&P)", self)
+        self.act_profile.setToolTip("开启后点击影像像元查看多波段连续反射光谱剖面曲线 (Spectral Profile)")
+        self.act_profile.setCheckable(True)
+        m_view.addAction(self.act_profile)
+
         # -------------------------------------------------------------- ENVI 经典拉伸与显示增强动作
         self.act_stretch_linear = QAction(get_icon("stretch_linear"), "线性 2% 拉伸", self)
         self.act_stretch_linear.setToolTip("ENVI 经典线性 2%~98% 分位数拉伸 (Linear 2% Stretch)")
@@ -653,6 +713,10 @@ class MainWindow(QMainWindow):
         self.tb_nav.addAction(self.act_fit)
         self.tb_nav.addAction(self.act_zoom_100)
         self.tb_nav.addAction(self.act_refresh)
+        self.tb_nav.addSeparator()
+        self.tb_nav.addAction(self.act_swipe)
+        self.tb_nav.addAction(self.act_measure)
+        self.tb_nav.addAction(self.act_profile)
 
         # 3. ENVI 经典显示增强与拉伸工具栏 (Stretch & Display Toolbar)
         self.tb_stretch = QToolBar("显示增强与拉伸 (&S)", self)

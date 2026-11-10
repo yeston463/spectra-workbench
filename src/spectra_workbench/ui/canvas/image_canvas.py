@@ -21,9 +21,11 @@ import pyqtgraph as pg
 from PySide6.QtCore import QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QImage, QPainter
 from PySide6.QtWidgets import (
+    QComboBox,
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QSlider,
     QVBoxLayout,
     QWidget,
 )
@@ -47,13 +49,47 @@ GRAY_BUDGET = 1024
 RGB_BUDGET = 512
 
 
+class SwipeImageItem(pg.ImageItem):
+    """带卷帘区域裁剪的图像项（用于 Swipe 模式下的顶层对比图层展示，P11-01）。"""
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.swipe_enabled: bool = False
+        self.split_coord: float = 0.0
+        self.swipe_orientation: str = "vertical"  # "vertical"（左右卷帘）或 "horizontal"（上下卷帘）
+
+    def set_swipe(self, enabled: bool, split_coord: float, orientation: str = "vertical") -> None:
+        self.swipe_enabled = enabled
+        self.split_coord = split_coord
+        self.swipe_orientation = orientation
+        self.update()
+
+    def paint(self, p: QPainter, opt: Any, widget: Any = None) -> None:
+        if not self.swipe_enabled:
+            super().paint(p, opt, widget)
+            return
+        p.save()
+        br = self.boundingRect()
+        if self.swipe_orientation == "vertical":
+            clip_w = max(0.0, min(br.width(), self.split_coord - br.x()))
+            clip_rect = QRectF(br.x(), br.y(), clip_w, br.height())
+        else:
+            clip_h = max(0.0, min(br.height(), self.split_coord - br.y()))
+            clip_rect = QRectF(br.x(), br.y(), br.width(), clip_h)
+        p.setClipRect(clip_rect, Qt.ClipOperation.IntersectClip)
+        super().paint(p, opt, widget)
+        p.restore()
+
+
 class ImageCanvas(QWidget):
     """栅格影像显示画布。"""
 
     sig_view_changed = Signal(object)  # dict：view_id / 中心 / 比例
     sig_pixel_hover = Signal(int, int, str)  # col, row, layer_id
+    sig_pixel_clicked = Signal(int, int, str)  # col, row, layer_id (P11-01 光谱剖面点击)
     sig_roi_changed = Signal()
     sig_status = Signal(str)
+    sig_measure_status = Signal(str)  # P11-01 测距状态
 
     def __init__(
         self,
@@ -94,6 +130,19 @@ class ImageCanvas(QWidget):
         self._hover_timer.timeout.connect(self._emit_hover)
         self._hover_pos: tuple[float, float] | None = None
 
+        # P11-01 Swipe 卷帘状态
+        self._swipe_enabled: bool = False
+        self._swipe_layer: LayerItem | None = None
+        self._swipe_orientation: str = "vertical"
+        self._available_layers_provider: Any = None
+
+        # P11-01 折线测距状态
+        self._measure_mode: bool = False
+        self._measure_points: list[tuple[float, float]] = []
+        self._measure_line: pg.PlotDataItem | None = None
+        self._measure_rubber: pg.PlotDataItem | None = None
+        self._measure_labels: list[pg.TextItem] = []
+
         self._init_ui()
 
     # ------------------------------------------------------------------ 界面
@@ -113,6 +162,18 @@ class ImageCanvas(QWidget):
         self.btn_fit.clicked.connect(self.fit_extent)
         bar.addWidget(self.btn_fit)
 
+        self.btn_swipe = QPushButton("卷帘对比")
+        self.btn_swipe.setCheckable(True)
+        self.btn_swipe.setToolTip("开启两图层卷帘对比 (Swipe)")
+        self.btn_swipe.toggled.connect(self._on_swipe_toggled)
+        bar.addWidget(self.btn_swipe)
+
+        self.btn_measure = QPushButton("折线测距")
+        self.btn_measure.setCheckable(True)
+        self.btn_measure.setToolTip("开启地图折线多段测距 (Measure Distance)")
+        self.btn_measure.toggled.connect(self.set_measure_mode)
+        bar.addWidget(self.btn_measure)
+
         self.btn_rect = QPushButton("画矩形ROI")
         self.btn_rect.setCheckable(True)
         self.btn_rect.toggled.connect(lambda on: self.set_roi_draw(ROIShape.rectangle, on))
@@ -128,6 +189,50 @@ class ImageCanvas(QWidget):
         bar.addWidget(self.btn_refresh)
         layout.addLayout(bar)
 
+        # ---------------- P11-01 卷帘控制子工具栏
+        self.swipe_bar = QWidget()
+        bar_swipe_layout = QHBoxLayout(self.swipe_bar)
+        bar_swipe_layout.setContentsMargins(6, 2, 6, 2)
+        bar_swipe_layout.setSpacing(6)
+        bar_swipe_layout.addWidget(QLabel("对比图层:"))
+        self.cmb_swipe_layer = QComboBox()
+        self.cmb_swipe_layer.currentIndexChanged.connect(self._on_swipe_layer_selected)
+        bar_swipe_layout.addWidget(self.cmb_swipe_layer)
+        bar_swipe_layout.addWidget(QLabel("方向:"))
+        self.cmb_swipe_orient = QComboBox()
+        self.cmb_swipe_orient.addItem("左右卷帘 (垂直线)", "vertical")
+        self.cmb_swipe_orient.addItem("上下卷帘 (水平线)", "horizontal")
+        self.cmb_swipe_orient.currentIndexChanged.connect(self._on_swipe_orient_changed)
+        bar_swipe_layout.addWidget(self.cmb_swipe_orient)
+        bar_swipe_layout.addWidget(QLabel("位置:"))
+        self.slider_swipe = QSlider(Qt.Orientation.Horizontal)
+        self.slider_swipe.setRange(0, 100)
+        self.slider_swipe.setValue(50)
+        self.slider_swipe.valueChanged.connect(self._on_swipe_slider_changed)
+        bar_swipe_layout.addWidget(self.slider_swipe, stretch=1)
+        self.btn_exit_swipe = QPushButton("退出卷帘")
+        self.btn_exit_swipe.clicked.connect(lambda: self.btn_swipe.setChecked(False))
+        bar_swipe_layout.addWidget(self.btn_exit_swipe)
+        self.swipe_bar.setVisible(False)
+        layout.addWidget(self.swipe_bar)
+
+        # ---------------- P11-01 测距控制子工具栏
+        self.measure_bar = QWidget()
+        bar_meas_layout = QHBoxLayout(self.measure_bar)
+        bar_meas_layout.setContentsMargins(6, 2, 6, 2)
+        bar_meas_layout.setSpacing(6)
+        self.lbl_measure_status = QLabel("测距模式：鼠标左键点击拾取起点，连续点击添加顶点，右键/双击完成")
+        self.lbl_measure_status.setStyleSheet("color: #d35400; font-weight: bold;")
+        bar_meas_layout.addWidget(self.lbl_measure_status, stretch=1)
+        self.btn_clear_measure = QPushButton("清除测距")
+        self.btn_clear_measure.clicked.connect(self.clear_measurement)
+        bar_meas_layout.addWidget(self.btn_clear_measure)
+        self.btn_exit_measure = QPushButton("退出测距")
+        self.btn_exit_measure.clicked.connect(lambda: self.btn_measure.setChecked(False))
+        bar_meas_layout.addWidget(self.btn_exit_measure)
+        self.measure_bar.setVisible(False)
+        layout.addWidget(self.measure_bar)
+
         pg.setConfigOptions(imageAxisOrder="row-major", antialias=False)
         self.gl_widget = pg.GraphicsLayoutWidget()
         self.plot_item = self.gl_widget.addPlot()
@@ -137,6 +242,41 @@ class ImageCanvas(QWidget):
 
         self.img_item = pg.ImageItem()
         self.plot_item.addItem(self.img_item)
+
+        # P11-01 卷帘顶层图层与分割线
+        self.img_swipe_item = SwipeImageItem()
+        self.img_swipe_item.setZValue(2)
+        self.img_swipe_item.setVisible(False)
+        self.plot_item.addItem(self.img_swipe_item)
+
+        self.swipe_line = pg.InfiniteLine(
+            angle=90,
+            movable=True,
+            pen=pg.mkPen(color="#00e5ff", width=2, style=Qt.PenStyle.DashLine),
+            label="◀ 卷帘对比 ▶",
+            labelOpts={"position": 0.85, "color": "#00e5ff", "fill": "#1a1a1a"},
+        )
+        self.swipe_line.setZValue(15)
+        self.swipe_line.setVisible(False)
+        self.plot_item.addItem(self.swipe_line)
+        self.swipe_line.sigPositionChanged.connect(self._on_swipe_line_changed)
+
+        # P11-01 测距折线与橡皮筋
+        self._measure_line = pg.PlotDataItem(
+            pen=pg.mkPen(color="#ff9900", width=2.0),
+            symbol="o",
+            symbolBrush="#ffcc00",
+            symbolSize=8,
+        )
+        self._measure_line.setZValue(25)
+        self.plot_item.addItem(self._measure_line)
+
+        self._measure_rubber = pg.PlotDataItem(
+            pen=pg.mkPen(color="#ff9900", width=1.5, style=Qt.PenStyle.DashLine),
+        )
+        self._measure_rubber.setZValue(24)
+        self.plot_item.addItem(self._measure_rubber)
+
         # ROI 直接挂在 plot_item 上：pyqtgraph 的 ItemGroup 只能 addItem，无法逐个摘除
         self.roi_z = 10
         self.rubber_z = 20
@@ -239,6 +379,8 @@ class ImageCanvas(QWidget):
         self._bounds = None
         self._bounds_gen = -1
         self.img_item.clear()
+        self.disable_swipe()
+        self.clear_measurement()
         self._clear_rois()
         self._status("就绪 (画布已清空)")
 
@@ -579,6 +721,360 @@ class ImageCanvas(QWidget):
         self._bounds = None
         self.refresh()
 
+    # ------------------------------------------------------------------ P11-01 Swipe 卷帘
+    def set_available_layers_provider(self, provider: Any) -> None:
+        """设置图层提供者回调，用于填充卷帘可选图层下拉框。"""
+        self._available_layers_provider = provider
+
+    def _on_swipe_toggled(self, on: bool) -> None:
+        if on:
+            self.enable_swipe()
+        else:
+            self.disable_swipe()
+
+    def enable_swipe(
+        self,
+        swipe_layer: LayerItem | None = None,
+        orientation: str = "vertical",
+    ) -> None:
+        """开启两图层卷帘对比模式。"""
+        self._swipe_enabled = True
+        self._swipe_orientation = orientation
+        self.swipe_bar.setVisible(True)
+        self.btn_swipe.blockSignals(True)
+        self.btn_swipe.setChecked(True)
+        self.btn_swipe.blockSignals(False)
+
+        # 填充对比图层候选列表
+        self.cmb_swipe_layer.blockSignals(True)
+        self.cmb_swipe_layer.clear()
+        layers: list[LayerItem] = []
+        if callable(self._available_layers_provider):
+            layers = self._available_layers_provider() or []
+        for ly in layers:
+            if self._layer is not None and ly.layer_id == self._layer.layer_id:
+                continue  # 跳过当前底图
+            if self.is_raster_renderable(ly):
+                self.cmb_swipe_layer.addItem(ly.name, ly)
+
+        if swipe_layer is not None:
+            for idx in range(self.cmb_swipe_layer.count()):
+                if self.cmb_swipe_layer.itemData(idx).layer_id == swipe_layer.layer_id:
+                    self.cmb_swipe_layer.setCurrentIndex(idx)
+                    break
+            self._swipe_layer = swipe_layer
+        elif self.cmb_swipe_layer.count() > 0:
+            self._swipe_layer = self.cmb_swipe_layer.itemData(0)
+        else:
+            self._swipe_layer = None
+        self.cmb_swipe_layer.blockSignals(False)
+
+        # 初始化分割线
+        vr = self.plot_item.getViewBox().viewRange()
+        if orientation == "vertical":
+            self.swipe_line.setAngle(90)
+            split_pos = (vr[0][0] + vr[0][1]) * 0.5
+        else:
+            self.swipe_line.setAngle(0)
+            split_pos = (vr[1][0] + vr[1][1]) * 0.5
+
+        self.swipe_line.setValue(split_pos)
+        self.swipe_line.setVisible(True)
+        self.slider_swipe.setValue(50)
+
+        self._refresh_swipe_layer()
+        self._status("已开启卷帘对比：可拖拽蓝色分割线或滑动条实时对比两图层")
+
+    def disable_swipe(self) -> None:
+        """关闭卷帘对比模式。"""
+        self._swipe_enabled = False
+        self._swipe_layer = None
+        self.img_swipe_item.setVisible(False)
+        self.img_swipe_item.swipe_enabled = False
+        self.swipe_line.setVisible(False)
+        self.swipe_bar.setVisible(False)
+        self.btn_swipe.blockSignals(True)
+        self.btn_swipe.setChecked(False)
+        self.btn_swipe.blockSignals(False)
+        self._status("已退出卷帘对比模式")
+
+    def _on_swipe_layer_selected(self, idx: int) -> None:
+        if not self._swipe_enabled:
+            return
+        ly = self.cmb_swipe_layer.itemData(idx)
+        self._swipe_layer = ly
+        self._refresh_swipe_layer()
+
+    def _on_swipe_orient_changed(self, idx: int) -> None:
+        orient = self.cmb_swipe_orient.itemData(idx) or "vertical"
+        self._swipe_orientation = orient
+        vr = self.plot_item.getViewBox().viewRange()
+        if orient == "vertical":
+            self.swipe_line.setAngle(90)
+            pos = (vr[0][0] + vr[0][1]) * (self.slider_swipe.value() / 100.0)
+        else:
+            self.swipe_line.setAngle(0)
+            pos = (vr[1][0] + vr[1][1]) * (self.slider_swipe.value() / 100.0)
+        self.swipe_line.setValue(pos)
+        self.img_swipe_item.set_swipe(True, pos, orient)
+
+    def _on_swipe_slider_changed(self, val: int) -> None:
+        if not self._swipe_enabled:
+            return
+        vr = self.plot_item.getViewBox().viewRange()
+        frac = max(0.0, min(1.0, val / 100.0))
+        if self._swipe_orientation == "vertical":
+            pos = vr[0][0] + (vr[0][1] - vr[0][0]) * frac
+        else:
+            pos = vr[1][0] + (vr[1][1] - vr[1][0]) * frac
+        self.swipe_line.blockSignals(True)
+        self.swipe_line.setValue(pos)
+        self.swipe_line.blockSignals(False)
+        self.img_swipe_item.set_swipe(True, pos, self._swipe_orientation)
+
+    def _on_swipe_line_changed(self) -> None:
+        if not self._swipe_enabled:
+            return
+        pos = self.swipe_line.value()
+        self.img_swipe_item.set_swipe(True, pos, self._swipe_orientation)
+        vr = self.plot_item.getViewBox().viewRange()
+        if self._swipe_orientation == "vertical":
+            span = max(1e-6, vr[0][1] - vr[0][0])
+            frac = (pos - vr[0][0]) / span
+        else:
+            span = max(1e-6, vr[1][1] - vr[1][0])
+            frac = (pos - vr[1][0]) / span
+        pct = int(round(max(0.0, min(1.0, frac)) * 100))
+        self.slider_swipe.blockSignals(True)
+        self.slider_swipe.setValue(pct)
+        self.slider_swipe.blockSignals(False)
+
+    def _refresh_swipe_layer(self) -> None:
+        layer, client = self._swipe_layer, self._client
+        if layer is None or client is None or not layer.visible or not self._swipe_enabled:
+            self.img_swipe_item.setVisible(False)
+            return
+        if not self.is_raster_renderable(layer):
+            self.img_swipe_item.setVisible(False)
+            return
+        settings = layer.display
+        try:
+            bands = settings.selected_bands(layer.band_count)
+        except Exception:
+            return
+
+        x_off, y_off, win_w, win_h = self._visible_window(layer)
+        budget = RGB_BUDGET if settings.mode is DisplayMode.rgb else GRAY_BUDGET
+        out_w, out_h = self._out_size(win_w, win_h, budget)
+        key = TileKey(
+            source=f"{layer.file_path}|swipe",
+            bands=tuple(bands),
+            x_off=x_off,
+            y_off=y_off,
+            win_w=win_w,
+            win_h=win_h,
+            out_w=out_w,
+            out_h=out_h,
+            overview=-1,
+        )
+        hit = self._cache.get(key)
+        if hit is not None:
+            self._render_swipe(_payload_from_cache(hit), layer, settings)
+            return
+
+        def _on_ok(payload: dict[str, Any], k=key, ly=layer, st=settings) -> None:
+            self._cache.put(k, _cache_bytes(payload))
+            self._render_swipe(payload, ly, st)
+
+        client.read_window_async(
+            path=layer.file_path,
+            x_off=x_off,
+            y_off=y_off,
+            win_w=win_w,
+            win_h=win_h,
+            out_w=out_w,
+            out_h=out_h,
+            bands=bands,
+            raw=True,
+            on_success=_on_ok,
+            on_error=lambda msg: None,
+        )
+
+    def _render_swipe(
+        self,
+        payload: dict[str, Any],
+        layer: LayerItem,
+        settings: DisplaySettings,
+    ) -> None:
+        if not self._swipe_enabled or self._swipe_layer is None:
+            return
+        try:
+            win = decode_window(payload)
+            bounds = compute_stretch_bounds(win, settings)
+            rgba, _ = to_rgba(win, settings, bounds_override=bounds)
+        except Exception:
+            return
+
+        self.img_swipe_item.setImage(rgba, autoLevels=False)
+        self.img_swipe_item.setRect(QRectF(float(win.x_off), float(win.y_off), float(win.win_w), float(win.win_h)))
+        self.img_swipe_item.set_swipe(True, self.swipe_line.value(), self._swipe_orientation)
+        self.img_swipe_item.setVisible(True)
+
+    # ------------------------------------------------------------------ P11-01 折线测距
+    def set_measure_mode(self, enabled: bool) -> None:
+        """切换折线测距模式开关。"""
+        self._measure_mode = enabled
+        self.measure_bar.setVisible(enabled)
+        self.btn_measure.blockSignals(True)
+        self.btn_measure.setChecked(enabled)
+        self.btn_measure.blockSignals(False)
+
+        if enabled:
+            # 退出 ROI 绘制模式避免事件冲突
+            self.set_roi_draw(ROIShape.rectangle, False)
+            self.set_roi_draw(ROIShape.polygon, False)
+            self.btn_rect.setChecked(False)
+            self.btn_poly.setChecked(False)
+            self.lbl_measure_status.setText("测距模式：左键点击拾取起点，连续点击添加顶点，右键/双击完成")
+            self._status("折线测距已开启：鼠标左键点击开始测量")
+        else:
+            if self._measure_rubber is not None:
+                self._measure_rubber.setData([], [])
+            self._status("已退出测距模式")
+
+    def clear_measurement(self) -> None:
+        """清空当前测距折线与端点标记。"""
+        self._measure_points.clear()
+        if self._measure_line is not None:
+            self._measure_line.setData([], [])
+        if self._measure_rubber is not None:
+            self._measure_rubber.setData([], [])
+        for lbl in self._measure_labels:
+            with contextlib.suppress(Exception):
+                self.plot_item.removeItem(lbl)
+        self._measure_labels.clear()
+        self.lbl_measure_status.setText("测距数据已清空，点击影像左键开始新测量")
+        self.sig_measure_status.emit("")
+
+    def _compute_segment_distance(
+        self, p1: tuple[float, float], p2: tuple[float, float]
+    ) -> tuple[float, str]:
+        """计算两点间真实距离（支持 CRS 投影/地理坐标换算，无投影回退像素距离）。"""
+        layer = self._layer
+        if layer is None:
+            d_px = math.hypot(p2[0] - p1[0], p2[1] - p1[1])
+            return d_px, f"{d_px:.1f} px"
+
+        meta = getattr(layer, "metadata", None) or {}
+        gt = meta.get("geotransform")
+        crs_wkt = str(meta.get("crs_wkt") or "")
+
+        if gt and len(gt) >= 6:
+            x1 = gt[0] + p1[0] * gt[1] + p1[1] * gt[2]
+            y1 = gt[3] + p1[0] * gt[4] + p1[1] * gt[5]
+            x2 = gt[0] + p2[0] * gt[1] + p2[1] * gt[2]
+            y2 = gt[3] + p2[0] * gt[4] + p2[1] * gt[5]
+
+            is_geo = any(k in crs_wkt.lower() for k in ("degree", "4326", "geogcs", "geographic"))
+            if is_geo:
+                # 经纬度：大圆大地线公式 (Haversine)
+                lat1, lon1 = y1, x1
+                lat2, lon2 = y2, x2
+                r = 6371000.0  # 地球平均半径 (米)
+                phi1, phi2 = math.radians(lat1), math.radians(lat2)
+                dphi = math.radians(lat2 - lat1)
+                dlambda = math.radians(lon2 - lon1)
+                a = math.sin(dphi / 2.0) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2.0) ** 2
+                dist_m = 2.0 * r * math.atan2(math.sqrt(a), math.sqrt(max(0.0, 1.0 - a)))
+            else:
+                # 投影平面直角坐标系 (米制)
+                dist_m = math.hypot(x2 - x1, y2 - y1)
+
+            if dist_m >= 1000.0:
+                return dist_m, f"{dist_m / 1000.0:.3f} km"
+            return dist_m, f"{dist_m:.2f} m"
+
+        # 默认无仿射参数：纯像素距离
+        dist_px = math.hypot(p2[0] - p1[0], p2[1] - p1[1])
+        return dist_px, f"{dist_px:.1f} px"
+
+    def _handle_measure_click(self, event: Any) -> None:
+        vb = self.plot_item.getViewBox()
+        if not vb.sceneBoundingRect().contains(event.scenePos()):
+            return
+        pos = vb.mapSceneToView(event.scenePos())
+        btn = event.button() if hasattr(event, "button") and callable(event.button) else None
+        is_right = (btn == Qt.MouseButton.RightButton)
+        is_double = False
+        if hasattr(event, "double") and callable(event.double):
+            is_double = bool(event.double())
+
+        if is_right or is_double:
+            self._finish_measurement()
+            return
+
+        # 左键添加顶点
+        self._measure_points.append((float(pos.x()), float(pos.y())))
+        self._update_measurement_display()
+
+    def _handle_measure_hover(self, view_pos: Any) -> None:
+        if not self._measure_points or self._measure_rubber is None:
+            return
+        last_pt = self._measure_points[-1]
+        curr_pt = (float(view_pos.x()), float(view_pos.y()))
+        self._measure_rubber.setData([last_pt[0], curr_pt[0]], [last_pt[1], curr_pt[1]])
+
+        seg_dist, seg_str = self._compute_segment_distance(last_pt, curr_pt)
+        total_dist = sum(
+            self._compute_segment_distance(self._measure_points[i], self._measure_points[i + 1])[0]
+            for i in range(len(self._measure_points) - 1)
+        ) + seg_dist
+
+        total_str = f"{total_dist / 1000.0:.3f} km" if total_dist >= 1000.0 else f"{total_dist:.2f} m"
+        status_txt = f"当前段长: {seg_str} | 累计总长: {total_str} (单击添加顶点，右键/双击完成)"
+        self.lbl_measure_status.setText(status_txt)
+        self.sig_measure_status.emit(status_txt)
+
+    def _finish_measurement(self) -> None:
+        if len(self._measure_points) < 2:
+            self.clear_measurement()
+            return
+        if self._measure_rubber is not None:
+            self._measure_rubber.setData([], [])
+        total_dist = sum(
+            self._compute_segment_distance(self._measure_points[i], self._measure_points[i + 1])[0]
+            for i in range(len(self._measure_points) - 1)
+        )
+        total_str = f"{total_dist / 1000.0:.3f} km" if total_dist >= 1000.0 else f"{total_dist:.2f} m"
+        finish_txt = f"测距完成：共 {len(self._measure_points)} 个顶点，累计总距离 {total_str}"
+        self.lbl_measure_status.setText(finish_txt)
+        self.sig_measure_status.emit(finish_txt)
+        self._status(finish_txt)
+
+    def _update_measurement_display(self) -> None:
+        if not self._measure_points or self._measure_line is None:
+            return
+        xs = [p[0] for p in self._measure_points]
+        ys = [p[1] for p in self._measure_points]
+        self._measure_line.setData(xs, ys)
+
+        if len(self._measure_points) >= 2:
+            p_prev = self._measure_points[-2]
+            p_curr = self._measure_points[-1]
+            _, seg_str = self._compute_segment_distance(p_prev, p_curr)
+            # 在中点添加文本标注
+            mid_x = (p_prev[0] + p_curr[0]) * 0.5
+            mid_y = (p_prev[1] + p_curr[1]) * 0.5
+            lbl = pg.TextItem(seg_str, color="#ffcc00", fill="#2c3e50")
+            lbl.setPos(mid_x, mid_y)
+            lbl.setZValue(26)
+            self.plot_item.addItem(lbl)
+            self._measure_labels.append(lbl)
+
+        count = len(self._measure_points)
+        status_txt = f"已标定 {count} 个端点 (移动鼠标观察当前段长，单击继续，右键完成)"
+        self.lbl_measure_status.setText(status_txt)
+
     # ------------------------------------------------------------------ 取数
     def _visible_window(self, layer: LayerItem) -> tuple[int, int, int, int]:
         vr = self.plot_item.getViewBox().viewRange()
@@ -618,6 +1114,9 @@ class ImageCanvas(QWidget):
             return
 
         generation = self._gen.generation
+
+        if self._swipe_enabled and self._swipe_layer is not None:
+            self._refresh_swipe_layer()
 
         if self.view_crs_wkt:
             self._refresh_reprojected(layer, client, settings, bands, generation)
@@ -796,6 +1295,10 @@ class ImageCanvas(QWidget):
         p = vb.mapSceneToView(pos)
         self._hover_pos = (float(p.x()), float(p.y()))
         self._hover_timer.start()
+
+        # P11-01 测距橡皮筋与实时距离提示
+        if self._measure_mode and self._measure_points:
+            self._handle_measure_hover(p)
 
     def _emit_hover(self) -> None:
         layer = self._layer
@@ -1157,7 +1660,21 @@ class ImageCanvas(QWidget):
     # 事件由 pyqtgraph 场景发出（QWidget 的 mousePress 拿不到 scenePos，
     # 且画布鼠标事件已被内部视图消费），因此这里连接 scene 信号。
     def _on_scene_mouse_clicked(self, event: Any) -> None:
+        # P11-01 测距点击优先接管
+        if self._measure_mode:
+            self._handle_measure_click(event)
+            return
+
         if self._draw_shape is not ROIShape.polygon:
+            # P11-01 普通点击像元发射光谱剖面查看信号
+            if self._layer is not None and self.is_raster_renderable(self._layer):
+                vb = self.plot_item.getViewBox()
+                if vb.sceneBoundingRect().contains(event.scenePos()):
+                    pos = vb.mapSceneToView(event.scenePos())
+                    col = int(math.floor(pos.x()))
+                    row = int(math.floor(pos.y()))
+                    if 0 <= col < self._layer.width and 0 <= row < self._layer.height:
+                        self.sig_pixel_clicked.emit(col, row, self._layer.layer_id)
             return
         vb = self.plot_item.getViewBox()
         if not vb.sceneBoundingRect().contains(event.scenePos()):

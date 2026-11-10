@@ -488,6 +488,93 @@ def _draw_tool_fft(p: QPainter, s: float) -> None:
     p.drawPath(path)
 
 
+def _draw_tool_swipe(p: QPainter, s: float) -> None:
+    # 卷帘对比：左右分屏矩形 + 垂直分割线 + 左右箭头
+    p.setPen(Qt.PenStyle.NoPen)
+    # 左半屏（深蓝）
+    p.setBrush(QBrush(QColor("#2980B9")))
+    p.drawRect(QRectF(s * 0.12, s * 0.18, s * 0.38, s * 0.64))
+    # 右半屏（亮绿）
+    p.setBrush(QBrush(QColor("#27AE60")))
+    p.drawRect(QRectF(s * 0.50, s * 0.18, s * 0.38, s * 0.64))
+    # 边框
+    p.setPen(QPen(QColor("#2C3E50"), 1.6))
+    p.setBrush(Qt.BrushStyle.NoBrush)
+    p.drawRect(QRectF(s * 0.12, s * 0.18, s * 0.76, s * 0.64))
+    # 中间分割虚线
+    p.setPen(QPen(QColor("#F1C40F"), 2.0, Qt.PenStyle.DashLine))
+    p.drawLine(QPointF(s * 0.50, s * 0.14), QPointF(s * 0.50, s * 0.86))
+    # 左右对比小箭头
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(QBrush(QColor("#F1C40F")))
+    # 左箭头
+    p1 = QPainterPath()
+    p1.moveTo(s * 0.40, s * 0.50)
+    p1.lineTo(s * 0.46, s * 0.42)
+    p1.lineTo(s * 0.46, s * 0.58)
+    p1.closeSubpath()
+    p.drawPath(p1)
+    # 右箭头
+    p2 = QPainterPath()
+    p2.moveTo(s * 0.60, s * 0.50)
+    p2.lineTo(s * 0.54, s * 0.42)
+    p2.lineTo(s * 0.54, s * 0.58)
+    p2.closeSubpath()
+    p.drawPath(p2)
+
+
+def _draw_tool_measure(p: QPainter, s: float) -> None:
+    # 折线测距：刻度尺 + 斜向测距线与端点圆圈
+    p.setPen(QPen(QColor("#D35400"), 2.2, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+    path = QPainterPath()
+    path.moveTo(s * 0.18, s * 0.78)
+    path.lineTo(s * 0.48, s * 0.32)
+    path.lineTo(s * 0.82, s * 0.55)
+    p.drawPath(path)
+    # 端点圆圈
+    p.setPen(QPen(QColor("#BA4A00"), 1.5))
+    p.setBrush(QBrush(QColor("#F39C12")))
+    p.drawEllipse(QPointF(s * 0.18, s * 0.78), s * 0.07, s * 0.07)
+    p.drawEllipse(QPointF(s * 0.48, s * 0.32), s * 0.07, s * 0.07)
+    p.drawEllipse(QPointF(s * 0.82, s * 0.55), s * 0.07, s * 0.07)
+
+
+def _draw_tool_profile(p: QPainter, s: float) -> None:
+    # 像元光谱剖面：L型坐标轴 + 典型反射光谱连续曲线（含红边与吸收谷）
+    p.setPen(QPen(QColor("#7F8C8D"), 1.8, Qt.PenStyle.SolidLine, Qt.PenCapStyle.SquareCap))
+    p.drawLine(QPointF(s * 0.15, s * 0.15), QPointF(s * 0.15, s * 0.85))
+    p.drawLine(QPointF(s * 0.15, s * 0.85), QPointF(s * 0.88, s * 0.85))
+    # 光谱曲线 (典型植被曲线：绿峰 + 红吸收谷 + 红边陡升 + 近红外高原)
+    path = QPainterPath()
+    path.moveTo(s * 0.18, s * 0.76)
+    path.lineTo(s * 0.28, s * 0.65)  # 绿峰
+    path.lineTo(s * 0.38, s * 0.78)  # 红光吸收谷
+    path.lineTo(s * 0.52, s * 0.30)  # 红边陡升
+    path.lineTo(s * 0.68, s * 0.28)  # NIR 高原
+    path.lineTo(s * 0.75, s * 0.55)  # 水吸收谷
+    path.lineTo(s * 0.85, s * 0.45)
+    p.setPen(QPen(QColor("#00B4D8"), 2.2, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+    p.drawPath(path)
+    # 吸收谷亮点
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(QBrush(QColor("#E74C3C")))
+    p.drawEllipse(QPointF(s * 0.38, s * 0.78), s * 0.06, s * 0.06)
+
+
+def _draw_tool_play(p: QPainter, s: float) -> None:
+    # 播放按钮：圆形底盘 + 向右播放实心三角
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(QBrush(QColor("#27AE60")))
+    p.drawEllipse(QPointF(s * 0.50, s * 0.50), s * 0.38, s * 0.38)
+    p.setBrush(QBrush(QColor("#FFFFFF")))
+    path = QPainterPath()
+    path.moveTo(s * 0.40, s * 0.32)
+    path.lineTo(s * 0.68, s * 0.50)
+    path.lineTo(s * 0.40, s * 0.68)
+    path.closeSubpath()
+    p.drawPath(path)
+
+
 # 图标分发注册表
 _DRAWERS: dict[str, Callable[[QPainter, float], None]] = {
     # 文件与工程
@@ -523,6 +610,11 @@ _DRAWERS: dict[str, Callable[[QPainter, float], None]] = {
     "tool_stats": _draw_tool_stats,
     "tool_pca": _draw_tool_pca,
     "tool_fft": _draw_tool_fft,
+    "tool_swipe": _draw_tool_swipe,
+    "tool_measure": _draw_tool_measure,
+    "tool_profile": _draw_tool_profile,
+    "tool_play": _draw_tool_play,
+
 }
 
 
