@@ -1,6 +1,6 @@
 # 执行状态
 
-更新：2026-11-10（第 80 轮 · P10-02 安装/升级/卸载和干净机测试全面收官，P0-02 闭环转 done！发布包完备内置 app、runtimes/gdal（162 原生二进制 + 161 gdal 规范元数据 + proj.db）、runtimes/rasterio（内置独立 rio CLI）、runtimes/science 四套运行时；实现安装、升级、安全卸载及原生 PE `uninstall.exe`，严格保障用户项目资产 100% 留存；在完全洗脱 PATH（仅保留 Windows 核心系统目录）、无全局 Python/Conda/QGIS、无开发目录源码的干净机和离线模拟环境下，通过 `--doctor --json` 自检 4 运行时全绿，并成功离线执行真实 GDAL DEM 山体阴影分析、Rasterio 4波段 NDVI 计算与无头 UI 窗口初始化；新增 `tests/integration/test_p10_clean_machine_and_lifecycle.py` 5 项端到端验收全过（97.33s），clean_exit_verified=True，0 残留进程；Ruff 0 告警，Mypy 99 个源文件 0 错误，scripts/audit-capabilities.ps1 2033 个参数零漂移对齐）✅。
+更新：2026-11-10（第 81 轮 · P10-03 用户说明、开发说明和诊断全面收官！建立完备的用户使用指南 `docs/user/` 与开发者参考 `docs/developer/` 文档体系，包括：01 工具索引与 CLI 指南（39+ 核心计算能力编目、PE 启动器 7 大命令行选项、内置 GDAL/Rasterio CLI 索引）、02 项目与工作流示例（带 path_anchor 锚点机制的完整工程 JSON、跨引擎强类型 DAG 工作流、批处理模板与隔离脚本会话）、01 插件协议与扩展指南（GUI 主进程严禁导入地理依赖的物理隔离红线、JSONL 完整协议状态机与三步新增算法插件实战）、02 故障定位与 Doctor 诊断（PROJ 空间参考缺失、DLL 动态库加载失败、WinError 206 长路径突破、子进程超时强杀与离线断网部署 6 大故障排查手册）、03 依赖与组件清单（GDAL 3.13.3、Rasterio 1.5.2、PySide6 6.9.3、NumPy 2.5.4、SciPy 1.18.1、Pydantic 2.11.7 上游锁定版本、发布包 4 大运行时架构矩阵、205 驱动支持清单与第三方开源合规协议）；同步加固根目录 README.md 首页导航；新增 `tests/unit/test_p10_documentation_audit.py` 6 项自动化测试在 scripts/run_with_timeout.py 监管下 0.29s 全过，clean_exit_verified=True，0 残留进程；Ruff 0 告警，Mypy 99 个源文件 0 错误，scripts/audit-capabilities.ps1 2033 个参数零漂移对齐）✅。
 
 ## 当前里程碑
 
@@ -161,6 +161,42 @@
         4. `test_p10_02_offline_rasterio_processing`：验证在离线环境下 Rasterio 引擎执行真实多波段创建与 NDVI 计算无误；
         5. `test_p10_02_offline_headless_ui_startup`：验证离线无头模式下主界面初始化、依赖装载与优雅退出。
       - 在 `scripts/run_with_timeout.py` 监督下 5 项测试全部通过（耗时 97.33s，`pytest_exit_code=0, clean_exit_verified=True, residual_processes=[]`）；
+      - Ruff 0 告警，Mypy 99 个源文件 0 错误，`scripts/audit-capabilities.ps1` 校验全量基准与 2033 个参数零漂移通过。
+  - **P10-03 用户说明、开发说明和诊断**：**done**（第 81 轮）。
+    - **完备文档体系编目与发布**：
+      - **工具索引与 CLI 指南 (`docs/user/01_工具索引与CLI.md`)**：
+        - 编目原生 PE 启动器（`SpectraWorkbench.exe`、`SpectraWorkbench-console.exe`、`SpectraWorkbench.bat`）的 7 大核心命令行参数（`--doctor`, `--json`, `--headless`, `--test-init`, `--sample`, `--open`, `--screenshot`）；
+        - 编目界面动态参数表单交互、Schema 参数校验、覆盖保护（`overwrite`）与临时工作空间暂存机制（Staging）；
+        - 全量编目 39+ 核心计算能力清单（格式转换、地图重投影、DEM 地形坡度/坡向/阴影、等值线/面、散点插值、矢量栅格化、栅格矢量化、OGR 矢量转换/SQL、多维切片、植被指数 NDVI/NDWI/SAVI/NBR、2D FFT 频域滤波去条纹、PCA 降维与无损重建、缨帽变换、GCP 纠正、像元差值、全色多光谱融合、二值掩膜、像元二分 FVC 反演、辐射定标与 TOA、DOS1 暗目标减法、多时相去云替换等）；
+        - 编目发布包内置独立 GDAL 二进制（gdalinfo, gdalwarp, ogr2ogr 等）与 Rasterio CLI（`rio.exe`）用法。
+      - **项目与工作流示例 (`docs/user/02_项目与工作流示例.md`)**：
+        - 给出结构规范的真实工程 JSON（`.spectra.json`），详细说明 `path_anchor: "project_dir"` 相对路径自愈机制、缺失源隔离防劫持保护与同卷原子保存；
+        - 给出跨引擎强类型 DAG 工作流示例（`workflow_terrain_pipeline.json`），包含 `kind: raster | vector` 端口校验、Kahn 算法环检测、跨引擎成果物化及按指纹智能缓存（Fingerprint Caching）；
+        - 给出批处理模板示例（`batch_ndvi.json`），包含占位符展开、`continue_on_error` 容错控制与批量执行清单（`batch_manifest.json`）；
+        - 给出隔离脚本会话（`ScriptSession`）Python 交互代码范例与成果显式登记机制。
+      - **插件协议与扩展指南 (`docs/developer/01_插件协议与自定义引擎.md`)**：
+        - 严密确立进程物理隔离红线：主进程 GUI 严禁导入 `osgeo`、`rasterio` 与 `scipy`，避免原生崩溃、DLL 地狱与界面卡死；
+        - 详述基于单行换行 JSONL 的进程间通信协议（`handshake`, `task_submit`, `task_progress`, `task_result`）；
+        - 说明 `capability.schema.json` 契约规范与参数表单映射关系；
+        - 提供三步接入自定义算法插件实战教程（定义契约 JSON -> 编写 `ProviderAdapter` -> 在独立 Worker 中注册执行函数）。
+      - **故障定位与诊断指南 (`docs/developer/02_故障定位与Doctor诊断.md`)**：
+        - 详解 `doctor.py` 自检诊断机制、核心判定字段（`overall_ok`, `gui_can_start`）与引擎指标；
+        - 编制 6 大典型运行期故障排查标准手册：PROJ 空间参考数据库丢失、Windows 原生 DLL 加载失败与 WinError 126、长路径限制与 WinError 206 突破、Worker 挂起超时级联强杀、工程意外断电损坏与原子保存防损、完全离线与断网内网部署。
+      - **依赖与组件版本清单 (`docs/developer/03_依赖与组件清单.md`)**：
+        - 归档上游基准锁定版本（Python 3.12.8, PySide6 6.9.3, PyQtGraph 0.13.7, GDAL 3.13.3, PROJ 9.5.1, Rasterio 1.5.2, NumPy 2.5.4, SciPy 1.18.1, Pydantic 2.11.7）；
+        - 归档发布包 4 大运行时目录架构矩阵与文件分布；
+        - 归档 205 个 GDAL 驱动支持矩阵与常用栅格/矢量格式；
+        - 归档第三方开源许可证与合规声明。
+      - **README.md 首页更新**：全面集成用户与开发者文档索引，更新开箱即用运行入口。
+    - **测试与门禁验证**：
+      - 新增单元审计测试 `tests/unit/test_p10_documentation_audit.py`，覆盖 6 大核心检验点：
+        1. `test_p10_03_all_required_documents_exist_and_non_empty`：验证 5 篇核心文档及 README 完整存在且内容详实；
+        2. `test_p10_03_tool_index_contains_registered_capabilities`：验证文档编目的 27 项核心能力与 7 大命令行选项均真实存在于注册表，无虚构；
+        3. `test_p10_03_json_examples_validity`：提取并校验工程、DAG 工作流与批处理 3 组 JSON 代码块，语法 100% 正确且结构符合规范；
+        4. `test_p10_03_plugin_protocol_spec_validity`：校验插件协议文档中的 4 组 JSONL 消息样例与隔离红线说明；
+        5. `test_p10_03_doctor_and_troubleshooting_coverage`：验证故障定位文档完整覆盖 6 类关键故障排查手册；
+        6. `test_p10_03_dependencies_and_version_consistency`：验证依赖清单记录的版本与环境基准严格一致。
+      - 在 `scripts/run_with_timeout.py` 监督下 6 项测试全部通过（耗时 0.29s，`pytest_exit_code=0, clean_exit_verified=True, residual_processes=[]`）；
       - Ruff 0 告警，Mypy 99 个源文件 0 错误，`scripts/audit-capabilities.ps1` 校验全量基准与 2033 个参数零漂移通过。
 ## 原 P3 验收标准逐项对账与剩余缺口
 
@@ -2442,6 +2478,7 @@ Thread 0x0000d064 (most recent call first):
 | P3-05 view CRS、重投影、查询与 ROI | implemented | 旋转 Affine 与无 GT 栅格支持；地图坐标 ↔ 像元中心/角点约定；ROI 模型与点包含判定；跨 CRS 视图重投影网格读取；真实鼠标事件多边形 ROI 绘制/闭合/选中/手柄拖拽/删除/保存重开全流程；矩形展开 4 角点经 Worker 转换并精确保持 425 平方单位面积与 4 个角点；坐标转换失败异常隔离隐藏并保全权威模型；五类故障注入矩阵覆盖（向地图/回像元/项目重开/拖动反算/旧响应迟到），跨坐标空间数据混用缺陷已修复（tests/integration/test_p3_interactive_polygon_roi.py 9 项全绿） |
 | P10-01 Windows onedir 发布与运行时重定位 | done | scripts/package_onedir.py 组装独立发布包；原生 PE SpectraWorkbench.exe 与 SpectraWorkbench-console.exe 启动器；中文空格路径下 tests/integration/test_p10_packaging_and_relocation.py 5 项全绿 |
 | P10-02 干净机环境与安装生命周期测试 | done | dist/SpectraWorkbench/ 包含 app, runtimes/gdal, runtimes/rasterio, runtimes/science 四套独立运行时；原生 uninstall.exe；用户工程 100% 保全；PATH 完全洗脱脱离开发目录干净机与断网离线实测 tests/integration/test_p10_clean_machine_and_lifecycle.py 5 项全绿 |
+| P10-03 用户说明、开发说明和诊断 | done | docs/user/ 与 docs/developer/ 5 篇核心文档 + README 索引；工具编目、工程/工作流/批处理/脚本示例、插件协议、6 大故障排查手册与依赖清单；tests/unit/test_p10_documentation_audit.py 6 项全绿 |
 
 实测命令与结果：
 - powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test.ps1 -All → **Ruff 干净、Mypy 干净（64 个源文件 0 错误）、539 项收集 / 0 失败、rc=0**（2026-11-06 第 36 轮，`ALL CHECKS PASSED`，耗时 245.9s；退出异常已在测试侧止血，见第 33 轮）。上一轮（第 35 轮）为 536 项收集 / 0 失败 / rc=0、耗时 369.0s；再上一轮（第 34 轮）为 467 passed / 0 失败 / rc=0、Mypy 61 个源文件 0 错误

@@ -1313,9 +1313,17 @@
         "P7-05",
         "P9-01"
       ],
-      "status": "todo",
+      "status": "done",
       "release_requirement": "core",
-      "evidence": [],
+      "evidence": [
+        "编目工具索引与 CLI 指南 docs/user/01_工具索引与CLI.md：涵盖原生 PE 启动器（SpectraWorkbench-console.exe）7 大核心选项、动态表单交互与覆盖保护机制、39+ 核心计算能力完整分类清单、内置 GDAL 与 Rasterio CLI 索引",
+        "编目项目与工作流示例 docs/user/02_项目与工作流示例.md：提供带 path_anchor 锚点机制的完整可用 project.spectra.json 工程、带强类型端口与按指纹缓存的 DAG 工作流 workflow.json、带参数展开与容错控制的批处理 batch.json、以及隔离解释器脚本会话 ScriptSession 原生代码示例",
+        "编目插件协议与扩展指南 docs/developer/01_插件协议与自定义引擎.md：详述主进程 GUI 严禁导入 osgeo/rasterio/scipy 的物理隔离红线、JSONL 握手/提交/进度/成果完整协议、capability.schema.json 契约规范与自定义算法插件三步接入实战",
+        "编目故障定位与诊断指南 docs/developer/02_故障定位与Doctor诊断.md：详述系统 Doctor 自检与健康判定指标、以及 PROJ 空间数据库缺失、Windows 原生 DLL 加载失败、WinError 206 长路径限制、子进程超时挂起强杀、原子保存工程防损与离线断网部署 6 大常见故障排查手册",
+        "编目依赖与组件版本清单 docs/developer/03_依赖与组件清单.md：精确记录 GDAL 3.13.3、Rasterio 1.5.2、PySide6 6.9.3、NumPy 2.5.4、SciPy 1.18.1、Pydantic 2.11.7 上游锁定版本、发布包 4 大运行时架构矩阵、205 驱动支持清单与第三方开源合规协议",
+        "更新首页 README.md 呈现完整文档导航与开箱即用运行入口",
+        "新增自动化文档与契约一致性测试 tests/unit/test_p10_documentation_audit.py 6 项测试在 scripts/run_with_timeout.py 监管下全过（clean_exit_verified=True, 0 残留进程）"
+      ],
       "blocking_reason": null
     },
     {
