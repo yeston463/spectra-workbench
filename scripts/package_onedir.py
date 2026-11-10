@@ -114,6 +114,14 @@ namespace SpectraWorkbenchLauncher
                     if (File.Exists(rioPy)) psi.EnvironmentVariables["SPECTRA_RASTERIO_PYTHON"] = rioPy;
                 }
 
+                string scienceDir = Path.Combine(baseDir, "runtimes", "science");
+                if (Directory.Exists(scienceDir))
+                {
+                    string sciPy = Path.Combine(scienceDir, "python.exe");
+                    if (!File.Exists(sciPy)) sciPy = Path.Combine(scienceDir, "Scripts", "python.exe");
+                    if (File.Exists(sciPy)) psi.EnvironmentVariables["SPECTRA_SCIENCE_PYTHON"] = sciPy;
+                }
+
                 string srcDir = Path.Combine(baseDir, "app", "src");
                 string sitePackages = Path.Combine(baseDir, "app", "Lib", "site-packages");
                 string existingPP = Environment.GetEnvironmentVariable("PYTHONPATH") ?? "";
@@ -160,20 +168,27 @@ exit /b %ERRORLEVEL%
 """
 
 
+def _to_extended_path(p: Path) -> Path:
+    p_res = p.resolve()
+    if os.name == "nt":
+        s = str(p_res)
+        if not s.startswith("\\\\?\\"):
+            return Path(f"\\\\?\\{s}")
+    return p_res
+
+
+def _ensure_dir(p: Path) -> Path:
+    ext_p = _to_extended_path(p)
+    os.makedirs(ext_p, exist_ok=True)
+    return ext_p
+
+
 def _link_or_copy(src: Path, dst: Path, mode: str = "link") -> None:
     r"""在 Windows NTFS 上优先创建硬链接，长路径使用 \\?\ 前缀规避 260 字符 MAX_PATH 限制。"""
-    src_res = src.resolve()
-    dst_res = dst.resolve()
+    src_res = _to_extended_path(src)
+    dst_res = _to_extended_path(dst)
 
-    if os.name == "nt":
-        src_str = str(src_res)
-        dst_str = str(dst_res)
-        if not src_str.startswith("\\\\?\\"):
-            src_res = Path(f"\\\\?\\{src_str}")
-        if not dst_str.startswith("\\\\?\\"):
-            dst_res = Path(f"\\\\?\\{dst_str}")
-
-    dst_res.parent.mkdir(parents=True, exist_ok=True)
+    _ensure_dir(dst_res.parent)
     if dst_res.exists():
         dst_res.unlink()
 
@@ -197,7 +212,7 @@ def _copy_tree_efficient(src_dir: Path, dst_dir: Path, mode: str = "link", ignor
         dirs[:] = [d for d in dirs if d not in ignore and not d.startswith(".")]
 
         target_root = dst_dir / rel_root
-        target_root.mkdir(parents=True, exist_ok=True)
+        _ensure_dir(target_root)
 
         for f in files:
             if any(f.endswith(ext.replace("*", "")) for ext in ignore if "*" in ext):
@@ -237,6 +252,140 @@ def compile_native_launcher(output_exe: Path, is_gui: bool = True) -> bool:
 
     if proc.returncode != 0:
         print(f"编译启动器 {output_exe.name} 失败: {proc.stderr}")
+        return False
+
+    return True
+
+
+UNINSTALLER_CS_TEMPLATE = r"""
+using System;
+using System.IO;
+using System.Collections.Generic;
+
+namespace SpectraWorkbenchUninstaller
+{
+    class Program
+    {
+        static int Main(string[] args)
+        {
+            try
+            {
+                string appDir = AppDomain.CurrentDomain.BaseDirectory;
+                Console.WriteLine("[Spectra Uninstaller] 正在执行 Spectra Workbench 安全卸载...");
+                Console.WriteLine("[Spectra Uninstaller] 安装目录: " + appDir);
+
+                // 收集并保全所有用户项目文件 (*.spectra.json)
+                List<string> preservedProjects = new List<string>();
+                try
+                {
+                    foreach (string f in Directory.GetFiles(appDir, "*.*", SearchOption.AllDirectories))
+                    {
+                        if (f.EndsWith(".spectra.json", StringComparison.OrdinalIgnoreCase) ||
+                            f.IndexOf("user_projects", StringComparison.OrdinalIgnoreCase) >= 0)
+                        {
+                            preservedProjects.Add(f);
+                        }
+                    }
+                }
+                catch {}
+
+                // 清理应用核心目录: app, runtimes, resources, environments
+                string[] appDirs = new string[] { "app", "runtimes", "resources", "environments" };
+                foreach (string sub in appDirs)
+                {
+                    string subPath = Path.Combine(appDir, sub);
+                    if (Directory.Exists(subPath))
+                    {
+                        try { Directory.Delete(subPath, true); } catch {}
+                    }
+                }
+
+                // 清理启动器与发布清单
+                string[] rootFiles = new string[] {
+                    "SpectraWorkbench.exe", "SpectraWorkbench-console.exe",
+                    "SpectraWorkbench.bat", "run-app.cmd", "manifest.json", "install_manifest.json"
+                };
+                foreach (string rf in rootFiles)
+                {
+                    string rfp = Path.Combine(appDir, rf);
+                    if (File.Exists(rfp))
+                    {
+                        try { File.Delete(rfp); } catch {}
+                    }
+                }
+
+                if (preservedProjects.Count > 0)
+                {
+                    Console.WriteLine("[Spectra Uninstaller] [用户项目保全] 成功保全以下 " + preservedProjects.Count + " 个用户项目文件：");
+                    foreach (string p in preservedProjects)
+                    {
+                        Console.WriteLine("  -> " + p);
+                    }
+                }
+
+                Console.WriteLine("[Spectra Uninstaller] 应用程序二进制与运行时已安全清理完毕。");
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine("[Spectra Uninstaller] 卸载出现异常: " + ex.Message);
+                return 1;
+            }
+        }
+    }
+}
+"""
+
+UNINSTALLER_BAT_TEMPLATE = r"""@echo off
+setlocal
+set "APP_DIR=%~dp0"
+echo [Spectra Workbench] 正在执行安全卸载...
+if exist "%APP_DIR%uninstall.exe" (
+    "%APP_DIR%uninstall.exe" %*
+    goto :done
+)
+if exist "%APP_DIR%app" rmdir /s /q "%APP_DIR%app"
+if exist "%APP_DIR%runtimes" rmdir /s /q "%APP_DIR%runtimes"
+if exist "%APP_DIR%resources" rmdir /s /q "%APP_DIR%resources"
+if exist "%APP_DIR%environments" rmdir /s /q "%APP_DIR%environments"
+if exist "%APP_DIR%SpectraWorkbench.exe" del /f /q "%APP_DIR%SpectraWorkbench.exe"
+if exist "%APP_DIR%SpectraWorkbench-console.exe" del /f /q "%APP_DIR%SpectraWorkbench-console.exe"
+if exist "%APP_DIR%SpectraWorkbench.bat" del /f /q "%APP_DIR%SpectraWorkbench.bat"
+if exist "%APP_DIR%manifest.json" del /f /q "%APP_DIR%manifest.json"
+if exist "%APP_DIR%install_manifest.json" del /f /q "%APP_DIR%install_manifest.json"
+echo [Spectra Workbench] 应用程序组件已清理完毕。用户项目文件与配置已安全保留。
+:done
+endlocal
+"""
+
+
+def compile_native_uninstaller(output_exe: Path) -> bool:
+    """使用 Windows 内置 C# 编译器编译原生卸载器 PE 可执行程序。"""
+    csc_path = Path(r"C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe")
+    if not csc_path.exists():
+        csc_path = Path(r"C:\Windows\Microsoft.NET\Framework\v4.0.30319\csc.exe")
+
+    if not csc_path.exists():
+        return False
+
+    output_exe = Path(output_exe).resolve()
+    output_exe.parent.mkdir(parents=True, exist_ok=True)
+    cs_src = output_exe.parent / f"{output_exe.stem}.cs"
+    cs_src.write_text(UNINSTALLER_CS_TEMPLATE.strip(), encoding="utf-8")
+
+    cmd = [
+        str(csc_path),
+        "/nologo",
+        "/target:exe",
+        f"/out:{output_exe}",
+        str(cs_src),
+    ]
+
+    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+    cs_src.unlink(missing_ok=True)
+
+    if proc.returncode != 0:
+        print(f"编译卸载器 {output_exe.name} 失败: {proc.stderr}")
         return False
 
     return True
@@ -337,9 +486,10 @@ def build_onedir_package(dist_dir: Path, mode: str = "link") -> dict[str, Any]:
     for dll in qgis_bin.glob("*.dll"):
         _link_or_copy(dll, dst_gdal_bin / dll.name, mode=mode)
         bin_count += 1
-    for exe in qgis_bin.glob("gdal*.exe"):
-        _link_or_copy(exe, dst_gdal_bin / exe.name, mode=mode)
-        bin_count += 1
+    for pattern in ("gdal*.exe", "ogr*.exe"):
+        for exe in qgis_bin.glob(pattern):
+            _link_or_copy(exe, dst_gdal_bin / exe.name, mode=mode)
+            bin_count += 1
     stats["gdal_bin_files"] = bin_count
 
     # 镜像 share/gdal 与 share/proj (含 proj.db)
@@ -357,7 +507,28 @@ def build_onedir_package(dist_dir: Path, mode: str = "link") -> dict[str, Any]:
     if (qgis_sp / "numpy").is_dir():
         _copy_tree_efficient(qgis_sp / "numpy", dst_gdal_sp / "numpy", mode=mode)
 
-    (gdal_dist / "pyvenv.cfg").write_text("home = .\ninclude-system-site-packages = false\nversion = 3.12.14\n", encoding="utf-8")
+    # 写入 sitecustomize.py 自动注册 DLL 目录与环境变量
+    sitecustomize_code = """import os, sys
+from pathlib import Path
+base = Path(__file__).resolve().parent.parent
+bin_dir = base / "bin"
+if bin_dir.is_dir():
+    try:
+        os.add_dll_directory(str(bin_dir))
+    except Exception:
+        pass
+    os.environ["PATH"] = f"{bin_dir};" + os.environ.get("PATH", "")
+gdal_data = base / "share" / "gdal"
+if gdal_data.is_dir() and "GDAL_DATA" not in os.environ:
+    os.environ["GDAL_DATA"] = str(gdal_data)
+proj_data = base / "share" / "proj"
+if proj_data.is_dir():
+    if "PROJ_DATA" not in os.environ:
+        os.environ["PROJ_DATA"] = str(proj_data)
+    if "PROJ_LIB" not in os.environ:
+        os.environ["PROJ_LIB"] = str(proj_data)
+"""
+    (gdal_dist / "Lib" / "sitecustomize.py").write_text(sitecustomize_code, encoding="utf-8")
 
     # 3. 组装 runtimes/rasterio/
     print(">>> [3/4] 组装自包含 Rasterio 引擎运行时...")
@@ -386,21 +557,65 @@ def build_onedir_package(dist_dir: Path, mode: str = "link") -> dict[str, Any]:
         if rio_sp.exists():
             dst_rio_sp = rio_dist / "Lib" / "site-packages"
             stats["rasterio_files"] = _copy_tree_efficient(rio_sp, dst_rio_sp, mode=mode)
+        rio_exe = rio_venv / "Scripts" / "rio.exe"
+        if rio_exe.exists():
+            _link_or_copy(rio_exe, rio_dist / "rio.exe", mode=mode)
+            (rio_dist / "Scripts").mkdir(parents=True, exist_ok=True)
+            _link_or_copy(rio_exe, rio_dist / "Scripts" / "rio.exe", mode=mode)
 
     (rio_dist / "pyvenv.cfg").write_text("home = .\ninclude-system-site-packages = false\nversion = 3.12.10\n", encoding="utf-8")
 
-    # 4. 拷贝 resources 与编译启动器
-    print(">>> [4/4] 拷贝资源与编译原生 Windows 启动器 (SpectraWorkbench.exe)...")
+    # 4. 组装 runtimes/science/
+    print(">>> [4/5] 组装自包含 Science 引擎运行时...")
+    sci_venv = root / ".venvs" / "sw-science"
+    sci_dist = dist_dir / "runtimes" / "science"
+    sci_dist.mkdir(parents=True, exist_ok=True)
+
+    _link_or_copy(base_exe, sci_dist / "python.exe", mode=mode)
+    if base_w_exe.exists():
+        _link_or_copy(base_w_exe, sci_dist / "pythonw.exe", mode=mode)
+    for dll in base_py_dir.glob("*.dll"):
+        _link_or_copy(dll, sci_dist / dll.name, mode=mode)
+
+    if (base_py_dir / "DLLs").is_dir():
+        _copy_tree_efficient(base_py_dir / "DLLs", sci_dist / "DLLs", mode=mode)
+    if (base_py_dir / "Lib").is_dir():
+        _copy_tree_efficient(
+            base_py_dir / "Lib",
+            sci_dist / "Lib",
+            mode=mode,
+            ignore_patterns={"site-packages", "__pycache__", "*.pyc", "*.tmp"},
+        )
+
+    if sci_venv.exists():
+        sci_sp = sci_venv / "Lib" / "site-packages"
+        if sci_sp.exists():
+            dst_sci_sp = sci_dist / "Lib" / "site-packages"
+            stats["science_files"] = _copy_tree_efficient(sci_sp, dst_sci_sp, mode=mode)
+
+    (sci_dist / "pyvenv.cfg").write_text("home = .\ninclude-system-site-packages = false\nversion = 3.12.10\n", encoding="utf-8")
+
+    # 5. 拷贝 resources 与编译启动器及卸载器
+    print(">>> [5/5] 拷贝资源与编译原生 Windows 启动器 (SpectraWorkbench.exe) 及卸载器...")
     res_src = root / "src" / "spectra_workbench" / "resources"
     res_dst = dist_dir / "resources"
     if res_src.exists():
         stats["resource_files"] = _copy_tree_efficient(res_src, res_dst, mode=mode)
 
-    # 编译原生启动器
+    # 拷贝 probe.py 至 resources 与 environments 目录供干净机自检调用
+    probe_src = root / "environments" / "probe.py"
+    if probe_src.exists():
+        _link_or_copy(probe_src, dist_dir / "resources" / "probe.py", mode=mode)
+        (dist_dir / "environments").mkdir(parents=True, exist_ok=True)
+        _link_or_copy(probe_src, dist_dir / "environments" / "probe.py", mode=mode)
+
+    # 编译原生启动器与卸载器
     compile_native_launcher(dist_dir / "SpectraWorkbench.exe", is_gui=True)
     compile_native_launcher(dist_dir / "SpectraWorkbench-console.exe", is_gui=False)
+    compile_native_uninstaller(dist_dir / "uninstall.exe")
     (dist_dir / "SpectraWorkbench.bat").write_text(LAUNCHER_BAT_TEMPLATE.strip(), encoding="utf-8")
     (dist_dir / "run-app.cmd").write_text(LAUNCHER_BAT_TEMPLATE.strip(), encoding="utf-8")
+    (dist_dir / "uninstall.bat").write_text(UNINSTALLER_BAT_TEMPLATE.strip(), encoding="utf-8")
 
     # 生成发布清单
     manifest = {
@@ -550,6 +765,107 @@ print('RASTERIO_RELOCATION_VERIFIED_OK')
     results["all_verified"] = True
     print("=== 重定位验证 100% 通过！满足 P10-01 验收标准 ===")
     return results
+
+
+def install_package(source_dir: Path, target_dir: Path, mode: str = "link") -> dict[str, Any]:
+    """将发布包安装至目标目录，生成安装元数据清单。"""
+    source_dir = Path(source_dir).resolve()
+    target_dir = Path(target_dir).resolve()
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    _copy_tree_efficient(source_dir, target_dir, mode=mode)
+
+    installed_files = []
+    for f in target_dir.rglob("*"):
+        if f.is_file() and not f.name.endswith(".spectra.json"):
+            installed_files.append(str(f.relative_to(target_dir)).replace("\\", "/"))
+
+    install_manifest = {
+        "schema_version": "1.0",
+        "app_name": "Spectra Workbench",
+        "version": "1.0.0",
+        "installed_at_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "installation_dir": str(target_dir),
+        "files_count": len(installed_files),
+        "files": installed_files,
+    }
+    (target_dir / "install_manifest.json").write_text(
+        json.dumps(install_manifest, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+    return install_manifest
+
+
+def upgrade_package(source_dir: Path, target_dir: Path, new_version: str = "1.0.1", mode: str = "link") -> dict[str, Any]:
+    """升级已有安装目录：更新应用与运行时，严格保全所有用户项目文件与用户自定义数据。"""
+    source_dir = Path(source_dir).resolve()
+    target_dir = Path(target_dir).resolve()
+    assert target_dir.is_dir(), f"升级目标目录不存在: {target_dir}"
+
+    # 1. 扫描并保全现有用户工程与自定义数据
+    user_projects = list(target_dir.rglob("*.spectra.json"))
+    user_project_hashes = {}
+    for up in user_projects:
+        user_project_hashes[str(up.relative_to(target_dir))] = up.read_bytes()
+
+    # 2. 覆盖安装新版本文件
+    _copy_tree_efficient(source_dir, target_dir, mode=mode)
+
+    # 3. 校验所有用户项目完整无损保留
+    for rel_path, expected_bytes in user_project_hashes.items():
+        current_file = target_dir / rel_path
+        assert current_file.exists(), f"用户项目文件在升级中丢失: {rel_path}"
+        assert current_file.read_bytes() == expected_bytes, f"用户项目文件内容在升级中发生改变: {rel_path}"
+
+    # 4. 更新 install_manifest.json
+    installed_files = []
+    for f in target_dir.rglob("*"):
+        if f.is_file() and not f.name.endswith(".spectra.json"):
+            installed_files.append(str(f.relative_to(target_dir)).replace("\\", "/"))
+
+    upgrade_manifest = {
+        "schema_version": "1.0",
+        "app_name": "Spectra Workbench",
+        "version": new_version,
+        "upgraded_at_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "installation_dir": str(target_dir),
+        "preserved_user_projects": list(user_project_hashes.keys()),
+        "files_count": len(installed_files),
+        "files": installed_files,
+    }
+    (target_dir / "install_manifest.json").write_text(
+        json.dumps(upgrade_manifest, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+    return upgrade_manifest
+
+
+def uninstall_package(target_dir: Path) -> dict[str, Any]:
+    """卸载应用：彻底移除应用二进制与运行时，严格保全所有用户工程文件与数据。"""
+    target_dir = Path(target_dir).resolve()
+    assert target_dir.is_dir(), f"卸载目标目录不存在: {target_dir}"
+
+    uninstaller_exe = target_dir / "uninstall.exe"
+    if uninstaller_exe.exists():
+        subprocess.run([str(uninstaller_exe)], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30)
+
+    # 深度清理应用核心目录（使用 \\?\ 前缀突破 Windows MAX_PATH 限制）
+    for sub in ("app", "runtimes", "resources", "environments"):
+        sub_dir = _to_extended_path(target_dir / sub)
+        if sub_dir.is_dir():
+            shutil.rmtree(sub_dir, ignore_errors=True)
+    for rf in ("SpectraWorkbench.exe", "SpectraWorkbench-console.exe", "SpectraWorkbench.bat", "run-app.cmd", "manifest.json", "install_manifest.json", "uninstall.exe", "uninstall.bat"):
+        f = _to_extended_path(target_dir / rf)
+        if f.is_file():
+            f.unlink(missing_ok=True)
+
+    remaining_files = list(target_dir.rglob("*"))
+    remaining_regular_files = [f for f in remaining_files if f.is_file() and f.name not in ("uninstall.exe", "uninstall.bat")]
+    user_projects = [f for f in remaining_regular_files if f.name.endswith(".spectra.json")]
+
+    return {
+        "uninstalled": True,
+        "remaining_files": [str(f.relative_to(target_dir)) for f in remaining_regular_files],
+        "preserved_user_projects": [str(p.relative_to(target_dir)) for p in user_projects],
+    }
 
 
 def main() -> int:

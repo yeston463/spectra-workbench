@@ -28,8 +28,16 @@ def run_app(argv: list[str] | None = None) -> int:
     parser.add_argument("--screenshot", dest="screenshot_path", type=str, default=None, help="渲染就绪后保存窗口截图并退出")
     parser.add_argument("--headless", action="store_true", help="无头模式运行 (QT_QPA_PLATFORM=offscreen)")
     parser.add_argument("--project-root", dest="project_root", type=str, default=None, help="项目根目录")
+    parser.add_argument("--doctor", action="store_true", help="运行环境与引擎运行时自检诊断")
+    parser.add_argument("--json", action="store_true", help="以 JSON 格式输出自检诊断报告")
+    parser.add_argument("--test-init", action="store_true", help="初始化主窗口与引擎后自动安全退出（用于自动化就绪测试）")
 
     args = parser.parse_args(argv or sys.argv[1:])
+
+    if args.doctor:
+        from spectra_workbench.app.doctor import main as doctor_main
+        sub_args = ["--json"] if args.json else []
+        return doctor_main(sub_args)
 
     if args.headless or (args.screenshot_path and os.environ.get("QT_QPA_PLATFORM") == "offscreen"):
         os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -72,6 +80,9 @@ def run_app(argv: list[str] | None = None) -> int:
 
         # 等待分块读取与渲染完成（延时 1500ms）
         QTimer.singleShot(1800, _capture)
+
+    if args.test_init:
+        QTimer.singleShot(400, app.quit)
 
     return app.exec()
 

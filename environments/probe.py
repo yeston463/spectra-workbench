@@ -9,6 +9,7 @@ role ∈ ui | gdal | rasterio | science
 """
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import sys
@@ -53,6 +54,11 @@ def gdal_info() -> dict:
         proj_paths = list(osr.GetPROJSearchPaths())
     except Exception:
         proj_paths = []
+
+    proj_env = os.environ.get("PROJ_DATA")
+    if proj_env and hasattr(osr, "SetPROJSearchPaths"):
+        with contextlib.suppress(Exception):
+            osr.SetPROJSearchPaths([proj_env])
 
     # 1. Coordinate transformation check (EPSG:4326 -> EPSG:3857)
     coord_check: dict = {"ok": False}
@@ -295,7 +301,7 @@ def main() -> int:
             info["qt_version"] = QtCore.qVersion()
         except Exception as exc:
             info["qt_version"] = f"error: {exc}"
-    print(json.dumps(info, ensure_ascii=False))
+    print(json.dumps(info, ensure_ascii=False, default=str))
     return 0
 
 

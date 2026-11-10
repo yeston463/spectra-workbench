@@ -196,6 +196,11 @@ def resolve_gdal_runtime(project_root: Path | str | None = None) -> dict[str, An
 def run_doctor(project_root: Path | str | None = None) -> DoctorReport:
     root = find_project_root(project_root)
     probe_py = root / "environments" / "probe.py"
+    if not probe_py.exists():
+        for cand in (root / "resources" / "probe.py", root / "app" / "resources" / "probe.py"):
+            if cand.exists():
+                probe_py = cand
+                break
     venvs_dir = root / ".venvs"
 
     envs_report: dict[str, EngineReport] = {}
@@ -204,6 +209,18 @@ def run_doctor(project_root: Path | str | None = None) -> DoctorReport:
 
     # 1. UI Environment
     ui_py = venvs_dir / "sw-ui" / "Scripts" / "python.exe"
+    ui_extra_env: dict[str, str] | None = None
+    if not ui_py.exists():
+        bundled_ui = root / "app" / "python.exe"
+        if bundled_ui.exists():
+            ui_py = bundled_ui
+            site_packages = root / "app" / "Lib" / "site-packages"
+            src_dir = root / "app" / "src"
+            ui_extra_env = os.environ.copy()
+            ui_extra_env["PYTHONPATH"] = f"{src_dir};{site_packages}"
+        elif Path(sys.executable).exists():
+            ui_py = Path(sys.executable)
+
     if not ui_py.exists():
         envs_report["ui"] = EngineReport(
             role="ui",
@@ -212,7 +229,7 @@ def run_doctor(project_root: Path | str | None = None) -> DoctorReport:
         )
         errors.append("UI environment missing (.venvs/sw-ui)")
     else:
-        code, data, err = probe_role(ui_py, probe_py, "ui")
+        code, data, err = probe_role(ui_py, probe_py, "ui", extra_env=ui_extra_env)
         if code != 0:
             envs_report["ui"] = EngineReport(
                 role="ui",
@@ -384,6 +401,24 @@ def run_doctor(project_root: Path | str | None = None) -> DoctorReport:
 
     # 3. Rasterio Environment
     rio_py = venvs_dir / "sw-rasterio" / "Scripts" / "python.exe"
+    rio_extra_env: dict[str, str] | None = None
+    if not rio_py.exists():
+        for cand in (
+            root / "runtimes" / "rasterio" / "python.exe",
+            root / "runtimes" / "rasterio" / "Scripts" / "python.exe",
+        ):
+            if cand.exists():
+                rio_py = cand
+                rio_sp = cand.parent / "Lib" / "site-packages"
+                if rio_sp.exists():
+                    rio_extra_env = os.environ.copy()
+                    rio_extra_env["PYTHONPATH"] = str(rio_sp)
+                break
+        if not rio_py.exists() and os.environ.get("SPECTRA_RASTERIO_PYTHON"):
+            cand_env = Path(os.environ["SPECTRA_RASTERIO_PYTHON"])
+            if cand_env.exists():
+                rio_py = cand_env
+
     if not rio_py.exists():
         envs_report["rasterio"] = EngineReport(
             role="rasterio",
@@ -392,7 +427,7 @@ def run_doctor(project_root: Path | str | None = None) -> DoctorReport:
         )
         errors.append("Rasterio environment missing (.venvs/sw-rasterio)")
     else:
-        code, data, err = probe_role(rio_py, probe_py, "rasterio")
+        code, data, err = probe_role(rio_py, probe_py, "rasterio", extra_env=rio_extra_env)
         if code != 0:
             envs_report["rasterio"] = EngineReport(
                 role="rasterio",
@@ -411,6 +446,16 @@ def run_doctor(project_root: Path | str | None = None) -> DoctorReport:
                 rio_errors.append(f"Rasterio GTiff roundtrip failed: {gtiff_chk.get('error') or gtiff_chk.get('reason')}")
             # CLI check：严格校验 rio 存在、退出码与版本输出
             rio_cli_path = venvs_dir / "sw-rasterio" / "Scripts" / "rio.exe"
+            if not rio_cli_path.exists():
+                for cand in (
+                    root / "runtimes" / "rasterio" / "rio.exe",
+                    root / "runtimes" / "rasterio" / "Scripts" / "rio.exe",
+                    rio_py.parent / "rio.exe",
+                    rio_py.parent / "Scripts" / "rio.exe",
+                ):
+                    if cand.exists():
+                        rio_cli_path = cand
+                        break
             cli_res = {}
             if not rio_cli_path.exists():
                 cli_res["rio"] = {
@@ -474,6 +519,24 @@ def run_doctor(project_root: Path | str | None = None) -> DoctorReport:
 
     # 4. Science Environment
     sci_py = venvs_dir / "sw-science" / "Scripts" / "python.exe"
+    sci_extra_env: dict[str, str] | None = None
+    if not sci_py.exists():
+        for cand in (
+            root / "runtimes" / "science" / "python.exe",
+            root / "runtimes" / "science" / "Scripts" / "python.exe",
+        ):
+            if cand.exists():
+                sci_py = cand
+                sci_sp = cand.parent / "Lib" / "site-packages"
+                if sci_sp.exists():
+                    sci_extra_env = os.environ.copy()
+                    sci_extra_env["PYTHONPATH"] = str(sci_sp)
+                break
+        if not sci_py.exists() and os.environ.get("SPECTRA_SCIENCE_PYTHON"):
+            cand_env = Path(os.environ["SPECTRA_SCIENCE_PYTHON"])
+            if cand_env.exists():
+                sci_py = cand_env
+
     if not sci_py.exists():
         envs_report["science"] = EngineReport(
             role="science",
@@ -482,7 +545,7 @@ def run_doctor(project_root: Path | str | None = None) -> DoctorReport:
         )
         errors.append("Science environment missing (.venvs/sw-science)")
     else:
-        code, data, err = probe_role(sci_py, probe_py, "science")
+        code, data, err = probe_role(sci_py, probe_py, "science", extra_env=sci_extra_env)
         if code != 0:
             envs_report["science"] = EngineReport(
                 role="science",
@@ -632,7 +695,7 @@ def save_doctor_report(report: DoctorReport, output_path: Path | str) -> None:
         json.dump(sanitize_dict(report.to_dict()), f, indent=2, ensure_ascii=False)
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     import argparse
 
     try:
@@ -645,7 +708,7 @@ def main() -> int:
     parser.add_argument("--json", action="store_true", help="Output JSON only")
     parser.add_argument("--out", type=str, default=None, help="Save report JSON to path")
     parser.add_argument("--ui-only", action="store_true", help="Only verify UI environment readiness for starting the GUI")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     report = run_doctor()
 

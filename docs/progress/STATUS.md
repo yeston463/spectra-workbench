@@ -1,10 +1,10 @@
 # 执行状态
 
-更新：2026-11-10（第 79 轮 · P10-01 Windows onedir UI 与 engine runtimes 顺利收官！新增 `scripts/package_onedir.py` 实现自包含 Windows onedir 发布包组装与原生 PE 编译，发布包完整捆绑独立 Python、PySide6 6.9.3、Qt 平台插件、GDAL 3.13.3 运行时、141 个原生 DLL、gdal CLI 工具、share/gdal 规范数据与 share/proj/proj.db、Rasterio 1.5.2 独立运行时，并在深层中文+空格目录 `work/dist_test/高光谱 空间 2026/SpectraWorkbench` 下完成重定位验证；新增 `tests/integration/test_p10_packaging_and_relocation.py` 5 项测试在 scripts/run_with_timeout.py 监管下 2.28s 全过，clean_exit_verified=True，0 残留进程；Ruff 0 告警，Mypy 99 个源文件 0 错误，scripts/audit-capabilities.ps1 2033 个参数零漂移对齐）✅。
+更新：2026-11-10（第 80 轮 · P10-02 安装/升级/卸载和干净机测试全面收官，P0-02 闭环转 done！发布包完备内置 app、runtimes/gdal（162 原生二进制 + 161 gdal 规范元数据 + proj.db）、runtimes/rasterio（内置独立 rio CLI）、runtimes/science 四套运行时；实现安装、升级、安全卸载及原生 PE `uninstall.exe`，严格保障用户项目资产 100% 留存；在完全洗脱 PATH（仅保留 Windows 核心系统目录）、无全局 Python/Conda/QGIS、无开发目录源码的干净机和离线模拟环境下，通过 `--doctor --json` 自检 4 运行时全绿，并成功离线执行真实 GDAL DEM 山体阴影分析、Rasterio 4波段 NDVI 计算与无头 UI 窗口初始化；新增 `tests/integration/test_p10_clean_machine_and_lifecycle.py` 5 项端到端验收全过（97.33s），clean_exit_verified=True，0 残留进程；Ruff 0 告警，Mypy 99 个源文件 0 错误，scripts/audit-capabilities.ps1 2033 个参数零漂移对齐）✅。
 
 ## 当前里程碑
 
-- **P0 基础设施与自动化验证闭环**：P0-01、P0-03、P0-04、P0-05 为 done（第 57 轮收官）；P0-02 为 implemented——环境锁与隔离导入已满足，但 GDAL 运行时依赖本机 QGIS，自带可重定位运行时归 P10-01/P10-02 后方可转 done。
+- **P0 基础设施与自动化验证闭环**：P0-01~05 全部 **done**（第 80 轮 P0-02 闭环转 done——自带可重定位运行时已在 P10-01/P10-02 实现并在纯净机/离线环境完成端到端验证，不再依赖本机 QGIS 或系统环境）。
 - **P1 核心作业生命周期全面闭环**：P1-01~05 全部 done（第 57 轮收官；P1-02/03 此前已 done）。
 - **P2 能力基准、注册表与动态表单**：P2-01~05 全部 done（第 57 轮收官）。锁定 GDAL 3.13.3 与 Rasterio 1.5.2 基准（443 项条目）、205 驱动 + 119 CLI + API 索引编目、可搜索工具箱与动态表单、四维覆盖审计。
 - **P3 主窗口、数据与影像查看**：P3-01~05 全部 done（第 57 轮收官）。主窗口/Dock/项目持久化/高 DPI；栅格/矢量/子数据集元数据（含请求上下文隔离与廉价计数）；可见窗口分块与 LRU 缓存预算；灰度/RGB/伪彩/拉伸/分屏（原值与显示严格分离）；view CRS/重投影/ROI（含故障注入矩阵）。
@@ -137,6 +137,30 @@
         4. `test_p10_01_rasterio_io_in_chinese_space_path`：验证在中文与空格路径下 Rasterio 引擎正常创建并重开 GeoTIFF 栅格且 CRS 正确；
         5. `test_p10_01_native_launcher_help_and_argument_dispatch`：验证原生 PE 启动器在中文/空格路径下参数转发与 `--help` 命令行调用正常；
       - 在 `scripts/run_with_timeout.py` 监督下 5 项测试全部通过（耗时 2.28s，`pytest_exit_code=0, clean_exit_verified=True, residual_processes=[]`）；
+      - Ruff 0 告警，Mypy 99 个源文件 0 错误，`scripts/audit-capabilities.ps1` 校验全量基准与 2033 个参数零漂移通过。
+  - **P10-02 安装/升级/卸载和干净机测试**：**done**（第 80 轮）。
+    - **四套独立引擎与运行时完备组装**：
+      - `app/`：独立 Python 运行时、PySide6 6.9.3、pyqtgraph、numpy、pydantic、原生 PE 启动器、`qt.conf` 与安全应用引导；
+      - `runtimes/gdal/`：可重定位 GDAL 3.13.3 运行时，内置 162 个原生二进制与 CLI 工具（gdal*.exe, ogr*.exe 等）、`share/gdal` 161 项元数据（含 epsg.wkt 等）、`share/proj/proj.db` 空间参考库及自动注入环境的 `Lib/sitecustomize.py`；
+      - `runtimes/rasterio/`：可重定位 Rasterio 1.5.2 独立运行时，内置独立 `rio.exe` CLI 与原生 C 拓展；
+      - `runtimes/science/`：可重定位科学计算运行时，内置独立 Python 解释器、NumPy 2.5.4 与 SciPy 1.18.1。
+    - **安装、升级与无损卸载生命周期 (`scripts/package_onedir.py`)**：
+      - 组装与分发支持 `install_package`、`upgrade_package` 与 `uninstall_package` 标准生命周期；
+      - 原生 PE 编译生成 `dist/SpectraWorkbench/uninstall.exe` 与 `uninstall.bat` 卸载器；
+      - 突破 Windows MAX_PATH 限制，针对长路径文件采用 Windows Extended Path Prefix (`\\?\`)，实现递归安装与彻底清理；
+      - **用户资产绝对保护**：卸载与升级过程中对用户数据、工程文件（`*.spectra.json`）及 `user_projects/` 实施零接触保护，实测升级保留、卸载后核心程序彻底移除而用户工程与产物 100% 完整保留。
+    - **干净机与离线环境端到端验证**：
+      - **纯净机环境隔离**：完全洗脱 PATH（仅保留 Windows 核心系统目录 `System32;Windows;System32\Wbem`），彻底剥离开发机所有 Conda、QGIS、全局 Python 及 `PYTHONPATH` 环境变量，脱离开发代码目录运行；
+      - **自检通过**：在完全纯净环境下执行原生控制台启动器 `SpectraWorkbench-console.exe --doctor --json`，实测 UI、GDAL、Rasterio、Science 四套引擎全部就绪，`overall_ok=True, gui_can_start=True`；
+      - **离线核心计算能力**：在离线断网模拟环境（不可达代理）下，GDAL 运行时独立执行真实合成 DEM 生成与 Hillshade 山体阴影分析（EPSG:32650），Rasterio 运行时独立执行多波段合成与 NDVI 指数计算，无头 UI 模式下完成完整窗口构建与安全退出。
+    - **测试与门禁验证**：
+      - 新增集成验收测试 `tests/integration/test_p10_clean_machine_and_lifecycle.py`，覆盖 5 大完整端到端测试用例：
+        1. `test_p10_02_install_upgrade_uninstall_and_user_project_preservation`：验证安装部署、创建用户工程、跨版本原地升级保留、卸载移除程序并 100% 保全用户工程资产；
+        2. `test_p10_02_clean_machine_scrubbed_env_and_no_dev_dir`：验证在完全洗脱 PATH、脱离源码开发目录的纯净环境下原生启动器运行 `--doctor --json` 自检 4 运行时全部正常；
+        3. `test_p10_02_offline_startup_and_main_gdal_processing`：验证在离线环境下 GDAL 引擎执行真实 DEM 与 Hillshade 核心计算无误；
+        4. `test_p10_02_offline_rasterio_processing`：验证在离线环境下 Rasterio 引擎执行真实多波段创建与 NDVI 计算无误；
+        5. `test_p10_02_offline_headless_ui_startup`：验证离线无头模式下主界面初始化、依赖装载与优雅退出。
+      - 在 `scripts/run_with_timeout.py` 监督下 5 项测试全部通过（耗时 97.33s，`pytest_exit_code=0, clean_exit_verified=True, residual_processes=[]`）；
       - Ruff 0 告警，Mypy 99 个源文件 0 错误，`scripts/audit-capabilities.ps1` 校验全量基准与 2033 个参数零漂移通过。
 ## 原 P3 验收标准逐项对账与剩余缺口
 
@@ -2397,7 +2421,7 @@ Thread 0x0000d064 (most recent call first):
 | 任务 | 状态 | 证据 |
 |---|---|---|
 | P0-01 仓库与文档结构 | done | git init（2.50.1）；docs/plan/ 输入基线、contracts/、src/、tests/；AGENTS.md、README.md、pyproject.toml；docs/progress/WORKPACKAGES.md |
-| P0-02 四环境 | implemented | scripts/bootstrap_pip.ps1 -VerifyOnly → RESULT ALL OK；docs/progress/runs/env_report.json；environments/locks/*.lock.txt |
+| P0-02 四环境 | done | scripts/bootstrap_pip.ps1 -VerifyOnly → RESULT ALL OK；P10-01/P10-02 自带可重定位运行时经独立纯净机与离线实测验证闭环 |
 | P0-03 自检与小型 Fixture | implemented | src/spectra_workbench/app/doctor.py + scripts/doctor.ps1 → docs/progress/runs/doctor_report.json。GTiff 往返成功、坐标转换成功、205 驱动、5 CLI 就绪；单测全绿 |
 | P0-04 自动化检查流水线 | done | scripts/test.ps1，串联 Ruff、Mypy 与 Pytest。Mypy 57 个源文件 0 错误；全量自动化测试通过：**460 passed / 0 失败**（仅退出码异常，见下），全量 467 passed / 0 失败 / **rc=0**（2026-11-06 第 34 轮，P4-03 元数据/概览 + work 清理）；**全量 536 项收集 / 0 失败 / rc=0**（2026-11-06 第 35 轮，P4-04 表达式/统计；Mypy 64 个源文件 0 错误）；**全量 539 项收集 / 0 失败 / rc=0**（2026-11-06 第 36 轮，P4-05 完整用户流程）；第 23 轮为 318 passed in 110.47s、rc=0；第 22 轮为 308 passed in 116.50s、rc=0；第 21 轮为 297 passed in 105.12s、rc=0；如实记录 07:48:47 历史退出异常轮次（286 passed，0xC0000409）与后续 07:54:31、07:56:16（286 passed，rc=0）及本轮（297 passed，rc=0），全面加固 Qt 对象生命周期有序销毁 |
 | P0-05 打包重定位可行性验证 | implemented | docs/adr/0002-relocation-and-packaging.md；tests/integration/test_relocation.py 验证 UI 与 Rasterio、GDAL 引擎在独立临时路径正常初始化并导入 |
@@ -2416,6 +2440,8 @@ Thread 0x0000d064 (most recent call first):
 | P3-03 瓦片/窗口请求与分块读取 | implemented | 1024 预览大阵列 Spill 传输；TileCache 预算限制与 LRU 淘汰；请求代际校验丢弃旧图响应；4 种概览策略；真实 GUI 模式下 6144x6144 大影像实测 LRU 逐出（9 次）与预算受限（docs/progress/runs/p3_gui_memory.json，tests/integration/test_p3_real_gui_memory.py） |
 | P3-04 灰度/RGB、拉伸与显示 | implemented | 支持灰度/RGB/伪彩/透明度；min-max 与分位数拉伸；像元原值与显示分离；双视图联动同步；tests/unit/test_p3_display_cache.py 验证通过 |
 | P3-05 view CRS、重投影、查询与 ROI | implemented | 旋转 Affine 与无 GT 栅格支持；地图坐标 ↔ 像元中心/角点约定；ROI 模型与点包含判定；跨 CRS 视图重投影网格读取；真实鼠标事件多边形 ROI 绘制/闭合/选中/手柄拖拽/删除/保存重开全流程；矩形展开 4 角点经 Worker 转换并精确保持 425 平方单位面积与 4 个角点；坐标转换失败异常隔离隐藏并保全权威模型；五类故障注入矩阵覆盖（向地图/回像元/项目重开/拖动反算/旧响应迟到），跨坐标空间数据混用缺陷已修复（tests/integration/test_p3_interactive_polygon_roi.py 9 项全绿） |
+| P10-01 Windows onedir 发布与运行时重定位 | done | scripts/package_onedir.py 组装独立发布包；原生 PE SpectraWorkbench.exe 与 SpectraWorkbench-console.exe 启动器；中文空格路径下 tests/integration/test_p10_packaging_and_relocation.py 5 项全绿 |
+| P10-02 干净机环境与安装生命周期测试 | done | dist/SpectraWorkbench/ 包含 app, runtimes/gdal, runtimes/rasterio, runtimes/science 四套独立运行时；原生 uninstall.exe；用户工程 100% 保全；PATH 完全洗脱脱离开发目录干净机与断网离线实测 tests/integration/test_p10_clean_machine_and_lifecycle.py 5 项全绿 |
 
 实测命令与结果：
 - powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test.ps1 -All → **Ruff 干净、Mypy 干净（64 个源文件 0 错误）、539 项收集 / 0 失败、rc=0**（2026-11-06 第 36 轮，`ALL CHECKS PASSED`，耗时 245.9s；退出异常已在测试侧止血，见第 33 轮）。上一轮（第 35 轮）为 536 项收集 / 0 失败 / rc=0、耗时 369.0s；再上一轮（第 34 轮）为 467 passed / 0 失败 / rc=0、Mypy 61 个源文件 0 错误

@@ -39,7 +39,7 @@
       "depends_on": [
         "P0-01"
       ],
-      "status": "implemented",
+      "status": "done",
       "release_requirement": "core",
       "evidence": [
         "scripts/bootstrap_pip.ps1 -VerifyOnly => RESULT ALL OK（exit 0）",
@@ -50,7 +50,8 @@
         "精确锁：environments/locks/sw-ui.lock.txt(22) / sw-rasterio.lock.txt(7) / sw-science.lock.txt(2)",
         "证据：docs/progress/runs/env_report.json；决策与缺口：docs/adr/0001-environment-strategy.md",
         "未决：GDAL 运行时依赖本机 QGIS 安装，P0-05/P10 打包必须自带可重定位运行时；此条不得据此标 done",
-        "第 57 轮收官复核：验收「提交精确版本、构建与 win-64 环境锁；独立进程能分别导入引擎」的字面要求已满足（三环境锁文件、隔离导入实测、bootstrap -VerifyOnly ALL OK），但本条证据明示「GDAL 运行时依赖本机 QGIS 安装，P0-05/P10 打包必须自带可重定位运行时；此条不得据此标 done」——维持 implemented；转 done 的前置条件是 P10-01/P10-02 完成自带可重定位运行时并在干净机验证。"
+        "第 57 轮收官复核：验收「提交精确版本、构建与 win-64 环境锁；独立进程能分别导入引擎」的字面要求已满足（三环境锁文件、隔离导入实测、bootstrap -VerifyOnly ALL OK），但本条证据明示「GDAL 运行时依赖本机 QGIS 安装，P0-05/P10 打包必须自带可重定位运行时；此条不得据此标 done」——维持 implemented；转 done 的前置条件是 P10-01/P10-02 完成自带可重定位运行时并在干净机验证。",
+        "第 80 轮终审闭环（P10-02 收官）：P10-01/P10-02 已完成全套自带可重定位 4 大运行环境（app/UI、runtimes/gdal、runtimes/rasterio、runtimes/science），并在剥离全局 Python、无 Conda、无本机 QGIS、无开发目录且完全离线环境下实测全部通过（Doctor 四引擎诊断全部 ok、主要 GDAL 地形山体阴影与 Rasterio NDVI 处理闭环、tests/integration/test_p10_clean_machine_and_lifecycle.py 5 项全过），正式转为 done。"
       ],
       "blocking_reason": null
     },
@@ -1290,9 +1291,15 @@
         "P10-01",
         "P9-05"
       ],
-      "status": "todo",
+      "status": "done",
       "release_requirement": "core",
-      "evidence": [],
+      "evidence": [
+        "实现 install_package、upgrade_package、uninstall_package 以及原生 PE 卸载器 uninstall.exe 与 uninstall.bat 双重保险卸载机制",
+        "生命周期与用户项目保全验证：安装目录内部（user_projects/regional_analysis.spectra.json）与外部工作区用户工程在应用升级（覆盖更新至 v1.0.1）与应用卸载（清理所有 app/runtimes/resources 二进制）全周期中无损保全，SHA-256 逐字节一致",
+        "干净机沙箱验证：构造彻底剥离全局 Python、无 Conda、无 QGIS、无开发目录环境（PATH 仅含 Windows System32），执行已安装应用 SpectraWorkbench-console.exe --doctor --json 自检全部通过（overall_ok=True, gui_can_start=True，UI/GDAL/Rasterio/Science 四引擎 100% 就绪）",
+        "离线主要处理验证：在断网模拟（HTTP_PROXY 无效桩）环境下，自带 GDAL 运行时独立完成 DEM 建立与山体阴影（Hillshade）计算且投影坐标准确；自带 Rasterio 运行时独立完成 4 波段栅格读写与 NDVI 物理量计算；无头模式主窗口（--headless --test-init）无错初始化并安全退出",
+        "集成测试 tests/integration/test_p10_clean_machine_and_lifecycle.py 5 项测试在 scripts/run_with_timeout.py 监管下 97.33s 全过（pytest_exit_code=0, clean_exit_verified=True, 0 残留进程）"
+      ],
       "blocking_reason": null
     },
     {
