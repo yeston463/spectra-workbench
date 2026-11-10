@@ -82,7 +82,11 @@ def run_app(argv: list[str] | None = None) -> int:
         QTimer.singleShot(1800, _capture)
 
     if args.test_init:
-        QTimer.singleShot(400, app.quit)
+        def _on_test_init() -> None:
+            window.close()
+            app.quit()
+
+        QTimer.singleShot(400, _on_test_init)
 
     return app.exec()
 

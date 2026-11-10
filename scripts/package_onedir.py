@@ -164,6 +164,14 @@ set "PATH=%BASE_DIR%\runtimes\gdal\bin;%BASE_DIR%\app;%PATH%"
 set "PYTHONPATH=%BASE_DIR%\app\src;%BASE_DIR%\app\Lib\site-packages;%PYTHONPATH%"
 
 "%BASE_DIR%\app\python.exe" -m spectra_workbench.ui.app %*
+if errorlevel 1 (
+    echo.
+    echo ========================================================
+    echo Spectra Workbench 异常退出，退出代码: %ERRORLEVEL%
+    echo ========================================================
+    echo 请查看上方错误堆栈，按任意键关闭此窗口...
+    pause >nul
+)
 exit /b %ERRORLEVEL%
 """
 
@@ -613,9 +621,11 @@ if proj_data.is_dir():
     compile_native_launcher(dist_dir / "SpectraWorkbench.exe", is_gui=True)
     compile_native_launcher(dist_dir / "SpectraWorkbench-console.exe", is_gui=False)
     compile_native_uninstaller(dist_dir / "uninstall.exe")
-    (dist_dir / "SpectraWorkbench.bat").write_text(LAUNCHER_BAT_TEMPLATE.strip(), encoding="utf-8")
-    (dist_dir / "run-app.cmd").write_text(LAUNCHER_BAT_TEMPLATE.strip(), encoding="utf-8")
-    (dist_dir / "uninstall.bat").write_text(UNINSTALLER_BAT_TEMPLATE.strip(), encoding="utf-8")
+    bat_text = LAUNCHER_BAT_TEMPLATE.strip().replace("\r\n", "\n").replace("\n", "\r\n") + "\r\n"
+    uninst_text = UNINSTALLER_BAT_TEMPLATE.strip().replace("\r\n", "\n").replace("\n", "\r\n") + "\r\n"
+    (dist_dir / "SpectraWorkbench.bat").write_bytes(bat_text.encode("utf-8"))
+    (dist_dir / "run-app.cmd").write_bytes(bat_text.encode("utf-8"))
+    (dist_dir / "uninstall.bat").write_bytes(uninst_text.encode("utf-8"))
 
     # 生成发布清单
     manifest = {
