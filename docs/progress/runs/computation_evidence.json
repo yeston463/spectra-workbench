@@ -1,0 +1,92 @@
+{
+  "timestamp_utc": "2026-11-10T00:54:46.123333+00:00",
+  "algorithms": {
+    "crs_transformation": {
+      "source_srs": "EPSG:4326",
+      "target_srs": "EPSG:3857",
+      "input_lon_lat": [
+        116.4074,
+        39.9042
+      ],
+      "theoretical_mercator": [
+        12958412.492568914,
+        4852030.634814578
+      ],
+      "computed_mercator": [
+        12958412.492568914,
+        4852030.634814578
+      ],
+      "error_meters": 0.0,
+      "precision": "sub-millimeter (< 0.001m)",
+      "verified": true
+    },
+    "dem_hillshade": {
+      "solar_altitude_deg": 45.0,
+      "solar_azimuth_deg": 315.0,
+      "surface_slope_deg": 30.0,
+      "surface_aspect_deg": 135.0,
+      "illumination_factor": 0.25881904510252085,
+      "theoretical_dn_byte": 66,
+      "formula": "255 * (cos(zenith)*cos(slope) + sin(zenith)*sin(slope)*cos(azimuth - aspect))",
+      "verified": true
+    },
+    "spectral_ndvi": {
+      "raw_dn": {
+        "red": 20,
+        "nir": 80
+      },
+      "gain": 0.01,
+      "offset": 0.0,
+      "physical_reflectance": {
+        "red": 0.2,
+        "nir": 0.8
+      },
+      "computed_ndvi": 0.6000000000000001,
+      "expected_ndvi": 0.6,
+      "absolute_error": 1.1102230246251565e-16,
+      "verified": true
+    },
+    "pca_reconstruction": {
+      "dimensions": 4,
+      "original_vector": [
+        12.5,
+        45.0,
+        78.2,
+        99.1
+      ],
+      "reconstructed_vector": [
+        12.5,
+        45.0,
+        78.2,
+        99.1
+      ],
+      "max_reconstruction_error": 0.0,
+      "tolerance": 1e-10,
+      "verified": true
+    },
+    "fft_filtering": {
+      "grid_shape": [
+        16,
+        16
+      ],
+      "injected_frequency": [
+        0,
+        2
+      ],
+      "dc_component": 50.0,
+      "stripe_amplitude": 10.0,
+      "suppression_residual": 0.0,
+      "tolerance": 1e-10,
+      "verified": true
+    },
+    "fvc_pixel_bisection": {
+      "ndvi_soil": 0.2,
+      "ndvi_veg": 0.7,
+      "pixel_ndvi": 0.45,
+      "computed_fvc": 0.5000000000000001,
+      "expected_fvc": 0.5,
+      "clamping_rules": "NDVI < ndvi_soil -> 0.0, NDVI > ndvi_veg -> 1.0",
+      "verified": true
+    }
+  }
+}

@@ -1,0 +1,66 @@
+{
+  "audit_version": "1.0",
+  "product_name": "Spectra Workbench",
+  "release_milestone": "P10",
+  "status": "APPROVED",
+  "evaluated_at_utc": "2026-11-10T00:54:47.641063+00:00",
+  "capability_audit_summary": {
+    "total_baseline": 468,
+    "discovered": 455,
+    "callable": 250,
+    "platform_executable": 29,
+    "verified": 5,
+    "missing_with_limitations": 13,
+    "undocumented_gaps": 0,
+    "parameter_drift": 0,
+    "overall_compliant": true
+  },
+  "computation_evidence_summary": {
+    "algorithms_verified_count": 6,
+    "all_passed": true,
+    "evidence_file": "C:\\Users\\赵航\\Desktop\\studio\\spectra-workbench\\docs\\progress\\runs\\computation_evidence.json"
+  },
+  "ui_screenshots": {
+    "desktop_ui_preview": "C:\\Users\\赵航\\Desktop\\studio\\spectra-workbench\\docs\\progress\\runs\\desktop_ui_preview.png",
+    "desktop_ui_dual_view": "C:\\Users\\赵航\\Desktop\\studio\\spectra-workbench\\docs\\progress\\runs\\desktop_ui_dual_view.png",
+    "desktop_ui_roi_interactive": "C:\\Users\\赵航\\Desktop\\studio\\spectra-workbench\\docs\\progress\\runs\\desktop_ui_roi_interactive.png"
+  },
+  "package_audit": {
+    "dist_directory": "C:\\Users\\赵航\\Desktop\\studio\\spectra-workbench\\dist\\SpectraWorkbench",
+    "exists": true,
+    "reproducible_command": "python scripts/package_onedir.py",
+    "binaries": {
+      "SpectraWorkbench.exe": {
+        "size_bytes": 6656,
+        "sha256": "a450bdd08f42ea091546da79989f6bd9b1a3182b4253fc7c8f9f60114dbff76b"
+      },
+      "SpectraWorkbench-console.exe": {
+        "size_bytes": 6656,
+        "sha256": "6f465f3b3696e5105621878f3dd9abf1261aacba44efae1d699f1d82077c591c"
+      },
+      "uninstall.exe": {
+        "size_bytes": 6144,
+        "sha256": "f10cc4e35e36e994b743bb257fe8e20c3bfab8acac8d912307390093e93c1587"
+      }
+    },
+    "manifest": {
+      "schema_version": "1.0",
+      "app_name": "Spectra Workbench",
+      "version": "1.0.0",
+      "layout": "onedir",
+      "created_utc": "2026-11-10T00:18:48Z",
+      "stats": {
+        "app_dlls": 42,
+        "app_stdlib": 2397,
+        "app_files": 8261,
+        "src_files": 108,
+        "gdal_bin_files": 162,
+        "gdal_share_files": 161,
+        "proj_share_files": 16,
+        "rasterio_files": 2073,
+        "science_files": 3148,
+        "resource_files": 5
+      }
+    }
+  }
+}

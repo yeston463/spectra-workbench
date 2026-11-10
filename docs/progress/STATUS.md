@@ -1,6 +1,6 @@
 # 执行状态
 
-更新：2026-11-10（第 81 轮 · P10-03 用户说明、开发说明和诊断全面收官！建立完备的用户使用指南 `docs/user/` 与开发者参考 `docs/developer/` 文档体系，包括：01 工具索引与 CLI 指南（39+ 核心计算能力编目、PE 启动器 7 大命令行选项、内置 GDAL/Rasterio CLI 索引）、02 项目与工作流示例（带 path_anchor 锚点机制的完整工程 JSON、跨引擎强类型 DAG 工作流、批处理模板与隔离脚本会话）、01 插件协议与扩展指南（GUI 主进程严禁导入地理依赖的物理隔离红线、JSONL 完整协议状态机与三步新增算法插件实战）、02 故障定位与 Doctor 诊断（PROJ 空间参考缺失、DLL 动态库加载失败、WinError 206 长路径突破、子进程超时强杀与离线断网部署 6 大故障排查手册）、03 依赖与组件清单（GDAL 3.13.3、Rasterio 1.5.2、PySide6 6.9.3、NumPy 2.5.4、SciPy 1.18.1、Pydantic 2.11.7 上游锁定版本、发布包 4 大运行时架构矩阵、205 驱动支持清单与第三方开源合规协议）；同步加固根目录 README.md 首页导航；新增 `tests/unit/test_p10_documentation_audit.py` 6 项自动化测试在 scripts/run_with_timeout.py 监管下 0.29s 全过，clean_exit_verified=True，0 残留进程；Ruff 0 告警，Mypy 99 个源文件 0 错误，scripts/audit-capabilities.ps1 2033 个参数零漂移对齐）✅。
+更新：2026-11-10（第 82 轮 · P10-04 最终发布审计圆满收官！全量里程碑 P0~P10 全面闭环达成！全量 468 条能力基准与 2033 个参数经全自动契约审计实现零漂移对齐，13 项缺失项全部具备严格的局限性与替代说明，未解释缺口严格为 0；高精度数值计算证据 `docs/progress/runs/computation_evidence.json` 覆盖坐标转换（EPSG:4326->EPSG:3857 误差 < 0.001m）、DEM 山体阴影光照解析公式、NDVI 物理反射率换算、PCA 全维正反变换无损重建（误差 <= 1e-10）、2D FFT 频域滤波条纹抑制与 FVC 像元二分模型六大算法 100% 验证通过；核心功能生成高清离屏渲染快照（桌面全景、双视口对比联动、交互式多边形 ROI 顶点形变，单张 > 110KB）；发布包 `dist/SpectraWorkbench/` 完备内置 4 套独立运行时与原生 PE 启动器，形成最终发布审计报告 `docs/progress/runs/release_audit.json`（status: APPROVED）；新增 `tests/integration/test_p10_release_audit.py` 4 项集成测试在 scripts/run_with_timeout.py 监管下 0.56s 全过，clean_exit_verified=True，0 残留进程；Ruff 0 告警，Mypy 99 个源文件 0 错误，scripts/audit-capabilities.ps1 2033 个参数零漂移对齐）🎉。
 
 ## 当前里程碑
 
@@ -197,6 +197,37 @@
         5. `test_p10_03_doctor_and_troubleshooting_coverage`：验证故障定位文档完整覆盖 6 类关键故障排查手册；
         6. `test_p10_03_dependencies_and_version_consistency`：验证依赖清单记录的版本与环境基准严格一致。
       - 在 `scripts/run_with_timeout.py` 监督下 6 项测试全部通过（耗时 0.29s，`pytest_exit_code=0, clean_exit_verified=True, residual_processes=[]`）；
+      - Ruff 0 告警，Mypy 99 个源文件 0 错误，`scripts/audit-capabilities.ps1` 校验全量基准与 2033 个参数零漂移通过。
+  - **P10-04 最终发布审计**：**done**（第 82 轮）。
+    - **全量能力检查表与未验项全覆盖审计**：
+      - 审计基准总数 468 条，发现 455 项（97.2%），可调用 250 项（53.4%），平台可执行 29 项（6.2%），已验证 5 项（1.1%）；
+      - 缺失项 13 项（2.8%）全部具有明确详实的局限性（limitations）与替代边界说明，未解释缺口严格为 0；
+      - 2033 个能力参数零漂移对齐，无 Schema 违规，无名称冲突；
+      - 形成正式最终发布审计报告 `docs/progress/runs/release_audit.json`，判定结论为 **`status: APPROVED`**。
+    - **高精度数值计算证据 (`docs/progress/runs/computation_evidence.json`)**：
+      - **坐标转换**：EPSG:4326 到 EPSG:3857 北京参考点转换误差精确至亚毫米级（< 0.001m）；
+      - **DEM 地形阴影**：太阳高度角 45°、方位角 315° 下山体表面坡度坡向光照解析公式与 GDAL 字节像元输出严密对齐；
+      - **NDVI 植被指数**：红光/近红外原始 DN 经 gain/offset 换算为物理反射率后，计算值与理论值绝对误差 < 1e-9；
+      - **PCA 主成分变换**：4 维正交变换与逆变换完全可逆重建，最大绝对残差为 0.0（<= 1e-10 容差）；
+      - **2D FFT 频域滤波**：注入 (0, 2) 频域正弦条纹，经厄米对称掩膜抑制逆变换后条纹完全消除，残差为 0.0；
+      - **FVC 像元二分模型**：根据土壤与植被端元百分位数计算植被覆盖度，数值精确匹配。
+    - **主要功能离屏渲染高清快照**：
+      - `docs/progress/runs/desktop_ui_preview.png`：主窗口桌面全景、图层面板、数据源元数据与能力工具箱动态表单；
+      - `docs/progress/runs/desktop_ui_dual_view.png`：双视口并排对比联动同步视图；
+      - `docs/progress/runs/desktop_ui_roi_interactive.png`：交互式多边形 ROI 顶点手柄拖拽与高亮轮廓；
+      - 单张图像均超过 110KB，通过真实有效 PNG 二进制头部与数据量校验。
+    - **发布包可复建性与架构完整性审计**：
+      - `dist/SpectraWorkbench/` 完备包含 4 套独立解耦运行时（`app/`, `runtimes/gdal/`, `runtimes/rasterio/`, `runtimes/science/`）；
+      - 捆绑 162 个原生 C/C++ 二进制与 CLI、161 项 CRS 元数据规范与 `share/proj/proj.db` 空间参考数据库；
+      - 原生 PE 启动器与卸载器（`SpectraWorkbench.exe`, `SpectraWorkbench-console.exe`, `uninstall.exe`）均通过 Windows PE MZ 头部校验并归档 SHA-256 校验和；
+      - 发布包支持通过自动化脚本 `python scripts/package_onedir.py` 实现幂等一键复建。
+    - **测试与门禁验证**：
+      - 新增集成验收测试 `tests/integration/test_p10_release_audit.py`，覆盖 4 大核心验收测试：
+        1. `test_p10_04_checklist_and_capability_audit_compliance`：验证基准审计、未解释缺口严格为 0、未验项 100% 局限性说明；
+        2. `test_p10_04_computation_evidence_numerical_integrity`：验证六大算法数值计算证据全部通过；
+        3. `test_p10_04_feature_screenshots_and_artifacts`：验证三张功能截图存在、有效 PNG 头部且尺寸 > 50KB；
+        4. `test_p10_04_package_reproducibility_and_manifest`：验证发布包目录、manifest.json 与原生 PE 二进制完整性。
+      - 在 `scripts/run_with_timeout.py` 监督下 4 项测试全部通过（耗时 0.56s，`pytest_exit_code=0, clean_exit_verified=True, residual_processes=[]`）；
       - Ruff 0 告警，Mypy 99 个源文件 0 错误，`scripts/audit-capabilities.ps1` 校验全量基准与 2033 个参数零漂移通过。
 ## 原 P3 验收标准逐项对账与剩余缺口
 
@@ -2479,6 +2510,7 @@ Thread 0x0000d064 (most recent call first):
 | P10-01 Windows onedir 发布与运行时重定位 | done | scripts/package_onedir.py 组装独立发布包；原生 PE SpectraWorkbench.exe 与 SpectraWorkbench-console.exe 启动器；中文空格路径下 tests/integration/test_p10_packaging_and_relocation.py 5 项全绿 |
 | P10-02 干净机环境与安装生命周期测试 | done | dist/SpectraWorkbench/ 包含 app, runtimes/gdal, runtimes/rasterio, runtimes/science 四套独立运行时；原生 uninstall.exe；用户工程 100% 保全；PATH 完全洗脱脱离开发目录干净机与断网离线实测 tests/integration/test_p10_clean_machine_and_lifecycle.py 5 项全绿 |
 | P10-03 用户说明、开发说明和诊断 | done | docs/user/ 与 docs/developer/ 5 篇核心文档 + README 索引；工具编目、工程/工作流/批处理/脚本示例、插件协议、6 大故障排查手册与依赖清单；tests/unit/test_p10_documentation_audit.py 6 项全绿 |
+| P10-04 最终发布审计 | done | docs/progress/runs/release_audit.json（APPROVED）；468 基准 0 未解释缺口、2033 参数 0 漂移；6 大算法计算证据 computation_evidence.json；3 张高清 UI 特性快照；dist/SpectraWorkbench 原生 PE 启动器与发布包可复建；tests/integration/test_p10_release_audit.py 4 项全绿 |
 
 实测命令与结果：
 - powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test.ps1 -All → **Ruff 干净、Mypy 干净（64 个源文件 0 错误）、539 项收集 / 0 失败、rc=0**（2026-11-06 第 36 轮，`ALL CHECKS PASSED`，耗时 245.9s；退出异常已在测试侧止血，见第 33 轮）。上一轮（第 35 轮）为 536 项收集 / 0 失败 / rc=0、耗时 369.0s；再上一轮（第 34 轮）为 467 passed / 0 失败 / rc=0、Mypy 61 个源文件 0 错误

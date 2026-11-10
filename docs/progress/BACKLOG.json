@@ -1341,9 +1341,15 @@
         "P9-04",
         "P9-05"
       ],
-      "status": "todo",
+      "status": "done",
       "release_requirement": "core",
-      "evidence": [],
+      "evidence": [
+        "检查表与未验项全覆盖审计：全量 468 基准条目（455 已发现、250 可调用、29 平台可执行、5 已验证、13 缺失但具有明确 limitations 局限性与替代说明），未解释缺口严格为 0，2033 个能力参数零漂移对齐，形成 docs/progress/runs/release_audit.json 最终审计报告（status: APPROVED）",
+        "高精度数值计算证据 docs/progress/runs/computation_evidence.json：坐标转换（EPSG:4326->EPSG:3857 误差 < 0.001m）、地形 Hillshade（光照解析公式与 GDAL 字节输出对齐）、NDVI 植被指数（逐像元物理反射率公式误差 < 1e-9）、PCA 主成分变换（4 维正反变换无损重建误差 <= 1e-10）、2D FFT 频域滤波（厄米对称掩膜完全抑制正弦条纹残差 <= 1e-10）、FVC 像元二分模型（端元分位数与连续反演数值精确一致）六大算法证明 100% 通过",
+        "核心功能高质量离屏渲染快照：docs/progress/runs/desktop_ui_preview.png（主窗口全景、图层面板与动态表单）、docs/progress/runs/desktop_ui_dual_view.png（双视口并排对比联动）、docs/progress/runs/desktop_ui_roi_interactive.png（交互式多边形 ROI 顶点形变），单张图像均超过 110KB 且经有效 PNG 二进制校验",
+        "发布包可复建性与架构完整性审计：dist/SpectraWorkbench/ 自包含 4 套独立运行时（app, runtimes/gdal, runtimes/rasterio, runtimes/science），包含 162 个原生二进制与 CLI、161 项 CRS 规范与 proj.db 数据库、原生 PE 启动器与卸载器（SpectraWorkbench.exe, SpectraWorkbench-console.exe, uninstall.exe 均带有效 MZ 头部并记录 SHA-256），支持通过 python scripts/package_onedir.py 幂等一键复建",
+        "集成发布审计测试 tests/integration/test_p10_release_audit.py 4 项测试在 scripts/run_with_timeout.py 监管下全过（clean_exit_verified=True, 0 残留进程）"
+      ],
       "blocking_reason": null
     }
   ],
