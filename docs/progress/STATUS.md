@@ -1,6 +1,6 @@
 # 执行状态
 
-更新：2026-11-09（第 78 轮 · P9-05 故障注入与恢复审计全面收官，P9 全能力审计与性能可靠性里程碑 100% 完成！新增 `tests/integration/test_p9_fault_injection_and_recovery.py` 覆盖 Worker 崩溃与自动重启恢复、磁盘满 ENOSPC 原子回滚与数据保全、无权限/已存在标准错误拦截、网络 404 与超时阻断、协作取消快速终态与立即复用、损坏项目文件安全恢复与原子保存韧性共 6 大类故障注入矩阵；实测全部 6 项测试通过，P9 全量 5 套集成测试 30 项测试在 scripts/run_with_timeout.py 监管下 97.89s clean exit 零残留通过，Ruff 0 告警，Mypy 99 个源文件 0 错误，scripts/audit-capabilities.ps1 2033 个参数零漂移对齐）✅。
+更新：2026-11-10（第 79 轮 · P10-01 Windows onedir UI 与 engine runtimes 顺利收官！新增 `scripts/package_onedir.py` 实现自包含 Windows onedir 发布包组装与原生 PE 编译，发布包完整捆绑独立 Python、PySide6 6.9.3、Qt 平台插件、GDAL 3.13.3 运行时、141 个原生 DLL、gdal CLI 工具、share/gdal 规范数据与 share/proj/proj.db、Rasterio 1.5.2 独立运行时，并在深层中文+空格目录 `work/dist_test/高光谱 空间 2026/SpectraWorkbench` 下完成重定位验证；新增 `tests/integration/test_p10_packaging_and_relocation.py` 5 项测试在 scripts/run_with_timeout.py 监管下 2.28s 全过，clean_exit_verified=True，0 残留进程；Ruff 0 告警，Mypy 99 个源文件 0 错误，scripts/audit-capabilities.ps1 2033 个参数零漂移对齐）✅。
 
 ## 当前里程碑
 
@@ -116,6 +116,28 @@
       - **任务协作取消与立即复用恢复** (`test_p9_05_cancellation_and_resubmission_recovery`)：长计算中途发起 `cancel_task`，0.12s（目标 <= 2.0s）内协同取消并进入 `TaskStatus.cancelled` 终态，未完成成果物理清理，且在同一个 Client 和同一个未重启的 Worker 进程中立即提交新任务成功执行完成；
       - **损坏项目文件安全恢复与原子保存韧性** (`test_p9_05_corrupt_project_file_handling_and_atomic_save_resilience`)：截断畸变 JSON 工程安全拦截返回 False 且不污染图层模型；工程包含物理被删数据源时打开进入 `missing_sources` 隔离并支持重关联/显式移除；工程原子保存（`save_project`）在同卷替换前模拟注入崩溃，原工程文件字节原样保留，零残留 `.tmp` 临时文件；
     - **测试与门禁验证**：`tests/integration/test_p9_fault_injection_and_recovery.py` 6 项测试全通（21.45s）；P9 全量 5 套集成测试套件共 30 项测试 clean exit 零残留全通（97.89s, `pytest_exit_code=0, clean_exit_verified=True, residual_processes=[]`）；Ruff 0 告警，Mypy 99 个源文件 0 错误；`scripts/audit-capabilities.ps1` 校验全量基准与 2033 个参数零漂移通过。
+- **P10 打包、分发与最终验收**：
+  - **P10-01 Windows onedir UI 与 engine runtimes**：**done**（第 79 轮）。
+    - **全自包含 Windows onedir 发布包组装 (`scripts/package_onedir.py`)**：
+      - 组装规范目标目录 `dist/SpectraWorkbench/`，采用应用与多引擎分层解耦目录树：
+        - `app/`：独立 Python 运行时（标准库 `Lib/`、标准 DLLs `DLLs/`、无 `pyvenv.cfg` 原生隔离模式）、PySide6 6.9.3、pyqtgraph、numpy、pydantic 等完整依赖、应用源码 `src/spectra_workbench`、`qt.conf`（强制相对路径定位 Qt 插件目录）；
+        - `runtimes/gdal/`：可重定位独立 GDAL 引擎运行时，内置独立 Python 解释器、标准库、141 个原生 C/C++ DLLs、`bin/` 完整 gdalinfo/gdalwarp CLI、`share/gdal/` CRS 规范数据集（含 `epsg.wkt` 等）、`share/proj/proj.db` 空间参考数据库及 `osgeo` 驱动层；
+        - `runtimes/rasterio/`：可重定位独立 Rasterio 引擎运行时，内置独立 Python 解释器、标准库及 `rasterio` / `rasterio.libs` 动态链接库；
+        - `resources/` 与 `manifest.json`：包含架构元数据、依赖哈希与版本标记。
+      - 原生 PE 启动器编译：利用 Windows 自带 .NET 64 位 C# 编译器（`csc.exe`），无需第三方编译链或 PyInstaller 网络下载，编译原生 `SpectraWorkbench.exe`（GUI 无黑框启动）与 `SpectraWorkbench-console.exe`（控制台转发与 CLI 调度），并提供 `SpectraWorkbench.bat` 双保险批处理；
+    - **深层中文与空格路径重定位验证**：
+      - 将整个 onedir 发布包完整重定位镜像至包含中文与空格的深层测试目录（`work/dist_test/高光谱 空间 2026/SpectraWorkbench`）；
+      - 解决 Windows MAX_PATH（260 字符）限制，采用 Windows Extended Path Prefix (`\\?\`) 安全复制深层嵌套依赖；
+      - 适配 `doctor.py`、`process.py`、`session.py` 与 `adapter.py` 支持优先解析发布包自身内置的 `runtimes/gdal` 与 `runtimes/rasterio`，并自动注入 `PROJ_DATA` 寻址与 `osr.SetPROJSearchPaths`；
+    - **测试与门禁验证**：
+      - 新增集成验收测试 `tests/integration/test_p10_packaging_and_relocation.py`，覆盖 5 大重定位关键能力：
+        1. `test_p10_01_onedir_manifest_and_directory_structure`：验证目录结构、原生启动器、app 及 runtimes/gdal/rasterio 资源清单与 manifest.json 完整性；
+        2. `test_p10_01_ui_qt_platform_plugin_in_chinese_space_path`：验证在中文与空格路径下 PySide6 offscreen 平台插件与 Qt 基础窗体正常无错初始化；
+        3. `test_p10_01_gdal_crs_proj_db_integrity_in_chinese_space_path`：验证在中文与空格路径下 GDAL 引擎成功绑定内嵌 `share/proj/proj.db` 并完成 EPSG:4326 到 EPSG:3857 投影坐标精确转换（北京坐标精确至亚毫米级）；
+        4. `test_p10_01_rasterio_io_in_chinese_space_path`：验证在中文与空格路径下 Rasterio 引擎正常创建并重开 GeoTIFF 栅格且 CRS 正确；
+        5. `test_p10_01_native_launcher_help_and_argument_dispatch`：验证原生 PE 启动器在中文/空格路径下参数转发与 `--help` 命令行调用正常；
+      - 在 `scripts/run_with_timeout.py` 监督下 5 项测试全部通过（耗时 2.28s，`pytest_exit_code=0, clean_exit_verified=True, residual_processes=[]`）；
+      - Ruff 0 告警，Mypy 99 个源文件 0 错误，`scripts/audit-capabilities.ps1` 校验全量基准与 2033 个参数零漂移通过。
 ## 原 P3 验收标准逐项对账与剩余缺口
 
 | ID | 任务 | 原始验收标准 | 当前已满足项与实测证据 | 剩余缺口与待验条件 | 当前状态 |

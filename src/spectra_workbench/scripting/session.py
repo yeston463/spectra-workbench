@@ -2,7 +2,12 @@
 
 设计（符合 docs/plan §3.1「环境隔离原则」）：
 - **引擎各用各自的真实解释器**：GDAL 用 doctor 解析的 QGIS/conda 运行时，
-  Rasterio 用项目里的 ``.venvs\\sw-rasterio\\Scripts\\python.exe``。GUI 进程
+  Rasterio 用项目里的 ``.venvs\\sw-rasterio\\Scripts\\python.exe``。GUI 进candidates = [
+  Rasterio 用项目里的 ``.venvs\\sw-rasterio\\Scripts\\python.exe``。GUI 进    root / "runtimes" / "rasterio" / "python.exe",
+  Rasterio 用项目里的 ``.venvs\\sw-rasterio\\Scripts\\python.exe``。GUI 进    root / "runtimes" / "rasterio" / "Scripts" / "python.exe",
+  Rasterio 用项目里的 ``.venvs\\sw-rasterio\\Scripts\\python.exe``。GUI 进    root / ".venvs" / "sw-rasterio" / "Scripts" / "python.exe",
+  Rasterio 用项目里的 ``.venvs\\sw-rasterio\\Scripts\\python.exe``。GUI 进]
+  Rasterio 用项目里的 ``.venvs\\sw-rasterio\\Scripts\\python.exe``。GUI 进py = next((p for p in candidates if p.exists()), candidates[-1])
   永远不 ``import osgeo`` / ``rasterio``——本模块只启动子进程，不传递原生句柄。
 - **用户脚本在 engine 解释器里 ``exec``**：``from osgeo import gdal`` /
   ``import rasterio`` 都在引擎环境内真实执行，受 engine 环境变量影响。

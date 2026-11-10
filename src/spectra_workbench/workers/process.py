@@ -85,15 +85,21 @@ def resolve_worker_command(
         return Path(sys.executable), base_env
 
     if provider_id == "rasterio":
-        py_path = root / ".venvs" / "sw-rasterio" / "Scripts" / "python.exe"
-        if not py_path.exists():
-            py_path = Path(sys.executable)
+        candidates = [
+            root / "runtimes" / "rasterio" / "python.exe",
+            root / "runtimes" / "rasterio" / "Scripts" / "python.exe",
+            root / ".venvs" / "sw-rasterio" / "Scripts" / "python.exe",
+        ]
+        py_path = next((p for p in candidates if p.exists()), Path(sys.executable))
         return py_path, base_env
 
     if provider_id == "science":
-        py_path = root / ".venvs" / "sw-science" / "Scripts" / "python.exe"
-        if not py_path.exists():
-            py_path = Path(sys.executable)
+        candidates = [
+            root / "runtimes" / "science" / "python.exe",
+            root / "runtimes" / "science" / "Scripts" / "python.exe",
+            root / ".venvs" / "sw-science" / "Scripts" / "python.exe",
+        ]
+        py_path = next((p for p in candidates if p.exists()), Path(sys.executable))
         return py_path, base_env
 
     if provider_id in {"dummy", "test"}:

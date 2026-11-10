@@ -14,6 +14,7 @@ from __future__ import annotations
 import contextlib
 import json
 import math
+import os
 import shutil
 import time
 import uuid
@@ -25,6 +26,10 @@ try:
 
     gdal.UseExceptions()
     GDAL_AVAILABLE = True
+    proj_data = os.environ.get("PROJ_DATA")
+    if proj_data and hasattr(osr, "SetPROJSearchPaths"):
+        with contextlib.suppress(Exception):
+            osr.SetPROJSearchPaths([proj_data])
 except ImportError:
     GDAL_AVAILABLE = False
     gdal = None

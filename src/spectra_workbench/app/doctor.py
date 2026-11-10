@@ -50,9 +50,14 @@ class DoctorReport:
 
 
 def find_project_root(start_path: Path | str | None = None) -> Path:
+    onedir_root = os.environ.get("SPECTRA_ONEDIR_ROOT")
+    if onedir_root and Path(onedir_root).is_dir():
+        return Path(onedir_root).resolve()
     current = Path(start_path or Path.cwd()).resolve()
     for p in [current, *current.parents]:
         if (p / "pyproject.toml").is_file() and (p / "src" / "spectra_workbench").is_dir():
+            return p
+        if (p / "runtimes").is_dir() and ((p / "SpectraWorkbench.exe").is_file() or (p / "app").is_dir()):
             return p
     return current
 
@@ -118,6 +123,24 @@ def resolve_gdal_runtime(project_root: Path | str | None = None) -> dict[str, An
     bin_path: Path | None = Path(env_bin) if env_bin else None
     gdal_data_path: Path | None = Path(env_gdal_data) if env_gdal_data else None
     proj_data_path: Path | None = Path(env_proj_data) if env_proj_data else None
+
+    # Check bundled onedir runtime in root / "runtimes" / "gdal"
+    if not (py_path and py_path.exists()):
+        bundled_gdal = root / "runtimes" / "gdal"
+        if bundled_gdal.is_dir():
+            cand_py = bundled_gdal / "python.exe"
+            if not cand_py.exists():
+                cand_py = bundled_gdal / "apps" / "Python312" / "python.exe"
+            if cand_py.exists():
+                py_path = cand_py
+                cand_bin = bundled_gdal / "bin"
+                bin_path = cand_bin if cand_bin.exists() else bundled_gdal
+                cand_gdal_data = bundled_gdal / "share" / "gdal"
+                if cand_gdal_data.exists():
+                    gdal_data_path = cand_gdal_data
+                cand_proj_data = bundled_gdal / "share" / "proj"
+                if cand_proj_data.exists():
+                    proj_data_path = cand_proj_data
 
     # Check env_report.json
     if not (py_path and py_path.exists()):

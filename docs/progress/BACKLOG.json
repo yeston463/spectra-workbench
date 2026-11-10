@@ -1265,9 +1265,18 @@
         "P9-02",
         "P9-03"
       ],
-      "status": "todo",
+      "status": "done",
       "release_requirement": "core",
-      "evidence": [],
+      "evidence": [
+        "scripts/package_onedir.py 实现自动化自包含 Windows onedir 发布包组装与原生 PE 编译",
+        "构建产物 dist/SpectraWorkbench/ 包含原生启动器（SpectraWorkbench.exe / SpectraWorkbench-console.exe）、app（PySide6 6.9.3、Qt 平台插件、标准库及代码）、runtimes/gdal（自包含 GDAL 3.13.3、141 个原生 DLL、gdal CLI、share/gdal 规范数据及 share/proj/proj.db）、runtimes/rasterio（自包含 Rasterio 1.5.2）、resources 及 manifest.json",
+        "重定位至深层中文+空格目录（work/dist_test/高光谱 空间 2026/SpectraWorkbench）完全通过 5 项验证：",
+        "1. PySide6 offscreen 平台插件在中文空格路径正常加载初始化；",
+        "2. GDAL 引擎自动绑定 share/proj/proj.db，完成 EPSG:4326 到 EPSG:3857 投影转换且精度达标（X=12958412.49, Y=4852030.63）；",
+        "3. Rasterio 引擎在中文空格路径正常生成与读写 GeoTIFF，CRS 与像元值准确闭环；",
+        "4. 原生 PE 启动器 SpectraWorkbench-console.exe 正常完成参数转发与 CLI 调度；",
+        "5. 集成测试 tests/integration/test_p10_packaging_and_relocation.py 在 run_with_timeout 监督下 5 项全过（2.28s，clean_exit_verified=True，0 残留进程）"
+      ],
       "blocking_reason": null
     },
     {
@@ -1323,5 +1332,5 @@
       "blocking_reason": null
     }
   ],
-  "updated_at": "2026-11-09"
+  "updated_at": "2026-11-10"
 }
