@@ -77,6 +77,7 @@ from spectra_workbench.providers.gdal_provider.cleanup_ops import (
     plan_cleanup_output,
     run_cleanup,
 )
+from spectra_workbench.providers.gdal_provider.clip_ops import ClipError, run_clip_mask
 from spectra_workbench.providers.gdal_provider.cloudreplace_ops import run_cloud_replace
 from spectra_workbench.providers.gdal_provider.diff_ops import run_raster_diff
 from spectra_workbench.providers.gdal_provider.dos_ops import run_dos1
@@ -377,6 +378,8 @@ class GDALProviderAdapter(ProviderAdapter):
         # --- P6-05：掩膜生成 / FVC ---
         "gdal:mask",
         "gdal:fvc",
+        # --- P11-07：多边形 ROI 与矢量 cutline 掩膜裁剪 ---
+        "gdal:clip_mask",
         # --- P6-06：辐射定标 / DOS1 大气校正 / 掩膜驱动多时相去云 ---
         "gdal:calibrate",
         "gdal:dos1",
@@ -774,6 +777,7 @@ class GDALProviderAdapter(ProviderAdapter):
         is_pansharpen = spec.capability_id == "gdal:pansharpen"
         is_mask = spec.capability_id == "gdal:mask"
         is_fvc = spec.capability_id == "gdal:fvc"
+        is_clip_mask = spec.capability_id in ("gdal:clip_mask", "clip_mask")
         is_calibrate = spec.capability_id == "gdal:calibrate"
         is_dos1 = spec.capability_id == "gdal:dos1"
         is_cloudreplace = spec.capability_id == "gdal:cloudreplace"
@@ -1975,6 +1979,56 @@ class GDALProviderAdapter(ProviderAdapter):
                     f"sidecar：{fvc_info['sidecar']}",
                 )
                 ds = gdal.Open(str(staged_path), gdal.GA_ReadOnly)
+            elif is_clip_mask:
+                try:
+                    clip_info = run_clip_mask(
+                        staged_path,
+                        in_path,  # type: ignore[arg-type]
+                        cutline_path=(
+                            Path(norm["cutlinePath"]) if norm.get("cutlinePath") else None
+                        ),
+                        cutline_geojson=norm.get("cutlineGeoJson"),
+                        roi_points=norm.get("roiPoints"),
+                        roi_space=str(norm.get("roiSpace") or "pixel"),
+                        crop_to_cutline=bool(norm.get("cropToCutline", True)),
+                        dst_nodata=(
+                            float(norm["dstNodata"])
+                            if norm.get("dstNodata") is not None
+                            else None
+                        ),
+                        src_nodata=(
+                            float(norm["srcNodata"])
+                            if norm.get("srcNodata") is not None
+                            else None
+                        ),
+                        cutline_where=norm.get("cutlineWhere"),
+                        cutline_layer=norm.get("cutlineLayer"),
+                        cutline_blend=(
+                            float(norm["cutlineBlend"])
+                            if norm.get("cutlineBlend") is not None
+                            else None
+                        ),
+                        all_touched=bool(norm.get("allTouched") or False),
+                        resample_alg=str(norm.get("resampleAlg") or "near"),
+                        out_format=out_format,
+                        creation_options=creation_options,
+                        callback=_gdal_cb,
+                    )
+                except ClipError as clip_err:
+                    return TaskResult(
+                        task_id=spec.task_id,
+                        attempt=spec.attempt,
+                        status=TaskStatus.failed,
+                        error={"code": "clip_error", "message": str(clip_err)},
+                        duration_seconds=round(time.monotonic() - start_time, 4),
+                    )
+                context.log(
+                    "INFO",
+                    f"几何掩膜裁剪完成：输出尺寸 {clip_info['out_width']}x{clip_info['out_height']}，"
+                    f"有效像元 {clip_info['n_valid']}，NoData 像元 {clip_info['n_nodata']}；"
+                    f"sidecar：{clip_info['sidecar']}",
+                )
+                ds = gdal.Open(str(staged_path), gdal.GA_ReadOnly)
             elif is_calibrate:
                 calibrate_info = run_calibration(
                     staged_path,
@@ -2390,6 +2444,8 @@ class GDALProviderAdapter(ProviderAdapter):
                 if is_mask
                 else "FVC"
                 if is_fvc
+                else "ClipMask"
+                if is_clip_mask
                 else "Calibrate"
                 if is_calibrate
                 else "DOS1"
@@ -2449,6 +2505,8 @@ class GDALProviderAdapter(ProviderAdapter):
                 if is_mask
                 else "FVC"
                 if is_fvc
+                else "ClipMask"
+                if is_clip_mask
                 else "Calibrate"
                 if is_calibrate
                 else "DOS1"
@@ -2515,6 +2573,10 @@ class GDALProviderAdapter(ProviderAdapter):
             fvc_class = staged_path.with_name(staged_path.name + ".fvc_class.tif")
             if fvc_class.exists():
                 staged_files.append(fvc_class.resolve())
+        if is_clip_mask:
+            clip_sidecar = staged_path.with_name(staged_path.name + ".clip.json")
+            if clip_sidecar.exists():
+                staged_files.append(clip_sidecar.resolve())
         if is_calibrate:
             calibrate_sidecar = staged_path.with_name(
                 staged_path.name + ".calibrate.json"

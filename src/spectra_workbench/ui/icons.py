@@ -575,6 +575,43 @@ def _draw_tool_play(p: QPainter, s: float) -> None:
     p.drawPath(path)
 
 
+def _draw_tool_clip(p: QPainter, s: float) -> None:
+    # 裁剪图标：多边形虚线框 + 剪刀
+    poly = QPainterPath()
+    poly.moveTo(s * 0.15, s * 0.35)
+    poly.lineTo(s * 0.55, s * 0.15)
+    poly.lineTo(s * 0.85, s * 0.45)
+    poly.lineTo(s * 0.65, s * 0.85)
+    poly.lineTo(s * 0.25, s * 0.80)
+    poly.closeSubpath()
+
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(QBrush(QColor(0, 180, 216, 40)))
+    p.drawPath(poly)
+
+    p.setPen(QPen(QColor("#00B4D8"), 1.8, Qt.PenStyle.DashLine, Qt.PenCapStyle.RoundCap))
+    p.setBrush(Qt.BrushStyle.NoBrush)
+    p.drawPath(poly)
+
+    # 剪刀把柄
+    p.setPen(QPen(QColor("#E67E22"), 2.0))
+    p.drawEllipse(QPointF(s * 0.28, s * 0.30), s * 0.10, s * 0.10)
+    p.drawEllipse(QPointF(s * 0.24, s * 0.52), s * 0.10, s * 0.10)
+
+    # 剪刀刀刃
+    blade = QPainterPath()
+    blade.moveTo(s * 0.36, s * 0.33)
+    blade.lineTo(s * 0.72, s * 0.62)
+    blade.moveTo(s * 0.32, s * 0.50)
+    blade.lineTo(s * 0.70, s * 0.26)
+    p.setPen(QPen(QColor("#ECEFF1"), 2.2, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+    p.drawPath(blade)
+
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(QBrush(QColor("#D35400")))
+    p.drawEllipse(QPointF(s * 0.48, s * 0.42), s * 0.045, s * 0.045)
+
+
 # 图标分发注册表
 _DRAWERS: dict[str, Callable[[QPainter, float], None]] = {
     # 文件与工程
@@ -614,6 +651,8 @@ _DRAWERS: dict[str, Callable[[QPainter, float], None]] = {
     "tool_measure": _draw_tool_measure,
     "tool_profile": _draw_tool_profile,
     "tool_play": _draw_tool_play,
+    "tool_clip": _draw_tool_clip,
+    "roi_clip": _draw_tool_clip,
 
 }
 

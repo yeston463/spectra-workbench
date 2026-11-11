@@ -169,7 +169,7 @@ def test_gdal_algorithms_count_and_structure():
     已在 registry 文档串中标注。
     """
     algorithms = build_gdal_algorithms()
-    assert len(algorithms) == 37
+    assert len(algorithms) == 38
 
     algo_ids = {a.capability_id for a in algorithms}
     expected_ids = {
@@ -212,6 +212,8 @@ def test_gdal_algorithms_count_and_structure():
         # P6-05：二值掩膜 / FVC 植被覆盖度
         "gdal:mask",
         "gdal:fvc",
+        # P11-07：多边形 ROI 与矢量 cutline 掩膜裁剪
+        "gdal:clip_mask",
         # P6-06：辐射定标 / DOS1 大气校正 / 多时相去云
         "gdal:calibrate",
         "gdal:dos1",
@@ -402,10 +404,10 @@ def test_four_dimensional_state_independence_and_audit():
     # 基线总数 462 -> 468，missing 7 -> 13，discovered/callable/platform_executable 维持 455/250/24 不变。
     # 第 75 轮（P9-02）：5 项清理算法（sieve/fillnodata/nearblack/proximity/viewshed）
     # 接通 form 执行器与面板：platform_executable 24 -> 29。
-    assert report["total_baseline_count"] == 468
-    assert report["discovered"]["count"] == 455
-    assert report["callable"]["count"] == 250
-    assert report["platform_executable"]["count"] == 29
+    assert report["total_baseline_count"] == 469
+    assert report["discovered"]["count"] == 456
+    assert report["callable"]["count"] == 251
+    assert report["platform_executable"]["count"] == 30
     # 第 63 轮 blocked 新增 flaash_external 与 agriculture_count：5 -> 7；
     # 第 73 轮（P8-05）新增 6 项未实现可选扩展：7 -> 13
     assert report["missing"]["count"] == 13
@@ -431,8 +433,8 @@ def test_four_dimensional_state_independence_and_audit():
     # 第 69 轮（P8-01）：新增平台能力 gdal:mdim_slice：420 -> 421、416 -> 417。
     # gdal:buildvrt、P5-02 的 gdal:dem/rasterize/grid 由 blocked 改为 ready，
     # GDAL 缺失项 6 -> 5 -> 4 -> 3 -> 2。
-    assert gdal_rep["total_baseline_count"] == 421
-    assert gdal_rep["discovered"]["count"] == 417
+    assert gdal_rep["total_baseline_count"] == 422
+    assert gdal_rep["discovered"]["count"] == 418
     # ? 63 ? blocked ?? flaash_external ? agriculture_count?2 -> 4
     assert gdal_rep["missing"]["count"] == 4
 
@@ -451,7 +453,7 @@ def test_provider_adapters_discover_baseline():
     # 第 61 轮 gcpregister/rasterdiff：411 -> 413；第 62 轮 mask/fvc：413 -> 415；
     # 第 63 轮 calibrate/dos1/cloudreplace + 2 blocked：415 -> 420；
     # 第 69 轮（P8-01）mdim_slice：420 -> 421。
-    assert len(gdal_caps) == 421
+    assert len(gdal_caps) == 422
 
     rio_adapter = RasterioProviderAdapter()
     rio_caps = rio_adapter.discover()

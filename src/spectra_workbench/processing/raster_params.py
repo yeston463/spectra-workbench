@@ -276,6 +276,15 @@ _PARAM_ALIASES: dict[str, tuple[str, ...]] = {
     "observerHeight": ("observer_height",),
     "targetHeight": ("target_height",),
     "viewDistance": ("view_distance", "viewshed_distance"),
+    # --- P11-07 矢量与多边形 ROI 掩膜裁剪 ---
+    "cutlinePath": ("cutline_path", "cutline", "cutline_file", "cutline_ds"),
+    "cutlineGeoJson": ("cutline_geojson", "cutline_geometry"),
+    "roiPoints": ("roi_points", "polygon_points"),
+    "roiSpace": ("roi_space", "coordinate_space"),
+    "cropToCutline": ("crop_to_cutline", "crop_cutline"),
+    "cutlineWhere": ("cutline_where",),
+    "cutlineLayer": ("cutline_layer",),
+    "cutlineBlend": ("cutline_blend",),
 }
 
 #: 重叠区的取值来源优先级。
@@ -517,6 +526,25 @@ _CAPABILITY_SUPPORT: dict[str, frozenset[str]] = {
             "srcNodata",
         }
     ),
+    # --- P11-07：多边形 ROI 与矢量 cutline 掩膜裁剪 ---
+    "gdal:clip_mask": frozenset(
+        {
+            "cutlinePath",
+            "cutlineGeoJson",
+            "roiPoints",
+            "roiSpace",
+            "cropToCutline",
+            "dstNodata",
+            "srcNodata",
+            "cutlineWhere",
+            "cutlineLayer",
+            "cutlineBlend",
+            "allTouched",
+            "resampleAlg",
+            "outFormat",
+            "creationOptions",
+        }
+    ),
     # --- P6-05：FVC（NDVI 输入 + 端元/分位 + 分级）---
     "gdal:fvc": frozenset(
         {
@@ -635,6 +663,11 @@ _CAPABILITY_ALIASES: dict[str, str] = {
     "gdal_contour": "gdal:contour",
     # --- P5-04 能力别名 ---
     "ogr2ogr": "ogr:vectortranslate",
+    # --- P11-07 能力别名 ---
+    "clip_mask": "gdal:clip_mask",
+    "gdal_clip_mask": "gdal:clip_mask",
+    "gdal:clip": "gdal:clip_mask",
+    "gdal_clip": "gdal:clip_mask",
     # 保留 rio_convert / rio:convert 等 CLI 风格别名
     "rio:convert": "rasterio:convert",
 }
@@ -1592,6 +1625,36 @@ def normalize_raster_params(
         _, value = collected["viewDistance"]
         out["viewDistance"] = _require_positive_float(value, "viewDistance")
 
+    # --- P11-07 几何掩膜裁剪参数解析 ---
+    if "cutlinePath" in collected:
+        _, value = collected["cutlinePath"]
+        out["cutlinePath"] = str(value)
+    if "cutlineGeoJson" in collected:
+        _, value = collected["cutlineGeoJson"]
+        out["cutlineGeoJson"] = value
+    if "roiPoints" in collected:
+        _, value = collected["roiPoints"]
+        if not isinstance(value, (list, tuple)) or len(value) < 3:
+            raise ParameterError("参数 roiPoints 必须是包含至少 3 个顶点的坐标序列")
+        out["roiPoints"] = [[float(p[0]), float(p[1])] for p in value]
+    if "roiSpace" in collected:
+        _, value = collected["roiSpace"]
+        out["roiSpace"] = _require_choice(value, ("pixel", "map"), "roiSpace")
+    if "cropToCutline" in collected:
+        _, value = collected["cropToCutline"]
+        if not isinstance(value, bool):
+            raise ParameterError(f"cropToCutline 必须是布尔值，实际 {value!r}")
+        out["cropToCutline"] = value
+    if "cutlineWhere" in collected:
+        _, value = collected["cutlineWhere"]
+        out["cutlineWhere"] = str(value)
+    if "cutlineLayer" in collected:
+        _, value = collected["cutlineLayer"]
+        out["cutlineLayer"] = str(value)
+    if "cutlineBlend" in collected:
+        _, value = collected["cutlineBlend"]
+        out["cutlineBlend"] = _require_positive_float(value, "cutlineBlend")
+
     # 12) 互斥组合：分辨率与输出尺寸不能同时指定
     # （GDAL 侧表现为 "-outsize 与 -tr 冲突"，但那是在引擎里才发现；
     #   契约层提前判定，GUI 与 worker 都能给出明确错误。）
@@ -1611,6 +1674,17 @@ def normalize_raster_params(
             )
         if "srcWin" in out and "projWin" in out:
             raise ParameterError("参数互斥：srcWin 与 projWin 都是源窗口语义，不能同时指定")
+
+    if canonical_capability_id(capability_id) == "gdal:clip_mask":
+        has_cutline = (
+            bool(out.get("cutlinePath"))
+            or bool(out.get("cutlineGeoJson"))
+            or bool(out.get("roiPoints"))
+        )
+        if not has_cutline:
+            raise ParameterError(
+                "gdal:clip_mask 需要 cutlinePath、roiPoints 或 cutlineGeoJson 其中之一"
+            )
 
     return out
 

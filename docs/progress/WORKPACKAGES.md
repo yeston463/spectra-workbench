@@ -15,7 +15,7 @@
 | PROC / UI | P11-04 (FFT 滤波器羽化过渡与交互编辑) | `src/spectra_workbench/processing/`, `ui/` | 排期建账 (todo) |
 | DOMAIN / UI | P11-05 (光谱分析链: 端元采集/水吸收/光谱库) | `src/spectra_workbench/ui/`, `domain/` | 排期建账 (todo) |
 | PROC / UI | P11-06 (空间统计: 掩膜分地类统计/密度分割) | `src/spectra_workbench/processing/`, `ui/` | 排期建账 (todo) |
-| PROC / UI | P11-07 (几何裁剪管线桥: ROI/矢量多边形掩膜裁剪) | `src/spectra_workbench/processing/`, `ui/` | 排期建账 (todo) |
+| PROC / UI | P11-07 (几何裁剪管线桥: ROI/矢量多边形掩膜裁剪) | `src/spectra_workbench/processing/`, `ui/` | 已完成 (done) |
 | DOMAIN / UI | P11-08 (多维高光谱坏波段标注与元数据读取) | `src/spectra_workbench/domain/`, `ui/` | 排期建账 (todo) |
 | PROC | P11-09 (次级分析: 矢量缓冲区/DEM采样/PC散点图) | `src/spectra_workbench/processing/` | 排期建账 (todo) |
 | DOCTOR | P0-03、P0-04 | `scripts/doctor.ps1`、`scripts/test.ps1`、`app/doctor*`、`tests/fixtures/`、`work/`、`runs/DOCTOR.md`、`doctor.json`、`test_summary.txt` | 运行中 |

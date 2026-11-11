@@ -42,6 +42,7 @@ class LayerPanel(QWidget):
     sig_missing_relink_requested = Signal(str)  # layer_id
     sig_display_mode_changed = Signal(object)  # LayerItem
     sig_open_file_requested = Signal()
+    sig_clip_layer_requested = Signal(object)  # P11-07 掩膜裁剪：LayerItem
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -65,6 +66,12 @@ class LayerPanel(QWidget):
         self.btn_remove.setEnabled(False)
         self.btn_remove.clicked.connect(self._on_remove_clicked)
         top_bar.addWidget(self.btn_remove)
+
+        self.btn_clip = QPushButton("✂️ 按ROI裁剪")
+        self.btn_clip.setEnabled(False)
+        self.btn_clip.setToolTip("使用当前 ROI 裁剪选中的栅格图层")
+        self.btn_clip.clicked.connect(self._on_clip_clicked)
+        top_bar.addWidget(self.btn_clip)
 
         layout.addLayout(top_bar)
 
@@ -251,6 +258,7 @@ class LayerPanel(QWidget):
         if not items:
             self._selected_layer = None
             self.btn_remove.setEnabled(False)
+            self.btn_clip.setEnabled(False)
             self.grp_display.setEnabled(False)
             self._update_details()
             self.sig_layer_selected.emit(None)
@@ -260,6 +268,7 @@ class LayerPanel(QWidget):
         match = next((ly for ly in self._layers if ly.layer_id == layer_id), None)
         self._selected_layer = match
         self.btn_remove.setEnabled(match is not None)
+        self.btn_clip.setEnabled(match is not None)
         self.grp_display.setEnabled(match is not None)
         self._populate_display_controls()
         self._update_details()
@@ -278,6 +287,10 @@ class LayerPanel(QWidget):
         if self._selected_layer:
             lid = self._selected_layer.layer_id
             self.remove_layer(lid)
+
+    def _on_clip_clicked(self) -> None:
+        if self._selected_layer:
+            self.sig_clip_layer_requested.emit(self._selected_layer)
 
     def _on_mode_toggled(self, btn_id: int, checked: bool) -> None:
         if not checked:

@@ -10,6 +10,7 @@ import base64
 import contextlib
 import datetime
 import json
+import uuid
 from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
@@ -40,7 +41,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from spectra_workbench.domain.models import TaskResult, TaskSpec
+from spectra_workbench.domain.models import (
+    DatasetKind,
+    DatasetRef,
+    EngineConstraint,
+    OutputPlan,
+    TaskResult,
+    TaskSpec,
+)
 from spectra_workbench.domain.paths import (
     extract_local_path_from_vsi,
     get_display_name,
@@ -48,7 +56,7 @@ from spectra_workbench.domain.paths import (
     is_vsi_or_remote,
     normalize_vsi_path,
 )
-from spectra_workbench.domain.roi import ROI
+from spectra_workbench.domain.roi import ROI, ROIShape
 from spectra_workbench.project.model import (
     PATH_ANCHOR_PROJECT_DIR,
     LayerRecord,
@@ -810,6 +818,9 @@ class MainWindow(QMainWindow):
         self.info_panel.sig_roi_delete_requested.connect(self._on_roi_delete)
         self.info_panel.sig_roi_clear_requested.connect(self._on_roi_clear)
         self.canvas.sig_roi_changed.connect(self._on_roi_changed)
+        self.layer_panel.sig_clip_layer_requested.connect(self._on_clip_layer_requested)
+        self.canvas.sig_clip_roi_requested.connect(self._on_canvas_clip_roi_requested)
+        self.info_panel.sig_roi_clip_requested.connect(self._on_info_roi_clip_requested)
         self.metadata_panel.sig_subdataset_selected.connect(self._on_subdataset_selected)
 
         # 双视图联动
@@ -1401,6 +1412,101 @@ class MainWindow(QMainWindow):
             layer.rois = []
         self.info_panel.set_rois([])
         self._mark_dirty()
+
+    def _on_clip_layer_requested(self, layer: LayerItem) -> None:
+        self.clip_layer_by_roi(layer=layer)
+
+    def _on_canvas_clip_roi_requested(self, layer: LayerItem, roi: ROI) -> None:
+        self.clip_layer_by_roi(layer=layer, roi=roi)
+
+    def _on_info_roi_clip_requested(self, roi_id: str) -> None:
+        roi = next((r for r in self.canvas.roi_list() if r.roi_id == roi_id), None)
+        self.clip_layer_by_roi(roi=roi)
+
+    def clip_layer_by_roi(
+        self,
+        layer: LayerItem | None = None,
+        roi: ROI | None = None,
+    ) -> None:
+        """P11-07 基于选中的 ROI 多边形/矩形执行几何掩膜裁剪。
+
+        自动生成 TaskSpec(capability_id="gdal:clip_mask") 派发至 GDAL Worker。
+        完成后的成果栅格自动加载至图层树并在画布中渲染显示。
+        """
+        target_layer = layer or self.canvas.current_layer or self._selected_layer()
+        if target_layer is None:
+            self.status_bar.showMessage("无法裁剪：请先加载或选中要裁剪的栅格图层")
+            return
+
+        target_roi = roi or self.canvas.selected_roi()
+        if target_roi is None:
+            self.status_bar.showMessage("无法裁剪：请先在画布上绘制或选中一个 ROI")
+            return
+
+        out_dir = self.project_dir / "clipped"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        src_stem = Path(target_layer.file_path).stem
+        safe_name = "".join(c if c.isalnum() or c in ("_", "-") else "_" for c in target_roi.name)
+        out_path = out_dir / f"{src_stem}_clip_{safe_name}.tif"
+
+        # 展开多边形顶点序列（矩形转为 4 个角点）
+        if target_roi.shape is ROIShape.rectangle and len(target_roi.points) == 2:
+            pts = self.canvas._roi_points_for_transform(target_roi)
+        else:
+            pts = [(float(p[0]), float(p[1])) for p in target_roi.points]
+
+        dst_nodata = (
+            float(target_layer.nodata)
+            if target_layer.nodata is not None
+            else -9999.0
+        )
+
+        task_id = f"task-clip-{uuid.uuid4().hex[:8]}"
+        in_p = Path(target_layer.file_path).resolve()
+        spec = TaskSpec(
+            task_id=task_id,
+            attempt=1,
+            capability_id="gdal:clip_mask",
+            descriptor_revision="1.0",
+            engine=EngineConstraint(
+                provider_id="gdal",
+                runtime_id="gdal-qgis",
+                expected_version="3.13.3",
+            ),
+            project_root=str(self.project_dir),
+            workspace=str(out_dir),
+            inputs={
+                "input": DatasetRef(
+                    dataset_id=f"in-{uuid.uuid4().hex[:6]}",
+                    kind=DatasetKind.raster,
+                    uri=in_p.as_uri(),
+                )
+            },
+            outputs=[
+                OutputPlan(
+                    key="output",
+                    kind=DatasetKind.raster,
+                    uri=out_path.resolve().as_uri(),
+                    driver="GTiff",
+                )
+            ],
+            parameters={
+                "roiPoints": pts,
+                "roiSpace": target_roi.coordinate_space,
+                "cropToCutline": True,
+                "dstNodata": dst_nodata,
+                "resampleAlg": "near",
+                "outFormat": "GTiff",
+            },
+        )
+
+        self.task_panel.append_log(
+            "INFO",
+            f"发起几何掩膜裁剪（P11-07）：图层 '{target_layer.name}'，ROI '{target_roi.name}'（{len(pts)} 顶点）→ {out_path.name}",
+            "ui",
+        )
+        self.status_bar.showMessage(f"正在裁剪图层 '{target_layer.name}'...")
+        self.submit_task(spec)
 
     # ---------------------------------------------------------------- 视图与双视图
     def _on_refresh_views(self) -> None:

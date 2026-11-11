@@ -22,6 +22,7 @@ PLATFORM_ONLY = {
     "ext:xarray_dask",
     "gdal:bandmanage",
     "gdal:calibrate",
+    "gdal:clip_mask",
     "gdal:cloudreplace",
     "gdal:dos1",
     "gdal:editmeta",
@@ -58,7 +59,7 @@ def test_baseline_reconciliation_has_no_missing_registry_entry() -> None:
     # 第 58/59/60/61/62/63 轮新增平台能力（pansharpen 升级既有条目）：448 -> 461；
     # 第 69 轮（P8-01）新增 gdal:mdim_slice：461 -> 462；
     # 第 73 轮（P8-05）新增 6 项可选引擎扩展登记（全部 missing/blocked，不作为已实现宣传）：462 -> 468
-    assert report["registry_count"] == 468
+    assert report["registry_count"] == 469
     assert report["missing_from_registry"] == []
     assert set(report["platform_only"]) == PLATFORM_ONLY
     assert report["complete"] is True
@@ -102,6 +103,7 @@ def test_target_version_tools_are_indexed_and_gaps_have_reasons() -> None:
         "gdal:mask",
         "gdal:fvc",
         "gdal:calibrate",
+    "gdal:clip_mask",
         "gdal:dos1",
         "gdal:cloudreplace",
     ):

@@ -2533,7 +2533,7 @@ Thread 0x0000d064 (most recent call first):
   - **P11-04 频率域 FFT 滤波器高级化**：todo。频域滤波掩膜引入高斯/余弦滚降过渡宽度参数（transition_width，如 10px），消除 0/1 硬二值截断导致的吉布斯环状擦痕；空间域逆变换完全抑制周期性条带；UI 侧支持双击频谱图交互添加中心矩形/扇形/楔形陷波滤波并实时预览。依赖 [P6-02]。
   - **P11-05 高光谱与多光谱分析链**：todo。ROI 交互端元采集器（从绘制的高植被/裸土多边形自动提取统计均值回填至 FVC/混合像元分解）、强水汽吸收谷（1.4μm/1.9μm）自动识别与一键 Mask 排除、标准光谱库对接（USGS/ASTER ASCII/CSV 匹配与 SAM 光谱角制图）、Savitzky-Golay 连续光谱平滑。依赖 [P6-05, P8-01, P3-05]。
   - **P11-06 空间统计高级化与密度分割**：todo。gdal:statistics 新增 maskFile/maskBand/maskValue 入口，仅对掩膜地类有效区计算均值/极值与 2%/98% 分位数；交互式密度分割（Density Slice）面板，依据直方图多级区间色阶可视化编辑并输出分类栅格与面积统计表。依赖 [P4-04, P6-05]。
-  - **P11-07 几何裁剪管线桥**：todo。基于绘制/图层 ROI 多边形及外部矢量图层（Shapefile/GeoJSON）构建掩膜裁剪执行桥（gdal:clip_mask / gdal.Warp cutline），突破 translate 仅限矩形窗口限制，多边形外部严格设为 NoData；图层面板提供一键裁剪联动并挂载成果。依赖 [P3-05, P5-01, P4-01]。
+  - **P11-07 几何裁剪管线桥**：**done**（第 85 轮全量验收）。基于绘制/图层 ROI 多边形及外部矢量图层（Shapefile/GeoJSON/GPKG）构建掩膜裁剪执行桥（`gdal:clip_mask` / `gdal.Warp` cutline），突破 translate 仅限矩形窗口限制；严格实现外部像元赋 NoData、内部像元 100% 物理保真；生成 `.clip.json` 侧车审计；自动更新 GeoTransform 与空间参考；ImageCanvas、LayerPanel、InfoPanel 三端提供一键裁剪联动，自动构建 TaskSpec 并派发 GDAL Worker 异步计算，成果自动挂载图层树与视口；`tests/unit/test_p11_roi_clip.py` 10 项测试与 baseline 20 项测试全绿。依赖 [P3-05, P5-01, P4-01]。
   - **P11-08 多维高光谱坏波段标注**：todo。元数据模型解析 ENVI .hdr bbl 属性与 NetCDF 质量标识；UI 图层树、波段切换下拉框与工具箱以黄色警示符（⚠️）视觉标记坏波段；分析链提供默认自动跳过坏波段选项。依赖 [P8-01, P3-02]。
   - **P11-09 次级空间分析工具**：todo。基于 OGR Geometry 实现 ogr:buffer 缓冲区生成；DEM 区域高程与坡度平均采样；PCA 变换后提供 PC1 vs PC2 二维特征像元散点投影图。依赖 [P5-03, P6-03]。
 

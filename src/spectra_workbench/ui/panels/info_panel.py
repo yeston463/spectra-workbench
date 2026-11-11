@@ -41,6 +41,7 @@ class InfoPanel(QWidget):
     sig_roi_selected = Signal(str)
     sig_roi_delete_requested = Signal(str)
     sig_roi_clear_requested = Signal()
+    sig_roi_clip_requested = Signal(str)  # P11-07 掩膜裁剪：roi_id
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -133,6 +134,10 @@ class InfoPanel(QWidget):
         self.btn_clear_roi.clicked.connect(self.sig_roi_clear_requested)
         btn_row.addWidget(self.btn_del_roi)
         btn_row.addWidget(self.btn_clear_roi)
+        self.btn_clip_roi = QPushButton("裁剪图层")
+        self.btn_clip_roi.setToolTip("使用选中的 ROI 裁剪当前活动图层")
+        self.btn_clip_roi.clicked.connect(self._emit_roi_clip)
+        btn_row.addWidget(self.btn_clip_roi)
         roi_layout.addLayout(btn_row)
         root.addWidget(box_roi)
 
@@ -239,6 +244,12 @@ class InfoPanel(QWidget):
             return
         roi_id = str(items[0].data(Qt.ItemDataRole.UserRole))
         self.sig_roi_selected.emit(roi_id)
+
+    def _emit_roi_clip(self) -> None:
+        items = self.lst_rois.selectedItems()
+        if not items:
+            return
+        self.sig_roi_clip_requested.emit(str(items[0].data(Qt.ItemDataRole.UserRole)))
 
     def _emit_roi_delete(self) -> None:
         items = self.lst_rois.selectedItems()

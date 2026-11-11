@@ -1489,9 +1489,13 @@
         "P5-01",
         "P4-01"
       ],
-      "status": "todo",
+      "status": "done",
       "release_requirement": "core",
-      "evidence": [],
+      "evidence": [
+        "tests/unit/test_p11_roi_clip.py",
+        "src/spectra_workbench/providers/gdal_provider/clip_ops.py",
+        "tests/unit/test_capabilities_baseline.py"
+      ],
       "blocking_reason": null
     },
     {

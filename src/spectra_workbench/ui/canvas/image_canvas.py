@@ -88,6 +88,7 @@ class ImageCanvas(QWidget):
     sig_pixel_hover = Signal(int, int, str)  # col, row, layer_id
     sig_pixel_clicked = Signal(int, int, str)  # col, row, layer_id (P11-01 光谱剖面点击)
     sig_roi_changed = Signal()
+    sig_clip_roi_requested = Signal(object, object)
     sig_status = Signal(str)
     sig_measure_status = Signal(str)  # P11-01 测距状态
 
@@ -183,6 +184,11 @@ class ImageCanvas(QWidget):
         self.btn_poly.setCheckable(True)
         self.btn_poly.toggled.connect(lambda on: self.set_roi_draw(ROIShape.polygon, on))
         bar.addWidget(self.btn_poly)
+
+        self.btn_clip_roi = QPushButton("✂️ 按ROI裁剪")
+        self.btn_clip_roi.setToolTip("使用当前绘制或选中的 ROI 裁剪活动栅格图层（多边形外部赋 NoData）")
+        self.btn_clip_roi.clicked.connect(self._on_clip_roi_clicked)
+        bar.addWidget(self.btn_clip_roi)
 
         self.btn_refresh = QPushButton("刷新视图")
         self.btn_refresh.clicked.connect(self.refresh)
@@ -1353,6 +1359,28 @@ class ImageCanvas(QWidget):
         self._selected_roi_id = roi_id
         for rid, state in self._roi_states.items():
             state["item"].setPen(pg.mkPen((255, 220, 0) if rid == roi_id else (0, 200, 255), width=3))
+
+    def selected_roi(self) -> ROI | None:
+        """返回当前选中的 ROI 模型对象；若未显式选中但仅有 1 个 ROI 时返回该 ROI。"""
+        if self._selected_roi_id and self._selected_roi_id in self._roi_states:
+            return self._roi_geometry(self._roi_states[self._selected_roi_id])
+        rois = self.roi_list()
+        if len(rois) == 1:
+            return rois[0]
+        return None
+
+    def _on_clip_roi_clicked(self) -> None:
+        roi = self.selected_roi()
+        if roi is None:
+            if not self._roi_states:
+                self._status("未找到可用于裁剪的 ROI：请先使用工具栏绘制矩形或多边形 ROI")
+            else:
+                self._status("当前存在多个 ROI，请先在 ROI 列表或画布中点击选中一个用于裁剪的 ROI")
+            return
+        if self._layer is None:
+            self._status("无法裁剪：当前未加载或未选中任何栅格图层")
+            return
+        self.sig_clip_roi_requested.emit(self._layer, roi)
 
     def delete_selected_roi(self) -> str | None:
         return self.remove_roi(self._selected_roi_id)
