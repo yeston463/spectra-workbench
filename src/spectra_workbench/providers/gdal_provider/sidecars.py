@@ -216,9 +216,7 @@ def collect_protected_inputs(sources: list[Path]) -> set[Path]:
     return protected
 
 
-def discover_sidecars(
-    target: Path, *, protected_inputs: set[Path] | None = None
-) -> SidecarReport:
+def discover_sidecars(target: Path, *, protected_inputs: set[Path] | None = None) -> SidecarReport:
     """Discover the existing target's owned sidecars without wildcard deletion."""
     target = target.resolve()
     protected = {p.resolve() for p in (protected_inputs or set())}

@@ -44,8 +44,8 @@ def test_declared_capabilities_are_actually_supported() -> None:
     declared = set(CONNECTED_CAPABILITIES)
     actual = _gdal_supported() | _rasterio_supported()
     only_declared = sorted(declared - actual)
-    assert not only_declared, (
-        "GUI 声明了 provider 不支持的能力（会提交后失败）：" + repr(only_declared)
+    assert not only_declared, "GUI 声明了 provider 不支持的能力（会提交后失败）：" + repr(
+        only_declared
     )
 
 
@@ -67,15 +67,10 @@ def test_form_capable_provider_support_is_declared() -> None:
         if cap is None:
             # provider 的兼容别名，registry 无独立条目：不要求出现在表单集合
             continue
-        has_form = any(
-            str(e.kind).endswith("form") and e.available for e in cap.entrypoints
-        )
+        has_form = any(str(e.kind).endswith("form") and e.available for e in cap.entrypoints)
         if has_form:
             missing.append(cid)
-    assert not missing, (
-        "这些能力有可用的 form 入口但 GUI 未声明（用户用不到）：" + repr(missing)
-    )
-
+    assert not missing, "这些能力有可用的 form 入口但 GUI 未声明（用户用不到）：" + repr(missing)
 
 
 def test_multi_input_set_is_subset_of_connected() -> None:

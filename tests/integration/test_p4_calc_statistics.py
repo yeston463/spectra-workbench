@@ -76,7 +76,7 @@ gdal.UseExceptions()
 arr = np.array({array_expr}, dtype=np.float32)
 ds = gdal.GetDriverByName("GTiff").Create({str(path)!r}, arr.shape[1], arr.shape[0], 1, gdal.GDT_Float32)
 ds.SetGeoTransform({gt!r})
-ds.SetProjection({str(projection or '')!r})
+ds.SetProjection({str(projection or "")!r})
 b = ds.GetRasterBand(1)
 b.WriteArray(arr)
 if {nodata!r} is not None:
@@ -87,7 +87,10 @@ print("OK")
 """
     proc = subprocess.run(
         [str(gdal_rt["python"]), "-c", script],
-        capture_output=True, text=True, timeout=120, env=gdal_rt["env"],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        env=gdal_rt["env"],
     )
     assert proc.returncode == 0, f"GTiff 构造失败：{proc.stderr}"
     return path
@@ -108,7 +111,10 @@ def _inspect(gdal_rt: dict, path: Path) -> dict[str, Any]:
     )
     proc = subprocess.run(
         [str(gdal_rt["python"]), "-c", script],
-        capture_output=True, text=True, timeout=120, env=gdal_rt["env"],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        env=gdal_rt["env"],
     )
     assert proc.returncode == 0, f"校验失败：{proc.stderr}"
     return json.loads(proc.stdout.strip())
@@ -248,8 +254,10 @@ def test_calc_division_by_zero_becomes_nodata_with_evidence(qapp, gdal_rt, tmp_p
 
 def test_calc_input_nodata_mask_propagates(qapp, gdal_rt, tmp_path) -> None:
     a = _make_gtiff(
-        gdal_rt, tmp_path / "masked.tif",
-        array_expr="[[-9999,2],[3,4]]", nodata=-9999.0,
+        gdal_rt,
+        tmp_path / "masked.tif",
+        array_expr="[[-9999,2],[3,4]]",
+        nodata=-9999.0,
     )
     b = _make_gtiff(gdal_rt, tmp_path / "ones.tif", array_expr="[[1,1],[1,1]]")
     out = tmp_path / "masked_out.tif"
@@ -303,9 +311,7 @@ def test_calc_rejects_misaligned_inputs(qapp, gdal_rt, tmp_path) -> None:
 
 
 def _make_stats_raster(gdal_rt: dict, path: Path) -> Path:
-    expr = (
-        "np.random.default_rng(7).uniform(0, 100, (150, 200)).astype(np.float32)"
-    )
+    expr = "np.random.default_rng(7).uniform(0, 100, (150, 200)).astype(np.float32)"
     script = f"""
 import numpy as np
 from osgeo import gdal
@@ -323,7 +329,10 @@ print("OK")
 """
     proc = subprocess.run(
         [str(gdal_rt["python"]), "-c", script],
-        capture_output=True, text=True, timeout=120, env=gdal_rt["env"],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        env=gdal_rt["env"],
     )
     assert proc.returncode == 0, f"统计样本构造失败：{proc.stderr}"
     return path
@@ -338,8 +347,10 @@ def test_statistics_sampled_and_full_reports(qapp, gdal_rt, tmp_path) -> None:
         qapp,
         capability_id="gdal:statistics",
         parameters={
-            "statisticsMode": "sampled", "histogramBins": 16,
-            "maxSamples": 1000, "fullLimit": 50_000,
+            "statisticsMode": "sampled",
+            "histogramBins": 16,
+            "maxSamples": 1000,
+            "fullLimit": 50_000,
         },
         inputs=_stats_input(src),
         output=sampled_path,
@@ -349,8 +360,10 @@ def test_statistics_sampled_and_full_reports(qapp, gdal_rt, tmp_path) -> None:
         qapp,
         capability_id="gdal:statistics",
         parameters={
-            "statisticsMode": "full", "histogramBins": 16,
-            "maxSamples": 1000, "fullLimit": 50_000,
+            "statisticsMode": "full",
+            "histogramBins": 16,
+            "maxSamples": 1000,
+            "fullLimit": 50_000,
         },
         inputs=_stats_input(src),
         output=full_path,
@@ -393,7 +406,9 @@ def test_statistics_full_over_limit_is_refused(qapp, gdal_rt, tmp_path) -> None:
         qapp,
         capability_id="gdal:statistics",
         parameters={
-            "statisticsMode": "full", "histogramBins": 8, "fullLimit": 100,
+            "statisticsMode": "full",
+            "histogramBins": 8,
+            "fullLimit": 100,
         },
         inputs=_stats_input(src),
         output=out,

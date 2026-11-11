@@ -138,9 +138,7 @@ def _normalize_resample_name(raw: Any) -> str:
         return key
     if key in RESAMPLE_ALIASES:
         return RESAMPLE_ALIASES[key]
-    raise ParameterError(
-        f"未知的重采样算法 {raw!r}；可用算法：{', '.join(RESAMPLE_ALGORITHMS)}"
-    )
+    raise ParameterError(f"未知的重采样算法 {raw!r}；可用算法：{', '.join(RESAMPLE_ALGORITHMS)}")
 
 
 # --------------------------------------------------------------------------
@@ -237,7 +235,7 @@ _PARAM_ALIASES: dict[str, tuple[str, ...]] = {
     "fvcSoil": ("fvc_soil", "soil_endmember"),
     "fvcVeg": ("fvc_veg", "veg_endmember"),
     "fvcClassEdges": ("fvc_class_edges", "class_edges"),
-    "maskFile": ("mask_file", "fvc_mask_file"),
+    "maskFile": ("mask_file", "fvc_mask_file", "mask_path", "mask_ds"),
     "crop": ("crop", "fvc_crop"),
     # --- P6-06 辐射定标 / DOS1 / 去云 ---
     "calibrateMode": ("calibrate_mode", "radiometric_mode"),
@@ -285,6 +283,40 @@ _PARAM_ALIASES: dict[str, tuple[str, ...]] = {
     "cutlineWhere": ("cutline_where",),
     "cutlineLayer": ("cutline_layer",),
     "cutlineBlend": ("cutline_blend",),
+    # --- P11-04 FFT 滤波滚降过渡宽度与陷波 ---
+    "transitionWidth": ("transition_width", "transition", "taper_width"),
+    "notchRegions": ("notch_regions", "notch_rects", "suppress_regions"),
+    "taperType": ("taper_type", "rolloff_type"),
+    # --- P11-06 空间统计掩膜与密度分割 ---
+    "maskValue": ("mask_value", "mask_val"),
+    "maskMin": ("mask_min",),
+    "maskMax": ("mask_max",),
+    "slices": ("slice_list", "intervals"),
+    "numSlices": ("num_slices", "n_slices", "slice_count"),
+    "sliceMode": ("slice_mode",),
+    # --- P11-03 高级图像镶嵌 ---
+    "matchHistogram": ("match_histogram", "hist_match"),
+    "masterIndex": ("master_index", "ref_index"),
+    "featherWidth": ("feather_width", "feather_pixels", "blend_width"),
+    # --- P11-05 SAM 光谱角制图 ---
+    "referenceSpectrum": ("reference_spectrum", "ref_spectrum", "endmember"),
+    "angleUnit": ("angle_unit", "unit"),
+    "maxAngle": ("max_angle", "threshold_angle"),
+    # --- P11-02 遥感分类整链 ---
+    "method": ("classify_method", "algorithm"),
+    "numClasses": ("num_classes", "k_classes", "n_classes"),
+    "maxIterations": ("max_iterations", "max_iter"),
+    "roiTraining": ("roi_training", "training_rois", "samples"),
+    "classifiedFile": ("classified_file", "classified_raster"),
+    "groundTruthRois": ("ground_truth_rois", "test_rois"),
+    # --- P11-09 次级分析 (矢量缓冲与 DEM 区域统计) ---
+    "distance": ("buffer_distance", "dist"),
+    "dissolve": ("dissolve_all",),
+    "zoneVector": ("zone_vector", "zones", "vector_zones"),
+    "roiPolygons": ("roi_polygons", "polygons"),
+    "demFile": ("dem_file", "dem_raster"),
+    "demBand": ("dem_band",),
+    "outFormat": ("out_format",),
 }
 
 #: 重叠区的取值来源优先级。
@@ -473,7 +505,16 @@ _CAPABILITY_SUPPORT: dict[str, frozenset[str]] = {
     ),
     # --- P6-02：FFT 滤波 / 去条纹（成果为单波段 Float32 栅格 + 掩膜 sidecar）---
     "gdal:fftfilter": frozenset(
-        {"fftBand", "suppressBins", "srcNodata", "dstNodata"}
+        {
+            "fftBand",
+            "suppressBins",
+            "srcNodata",
+            "dstNodata",
+            "transitionWidth",
+            "featherWidth",
+            "notchRegions",
+            "taperType",
+        }
     ),
     # --- P6-03：PCA 正/逆变换（成果为多波段 Float32 栅格 + 变换 sidecar）---
     "gdal:pca": frozenset(
@@ -487,9 +528,7 @@ _CAPABILITY_SUPPORT: dict[str, frozenset[str]] = {
         }
     ),
     # --- P6-03：缨帽变换（成果为 3 波段 Float32 栅格 + 来源 sidecar）---
-    "gdal:tasseledcap": frozenset(
-        {"tcSensor", "tcBands", "srcNodata", "dstNodata"}
-    ),
+    "gdal:tasseledcap": frozenset({"tcSensor", "tcBands", "srcNodata", "dstNodata"}),
     # --- P6-04：GCP 配准（输入源影像 + 参考影像 + GCP JSON）---
     "gdal:gcpregister": frozenset(
         {
@@ -502,9 +541,7 @@ _CAPABILITY_SUPPORT: dict[str, frozenset[str]] = {
         }
     ),
     # --- P6-04：栅格差值（输入 A + 参考 B，严格同网格）---
-    "gdal:rasterdiff": frozenset(
-        {"diffMode", "referenceFile", "srcNodata", "dstNodata"}
-    ),
+    "gdal:rasterdiff": frozenset({"diffMode", "referenceFile", "srcNodata", "dstNodata"}),
     # --- P6-04：Brovey/HSV 融合（Pan 输入 + MS 文件/3 波段）---
     "gdal:pansharpen": frozenset(
         {
@@ -604,9 +641,7 @@ _CAPABILITY_SUPPORT: dict[str, frozenset[str]] = {
     "gdal:mdim_slice": frozenset({"array", "dimSelect"}),
     # --- P9-02：杂斑滤除 / 无效值填补 / 近黑边清理 / 邻近距离 / 视域 ---
     "gdal:sieve": frozenset({"threshold", "connectedness", "band"}),
-    "gdal:fillnodata": frozenset(
-        {"fillDistance", "smoothIterations", "band", "srcNodata"}
-    ),
+    "gdal:fillnodata": frozenset({"fillDistance", "smoothIterations", "band", "srcNodata"}),
     "gdal:nearblack": frozenset({"near", "white"}),
     "gdal:proximity": frozenset({"values", "distunits", "maxDist", "band"}),
     "gdal:viewshed": frozenset(
@@ -622,6 +657,72 @@ _CAPABILITY_SUPPORT: dict[str, frozenset[str]] = {
             "fullLimit",
             "bandList",
             "srcNodata",
+            "maskFile",
+            "maskBand",
+            "maskValue",
+            "maskMin",
+            "maskMax",
+            "maskInvert",
+        }
+    ),
+    # --- P11-06：密度分割（成果为带颜色表单波段 Byte/UInt16 栅格 + 统计 sidecar）---
+    "gdal:density_slice": frozenset(
+        {
+            "band",
+            "slices",
+            "numSlices",
+            "sliceMode",
+            "dstNodata",
+            "outFormat",
+        }
+    ),
+    # --- P11-03：高级图像镶嵌（直方图匹配 + 余弦羽化渐变）---
+    "gdal:mosaic_advanced": frozenset(
+        {
+            "matchHistogram",
+            "masterIndex",
+            "featherWidth",
+            "dstNodata",
+            "outFormat",
+        }
+    ),
+    # --- P11-05：光谱角制图 SAM ---
+    "gdal:sam": frozenset(
+        {
+            "referenceSpectrum",
+            "angleUnit",
+            "maxAngle",
+            "dstNodata",
+            "outFormat",
+        }
+    ),
+    # --- P11-02：遥感分类整链与精度评估 ---
+    "gdal:classify": frozenset(
+        {
+            "method",
+            "numClasses",
+            "maxIterations",
+            "roiTraining",
+            "maskFile",
+            "dstNodata",
+            "outFormat",
+        }
+    ),
+    "gdal:accuracy_assessment": frozenset(
+        {
+            "classifiedFile",
+            "referenceFile",
+            "groundTruthRois",
+        }
+    ),
+    # --- P11-09：次级空间分析 ---
+    "ogr:buffer": frozenset({"distance", "dissolve", "outFormat"}),
+    "gdal:dem_sample": frozenset(
+        {
+            "demFile",
+            "zoneVector",
+            "roiPolygons",
+            "demBand",
         }
     ),
 }
@@ -668,6 +769,22 @@ _CAPABILITY_ALIASES: dict[str, str] = {
     "gdal_clip_mask": "gdal:clip_mask",
     "gdal:clip": "gdal:clip_mask",
     "gdal_clip": "gdal:clip_mask",
+    # --- P11-06 能力别名 ---
+    "density_slice": "gdal:density_slice",
+    "gdal_density_slice": "gdal:density_slice",
+    # --- P11-03 / P11-05 / P11-02 / P11-09 能力别名 ---
+    "mosaic_advanced": "gdal:mosaic_advanced",
+    "gdal_mosaic_advanced": "gdal:mosaic_advanced",
+    "sam": "gdal:sam",
+    "gdal_sam": "gdal:sam",
+    "classify": "gdal:classify",
+    "gdal_classify": "gdal:classify",
+    "accuracy_assessment": "gdal:accuracy_assessment",
+    "gdal_accuracy_assessment": "gdal:accuracy_assessment",
+    "ogr_buffer": "ogr:buffer",
+    "buffer": "ogr:buffer",
+    "dem_sample": "gdal:dem_sample",
+    "gdal_dem_sample": "gdal:dem_sample",
     # 保留 rio_convert / rio:convert 等 CLI 风格别名
     "rio:convert": "rasterio:convert",
 }
@@ -719,9 +836,7 @@ def _strict_int(value: Any, key_hint: str) -> int:
     if isinstance(value, float):
         if value.is_integer():
             return int(value)
-        raise ParameterError(
-            f"dimSelect 的 {key_hint!r} 索引必须是整数，实际 {value!r}"
-        )
+        raise ParameterError(f"dimSelect 的 {key_hint!r} 索引必须是整数，实际 {value!r}")
     if isinstance(value, str):
         text = value.strip()
         try:
@@ -773,8 +888,7 @@ def _normalize_dim_select(value: Any) -> dict[str, int]:
             result2[k.strip()] = _strict_int(v, k.strip())
         return result2
     raise ParameterError(
-        "参数 dimSelect 必须是 dict 或 \"dim=index\" 逗号分隔字符串，实际 "
-        f"{type(value).__name__}"
+        f'参数 dimSelect 必须是 dict 或 "dim=index" 逗号分隔字符串，实际 {type(value).__name__}'
     )
 
 
@@ -787,9 +901,7 @@ def _require_int_list(value: Any, name: str, expected: int) -> list[int]:
     out: list[int] = []
     for v in value:
         if not _is_int_like(v):
-            raise ParameterError(
-                f"参数 {name} 的元素必须是整数（不接受小数截断），实际含 {v!r}"
-            )
+            raise ParameterError(f"参数 {name} 的元素必须是整数（不接受小数截断），实际含 {v!r}")
         out.append(int(v))
     return out
 
@@ -814,9 +926,7 @@ def _require_choice(value: Any, choices: tuple[str, ...], name: str) -> str:
     """解析受限字符串选项（归一化为小写），未知值明确拒绝。"""
     text = str(value or "").strip().lower()
     if text not in choices:
-        raise ParameterError(
-            f"参数 {name} 必须是 {', '.join(choices)} 之一，实际 {value!r}"
-        )
+        raise ParameterError(f"参数 {name} 必须是 {', '.join(choices)} 之一，实际 {value!r}")
     return text
 
 
@@ -1066,9 +1176,7 @@ def normalize_raster_params(
                     "processing='color-relief' 需要额外颜色表文件，当前未接入；"
                     f"可用：{', '.join(DEM_PROCESSINGS)}"
                 )
-            raise ParameterError(
-                f"未知的地形模式 {value!r}；可用：{', '.join(DEM_PROCESSINGS)}"
-            )
+            raise ParameterError(f"未知的地形模式 {value!r}；可用：{', '.join(DEM_PROCESSINGS)}")
         out["processing"] = canonical
 
     if "zFactor" in collected:
@@ -1173,9 +1281,7 @@ def normalize_raster_params(
         _, value = collected["sindex"]
         index_name = str(value).strip().lower()
         if index_name not in ("ndvi", "ndwi", "nbr", "savi"):
-            raise ParameterError(
-                f"未知光谱指数 {value!r}；可用：ndvi, ndwi, nbr, savi"
-            )
+            raise ParameterError(f"未知光谱指数 {value!r}；可用：ndvi, ndwi, nbr, savi")
         out["sindex"] = index_name
     if "bandA" in collected:
         _, value = collected["bandA"]
@@ -1219,9 +1325,7 @@ def normalize_raster_params(
         bins: list[tuple[int, int]] = []
         for v in value:
             if not isinstance(v, (list, tuple)) or len(v) != 2:
-                raise ParameterError(
-                    f"suppressBins 的元素必须是 [fy, fx] 二元组，实际 {v!r}"
-                )
+                raise ParameterError(f"suppressBins 的元素必须是 [fy, fx] 二元组，实际 {v!r}")
             fy, fx = v
             if not _is_int_like(fy) or not _is_int_like(fx):
                 raise ParameterError(
@@ -1235,9 +1339,7 @@ def normalize_raster_params(
         _, value = collected["pcaMode"]
         mode = str(value).strip().lower()
         if mode not in PCA_MODES:
-            raise ParameterError(
-                f"未知 PCA 模式 {value!r}；可用：{', '.join(PCA_MODES)}"
-            )
+            raise ParameterError(f"未知 PCA 模式 {value!r}；可用：{', '.join(PCA_MODES)}")
         out["pcaMode"] = mode
     if "pcaComponents" in collected:
         _, value = collected["pcaComponents"]
@@ -1246,9 +1348,7 @@ def normalize_raster_params(
         _, value = collected["pcaMatrix"]
         matrix = str(value).strip().lower()
         if matrix not in PCA_MATRICES:
-            raise ParameterError(
-                f"未知 PCA 矩阵类型 {value!r}；可用：{', '.join(PCA_MATRICES)}"
-            )
+            raise ParameterError(f"未知 PCA 矩阵类型 {value!r}；可用：{', '.join(PCA_MATRICES)}")
         out["pcaMatrix"] = matrix
     if "pcaTransform" in collected:
         _, value = collected["pcaTransform"]
@@ -1262,9 +1362,7 @@ def normalize_raster_params(
         _, value = collected["tcSensor"]
         sensor = str(value).strip().lower()
         if sensor not in sensor_keys():
-            raise ParameterError(
-                f"未登记的缨帽传感器 {value!r}；可用：{', '.join(sensor_keys())}"
-            )
+            raise ParameterError(f"未登记的缨帽传感器 {value!r}；可用：{', '.join(sensor_keys())}")
         out["tcSensor"] = sensor
     if "tcBands" in collected:
         _, value = collected["tcBands"]
@@ -1280,9 +1378,7 @@ def normalize_raster_params(
         _, value = collected["gcpTransform"]
         transform = str(value).strip().lower()
         if transform not in GCP_TRANSFORMS:
-            raise ParameterError(
-                f"未知 GCP 变换 {value!r}；可用：{', '.join(GCP_TRANSFORMS)}"
-            )
+            raise ParameterError(f"未知 GCP 变换 {value!r}；可用：{', '.join(GCP_TRANSFORMS)}")
         out["gcpTransform"] = transform
     for key in ("gcpFile", "referenceFile", "msFile"):
         if key in collected:
@@ -1304,25 +1400,19 @@ def normalize_raster_params(
         _, value = collected["diffMode"]
         mode = str(value).strip().lower()
         if mode not in DIFF_MODES:
-            raise ParameterError(
-                f"未知差值模式 {value!r}；可用：{', '.join(DIFF_MODES)}"
-            )
+            raise ParameterError(f"未知差值模式 {value!r}；可用：{', '.join(DIFF_MODES)}")
         out["diffMode"] = mode
     if "fusionMethod" in collected:
         _, value = collected["fusionMethod"]
         method = str(value).strip().lower()
         if method not in FUSION_METHODS:
-            raise ParameterError(
-                f"未知融合方法 {value!r}；可用：{', '.join(FUSION_METHODS)}"
-            )
+            raise ParameterError(f"未知融合方法 {value!r}；可用：{', '.join(FUSION_METHODS)}")
         out["fusionMethod"] = method
     if "msBands" in collected:
         _, value = collected["msBands"]
         ms_bands = _require_int_list(value, "msBands", 3)
         if any(b < 1 for b in ms_bands):
-            raise ParameterError(
-                f"msBands 的波段号必须为正数（1-based），实际 {ms_bands}"
-            )
+            raise ParameterError(f"msBands 的波段号必须为正数（1-based），实际 {ms_bands}")
         if len(set(ms_bands)) != 3:
             raise ParameterError(f"msBands 的 3 个波段号必须互不相同，实际 {ms_bands}")
         out["msBands"] = ms_bands
@@ -1335,14 +1425,9 @@ def normalize_raster_params(
         if key in collected:
             _, value = collected[key]
             out[key] = _require_finite_float(value, key)
-    if (
-        "maskLow" in out
-        and "maskHigh" in out
-        and float(out["maskLow"]) > float(out["maskHigh"])
-    ):
+    if "maskLow" in out and "maskHigh" in out and float(out["maskLow"]) > float(out["maskHigh"]):
         raise ParameterError(
-            "maskLow 必须小于等于 maskHigh，实际 "
-            f"{out['maskLow']} > {out['maskHigh']}"
+            f"maskLow 必须小于等于 maskHigh，实际 {out['maskLow']} > {out['maskHigh']}"
         )
     if "maskInvert" in collected:
         _, value = collected["maskInvert"]
@@ -1377,14 +1462,9 @@ def normalize_raster_params(
         if key in collected:
             _, value = collected[key]
             out[key] = _require_finite_float(value, key)
-    if (
-        "fvcSoil" in out
-        and "fvcVeg" in out
-        and float(out["fvcSoil"]) >= float(out["fvcVeg"])
-    ):
+    if "fvcSoil" in out and "fvcVeg" in out and float(out["fvcSoil"]) >= float(out["fvcVeg"]):
         raise ParameterError(
-            "FVC 端元必须 fvcSoil < fvcVeg，实际 "
-            f"{out['fvcSoil']} >= {out['fvcVeg']}"
+            f"FVC 端元必须 fvcSoil < fvcVeg，实际 {out['fvcSoil']} >= {out['fvcVeg']}"
         )
     if "fvcClassEdges" in collected:
         _, value = collected["fvcClassEdges"]
@@ -1395,14 +1475,10 @@ def normalize_raster_params(
             try:
                 edges.append(float(item))
             except (TypeError, ValueError) as exc:
-                raise ParameterError(
-                    f"fvcClassEdges 必须为数值，实际 {item!r}"
-                ) from exc
+                raise ParameterError(f"fvcClassEdges 必须为数值，实际 {item!r}") from exc
         for item in edges:
             if not math.isfinite(item) or not (0.0 < item < 1.0):
-                raise ParameterError(
-                    f"fvcClassEdges 必须在 (0, 1) 内且有限，实际 {item!r}"
-                )
+                raise ParameterError(f"fvcClassEdges 必须在 (0, 1) 内且有限，实际 {item!r}")
         if any(b <= a for a, b in zip(edges, edges[1:], strict=False)):
             raise ParameterError("fvcClassEdges 必须严格递增")
         out["fvcClassEdges"] = edges
@@ -1566,9 +1642,7 @@ def normalize_raster_params(
         _, value = collected["histogramBins"]
         n_bins = _require_positive_int(value, "histogramBins")
         if not 2 <= n_bins <= 4096:
-            raise ParameterError(
-                f"参数 histogramBins 必须在 2..4096 之间，实际 {n_bins}"
-            )
+            raise ParameterError(f"参数 histogramBins 必须在 2..4096 之间，实际 {n_bins}")
         out["histogramBins"] = n_bins
 
     # 11.20) P9-02：杂斑滤除 / 无效值填补 / 近黑边清理 / 邻近距离 / 视域
@@ -1655,6 +1729,120 @@ def normalize_raster_params(
         _, value = collected["cutlineBlend"]
         out["cutlineBlend"] = _require_positive_float(value, "cutlineBlend")
 
+    # --- P11-04 FFT 滚降羽化与陷波 ---
+    if "transitionWidth" in collected:
+        _, value = collected["transitionWidth"]
+        out["transitionWidth"] = _require_finite_float(value, "transitionWidth")
+    elif "featherWidth" in collected and canonical_capability_id(capability_id) == "gdal:fftfilter":
+        _, value = collected["featherWidth"]
+        out["transitionWidth"] = _require_finite_float(value, "featherWidth")
+    if "notchRegions" in collected:
+        _, value = collected["notchRegions"]
+        out["notchRegions"] = list(value) if isinstance(value, (list, tuple)) else []
+    if "taperType" in collected:
+        _, value = collected["taperType"]
+        t_type = str(value).lower()
+        if t_type not in ("cosine", "gaussian"):
+            raise ParameterError(f"taperType 必须是 'cosine' 或 'gaussian'，实际 {value!r}")
+        out["taperType"] = t_type
+
+    # --- P11-06 掩膜统计与密度分割 ---
+    if "maskValue" in collected:
+        _, value = collected["maskValue"]
+        out["maskValue"] = _require_finite_float(value, "maskValue")
+    if "maskMin" in collected:
+        _, value = collected["maskMin"]
+        out["maskMin"] = _require_finite_float(value, "maskMin")
+    if "maskMax" in collected:
+        _, value = collected["maskMax"]
+        out["maskMax"] = _require_finite_float(value, "maskMax")
+    if "slices" in collected:
+        _, value = collected["slices"]
+        out["slices"] = list(value) if isinstance(value, (list, tuple)) else []
+    if "numSlices" in collected:
+        _, value = collected["numSlices"]
+        out["numSlices"] = _require_positive_int(value, "numSlices")
+    if "sliceMode" in collected:
+        _, value = collected["sliceMode"]
+        s_mode = str(value).lower()
+        if s_mode not in ("equal_interval", "quantile"):
+            raise ParameterError(f"sliceMode 必须是 'equal_interval' 或 'quantile'，实际 {value!r}")
+        out["sliceMode"] = s_mode
+
+    # --- P11-03 高级图像镶嵌 ---
+    if "matchHistogram" in collected:
+        _, value = collected["matchHistogram"]
+        if not isinstance(value, bool):
+            raise ParameterError(f"matchHistogram 必须是布尔值，实际 {value!r}")
+        out["matchHistogram"] = value
+    if "masterIndex" in collected:
+        _, value = collected["masterIndex"]
+        out["masterIndex"] = int(_require_finite_float(value, "masterIndex"))
+    if "featherWidth" in collected:
+        _, value = collected["featherWidth"]
+        out["featherWidth"] = int(_require_finite_float(value, "featherWidth"))
+
+    # --- P11-05 SAM 光谱角制图 ---
+    if "referenceSpectrum" in collected:
+        _, value = collected["referenceSpectrum"]
+        if not isinstance(value, (list, tuple)) or not value:
+            raise ParameterError("referenceSpectrum 必须是非空数值序列")
+        out["referenceSpectrum"] = [float(x) for x in value]
+    if "angleUnit" in collected:
+        _, value = collected["angleUnit"]
+        u = str(value).lower()
+        if u not in ("radians", "degrees"):
+            raise ParameterError(f"angleUnit 必须是 'radians' 或 'degrees'，实际 {value!r}")
+        out["angleUnit"] = u
+    if "maxAngle" in collected:
+        _, value = collected["maxAngle"]
+        out["maxAngle"] = _require_positive_float(value, "maxAngle")
+
+    # --- P11-02 遥感分类整链 ---
+    if "method" in collected:
+        _, value = collected["method"]
+        out["method"] = str(value).lower()
+    if "numClasses" in collected:
+        _, value = collected["numClasses"]
+        out["numClasses"] = _require_positive_int(value, "numClasses")
+    if "maxIterations" in collected:
+        _, value = collected["maxIterations"]
+        out["maxIterations"] = _require_positive_int(value, "maxIterations")
+    if "roiTraining" in collected:
+        _, value = collected["roiTraining"]
+        out["roiTraining"] = value
+    if "classifiedFile" in collected:
+        _, value = collected["classifiedFile"]
+        out["classifiedFile"] = str(value)
+    if "groundTruthRois" in collected:
+        _, value = collected["groundTruthRois"]
+        out["groundTruthRois"] = value
+
+    # --- P11-09 次级分析 (矢量缓冲与 DEM 采样) ---
+    if "distance" in collected:
+        _, value = collected["distance"]
+        out["distance"] = _require_finite_float(value, "distance")
+    if "dissolve" in collected:
+        _, value = collected["dissolve"]
+        if not isinstance(value, bool):
+            raise ParameterError(f"dissolve 必须是布尔值，实际 {value!r}")
+        out["dissolve"] = value
+    if "zoneVector" in collected:
+        _, value = collected["zoneVector"]
+        out["zoneVector"] = str(value)
+    if "roiPolygons" in collected:
+        _, value = collected["roiPolygons"]
+        out["roiPolygons"] = value
+    if "demBand" in collected:
+        _, value = collected["demBand"]
+        out["demBand"] = _require_positive_int(value, "demBand")
+    if "demFile" in collected:
+        _, value = collected["demFile"]
+        out["demFile"] = str(value)
+    if "outFormat" in collected:
+        _, value = collected["outFormat"]
+        out["outFormat"] = str(value)
+
     # 12) 互斥组合：分辨率与输出尺寸不能同时指定
     # （GDAL 侧表现为 "-outsize 与 -tr 冲突"，但那是在引擎里才发现；
     #   契约层提前判定，GUI 与 worker 都能给出明确错误。）
@@ -1669,8 +1857,7 @@ def normalize_raster_params(
     if canonical_capability_id(capability_id) == "gdal:warp":
         if ("srcWin" in out or "projWin" in out) and "outputBounds" in out:
             raise ParameterError(
-                "参数互斥：源窗口（srcWin/projWin）与目标范围（outputBounds）"
-                "语义不同，不能同时指定"
+                "参数互斥：源窗口（srcWin/projWin）与目标范围（outputBounds）语义不同，不能同时指定"
             )
         if "srcWin" in out and "projWin" in out:
             raise ParameterError("参数互斥：srcWin 与 projWin 都是源窗口语义，不能同时指定")

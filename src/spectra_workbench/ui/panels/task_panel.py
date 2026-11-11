@@ -26,6 +26,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from spectra_workbench.ui.icons import get_icon
+
 if TYPE_CHECKING:
     from spectra_workbench.domain.models import TaskResult, TaskSpec
 
@@ -56,7 +58,7 @@ class TaskPanel(QWidget):
         self.lbl_task_info.setStyleSheet("font-weight: bold; color: #333;")
         top_row.addWidget(self.lbl_task_info, stretch=1)
 
-        self.btn_cancel = QPushButton("🛑 取消任务")
+        self.btn_cancel = QPushButton("取消任务")
         self.btn_cancel.setStyleSheet(
             "QPushButton { background-color: #e74c3c; color: white; font-weight: bold; padding: 4px 10px; border-radius: 3px; }"
             "QPushButton:hover { background-color: #c0392b; }"
@@ -66,7 +68,7 @@ class TaskPanel(QWidget):
         self.btn_cancel.clicked.connect(self._on_cancel_clicked)
         top_row.addWidget(self.btn_cancel)
 
-        self.btn_retry = QPushButton("🔁 重试任务")
+        self.btn_retry = QPushButton("重试任务")
         self.btn_retry.setStyleSheet(
             "QPushButton { background-color: #8e44ad; color: white; font-weight: bold; padding: 4px 10px; border-radius: 3px; }"
             "QPushButton:hover { background-color: #9b59b6; }"
@@ -77,7 +79,8 @@ class TaskPanel(QWidget):
         self.btn_retry.clicked.connect(self._on_retry_clicked)
         top_row.addWidget(self.btn_retry)
 
-        self.btn_load_result = QPushButton("📂 加载成果图层")
+        self.btn_load_result = QPushButton("加载成果图层")
+        self.btn_load_result.setIcon(get_icon("open_raster", 16))
         self.btn_load_result.setStyleSheet(
             "QPushButton { background-color: #2980b9; color: white; font-weight: bold; padding: 4px 10px; border-radius: 3px; }"
             "QPushButton:hover { background-color: #3498db; }"
@@ -121,9 +124,7 @@ class TaskPanel(QWidget):
         self._current_task_id = spec.task_id
         self._last_result = None
         attempt_hint = f" 第 {spec.attempt} 次尝试" if spec.attempt > 1 else ""
-        self.lbl_task_info.setText(
-            f"执行中: {spec.capability_id} [{spec.task_id}]{attempt_hint}"
-        )
+        self.lbl_task_info.setText(f"执行中: {spec.capability_id} [{spec.task_id}]{attempt_hint}")
         self.progress_bar.setValue(0)
         self.progress_bar.setFormat("准备中 (0%)...")
         self.btn_cancel.setEnabled(True)
@@ -171,7 +172,11 @@ class TaskPanel(QWidget):
             )
             self.lbl_task_info.setText(f"✅ 任务成功完成: {result.task_id} (耗时 {dur_str})")
             self.btn_load_result.setEnabled(bool(result.outputs))
-            self.append_log("INFO", f"任务成功完成: {result.task_id}，产生 {len(result.outputs)} 项成果", "scheduler")
+            self.append_log(
+                "INFO",
+                f"任务成功完成: {result.task_id}，产生 {len(result.outputs)} 项成果",
+                "scheduler",
+            )
         elif status_val == "cancelled":
             self.progress_bar.setFormat("任务已取消")
             self.progress_bar.setStyleSheet(
@@ -224,16 +229,16 @@ class TaskPanel(QWidget):
     def _on_cancel_clicked(self) -> None:
         if self._current_task_id:
             self.btn_cancel.setEnabled(False)
-            self.append_log("WARNING", f"正在请求协作取消任务: {self._current_task_id}...", "scheduler")
+            self.append_log(
+                "WARNING", f"正在请求协作取消任务: {self._current_task_id}...", "scheduler"
+            )
             self.sig_cancel_requested.emit(self._current_task_id)
 
     def _on_retry_clicked(self) -> None:
         if not self._current_task_id:
             return
         self.btn_retry.setEnabled(False)
-        self.append_log(
-            "WARNING", f"正在请求重试任务: {self._current_task_id}...", "scheduler"
-        )
+        self.append_log("WARNING", f"正在请求重试任务: {self._current_task_id}...", "scheduler")
         self.sig_retry_requested.emit(self._current_task_id)
 
     def _on_load_result_clicked(self) -> None:

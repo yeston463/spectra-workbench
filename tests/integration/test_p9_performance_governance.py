@@ -164,12 +164,23 @@ def test_p9_04_cooperative_cancellation_latency_and_process_cleanup(
         attempt=1,
         capability_id="gdal:calc",
         descriptor_revision="1.0",
-        engine=EngineConstraint(provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"),
+        engine=EngineConstraint(
+            provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"
+        ),
         project_root=str(root),
         workspace=str(out_tif.parent),
-        inputs={"inputs": [DatasetRef(dataset_id="in", kind=DatasetKind.raster, uri=BIG_RASTER.as_uri())]},
-        outputs=[OutputPlan(key="output", kind=DatasetKind.raster, uri=out_tif.as_uri(), overwrite=True)],
-        parameters={"expression": "numpy.sin(A) * numpy.cos(A) + numpy.sqrt(numpy.abs(A))", "outputType": "Float32"},
+        inputs={
+            "inputs": [
+                DatasetRef(dataset_id="in", kind=DatasetKind.raster, uri=BIG_RASTER.as_uri())
+            ]
+        },
+        outputs=[
+            OutputPlan(key="output", kind=DatasetKind.raster, uri=out_tif.as_uri(), overwrite=True)
+        ],
+        parameters={
+            "expression": "numpy.sin(A) * numpy.cos(A) + numpy.sqrt(numpy.abs(A))",
+            "outputType": "Float32",
+        },
     )
 
     result_holder: dict[str, Any] = {"result": None, "t_cancel": 0.0, "t_finish": 0.0}
@@ -222,9 +233,18 @@ def test_p9_04_memory_governance_and_lru_cache_budget(qapp: QApplication) -> Non
 
         vb = win.canvas.plot_item.getViewBox()
         pan_coords = [
-            (300, 300), (1500, 1500), (3000, 2500), (4500, 3500),
-            (1000, 4000), (2000, 1000), (3500, 1500), (500, 2500),
-            (2500, 3500), (4000, 1000), (1200, 3000), (3200, 4200),
+            (300, 300),
+            (1500, 1500),
+            (3000, 2500),
+            (4500, 3500),
+            (1000, 4000),
+            (2000, 1000),
+            (3500, 1500),
+            (500, 2500),
+            (2500, 3500),
+            (4000, 1000),
+            (1200, 3000),
+            (3200, 4200),
         ]
 
         for idx, (px, py) in enumerate(pan_coords):
@@ -237,7 +257,9 @@ def test_p9_04_memory_governance_and_lru_cache_budget(qapp: QApplication) -> Non
             _wait_qt(qapp, timeout=0.1)
 
         assert cache.stats.evictions > 0, "连续平移缩放必须真实触发 LRU 淘汰"
-        assert cache.stats.bytes <= budget_bytes, f"缓存占用超出预算: {cache.stats.bytes} > {budget_bytes}"
+        assert cache.stats.bytes <= budget_bytes, (
+            f"缓存占用超出预算: {cache.stats.bytes} > {budget_bytes}"
+        )
 
         # 移除图层并验证缓存清零
         win.layer_panel.remove_layer(layer.layer_id)
@@ -260,7 +282,9 @@ def test_p9_04_large_logical_data_no_full_load(test_client: QtWorkerClient) -> N
 
     assert metrics["no_full_load_verified"] is True
     assert metrics["window_data_bytes"] > 0
-    assert metrics["rss_delta_mib"] < 50.0, f"单瓦片读取内存增量异常大: {metrics['rss_delta_mib']} MiB"
+    assert metrics["rss_delta_mib"] < 50.0, (
+        f"单瓦片读取内存增量异常大: {metrics['rss_delta_mib']} MiB"
+    )
     assert metrics["compliant"] is True
 
 

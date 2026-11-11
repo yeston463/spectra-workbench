@@ -299,16 +299,16 @@ def test_merge_gap_is_nodata(qapp, gdal_rt, gap_sources, tmp_path) -> None:
     assert result.status is TaskStatus.succeeded, result.error
     info = _inspect(gdal_rt, out)
     assert info["w"] == 5, f"拼接宽度应为 5（含缺口），实际 {info['w']}"
-    assert info["nodata"] == pytest.approx(-9999.0), f"成果 NoData 应为 -9999，实际 {info['nodata']}"
+    assert info["nodata"] == pytest.approx(-9999.0), (
+        f"成果 NoData 应为 -9999，实际 {info['nodata']}"
+    )
     row = info["bands"][0][0]
     assert row[0] == 5.0, f"C 覆盖区应为 5，实际 {row[0]}"
     assert row[2] == pytest.approx(-9999.0), f"缺口应为 NoData，实际 {row[2]}"
     assert row[4] == 7.0, f"D 覆盖区应为 7，实际 {row[4]}"
 
 
-def test_source_nodata_does_not_leak_into_result(
-    qapp, gdal_rt, gap_sources, tmp_path
-) -> None:
+def test_source_nodata_does_not_leak_into_result(qapp, gdal_rt, gap_sources, tmp_path) -> None:
     """源 NoData 不得作为有效像元进入成果。"""
     pc, pd = gap_sources
     out = tmp_path / "merge_nodata_leak.tif"
@@ -342,9 +342,7 @@ def test_buildvrt_uses_relative_source_paths(qapp, gdal_rt, overlap_sources, tmp
     )
 
 
-def test_vrt_still_opens_after_directory_moved(
-    qapp, gdal_rt, overlap_sources, tmp_path
-) -> None:
+def test_vrt_still_opens_after_directory_moved(qapp, gdal_rt, overlap_sources, tmp_path) -> None:
     """目录整体搬移后 VRT 仍可打开（相对引用随目录关系保持）。
 
     这是「源路径变化」验收的核心：VRT 与源保持相对关系时，
@@ -374,9 +372,7 @@ def test_vrt_still_opens_after_directory_moved(
 
 
 # ------------------------------------------------------------- 4. 波段顺序
-def test_stack_band_order_follows_input_order(
-    qapp, gdal_rt, overlap_sources, tmp_path
-) -> None:
+def test_stack_band_order_follows_input_order(qapp, gdal_rt, overlap_sources, tmp_path) -> None:
     """波段堆叠：波段顺序必须与输入源顺序一致。"""
     pa, pb = overlap_sources
     out = tmp_path / "stack.tif"
@@ -416,9 +412,15 @@ def test_band_manage_reorders_bands(qapp, gdal_rt, multiband_source, tmp_path) -
     assert result.status is TaskStatus.succeeded, result.error
     info = _inspect(gdal_rt, out)
     assert len(info["bands"]) == 3, f"应有 3 个波段，实际 {len(info['bands'])}"
-    assert info["bands"][0][0][0] == 300.0, f"波段 1 应为原波段 3（300），实际 {info['bands'][0][0][0]}"
-    assert info["bands"][1][0][0] == 100.0, f"波段 2 应为原波段 1（100），实际 {info['bands'][1][0][0]}"
-    assert info["bands"][2][0][0] == 200.0, f"波段 3 应为原波段 2（200），实际 {info['bands'][2][0][0]}"
+    assert info["bands"][0][0][0] == 300.0, (
+        f"波段 1 应为原波段 3（300），实际 {info['bands'][0][0][0]}"
+    )
+    assert info["bands"][1][0][0] == 100.0, (
+        f"波段 2 应为原波段 1（100），实际 {info['bands'][1][0][0]}"
+    )
+    assert info["bands"][2][0][0] == 200.0, (
+        f"波段 3 应为原波段 2（200），实际 {info['bands'][2][0][0]}"
+    )
 
 
 def test_band_manage_band_subset(qapp, gdal_rt, multiband_source, tmp_path) -> None:
@@ -434,7 +436,9 @@ def test_band_manage_band_subset(qapp, gdal_rt, multiband_source, tmp_path) -> N
     assert result.status is TaskStatus.succeeded, result.error
     info = _inspect(gdal_rt, out)
     assert len(info["bands"]) == 1, f"应只保留 1 个波段，实际 {len(info['bands'])}"
-    assert info["bands"][0][0][0] == 200.0, f"保留的应是原波段 2（200），实际 {info['bands'][0][0][0]}"
+    assert info["bands"][0][0][0] == 200.0, (
+        f"保留的应是原波段 2（200），实际 {info['bands'][0][0][0]}"
+    )
 
 
 # -------------------------------------------------------- 5. 契约与能力边界
@@ -473,9 +477,7 @@ def test_merge_rejects_too_few_inputs(qapp, gdal_rt, overlap_sources, tmp_path) 
     assert not out.exists()
 
 
-def test_merge_with_unsupported_param_is_rejected(
-    qapp, gdal_rt, overlap_sources, tmp_path
-) -> None:
+def test_merge_with_unsupported_param_is_rejected(qapp, gdal_rt, overlap_sources, tmp_path) -> None:
     """拼接能力不接受 srcWin（它不消费该参数）——必须明确拒绝而非忽略。"""
     pa, pb = overlap_sources
     out = tmp_path / "bad_param.tif"

@@ -102,12 +102,37 @@ def build_rasterio_algorithms() -> list[CapabilityDescriptor]:
                     help="目标栅格驱动名称",
                 ),
             ],
-            inputs=[PortSpec(key="input", data_type=DatasetKind.raster, required=True, description="输入源影像")],
-            outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="输出目标影像")],
-            requirements=[Requirement(kind="package", name="rasterio", reason="需 rasterio 核心库与底层 GDAL 动态库")],
+            inputs=[
+                PortSpec(
+                    key="input",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="输入源影像",
+                )
+            ],
+            outputs=[
+                PortSpec(
+                    key="output",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="输出目标影像",
+                )
+            ],
+            requirements=[
+                Requirement(
+                    kind="package", name="rasterio", reason="需 rasterio 核心库与底层 GDAL 动态库"
+                )
+            ],
             entrypoints=[
-                Entrypoint(kind="form", target="rasterio:convert", available=True, notes="平台分块转换执行器"),
-                Entrypoint(kind="cli", target="rio convert", available=True, notes="标准 rio CLI 别名"),
+                Entrypoint(
+                    kind="form",
+                    target="rasterio:convert",
+                    available=True,
+                    notes="平台分块转换执行器",
+                ),
+                Entrypoint(
+                    kind="cli", target="rio convert", available=True, notes="标准 rio CLI 别名"
+                ),
             ],
             state=CapabilityState(
                 presence=Presence.present,
@@ -133,8 +158,14 @@ def build_rasterio_algorithms() -> list[CapabilityDescriptor]:
 def build_rio_cli_commands() -> list[CapabilityDescriptor]:
     """收录官方 21 项 rio 核心子命令与缺失插件。"""
     rio_commands: list[dict[str, Any]] = [
-        {"name": "info", "desc": "以结构化 JSON 或纯文本输出栅格数据集元数据、尺寸、驱动与波段摘要。"},
-        {"name": "bounds", "desc": "计算并输出栅格文件的地理空间外包框 (Bounding Box) 坐标或 GeoJSON 多边形。"},
+        {
+            "name": "info",
+            "desc": "以结构化 JSON 或纯文本输出栅格数据集元数据、尺寸、驱动与波段摘要。",
+        },
+        {
+            "name": "bounds",
+            "desc": "计算并输出栅格文件的地理空间外包框 (Bounding Box) 坐标或 GeoJSON 多边形。",
+        },
         {"name": "convert", "desc": "在不同栅格格式间转换、改变数据类型或应用缩放因数。"},
         {"name": "warp", "desc": "利用 GDAL warp 核心在不同坐标系间重投影栅格影像。"},
         {"name": "merge", "desc": "将多幅空间重叠或相邻的栅格影像拼合/镶嵌为单幅马赛克。"},
@@ -146,7 +177,10 @@ def build_rio_cli_commands() -> list[CapabilityDescriptor]:
         {"name": "rasterize", "desc": "将 GeoJSON 矢量要素烧录成栅格数据。"},
         {"name": "blocks", "desc": "以 GeoJSON 多边形流形式输出栅格文件的底层物理瓦片块结构布局。"},
         {"name": "create", "desc": "依据指定尺寸、CRS 与变换矩阵创建空白栅格模板。"},
-        {"name": "edit-info", "desc": "就地编辑现有栅格文件的元数据、NODATA 值、标签或坐标变换矩阵。"},
+        {
+            "name": "edit-info",
+            "desc": "就地编辑现有栅格文件的元数据、NODATA 值、标签或坐标变换矩阵。",
+        },
         {"name": "env", "desc": "打印当前进程的 GDAL/Rasterio 环境变量与底层配置选项。"},
         {"name": "gcps", "desc": "读取或写入栅格关联的地面控制点 (Ground Control Points)。"},
         {"name": "insp", "desc": "打开交互式 Python 解释器终端并预载入目标数据集对象。"},
@@ -177,7 +211,9 @@ def build_rio_cli_commands() -> list[CapabilityDescriptor]:
                     validation=Validation.not_run,
                     availability=Availability.ready,
                 ),
-                effects="read_only" if cmd_name in ("info", "bounds", "insp", "env", "sample", "blocks") else "new_dataset",
+                effects="read_only"
+                if cmd_name in ("info", "bounds", "insp", "env", "sample", "blocks")
+                else "new_dataset",
                 cancellation="process_termination",
                 limitations=[],
                 validation_evidence=[],
@@ -216,7 +252,14 @@ def build_rio_cli_commands() -> list[CapabilityDescriptor]:
                 description=str(mp["desc"]),
                 engine=_engine_spec(),
                 source=_source_spec("cli.html"),
-                entrypoints=[Entrypoint(kind="cli", target=f"rio {mp_name}", available=False, notes=str(mp["reason"]))],
+                entrypoints=[
+                    Entrypoint(
+                        kind="cli",
+                        target=f"rio {mp_name}",
+                        available=False,
+                        notes=str(mp["reason"]),
+                    )
+                ],
                 state=CapabilityState(
                     presence=Presence.missing,
                     binding=Binding.none,
@@ -396,14 +439,23 @@ def build_rasterio_python_api() -> list[CapabilityDescriptor]:
                 description=str(item["desc"]),
                 engine=_engine_spec(),
                 source=_source_spec(str(item["doc"])),
-                entrypoints=[Entrypoint(kind="script", target=str(item["name"]), available=True, notes=f"签名: {sig_str}")],
+                entrypoints=[
+                    Entrypoint(
+                        kind="script",
+                        target=str(item["name"]),
+                        available=True,
+                        notes=f"签名: {sig_str}",
+                    )
+                ],
                 state=CapabilityState(
                     presence=Presence.present,
                     binding=Binding.script,
                     validation=Validation.not_run,
                     availability=Availability.ready,
                 ),
-                effects="read_only" if "class" in item["category"] or "windows" in item["category"] else "mixed",
+                effects="read_only"
+                if "class" in item["category"] or "windows" in item["category"]
+                else "mixed",
                 cancellation="unsupported",
                 limitations=[f"接口签名: {sig_str}"],
                 validation_evidence=[],

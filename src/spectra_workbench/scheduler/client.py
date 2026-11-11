@@ -65,9 +65,15 @@ class QtWorkerClient(QObject):
         self._active_task_id: str | None = None
 
         # 回调注册表与互斥锁（生命周期绑定单次请求）
-        self._probe_callbacks: dict[str, tuple[Callable[[dict[str, Any]], None] | None, Callable[[str], None] | None]] = {}
-        self._read_callbacks: dict[str, tuple[Callable[[dict[str, Any]], None] | None, Callable[[str], None] | None]] = {}
-        self._call_callbacks: dict[str, tuple[Callable[[dict[str, Any]], None] | None, Callable[[str], None] | None]] = {}
+        self._probe_callbacks: dict[
+            str, tuple[Callable[[dict[str, Any]], None] | None, Callable[[str], None] | None]
+        ] = {}
+        self._read_callbacks: dict[
+            str, tuple[Callable[[dict[str, Any]], None] | None, Callable[[str], None] | None]
+        ] = {}
+        self._call_callbacks: dict[
+            str, tuple[Callable[[dict[str, Any]], None] | None, Callable[[str], None] | None]
+        ] = {}
         self._callbacks_lock = threading.Lock()
         # worker 启动必须串行化：多个请求线程并发 start() 会互相覆盖子进程句柄
         self._start_lock = threading.Lock()
@@ -432,9 +438,7 @@ class QtWorkerClient(QObject):
             except Exception as exc:
                 if self._closed:
                     return
-                self._enqueue(
-                    "call_dispatch", req_id, f"{type(exc).__name__}: {exc}", True
-                )
+                self._enqueue("call_dispatch", req_id, f"{type(exc).__name__}: {exc}", True)
 
         self._spawn_thread(_runner, f"qt-call-{req_id[:6]}")
         return req_id
@@ -490,8 +494,12 @@ class QtWorkerClient(QObject):
     ) -> str:
         return self.call_async(
             lambda: self._worker.compute_stats(
-                path, mode=mode, bands=bands, max_samples=max_samples,
-                full_limit=full_limit, timeout=timeout,
+                path,
+                mode=mode,
+                bands=bands,
+                max_samples=max_samples,
+                full_limit=full_limit,
+                timeout=timeout,
             ),
             on_success=on_success,
             on_error=on_error,

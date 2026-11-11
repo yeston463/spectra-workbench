@@ -98,9 +98,7 @@ def _dump_threads_at_interpreter_exit() -> None:
     alive = [t for t in threading.enumerate() if t.is_alive() and t is not threading.main_thread()]
     sys.stderr.write(f"\n[exit-dump] 解释器退出；非主线程存活数 = {len(alive)}\n")
     for t in alive:
-        sys.stderr.write(
-            f"[exit-dump]   name={t.name} daemon={t.daemon} ident={t.ident}\n"
-        )
+        sys.stderr.write(f"[exit-dump]   name={t.name} daemon={t.daemon} ident={t.ident}\n")
     sys.stderr.flush()
 
 

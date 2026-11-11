@@ -105,9 +105,7 @@ sys.exit(0)
     assert Path(session_json["python_path"]) == world["gdal_python"]
     assert (session_dir / "logs" / "stdout.log").exists()
     assert (session_dir / "logs" / "stderr.log").exists()
-    assert (session_dir / "logs" / "stdout.log").read_text(encoding="utf-8").endswith(
-        "\n"
-    )
+    assert (session_dir / "logs" / "stdout.log").read_text(encoding="utf-8").endswith("\n")
 
 
 def test_rasterio_session_reads_native_and_registers_artifacts(

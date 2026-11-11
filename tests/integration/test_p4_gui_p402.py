@@ -74,7 +74,10 @@ print("OK")
 """
     proc = subprocess.run(
         [str(gdal_rt["python"]), "-c", script],
-        capture_output=True, text=True, timeout=120, env=gdal_rt["env"],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        env=gdal_rt["env"],
     )
     assert proc.returncode == 0, f"源栅格构造失败：{proc.stderr}"
     return path
@@ -85,8 +88,12 @@ def overlap_pair(gdal_rt: dict, tmp_path) -> tuple[Path, Path]:
     """A 覆盖 x0..3 值 10；B 覆盖 x2..5 值 20；重叠区 x2..3。"""
     import numpy as np
 
-    a = _make_raster(gdal_rt, tmp_path / "a.tif", np.full((4, 4), 10.0), (100.0, 1.0, 0.0, 30.0, 0.0, -1.0))
-    b = _make_raster(gdal_rt, tmp_path / "b.tif", np.full((4, 4), 20.0), (102.0, 1.0, 0.0, 28.0, 0.0, -1.0))
+    a = _make_raster(
+        gdal_rt, tmp_path / "a.tif", np.full((4, 4), 10.0), (100.0, 1.0, 0.0, 30.0, 0.0, -1.0)
+    )
+    b = _make_raster(
+        gdal_rt, tmp_path / "b.tif", np.full((4, 4), 20.0), (102.0, 1.0, 0.0, 28.0, 0.0, -1.0)
+    )
     return a, b
 
 
@@ -119,7 +126,10 @@ def _inspect(gdal_rt: dict, path: Path) -> dict:
     )
     proc = subprocess.run(
         [str(gdal_rt["python"]), "-c", script],
-        capture_output=True, text=True, timeout=120, env=gdal_rt["env"],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        env=gdal_rt["env"],
     )
     assert proc.returncode == 0, f"校验失败：{proc.stderr}"
     return json.loads(proc.stdout.strip())
@@ -342,8 +352,20 @@ def test_gui_nodata_zero_means_explicit_zero(qapp, gdal_rt, tmp_path, overlap_pa
     import numpy as np
 
     # 用有缺口的源，验证 dstNodata=0 会重映射无效像元
-    c = _make_raster(gdal_rt, tmp_path / "c.tif", np.full((2, 2), 5.0), (100.0, 1.0, 0.0, 30.0, 0.0, -1.0), nodata=-9999.0)
-    d = _make_raster(gdal_rt, tmp_path / "d.tif", np.full((2, 2), 7.0), (103.0, 1.0, 0.0, 30.0, 0.0, -1.0), nodata=-9999.0)
+    c = _make_raster(
+        gdal_rt,
+        tmp_path / "c.tif",
+        np.full((2, 2), 5.0),
+        (100.0, 1.0, 0.0, 30.0, 0.0, -1.0),
+        nodata=-9999.0,
+    )
+    d = _make_raster(
+        gdal_rt,
+        tmp_path / "d.tif",
+        np.full((2, 2), 7.0),
+        (103.0, 1.0, 0.0, 30.0, 0.0, -1.0),
+        nodata=-9999.0,
+    )
     out = tmp_path / "zero.tif"
     form, emitted = _form_for(tmp_path, "gdal:merge")
     try:
@@ -392,7 +414,10 @@ print("OK")
 """
     proc = subprocess.run(
         [str(gdal_rt["python"]), "-c", script],
-        capture_output=True, text=True, timeout=120, env=gdal_rt["env"],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        env=gdal_rt["env"],
     )
     assert proc.returncode == 0, proc.stderr
 

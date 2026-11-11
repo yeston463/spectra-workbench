@@ -77,7 +77,9 @@ class IncompatibleSourcesError(RuntimeError):
 class SourceUsageError(RuntimeError):
     """引擎实际使用的源集合与请求集合不一致（源被跳过）。"""
 
-    def __init__(self, message: str, *, missing: list[str] | None = None, unexpected: list[str] | None = None):
+    def __init__(
+        self, message: str, *, missing: list[str] | None = None, unexpected: list[str] | None = None
+    ):
         super().__init__(message)
         self.missing = missing or []
         self.unexpected = unexpected or []
@@ -336,32 +338,18 @@ def assert_vrt_sources(
     plain = [e for e in entries if e["resolved"] is not None]
     missing = [e["text"] for e in plain if not e["exists"]]
     if missing:
-        raise SourceUsageError(
-            f"{operation} 的 VRT 源引用按最终目录无法解析: {missing}"
-        )
+        raise SourceUsageError(f"{operation} 的 VRT 源引用按最终目录无法解析: {missing}")
     used = [Path(str(e["resolved"])) for e in plain]
     assert_sources_used(used, expected_sources, operation=operation)
 
     if require_relative is True:
-        bad = [
-            e["text"]
-            for e in plain
-            if not e["relative"] or Path(e["text"]).is_absolute()
-        ]
+        bad = [e["text"] for e in plain if not e["relative"] or Path(e["text"]).is_absolute()]
         if bad:
-            raise SourceUsageError(
-                f"{operation} 要求相对源引用，但以下引用不是相对路径: {bad}"
-            )
+            raise SourceUsageError(f"{operation} 要求相对源引用，但以下引用不是相对路径: {bad}")
     elif require_relative is False:
-        bad = [
-            e["text"]
-            for e in plain
-            if e["relative"] or not Path(e["text"]).is_absolute()
-        ]
+        bad = [e["text"] for e in plain if e["relative"] or not Path(e["text"]).is_absolute()]
         if bad:
-            raise SourceUsageError(
-                f"{operation} 要求绝对源引用，但以下引用不是绝对路径: {bad}"
-            )
+            raise SourceUsageError(f"{operation} 要求绝对源引用，但以下引用不是绝对路径: {bad}")
     return {
         "source_count": len(entries),
         "plain_path_count": len(plain),
@@ -594,7 +582,10 @@ def check_source_compatibility(
             epsgs.append(srs.GetAuthorityCode(None) if srs is not None else None)
             band_counts.append(ds.RasterCount)
             band_types.append(
-                [gdal.GetDataTypeName(ds.GetRasterBand(i).DataType) for i in range(1, ds.RasterCount + 1)]
+                [
+                    gdal.GetDataTypeName(ds.GetRasterBand(i).DataType)
+                    for i in range(1, ds.RasterCount + 1)
+                ]
             )
             geotransforms.append(_gt_or_none(ds))
         except Exception as exc:
@@ -830,7 +821,9 @@ def merge_sources(
                 translate_kwargs["outputType"] = getattr(gdal, f"GDT_{output_type}")
             if callback is not None:
                 translate_kwargs["callback"] = callback
-            ds = gdal.Translate(str(dest), vrt_ds, options=gdal.TranslateOptions(**translate_kwargs))
+            ds = gdal.Translate(
+                str(dest), vrt_ds, options=gdal.TranslateOptions(**translate_kwargs)
+            )
             if ds is None:
                 raise RuntimeError("拼接落盘失败")
             try:
@@ -912,7 +905,9 @@ def stack_sources(
                 translate_kwargs["outputType"] = getattr(gdal, f"GDT_{output_type}")
             if callback is not None:
                 translate_kwargs["callback"] = callback
-            ds = gdal.Translate(str(dest), vrt_ds, options=gdal.TranslateOptions(**translate_kwargs))
+            ds = gdal.Translate(
+                str(dest), vrt_ds, options=gdal.TranslateOptions(**translate_kwargs)
+            )
             if ds is None:
                 raise RuntimeError("波段堆叠落盘失败")
             try:
@@ -1033,7 +1028,11 @@ def inspect_raster(path: str | Path, *, sample: bool = True) -> dict[str, Any]:
                     raw_value = arr[0, 0]
                     # CFloat32 等复数据类型不能直接 float()；保留 complex 供比较
                     try:
-                        value: Any = complex(raw_value) if isinstance(raw_value, complex) else float(raw_value)
+                        value: Any = (
+                            complex(raw_value)
+                            if isinstance(raw_value, complex)
+                            else float(raw_value)
+                        )
                     except (TypeError, ValueError):
                         value = raw_value.item() if hasattr(raw_value, "item") else raw_value
                     values.append(value)
@@ -1069,9 +1068,7 @@ def compare_rasters(expected: dict[str, Any], actual: dict[str, Any]) -> None:
     if len(exp_nodata) != len(act_nodata) or not all(
         _same_value(a, b) for a, b in zip(exp_nodata, act_nodata, strict=False)
     ):
-        raise RuntimeError(
-            f"提交前后成果 NoData 不一致：期望 {exp_nodata!r}，实际 {act_nodata!r}"
-        )
+        raise RuntimeError(f"提交前后成果 NoData 不一致：期望 {exp_nodata!r}，实际 {act_nodata!r}")
     exp_samples = expected.get("samples") or []
     act_samples = actual.get("samples") or []
     if len(exp_samples) != len(act_samples):

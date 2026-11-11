@@ -175,7 +175,10 @@ def test_fft_form_submit_to_envi(
         assert info["bands"] == 1 and info["dtype"] == "Float32"
         assert info["nodata"] == NODATA
         expected = np.asarray(
-            [[10.0 + 5.0 * math.sin(2.0 * math.pi * y / rows) for _ in range(cols)] for y in range(rows)],
+            [
+                [10.0 + 5.0 * math.sin(2.0 * math.pi * y / rows) for _ in range(cols)]
+                for y in range(rows)
+            ],
             dtype=np.float64,
         )
         actual = np.asarray(info["arr"], dtype=np.float64)

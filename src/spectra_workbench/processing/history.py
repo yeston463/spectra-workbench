@@ -131,9 +131,7 @@ class HistoryStore:
     def schema_version(self) -> int:
         """读 meta 中的 schema_version；空库返回 0，坏值显式拒绝。"""
         try:
-            cur = self._conn.execute(
-                "SELECT value FROM meta WHERE key = 'schema_version'"
-            )
+            cur = self._conn.execute("SELECT value FROM meta WHERE key = 'schema_version'")
             row = cur.fetchone()
         except sqlite3.OperationalError:
             return 0
@@ -279,9 +277,23 @@ class HistoryStore:
         if row is None:
             raise HistoryError(f"历史记录不存在：{run_id}")
         (
-            rid, kind, group_id, capability_id, task_id, attempt, status, created,
-            duration, project_root, descriptor_revision, provider, runtime_id,
-            expected, actual, params_json, error_json,
+            rid,
+            kind,
+            group_id,
+            capability_id,
+            task_id,
+            attempt,
+            status,
+            created,
+            duration,
+            project_root,
+            descriptor_revision,
+            provider,
+            runtime_id,
+            expected,
+            actual,
+            params_json,
+            error_json,
         ) = row
         inputs = self._conn.execute(
             "SELECT port, uri, kind, size, mtime_ns, sha256 FROM run_inputs"
@@ -338,9 +350,7 @@ class HistoryStore:
             entry = {"uri": row["uri"], "kind": row["kind"]}
             if port in inputs:
                 prev = inputs[port]
-                inputs[port] = (
-                    [prev, entry] if not isinstance(prev, list) else [*prev, entry]
-                )
+                inputs[port] = [prev, entry] if not isinstance(prev, list) else [*prev, entry]
             else:
                 inputs[port] = entry
         return {
@@ -425,7 +435,5 @@ class HistoryStore:
         }
         target = Path(path)
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(
-            json.dumps(doc, ensure_ascii=False, indent=1), encoding="utf-8"
-        )
+        target.write_text(json.dumps(doc, ensure_ascii=False, indent=1), encoding="utf-8")
         return doc

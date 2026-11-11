@@ -212,7 +212,9 @@ def save_project(path: Path | str, spec: ProjectSpec) -> Path:
     """原子保存：写临时文件 -> fsync -> 同卷替换。"""
     target = Path(path)
     if target.suffix != ".json" and not target.name.endswith(PROJECT_EXTENSION):
-        raise ProjectError(f"项目文件应使用 {PROJECT_EXTENSION}（或 .json）扩展名，收到 {target.name}")
+        raise ProjectError(
+            f"项目文件应使用 {PROJECT_EXTENSION}（或 .json）扩展名，收到 {target.name}"
+        )
     target.parent.mkdir(parents=True, exist_ok=True)
     if spec.path_anchor is None:
         spec = spec.model_copy(update={"path_anchor": PATH_ANCHOR_PROJECT_DIR})

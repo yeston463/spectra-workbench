@@ -73,7 +73,8 @@ def restore_missing_hdr_fields(hdr_path: Path, snapshot: list[str]) -> int:
                 current_keys.add(key.lower())
 
     missing_lines = [
-        line for line in snapshot
+        line
+        for line in snapshot
         if (key := _parse_key(line)) is not None and key.lower() not in current_keys
     ]
     if not missing_lines:
@@ -143,9 +144,7 @@ def build_overviews(
 
     after = _read_shape(data_path)
     if after != before:
-        raise RuntimeError(
-            f"概览构建改变了主影像尺寸契约：{before} -> {after}（验收红线）"
-        )
+        raise RuntimeError(f"概览构建改变了主影像尺寸契约：{before} -> {after}（验收红线）")
     return {
         "width": before[0],
         "height": before[1],

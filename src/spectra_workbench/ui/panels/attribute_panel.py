@@ -48,7 +48,9 @@ class VectorPageModel(QAbstractTableModel):
     def columnCount(self, parent: QModelIndex | QPersistentModelIndex = _EMPTY_INDEX) -> int:  # noqa: N802
         return 0 if parent.isValid() else 2 + len(self._fields)
 
-    def headerData(self, section: int, orientation: Qt.Orientation, role: int = Qt.ItemDataRole.DisplayRole) -> Any:  # noqa: N802
+    def headerData(
+        self, section: int, orientation: Qt.Orientation, role: int = Qt.ItemDataRole.DisplayRole
+    ) -> Any:  # noqa: N802
         if role != Qt.ItemDataRole.DisplayRole:
             return None
         if orientation == Qt.Orientation.Vertical:
@@ -60,7 +62,9 @@ class VectorPageModel(QAbstractTableModel):
         field = self._fields[section - 2]
         return str(field.get("name", f"field{section - 2}"))
 
-    def data(self, index: QModelIndex | QPersistentModelIndex, role: int = Qt.ItemDataRole.DisplayRole) -> Any:
+    def data(
+        self, index: QModelIndex | QPersistentModelIndex, role: int = Qt.ItemDataRole.DisplayRole
+    ) -> Any:
         if role != Qt.ItemDataRole.DisplayRole or not index.isValid():
             return None
         if index.row() >= len(self._features):
@@ -144,9 +148,7 @@ class AttributePanel(QWidget):
         self.table = QTableView()
         self._model = VectorPageModel(self)
         self.table.setModel(self._model)
-        self.table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeMode.Interactive
-        )
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         self.table.setEditTriggers(QTableView.EditTrigger.NoEditTriggers)
         self.table.verticalHeader().setVisible(False)
         root.addWidget(self.table, stretch=1)

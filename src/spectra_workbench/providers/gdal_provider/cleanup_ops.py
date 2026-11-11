@@ -130,9 +130,7 @@ def _pick_band(gdal: Any, ds: Any, params: dict[str, Any]) -> tuple[int, Any]:
     return index, band
 
 
-def plan_cleanup_output(
-    capability_id: str, source: Path, params: dict[str, Any]
-) -> dict[str, Any]:
+def plan_cleanup_output(capability_id: str, source: Path, params: dict[str, Any]) -> dict[str, Any]:
     """在写盘前推断输出 dtype/波段数/NoData，供格式矩阵预检使用。"""
     if capability_id not in CLEANUP_CAPABILITIES:
         raise CleanupError(f"未知清理能力 {capability_id!r}")
@@ -423,9 +421,7 @@ def _run_nearblack(
         out.FlushCache()
         changed = 0
         for b in range(1, int(ds.RasterCount) + 1):
-            changed += _count_changed(
-                ds.GetRasterBand(b), out.GetRasterBand(b), width, height
-            )
+            changed += _count_changed(ds.GetRasterBand(b), out.GetRasterBand(b), width, height)
     finally:
         out = None
     return {"near": near, "white": white, "n_changed_samples": changed}
@@ -513,7 +509,9 @@ def _run_viewshed(
             f"观察点 ({ox}, {oy}) 不在栅格范围内（像元坐标 col={col:.3f}, row={row:.3f}，"
             f"尺寸 {width}×{height}）"
         )
-    observer_h = float(params["observerHeight"]) if params.get("observerHeight") is not None else 2.0
+    observer_h = (
+        float(params["observerHeight"]) if params.get("observerHeight") is not None else 2.0
+    )
     target_h = float(params["targetHeight"]) if params.get("targetHeight") is not None else 0.0
     if params.get("viewDistance") is not None:
         max_distance = float(params["viewDistance"])

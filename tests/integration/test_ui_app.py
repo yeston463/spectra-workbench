@@ -94,11 +94,14 @@ def test_ui_callback_thread_affinity(qapp: QApplication) -> None:
 
     def _record(action: str) -> callable:
         def _cb(_: object) -> None:
-            callbacks_record.append({
-                "action": action,
-                "on_gui_thread": QThread.currentThread() == qapp.thread(),
-                "python_thread": threading.current_thread().name,
-            })
+            callbacks_record.append(
+                {
+                    "action": action,
+                    "on_gui_thread": QThread.currentThread() == qapp.thread(),
+                    "python_thread": threading.current_thread().name,
+                }
+            )
+
         return _cb
 
     try:
@@ -139,17 +142,23 @@ def test_large_preview_transport_and_worker_resilience(qapp: QApplication) -> No
     try:
         worker.start(timeout=15.0)
         # 1. 正常小预览
-        small = worker.read_window(sample_dat, win_w=16, win_h=16, out_w=16, out_h=16, bands=[1], timeout=5.0)
+        small = worker.read_window(
+            sample_dat, win_w=16, win_h=16, out_w=16, out_h=16, bands=[1], timeout=5.0
+        )
         assert small.get("out_w") == 16
 
         # 2. 1024x1024 灰度（base64 超过 1 MiB 协议上限，需由 spill 机制透明转发）
-        large = worker.read_window(sample_dat, win_w=16, win_h=16, out_w=1024, out_h=1024, bands=[1], timeout=8.0)
+        large = worker.read_window(
+            sample_dat, win_w=16, win_h=16, out_w=1024, out_h=1024, bands=[1], timeout=8.0
+        )
         assert large.get("out_w") == 1024
         assert len(large.get("b64_data", "")) > 1000000
         assert worker.is_alive
 
         # 3. 后续小请求应正常响应，证明执行线程没有因超限退出
-        next_small = worker.read_window(sample_dat, win_w=16, win_h=16, out_w=16, out_h=16, bands=[1], timeout=5.0)
+        next_small = worker.read_window(
+            sample_dat, win_w=16, win_h=16, out_w=16, out_h=16, bands=[1], timeout=5.0
+        )
         assert next_small.get("out_w") == 16
 
     finally:
@@ -192,26 +201,41 @@ def test_sequential_task_submissions_no_duplicate_loads(qapp: QApplication) -> N
 
     try:
         task_client = window.gdal_client
-        with patch.object(task_client, "submit_task_async", return_value=None), \
-             patch.object(window, "load_result_to_layer", side_effect=lambda r: loaded_task_ids.append(r.task_id)):
-
+        with (
+            patch.object(task_client, "submit_task_async", return_value=None),
+            patch.object(
+                window,
+                "load_result_to_layer",
+                side_effect=lambda r: loaded_task_ids.append(r.task_id),
+            ),
+        ):
             for n in (1, 2, 3):
                 spec = TaskSpec(
                     task_id=f"seq-task-{n}",
                     capability_id="gdal:translate",
                     descriptor_revision="1.0",
-                    engine=EngineConstraint(provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"),
+                    engine=EngineConstraint(
+                        provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"
+                    ),
                     project_root=str(root),
                     workspace=str(root / "workspace"),
-                    inputs={"input": DatasetRef(dataset_id="source", kind="raster", uri="file:///tmp/dummy.tif")},
-                    outputs=[OutputPlan(key="output", kind="raster", uri=f"file:///tmp/out_{n}.tif")],
+                    inputs={
+                        "input": DatasetRef(
+                            dataset_id="source", kind="raster", uri="file:///tmp/dummy.tif"
+                        )
+                    },
+                    outputs=[
+                        OutputPlan(key="output", kind="raster", uri=f"file:///tmp/out_{n}.tif")
+                    ],
                 )
                 window.submit_task(spec)
                 result = TaskResult(
                     task_id=spec.task_id,
                     attempt=1,
                     status="succeeded",
-                    outputs=[{"key": "output", "uri": f"file:///tmp/out_{n}.tif", "data_type": "raster"}],
+                    outputs=[
+                        {"key": "output", "uri": f"file:///tmp/out_{n}.tif", "data_type": "raster"}
+                    ],
                     duration_seconds=0.05,
                 )
                 task_client.sig_result.emit(result)
@@ -244,16 +268,18 @@ def test_viewport_zoom_window_reading_and_layer_generation(qapp: QApplication) -
                 w = int(kwargs.get("out_w", 8))
                 h = int(kwargs.get("out_h", 8))
                 dummy_buf = bytes(w * h)
-                on_success({
-                    "b64_data": base64.b64encode(dummy_buf).decode(),
-                    "out_w": w,
-                    "out_h": h,
-                    "is_rgb": False,
-                    "x_off": kwargs.get("x_off", 0),
-                    "y_off": kwargs.get("y_off", 0),
-                    "win_w": kwargs.get("win_w", 4096),
-                    "win_h": kwargs.get("win_h", 2048),
-                })
+                on_success(
+                    {
+                        "b64_data": base64.b64encode(dummy_buf).decode(),
+                        "out_w": w,
+                        "out_h": h,
+                        "is_rgb": False,
+                        "x_off": kwargs.get("x_off", 0),
+                        "y_off": kwargs.get("y_off", 0),
+                        "win_w": kwargs.get("win_w", 4096),
+                        "win_h": kwargs.get("win_h", 2048),
+                    }
+                )
 
     canvas = ImageCanvas()
     stub = StubClient()
@@ -323,7 +349,10 @@ def test_main_window_open_dataset_and_chunked_preview(qapp: QApplication) -> Non
 
         # 等待分块读取与渲染完成
         assert _spin_until(
-            lambda: "视口窗口" in window.canvas.lbl_status.text() or "a01_ramp_16x16" in window.canvas.lbl_status.text(),
+            lambda: (
+                "视口窗口" in window.canvas.lbl_status.text()
+                or "a01_ramp_16x16" in window.canvas.lbl_status.text()
+            ),
             timeout_seconds=8.0,
         )
 
@@ -370,7 +399,9 @@ def test_main_window_task_execution_and_auto_layer_load(qapp: QApplication) -> N
             window.form_widget._on_submit_clicked()
 
             # 等待任务在后台 Worker 执行完毕
-            assert _spin_until(lambda: window.task_panel._last_result is not None, timeout_seconds=30.0)
+            assert _spin_until(
+                lambda: window.task_panel._last_result is not None, timeout_seconds=30.0
+            )
 
             result = window.task_panel._last_result
             assert result is not None
@@ -409,7 +440,9 @@ def test_main_window_screenshot_capture(qapp: QApplication) -> None:
 
         window.open_dataset(sample_hdr)
         # 通过就绪信号确认渲染就绪，避免固定盲等
-        assert _spin_until(lambda: ready_flag["ready"], timeout_seconds=10.0), "影像视图渲染未在时限内就绪"
+        assert _spin_until(lambda: ready_flag["ready"], timeout_seconds=10.0), (
+            "影像视图渲染未在时限内就绪"
+        )
 
         trans_cap = window.toolbox_panel._registry.get("gdal:translate")
         if trans_cap:

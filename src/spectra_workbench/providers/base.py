@@ -174,15 +174,11 @@ class ExecutionContext:
             if target in staged_set:
                 raise ValueError(f"Delete path is also a staged file: {target}")
             if target in protected:
-                raise ProtectedInputError(
-                    f"Refusing to delete protected input file: {target}"
-                )
+                raise ProtectedInputError(f"Refusing to delete protected input file: {target}")
             if target.exists() and not target.is_file():
                 raise ValueError(f"Delete path is not a regular file: {target}")
         if delete_list and not overwrite:
-            raise OutputConflictError(
-                "Deleting stale sidecars requires overwrite=true"
-            )
+            raise OutputConflictError("Deleting stale sidecars requires overwrite=true")
 
         # 阶段 1：静态前置冲突检查（全量，不落任何盘）
         for staged, target in normalized_pairs:
@@ -209,7 +205,9 @@ class ExecutionContext:
             init_size = target.stat().st_size if tgt_exists else None
             init_sha = hash_file(target) if tgt_exists else None
             bak_path = (
-                target.with_name(f".{target.name}.bak_{self.task_id}_{backup_idx}_{uuid.uuid4().hex[:6]}")
+                target.with_name(
+                    f".{target.name}.bak_{self.task_id}_{backup_idx}_{uuid.uuid4().hex[:6]}"
+                )
                 if tgt_exists
                 else None
             )

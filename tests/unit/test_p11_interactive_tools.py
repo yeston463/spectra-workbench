@@ -20,7 +20,9 @@ from spectra_workbench.ui.models.layer import LayerItem
 from spectra_workbench.ui.panels.display_panel import DisplayPanel
 
 
-def _make_dummy_layer(layer_id: str = "L1", name: str = "Layer 1", is_geo: bool = False) -> LayerItem:
+def _make_dummy_layer(
+    layer_id: str = "L1", name: str = "Layer 1", is_geo: bool = False
+) -> LayerItem:
     meta: dict[str, Any] = {
         "kind": "raster",
         "renderable": True,
@@ -30,11 +32,11 @@ def _make_dummy_layer(layer_id: str = "L1", name: str = "Layer 1", is_geo: bool 
     }
     if is_geo:
         meta["geotransform"] = [116.30, 0.0001, 0.0, 39.90, 0.0, -0.0001]
-        meta["crs_wkt"] = "GEOGCS[\"WGS 84\", DATUM[\"WGS_1984\"]]"
+        meta["crs_wkt"] = 'GEOGCS["WGS 84", DATUM["WGS_1984"]]'
     else:
         # Projected UTM (meters)
         meta["geotransform"] = [500000.0, 10.0, 0.0, 4400000.0, 0.0, -10.0]
-        meta["crs_wkt"] = "PROJCS[\"WGS 84 / UTM zone 50N\", UNIT[\"metre\",1]]"
+        meta["crs_wkt"] = 'PROJCS["WGS 84 / UTM zone 50N", UNIT["metre",1]]'
 
     return LayerItem(
         layer_id=layer_id,

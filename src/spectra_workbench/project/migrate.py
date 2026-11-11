@@ -59,8 +59,7 @@ def legacy_to_current(raw: dict) -> dict:
         raise ProjectError("legacy 项目文件顶层必须是对象")
     if raw.get("schema_version") != LEGACY_SCHEMA_VERSION:
         raise ProjectError(
-            f"legacy_to_current 仅支持 {LEGACY_SCHEMA_VERSION}，"
-            f"收到 {raw.get('schema_version')!r}"
+            f"legacy_to_current 仅支持 {LEGACY_SCHEMA_VERSION}，收到 {raw.get('schema_version')!r}"
         )
     raw_layers = raw.get("layers")
     if not isinstance(raw_layers, list):
@@ -74,27 +73,17 @@ def legacy_to_current(raw: dict) -> dict:
             raise ProjectError(f"legacy layers[{legacy_order}] 必须是对象")
         unknown = set(entry) - keys_ok
         if unknown:
-            raise ProjectError(
-                f"legacy layers[{legacy_order}] 含未知字段 {sorted(unknown)}"
-            )
+            raise ProjectError(f"legacy layers[{legacy_order}] 含未知字段 {sorted(unknown)}")
         src = entry.get("src")
         label = entry.get("label")
         if not isinstance(src, str):
-            raise ProjectError(
-                f"legacy layers[{legacy_order}] 缺少非空 src 路径"
-            )
+            raise ProjectError(f"legacy layers[{legacy_order}] 缺少非空 src 路径")
         if not src.strip():
-            raise ProjectError(
-                f"legacy layers[{legacy_order}] 缺少非空 src 路径"
-            )
+            raise ProjectError(f"legacy layers[{legacy_order}] 缺少非空 src 路径")
         if not isinstance(label, str):
-            raise ProjectError(
-                f"legacy layers[{legacy_order}] 缺少非空 label"
-            )
+            raise ProjectError(f"legacy layers[{legacy_order}] 缺少非空 label")
         if not label.strip():
-            raise ProjectError(
-                f"legacy layers[{legacy_order}] 缺少非空 label"
-            )
+            raise ProjectError(f"legacy layers[{legacy_order}] 缺少非空 label")
         visible = bool(entry.get("visible", True))
         src_stripped = src.strip()
         metadata = entry.get("metadata")

@@ -48,6 +48,7 @@ def run_zscore(spec: Any, context: ExecutionContext) -> TaskResult:
     # 使用 GDAL 读取数据（worker 进程内）
     try:
         from osgeo import gdal  # type: ignore[import-not-found]
+
         gdal.UseExceptions()
 
         ds = gdal.Open(in_str, gdal.GA_ReadOnly)
@@ -89,7 +90,9 @@ def run_zscore(spec: Any, context: ExecutionContext) -> TaskResult:
     if std_val < 1e-7:
         std_val = 1.0
 
-    context.log("INFO", f"统计结果: mean={mean_val:.4f}, std={std_val:.4f}, valid_count={len(valid_pixels)}")
+    context.log(
+        "INFO", f"统计结果: mean={mean_val:.4f}, std={std_val:.4f}, valid_count={len(valid_pixels)}"
+    )
 
     # 执行标准变换
     context.progress(0.7, "standardizing", "正在进行像元标准化与输出写入…")
@@ -104,6 +107,7 @@ def run_zscore(spec: Any, context: ExecutionContext) -> TaskResult:
     staged_file = context.create_staging_path("zscore_normalized.tif")
     try:
         from osgeo import gdal
+
         drv = gdal.GetDriverByName("GTiff")
         out_ds = drv.Create(str(staged_file), x_size, y_size, 1, gdal.GDT_Float32)
         if gt:

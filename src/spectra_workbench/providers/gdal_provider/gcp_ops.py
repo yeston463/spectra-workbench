@@ -161,9 +161,7 @@ def fit_polynomial(
         raise GCPError("拟合输入数组长度不一致")
     min_points = 3 if order == 1 else 6
     if u.size < min_points:
-        raise GCPError(
-            f"{order} 阶 GCP 拟合至少需要 {min_points} 个控制点，实际 {u.size} 个"
-        )
+        raise GCPError(f"{order} 阶 GCP 拟合至少需要 {min_points} 个控制点，实际 {u.size} 个")
     matrix = _basis(u, v, order)
     coef_x, *_ = np.linalg.lstsq(matrix, x, rcond=None)
     coef_y, *_ = np.linalg.lstsq(matrix, y, rcond=None)
@@ -311,9 +309,7 @@ def run_gcp_registration(
     gdal = _gdal()
     transform_name = str(transform or "affine").strip().lower()
     if transform_name not in GCP_TRANSFORMS:
-        raise GCPError(
-            f"未知 GCP 变换 {transform!r}；可用：{', '.join(GCP_TRANSFORMS)}"
-        )
+        raise GCPError(f"未知 GCP 变换 {transform!r}；可用：{', '.join(GCP_TRANSFORMS)}")
     order = _GCP_ORDER[transform_name]
     alg = str(resample_alg or "bilinear").strip().lower()
     if alg not in _RESAMPLE_ALGS:
@@ -357,9 +353,7 @@ def run_gcp_registration(
             declared = gcp["srs"].strip()
             ref_auth = ref_srs.GetAuthorityCode(None)
             if ref_auth and declared.upper().replace("EPSG:", "").strip() != ref_auth:
-                raise GCPError(
-                    f"GCP 声明 SRS={declared!r} 与参考影像 EPSG:{ref_auth} 不一致"
-                )
+                raise GCPError(f"GCP 声明 SRS={declared!r} 与参考影像 EPSG:{ref_auth} 不一致")
     finally:
         src_ds = None
 
@@ -422,9 +416,7 @@ def run_gcp_registration(
         for band_index in range(1, src_bands + 1):
             band = src_ds.GetRasterBand(band_index)
             if gdal.DataTypeIsComplex(band.DataType):
-                raise GCPError(
-                    f"GCP 配准仅支持实数波段，波段 {band_index} 是复数类型"
-                )
+                raise GCPError(f"GCP 配准仅支持实数波段，波段 {band_index} 是复数类型")
             raw_obj = band.ReadAsArray()
             if raw_obj is None:
                 raise GCPError(f"无法读取源波段 {band_index}")
@@ -455,12 +447,8 @@ def run_gcp_registration(
         out_ds.SetProjection(ref_proj)
         out_ds.SetMetadataItem("GCP_REGISTRATION", transform_name)
         out_ds.SetMetadataItem("GCP_ORDER", str(order))
-        out_ds.SetMetadataItem(
-            "GCP_CHECKPOINT_RMSE_MAP", f"{forward_check['rmse']:.12g}"
-        )
-        out_ds.SetMetadataItem(
-            "GCP_CHECKPOINT_RMSE_PIXEL", f"{backward_check['rmse']:.12g}"
-        )
+        out_ds.SetMetadataItem("GCP_CHECKPOINT_RMSE_MAP", f"{forward_check['rmse']:.12g}")
+        out_ds.SetMetadataItem("GCP_CHECKPOINT_RMSE_PIXEL", f"{backward_check['rmse']:.12g}")
         for idx, values in enumerate(outputs):
             band_out = out_ds.GetRasterBand(idx + 1)
             arr = np.where(valid_all, values, dst_nodata).astype(np.float32)

@@ -162,7 +162,10 @@ def test_save_as_different_dir_via_dialog_rebases_correctly(
     dest_dir.mkdir(parents=True)
     new_proj = dest_dir / "saved_as.spectra.json"
 
-    with patch("spectra_workbench.ui.main_window.QFileDialog.getSaveFileName", return_value=(str(new_proj), "")):
+    with patch(
+        "spectra_workbench.ui.main_window.QFileDialog.getSaveFileName",
+        return_value=(str(new_proj), ""),
+    ):
         assert win.save_project_action(save_as=True) is True
     assert win.project_path == new_proj
     win.close()
@@ -170,7 +173,9 @@ def test_save_as_different_dir_via_dialog_rebases_correctly(
 
     spec_new = load_project(new_proj)
     assert len(spec_new.layers) == 1
-    resolved = resolve_source(dest_dir, spec_new.layers[0].source, is_relative=spec_new.layers[0].source_is_relative)
+    resolved = resolve_source(
+        dest_dir, spec_new.layers[0].source, is_relative=spec_new.layers[0].source_is_relative
+    )
     assert resolved == data_file.resolve()
 
 
@@ -202,8 +207,16 @@ def test_save_as_failure_does_not_corrupt_memory_and_retry_succeeds(
 
     # 另存为到父目录，但注入 save_project 的 OSError 模拟写权限失败
     destination = tmp_path / "save_as.spectra.json"
-    with patch("spectra_workbench.ui.main_window.QFileDialog.getSaveFileName", return_value=(str(destination), "")), \
-         patch("spectra_workbench.ui.main_window.save_project", side_effect=OSError("injected write failure")):
+    with (
+        patch(
+            "spectra_workbench.ui.main_window.QFileDialog.getSaveFileName",
+            return_value=(str(destination), ""),
+        ),
+        patch(
+            "spectra_workbench.ui.main_window.save_project",
+            side_effect=OSError("injected write failure"),
+        ),
+    ):
         result = win.save_project_action(save_as=True)
     assert result is False
     # 事务未完成：project_path 与内存图层记录必须保持原样
@@ -229,7 +242,12 @@ def test_missing_layer_preserved_on_save_and_save_as(qapp: QApplication, tmp_pat
     exist_file.write_bytes(b"existing data")
     expected_missing_target = (proj_dir / "data" / "missing.dat").resolve()
 
-    roi1 = ROI(name="R1", shape=ROIShape.rectangle, points=[(10, 10), (20, 20)], attributes={"layer_id": "L1"})
+    roi1 = ROI(
+        name="R1",
+        shape=ROIShape.rectangle,
+        points=[(10, 10), (20, 20)],
+        attributes={"layer_id": "L1"},
+    )
     roi2 = ROI(
         name="R2",
         shape=ROIShape.polygon,
@@ -276,8 +294,12 @@ def test_missing_layer_preserved_on_save_and_save_as(qapp: QApplication, tmp_pat
     assert {r.attributes.get("layer_id") for r in saved.rois} == {"L1", "L2"}
 
     # 验证物理目标解析
-    resolved_l1 = resolve_source(proj_dir, saved.layers[0].source, is_relative=saved.layers[0].source_is_relative)
-    resolved_l2 = resolve_source(proj_dir, saved.layers[1].source, is_relative=saved.layers[1].source_is_relative)
+    resolved_l1 = resolve_source(
+        proj_dir, saved.layers[0].source, is_relative=saved.layers[0].source_is_relative
+    )
+    resolved_l2 = resolve_source(
+        proj_dir, saved.layers[1].source, is_relative=saved.layers[1].source_is_relative
+    )
     assert resolved_l1 == exist_file.resolve()
     assert resolved_l2 == expected_missing_target
 
@@ -285,15 +307,22 @@ def test_missing_layer_preserved_on_save_and_save_as(qapp: QApplication, tmp_pat
     as_dir = tmp_path / "as_dir"
     as_dir.mkdir()
     as_proj = as_dir / "as.spectra.json"
-    with patch("spectra_workbench.ui.main_window.QFileDialog.getSaveFileName", return_value=(str(as_proj), "")):
+    with patch(
+        "spectra_workbench.ui.main_window.QFileDialog.getSaveFileName",
+        return_value=(str(as_proj), ""),
+    ):
         assert win.save_project_action(save_as=True) is True
     saved_as = load_project(as_proj)
     assert len(saved_as.layers) == 2
     assert [ly.layer_id for ly in saved_as.layers] == ["L1", "L2"]
     assert len(saved_as.rois) == 2
 
-    as_resolved_l1 = resolve_source(as_dir, saved_as.layers[0].source, is_relative=saved_as.layers[0].source_is_relative)
-    as_resolved_l2 = resolve_source(as_dir, saved_as.layers[1].source, is_relative=saved_as.layers[1].source_is_relative)
+    as_resolved_l1 = resolve_source(
+        as_dir, saved_as.layers[0].source, is_relative=saved_as.layers[0].source_is_relative
+    )
+    as_resolved_l2 = resolve_source(
+        as_dir, saved_as.layers[1].source, is_relative=saved_as.layers[1].source_is_relative
+    )
     assert as_resolved_l1 == exist_file.resolve()
     assert as_resolved_l2 == expected_missing_target
     win.close()
@@ -309,8 +338,20 @@ def test_partial_relink_preserves_both_relinked_and_unrelinked(
     (proj_dir / "data").mkdir(parents=True)
     spec = ProjectSpec(
         layers=[
-            LayerRecord(layer_id="M1", name="Missing1", source="data/m1.dat", source_is_relative=True, order=0),
-            LayerRecord(layer_id="M2", name="Missing2", source="data/m2.dat", source_is_relative=True, order=1),
+            LayerRecord(
+                layer_id="M1",
+                name="Missing1",
+                source="data/m1.dat",
+                source_is_relative=True,
+                order=0,
+            ),
+            LayerRecord(
+                layer_id="M2",
+                name="Missing2",
+                source="data/m2.dat",
+                source_is_relative=True,
+                order=1,
+            ),
         ]
     )
     proj_file = proj_dir / "case.spectra.json"
@@ -349,8 +390,16 @@ def test_explicit_removal_removes_missing_layer(qapp: QApplication, tmp_path: Pa
 
     spec = ProjectSpec(
         layers=[
-            LayerRecord(layer_id="K1", name="Keep", source="data/keep.dat", source_is_relative=True, order=0),
-            LayerRecord(layer_id="M1", name="ToDrop", source="data/drop.dat", source_is_relative=True, order=1),
+            LayerRecord(
+                layer_id="K1", name="Keep", source="data/keep.dat", source_is_relative=True, order=0
+            ),
+            LayerRecord(
+                layer_id="M1",
+                name="ToDrop",
+                source="data/drop.dat",
+                source_is_relative=True,
+                order=1,
+            ),
         ]
     )
     proj_file = proj_dir / "case.spectra.json"
@@ -744,9 +793,7 @@ def test_confirmed_missing_target_preserved_on_save_and_reopen_no_same_name_hija
     qapp.processEvents()
 
 
-def test_confirmed_missing_target_preserved_on_save_as(
-    qapp: QApplication, tmp_path: Path
-) -> None:
+def test_confirmed_missing_target_preserved_on_save_as(qapp: QApplication, tmp_path: Path) -> None:
     """用户确认缺失目标后 Save As 另存为：另存到新目录后目标解析路径保持一致。"""
     app_root = tmp_path / "runtime_app"
     app_root.mkdir(parents=True)
@@ -779,7 +826,10 @@ def test_confirmed_missing_target_preserved_on_save_as(
     save_as_dir.mkdir()
     save_as_file = save_as_dir / "copied.spectra.json"
 
-    with patch("spectra_workbench.ui.main_window.QFileDialog.getSaveFileName", return_value=(str(save_as_file), "")):
+    with patch(
+        "spectra_workbench.ui.main_window.QFileDialog.getSaveFileName",
+        return_value=(str(save_as_file), ""),
+    ):
         assert win.save_project_action(save_as=True) is True
     win.close()
     qapp.processEvents()
@@ -793,9 +843,7 @@ def test_confirmed_missing_target_preserved_on_save_as(
     qapp.processEvents()
 
 
-def test_reverse_selection_preserves_target_no_hijack(
-    qapp: QApplication, tmp_path: Path
-) -> None:
+def test_reverse_selection_preserves_target_no_hijack(qapp: QApplication, tmp_path: Path) -> None:
     """反向选择：程序根存在同名文件，用户明确选择项目目录下缺失的文件，重开不误读程序根文件。"""
     app_root = tmp_path / "runtime_app"
     app_root.mkdir(parents=True)
@@ -913,7 +961,9 @@ def test_dialog_empty_custom_choice_shows_validation_warning(
 
     dlg = _LegacyConfirmDialog([layer], user_proj, app_root)
     # 在 setCurrentIndex(2) 之前，替换 QFileDialog.getOpenFileName，返回 ("", "") 模拟用户取消
-    with patch("spectra_workbench.ui.main_window.QFileDialog.getOpenFileName", return_value=("", "")):
+    with patch(
+        "spectra_workbench.ui.main_window.QFileDialog.getOpenFileName", return_value=("", "")
+    ):
         cmb = dlg._combos["L_empty"]
         cmb.setCurrentIndex(2)
     assert cmb.currentData() is None

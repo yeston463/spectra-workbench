@@ -149,9 +149,7 @@ def audit_five_coverage_metrics(
     provider: str | None = None,
 ) -> dict[str, Any]:
     """独立计算开发方案 §1.1 要求的五项核心覆盖率指标。"""
-    reconciliation = registry.reconcile_baseline(
-        baseline_files=baseline_files, provider=provider
-    )
+    reconciliation = registry.reconcile_baseline(baseline_files=baseline_files, provider=provider)
     all_caps = registry.filter(provider=provider)
     total_reg = len(all_caps)
 
@@ -170,8 +168,7 @@ def audit_five_coverage_metrics(
     present_algo_caps = [
         c
         for c in algo_caps
-        if c.state.presence == Presence.present
-        and c.state.availability == Availability.ready
+        if c.state.presence == Presence.present and c.state.availability == Availability.ready
     ]
     form_algo_caps = [
         c
@@ -188,12 +185,9 @@ def audit_five_coverage_metrics(
     present_drivers = [
         c
         for c in driver_caps
-        if c.state.presence == Presence.present
-        and c.state.availability == Availability.ready
+        if c.state.presence == Presence.present and c.state.availability == Availability.ready
     ]
-    missing_drivers = [
-        c for c in driver_caps if c.state.presence == Presence.missing
-    ]
+    missing_drivers = [c for c in driver_caps if c.state.presence == Presence.missing]
     raster_drivers = [c for c in present_drivers if "raster" in c.category]
     vector_drivers = [c for c in present_drivers if "vector" in c.category]
 
@@ -212,21 +206,15 @@ def audit_five_coverage_metrics(
             "ratio_of_total": _ratio(len(callable_caps), total_reg),
             "non_driver_denominator": len(non_driver_caps),
             "callable_non_driver_count": len(callable_non_driver),
-            "ratio_of_non_driver": _ratio(
-                len(callable_non_driver), len(non_driver_caps)
-            ),
+            "ratio_of_non_driver": _ratio(len(callable_non_driver), len(non_driver_caps)),
         },
         "form_panel_coverage": {
             "total_algorithm_denominator": len(algo_caps),
             "present_algorithm_denominator": len(present_algo_caps),
             "connected_form_algorithm_count": len(form_algo_caps),
             "ratio_of_all_algorithms": _ratio(len(form_algo_caps), len(algo_caps)),
-            "ratio_of_present_algorithms": _ratio(
-                len(form_algo_caps), len(present_algo_caps)
-            ),
-            "connected_capability_ids": sorted(
-                c.capability_id for c in form_algo_caps
-            ),
+            "ratio_of_present_algorithms": _ratio(len(form_algo_caps), len(present_algo_caps)),
+            "connected_capability_ids": sorted(c.capability_id for c in form_algo_caps),
             "unconnected_present_algorithms": sorted(
                 c.capability_id
                 for c in present_algo_caps
@@ -270,20 +258,12 @@ def audit_parameters(registry: CapabilityRegistry) -> dict[str, Any]:
                     f"{cap.capability_id}: 参数存在空白 key/native_name/label ({p.key!r})"
                 )
             if p.type not in ALLOWED_PARAMETER_TYPES:
-                schema_errors.append(
-                    f"{cap.capability_id}.{p.key}: 非法参数类型 {p.type!r}"
-                )
+                schema_errors.append(f"{cap.capability_id}.{p.key}: 非法参数类型 {p.type!r}")
             if p.key in seen_keys:
-                duplicate_key_errors.append(
-                    f"{cap.capability_id}: 重复参数键 {p.key!r}"
-                )
+                duplicate_key_errors.append(f"{cap.capability_id}: 重复参数键 {p.key!r}")
             seen_keys.add(p.key)
 
-            if (
-                p.choices is not None
-                and p.default is not None
-                and p.default not in p.choices
-            ):
+            if p.choices is not None and p.default is not None and p.default not in p.choices:
                 default_choice_errors.append(
                     f"{cap.capability_id}.{p.key}: default={p.default!r} 不在 choices={p.choices!r} 中"
                 )
@@ -378,9 +358,7 @@ def build_full_audit_report(
 ) -> dict[str, Any]:
     """生成 P9-01 基准全量对账、分维度覆盖率与参数契约综合审计报告。"""
     base_report = registry.audit_report(provider=provider)
-    reconciliation = registry.reconcile_baseline(
-        baseline_files=baseline_files, provider=provider
-    )
+    reconciliation = registry.reconcile_baseline(baseline_files=baseline_files, provider=provider)
     by_kind = audit_by_kind(registry, provider=provider)
     five_metrics = audit_five_coverage_metrics(
         registry, baseline_files=baseline_files, provider=provider

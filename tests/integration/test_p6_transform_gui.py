@@ -68,9 +68,7 @@ def _tc_bands(rows: int, cols: int) -> np.ndarray:
     )
 
 
-def _make_raster(
-    gdal_rt: dict[str, Any], path: Path, values: np.ndarray
-) -> Path:
+def _make_raster(gdal_rt: dict[str, Any], path: Path, values: np.ndarray) -> Path:
     script = f"""
 import numpy as np
 from osgeo import gdal, osr
@@ -141,9 +139,7 @@ def _pump(qapp: QApplication, predicate: Any, timeout: float = 30.0, label: str 
 def test_pca_forward_then_inverse_from_gui(
     qapp: QApplication, gdal_rt: dict[str, Any], tmp_path: Path
 ) -> None:
-    src = _make_raster(
-        gdal_rt, tmp_path / "pca_gui_src.tif", _pca_bands(5, 4)
-    )
+    src = _make_raster(gdal_rt, tmp_path / "pca_gui_src.tif", _pca_bands(5, 4))
     components = tmp_path / "pca_gui_components.tif"
     inverse = tmp_path / "pca_gui_inverse.tif"
 
@@ -214,12 +210,8 @@ def test_pca_forward_then_inverse_from_gui(
     assert not win.gdal_client.is_alive
 
 
-def test_tasseled_cap_from_gui(
-    qapp: QApplication, gdal_rt: dict[str, Any], tmp_path: Path
-) -> None:
-    src = _make_raster(
-        gdal_rt, tmp_path / "tc_gui_src.tif", _tc_bands(4, 3)
-    )
+def test_tasseled_cap_from_gui(qapp: QApplication, gdal_rt: dict[str, Any], tmp_path: Path) -> None:
+    src = _make_raster(gdal_rt, tmp_path / "tc_gui_src.tif", _tc_bands(4, 3))
     out = tmp_path / "tc_gui_out.tif"
 
     win = MainWindow(project_root=tmp_path)

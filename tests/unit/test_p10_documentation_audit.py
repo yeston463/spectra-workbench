@@ -78,7 +78,15 @@ def test_p10_03_tool_index_contains_registered_capabilities():
         assert registry.get(cap_id) is not None, f"能力 {cap_id} 未在注册表中登记"
 
     # 验证命令行选项编目
-    for opt in ["--doctor", "--json", "--headless", "--test-init", "--sample", "--open", "--screenshot"]:
+    for opt in [
+        "--doctor",
+        "--json",
+        "--headless",
+        "--test-init",
+        "--sample",
+        "--open",
+        "--screenshot",
+    ]:
         assert opt in tool_doc, f"工具文档缺少核心命令行参数说明: {opt}"
 
 

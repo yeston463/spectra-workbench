@@ -79,9 +79,7 @@ def run_dos1(
     if math.isfinite(earth_sun_distance) and earth_sun_distance <= 0.0:
         raise DOS1Error("earthSunDistance 必须为正数")
     if not (0.0 < float(sun_zen_angle) < 90.0):
-        raise DOS1Error(
-            f"sunZenAngle 必须在 (0, 90) 度，实际 {sun_zen_angle}"
-        )
+        raise DOS1Error(f"sunZenAngle 必须在 (0, 90) 度，实际 {sun_zen_angle}")
     if not math.isfinite(haze_dn):
         raise DOS1Error(f"hazeDN 必须为有限值，实际 {haze_dn}")
 
@@ -91,9 +89,7 @@ def run_dos1(
         raise DOS1Error(f"无法打开输入栅格: {source}")
     try:
         if band < 1 or band > int(ds.RasterCount):
-            raise DOS1Error(
-                f"dosBand={band} 超出范围（数据集共 {ds.RasterCount} 个波段）"
-            )
+            raise DOS1Error(f"dosBand={band} 超出范围（数据集共 {ds.RasterCount} 个波段）")
         src_band = ds.GetRasterBand(band)
         if gdal.DataTypeIsComplex(src_band.DataType):
             raise DOS1Error("DOS1 仅支持实数波段")
@@ -105,8 +101,10 @@ def run_dos1(
         gt = tuple(float(v) for v in (ds.GetGeoTransform() or ()))
         proj = ds.GetProjectionRef() or ""
         label = src_band.GetNoDataValue()
-        nodata = float(src_nodata) if src_nodata is not None else (
-            float(label) if label is not None else None
+        nodata = (
+            float(src_nodata)
+            if src_nodata is not None
+            else (float(label) if label is not None else None)
         )
     finally:
         ds = None
@@ -144,9 +142,7 @@ def run_dos1(
         out_ds.SetMetadataItem("ATMOS_HAZE_DN", f"{haze_dn:.12g}")
         out_ds.SetMetadataItem("ATMOS_ESUN", f"{esun:.12g}")
         out_ds.SetMetadataItem("ATMOS_EARTH_SUN_DISTANCE", f"{earth_sun_distance:.12g}")
-        out_ds.SetMetadataItem(
-            "ATMOS_ONE_PERCENT_RADIANCE", f"{one_percent_radiance:.12g}"
-        )
+        out_ds.SetMetadataItem("ATMOS_ONE_PERCENT_RADIANCE", f"{one_percent_radiance:.12g}")
         band_out = out_ds.GetRasterBand(1)
         arr = np.where(rho_valid, rho, dst_nodata).astype(np.float32)
         band_out.WriteArray(arr)

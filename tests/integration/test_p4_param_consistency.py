@@ -264,9 +264,7 @@ def test_warp_src_win_and_proj_win_conflict_rejected(
 
 
 # ------------------------------------------- 2. GUI 重采样参数落到实际像元
-def test_gui_bilinear_reaches_worker_as_bilinear(
-    qapp, gdal_rt, source_raster, tmp_path
-) -> None:
+def test_gui_bilinear_reaches_worker_as_bilinear(qapp, gdal_rt, source_raster, tmp_path) -> None:
     """GUI 选双线性：落盘结果必须等于显式 bilinear，且不等于 nearest。
 
     复现第 25 轮缺陷：GUI 发 `resampling`，Worker 读 `resample_alg`，
@@ -305,8 +303,13 @@ def test_gui_bilinear_reaches_worker_as_bilinear(
         _run_task(
             qapp,
             "gdal:warp",
-            {"format": "GTiff", "dst_crs": "EPSG:4326", "xRes": 0.0015, "yRes": 0.0015,
-             "resample_alg": "nearest"},
+            {
+                "format": "GTiff",
+                "dst_crs": "EPSG:4326",
+                "xRes": 0.0015,
+                "yRes": 0.0015,
+                "resample_alg": "nearest",
+            },
             source_raster,
             near_out,
         ).status
@@ -316,8 +319,13 @@ def test_gui_bilinear_reaches_worker_as_bilinear(
         _run_task(
             qapp,
             "gdal:warp",
-            {"format": "GTiff", "dst_crs": "EPSG:4326", "xRes": 0.0015, "yRes": 0.0015,
-             "resample_alg": "bilinear"},
+            {
+                "format": "GTiff",
+                "dst_crs": "EPSG:4326",
+                "xRes": 0.0015,
+                "yRes": 0.0015,
+                "resample_alg": "bilinear",
+            },
             source_raster,
             bilinear_out,
         ).status
@@ -351,9 +359,7 @@ def test_gui_offers_only_supported_algorithms(qapp, tmp_path) -> None:
 
     form, _ = _form(qapp, tmp_path, "gdal:warp")
     try:
-        offered = {
-            form.cmb_resampling.itemData(i) for i in range(form.cmb_resampling.count())
-        }
+        offered = {form.cmb_resampling.itemData(i) for i in range(form.cmb_resampling.count())}
         assert offered, "下拉框不得为空"
         assert offered <= set(RESAMPLE_ALGORITHMS), f"下拉框含未支持算法：{offered}"
     finally:
@@ -429,9 +435,7 @@ def test_fractional_src_win_is_rejected(qapp, gdal_rt, source_raster, tmp_path) 
     assert not out.exists(), "非法参数时不得产出文件"
 
 
-def test_unknown_resampling_algorithm_is_rejected(
-    qapp, gdal_rt, source_raster, tmp_path
-) -> None:
+def test_unknown_resampling_algorithm_is_rejected(qapp, gdal_rt, source_raster, tmp_path) -> None:
     """未知重采样算法必须报错，不得静默回退最近邻。"""
     out = tmp_path / "unknown_alg.tif"
     result = _run_task(

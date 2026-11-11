@@ -28,7 +28,10 @@ RELOCATED_APP = RELOCATED_BASE / "SpectraWorkbench"
 @pytest.fixture(scope="session", autouse=True)
 def ensure_onedir_built() -> Path:
     """确保 onedir 发布包在测试开始前已就绪（如未构建则自动构建并链接）。"""
-    if not (DIST_DIR / "SpectraWorkbench.exe").exists() or not (DIST_DIR / "manifest.json").exists():
+    if (
+        not (DIST_DIR / "SpectraWorkbench.exe").exists()
+        or not (DIST_DIR / "manifest.json").exists()
+    ):
         build_onedir_package(DIST_DIR, mode="link")
     return DIST_DIR
 
@@ -58,8 +61,12 @@ def test_p10_01_onedir_manifest_and_directory_structure() -> None:
     # 验证 runtimes 目录
     assert (DIST_DIR / "runtimes" / "gdal" / "python.exe").is_file(), "缺少 GDAL 引擎解释器"
     assert (DIST_DIR / "runtimes" / "gdal" / "bin" / "gdalinfo.exe").is_file(), "缺少 gdalinfo CLI"
-    assert (DIST_DIR / "runtimes" / "gdal" / "share" / "gdal" / "epsg.wkt").is_file(), "缺少 gdal CRS epsg.wkt"
-    assert (DIST_DIR / "runtimes" / "gdal" / "share" / "proj" / "proj.db").is_file(), "缺少 PROJ 坐标数据库 proj.db"
+    assert (DIST_DIR / "runtimes" / "gdal" / "share" / "gdal" / "epsg.wkt").is_file(), (
+        "缺少 gdal CRS epsg.wkt"
+    )
+    assert (DIST_DIR / "runtimes" / "gdal" / "share" / "proj" / "proj.db").is_file(), (
+        "缺少 PROJ 坐标数据库 proj.db"
+    )
     assert (DIST_DIR / "runtimes" / "rasterio" / "python.exe").is_file(), "缺少 Rasterio 引擎解释器"
 
     # 校验 manifest 内容
@@ -85,9 +92,21 @@ print('P10_UI_OFFSCREEN_SUCCESS')
 sys.exit(0)
 """
     env = os.environ.copy()
-    env["QT_QPA_PLATFORM_PLUGIN_PATH"] = str(RELOCATED_APP / "app" / "Lib" / "site-packages" / "PySide6" / "plugins")
-    env["PYTHONPATH"] = f"{RELOCATED_APP / 'app' / 'src'};{RELOCATED_APP / 'app' / 'Lib' / 'site-packages'}"
-    proc = subprocess.run([str(ui_py), "-c", qt_script], capture_output=True, text=True, encoding="utf-8", errors="replace", env=env, timeout=20)
+    env["QT_QPA_PLATFORM_PLUGIN_PATH"] = str(
+        RELOCATED_APP / "app" / "Lib" / "site-packages" / "PySide6" / "plugins"
+    )
+    env["PYTHONPATH"] = (
+        f"{RELOCATED_APP / 'app' / 'src'};{RELOCATED_APP / 'app' / 'Lib' / 'site-packages'}"
+    )
+    proc = subprocess.run(
+        [str(ui_py), "-c", qt_script],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        env=env,
+        timeout=20,
+    )
     assert proc.returncode == 0, f"UI 启动失败: stdout={proc.stdout}, stderr={proc.stderr}"
     assert "P10_UI_OFFSCREEN_SUCCESS" in proc.stdout
 
@@ -140,7 +159,15 @@ print(f'P10_GDAL_PROJ_SUCCESS: x={{x:.2f}}, y={{y:.2f}}')
     env["PROJ_DATA"] = str(proj_data)
     env["PROJ_LIB"] = str(proj_data)
 
-    proc = subprocess.run([str(gdal_py), "-c", script], capture_output=True, text=True, encoding="utf-8", errors="replace", env=env, timeout=20)
+    proc = subprocess.run(
+        [str(gdal_py), "-c", script],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        env=env,
+        timeout=20,
+    )
     assert proc.returncode == 0, f"GDAL 投影转换失败: stdout={proc.stdout}, stderr={proc.stderr}"
     assert "P10_GDAL_PROJ_SUCCESS" in proc.stdout
 
@@ -174,7 +201,15 @@ with rasterio.open(out_tif) as ds:
 
 print('P10_RASTERIO_IO_SUCCESS')
 """
-    proc = subprocess.run([str(rio_py), "-c", script], capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=str(tmp_path), timeout=20)
+    proc = subprocess.run(
+        [str(rio_py), "-c", script],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        cwd=str(tmp_path),
+        timeout=20,
+    )
     assert proc.returncode == 0, f"Rasterio 执行失败: stdout={proc.stdout}, stderr={proc.stderr}"
     assert "P10_RASTERIO_IO_SUCCESS" in proc.stdout
 
@@ -185,7 +220,14 @@ def test_p10_01_native_launcher_help_and_argument_dispatch() -> None:
     if not launcher_exe.exists():
         launcher_exe = RELOCATED_APP / "SpectraWorkbench.bat"
 
-    proc = subprocess.run([str(launcher_exe), "--help"], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=20)
+    proc = subprocess.run(
+        [str(launcher_exe), "--help"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=20,
+    )
     assert proc.returncode == 0, f"原生启动器 --help 失败: stderr={proc.stderr}"
     out_all = proc.stdout + proc.stderr
     assert "Spectra Workbench" in out_all or "usage" in out_all.lower()

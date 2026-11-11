@@ -1,4 +1,4 @@
-﻿"""P7-03 批处理：模板展开成多个 TaskSpec 并按序执行。
+"""P7-03 批处理：模板展开成多个 TaskSpec 并按序执行。
 
 核心语义
 --------
@@ -109,9 +109,7 @@ def render_batch_specs(
     params_tpl = template.get("params") or {}
     task_prefix = str(template.get("task_prefix") or "batch")
     overwrite = bool(template.get("overwrite") or False)
-    if not isinstance(inputs_tpl, (list, tuple)) or not all(
-        isinstance(p, str) for p in inputs_tpl
-    ):
+    if not isinstance(inputs_tpl, (list, tuple)) or not all(isinstance(p, str) for p in inputs_tpl):
         raise BatchError("inputs 必须是字符串列表")
     if not isinstance(outputs_tpl, (list, tuple)) or not all(
         isinstance(p, str) for p in outputs_tpl
@@ -133,9 +131,7 @@ def render_batch_specs(
         in_paths = [_safe_format(p, scope_map, tag="inputs") for p in inputs_tpl]
         out_paths = [_safe_format(p, scope_map, tag="outputs") for p in outputs_tpl]
         params = {
-            key: _safe_format(value, scope_map, tag="params")
-            if isinstance(value, str)
-            else value
+            key: _safe_format(value, scope_map, tag="params") if isinstance(value, str) else value
             for key, value in params_tpl.items()
         }
 
@@ -196,16 +192,16 @@ def write_manifest(path: Path | str, payload: dict[str, Any]) -> Path:
     """把 batch manifest 写为 JSON。"""
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=1), encoding="utf-8"
-    )
+    target.write_text(json.dumps(payload, ensure_ascii=False, indent=1), encoding="utf-8")
     return target
 
 
 class BatchReport:
     """批处理终态；entries 保留成功/失败/pending 的诚实终态与 duration。"""
 
-    def __init__(self, *, batch_id: str, items: list[dict[str, Any]], continue_on_error: bool) -> None:
+    def __init__(
+        self, *, batch_id: str, items: list[dict[str, Any]], continue_on_error: bool
+    ) -> None:
         self.batch_id = batch_id
         self.entries: list[dict[str, Any]] = [
             {
@@ -231,8 +227,7 @@ class BatchReport:
 
     def all_terminal(self) -> bool:
         return all(
-            entry["status"] in ("succeeded", "failed", "cancelled")
-            for entry in self.entries
+            entry["status"] in ("succeeded", "failed", "cancelled") for entry in self.entries
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -266,9 +261,7 @@ def run_batch(
     """
     batch = batch_id or uuid.uuid4().hex[:12]
     rendered = render_batch_specs(template, items)
-    report = BatchReport(
-        batch_id=batch, items=items, continue_on_error=continue_on_error
-    )
+    report = BatchReport(batch_id=batch, items=items, continue_on_error=continue_on_error)
 
     for entry_spec, _item, index in rendered:
         if not report.continue_on_error:

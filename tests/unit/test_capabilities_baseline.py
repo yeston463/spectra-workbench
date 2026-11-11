@@ -169,7 +169,7 @@ def test_gdal_algorithms_count_and_structure():
     已在 registry 文档串中标注。
     """
     algorithms = build_gdal_algorithms()
-    assert len(algorithms) == 38
+    assert len(algorithms) == 45
 
     algo_ids = {a.capability_id for a in algorithms}
     expected_ids = {
@@ -214,6 +214,14 @@ def test_gdal_algorithms_count_and_structure():
         "gdal:fvc",
         # P11-07：多边形 ROI 与矢量 cutline 掩膜裁剪
         "gdal:clip_mask",
+        # P11-06：密度分割
+        "gdal:density_slice",
+        "gdal:mosaic_advanced",
+        "gdal:sam",
+        "gdal:classify",
+        "gdal:accuracy_assessment",
+        "ogr:buffer",
+        "gdal:dem_sample",
         # P6-06：辐射定标 / DOS1 大气校正 / 多时相去云
         "gdal:calibrate",
         "gdal:dos1",
@@ -273,7 +281,10 @@ def test_gdal_missing_and_deprecated_tools_retained():
     assert hdf5.state.availability == Availability.missing_dependency
 
     # 3. 历史脚本 rgb2pct 与 pct2rgb 在当前环境的 osgeo_utils 模块中实际存在
-    for mod_name, alt_hint in [("rgb2pct", "rgb-to-palette"), ("pct2rgb", "gdal_translate -expand")]:
+    for mod_name, alt_hint in [
+        ("rgb2pct", "rgb-to-palette"),
+        ("pct2rgb", "gdal_translate -expand"),
+    ]:
         cap = reg.get(f"gdal:cli:{mod_name}")
         assert cap is not None, f"历史工具未登记: {mod_name}"
         assert cap.state.presence == Presence.present
@@ -309,9 +320,27 @@ def test_rio_all_21_commands_cataloged():
     cmd_names = {c.native_name.split()[1] for c in rio_cmds if c.native_name.startswith("rio ")}
 
     expected_cmds = {
-        "blocks", "bounds", "calc", "clip", "convert", "create", "edit-info",
-        "env", "gcps", "info", "insp", "mask", "merge", "overview", "rasterize",
-        "rm", "sample", "shapes", "stack", "transform", "warp",
+        "blocks",
+        "bounds",
+        "calc",
+        "clip",
+        "convert",
+        "create",
+        "edit-info",
+        "env",
+        "gcps",
+        "info",
+        "insp",
+        "mask",
+        "merge",
+        "overview",
+        "rasterize",
+        "rm",
+        "sample",
+        "shapes",
+        "stack",
+        "transform",
+        "warp",
     }
     assert expected_cmds.issubset(cmd_names)
 
@@ -404,10 +433,10 @@ def test_four_dimensional_state_independence_and_audit():
     # 基线总数 462 -> 468，missing 7 -> 13，discovered/callable/platform_executable 维持 455/250/24 不变。
     # 第 75 轮（P9-02）：5 项清理算法（sieve/fillnodata/nearblack/proximity/viewshed）
     # 接通 form 执行器与面板：platform_executable 24 -> 29。
-    assert report["total_baseline_count"] == 469
-    assert report["discovered"]["count"] == 456
-    assert report["callable"]["count"] == 251
-    assert report["platform_executable"]["count"] == 30
+    assert report["total_baseline_count"] == 476
+    assert report["discovered"]["count"] == 463
+    assert report["callable"]["count"] == 258
+    assert report["platform_executable"]["count"] == 37
     # 第 63 轮 blocked 新增 flaash_external 与 agriculture_count：5 -> 7；
     # 第 73 轮（P8-05）新增 6 项未实现可选扩展：7 -> 13
     assert report["missing"]["count"] == 13
@@ -433,8 +462,8 @@ def test_four_dimensional_state_independence_and_audit():
     # 第 69 轮（P8-01）：新增平台能力 gdal:mdim_slice：420 -> 421、416 -> 417。
     # gdal:buildvrt、P5-02 的 gdal:dem/rasterize/grid 由 blocked 改为 ready，
     # GDAL 缺失项 6 -> 5 -> 4 -> 3 -> 2。
-    assert gdal_rep["total_baseline_count"] == 422
-    assert gdal_rep["discovered"]["count"] == 418
+    assert gdal_rep["total_baseline_count"] == 429
+    assert gdal_rep["discovered"]["count"] == 425
     # ? 63 ? blocked ?? flaash_external ? agriculture_count?2 -> 4
     assert gdal_rep["missing"]["count"] == 4
 
@@ -453,7 +482,7 @@ def test_provider_adapters_discover_baseline():
     # 第 61 轮 gcpregister/rasterdiff：411 -> 413；第 62 轮 mask/fvc：413 -> 415；
     # 第 63 轮 calibrate/dos1/cloudreplace + 2 blocked：415 -> 420；
     # 第 69 轮（P8-01）mdim_slice：420 -> 421。
-    assert len(gdal_caps) == 422
+    assert len(gdal_caps) == 429
 
     rio_adapter = RasterioProviderAdapter()
     rio_caps = rio_adapter.discover()
@@ -475,11 +504,17 @@ def test_audit_capability_registered_without_handler(project_root: Path):
         task_id="audit-unhandled-cap",
         capability_id="gdal:retile",
         descriptor_revision="1.0",
-        engine=EngineConstraint(provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"),
+        engine=EngineConstraint(
+            provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"
+        ),
         project_root=str(project_root),
         workspace=str(project_root / ".staging"),
         inputs={"input": DatasetRef(dataset_id="in", kind=DatasetKind.raster, uri=in_dat.as_uri())},
-        outputs=[OutputPlan(key="output", kind=DatasetKind.raster, uri=(project_root / "retile.tif").as_uri())],
+        outputs=[
+            OutputPlan(
+                key="output", kind=DatasetKind.raster, uri=(project_root / "retile.tif").as_uri()
+            )
+        ],
         parameters={},
     )
     val = adapter.validate(spec)
@@ -501,11 +536,17 @@ def test_audit_module_exists_but_platform_unwired(project_root: Path):
         task_id="audit-unwired-api",
         capability_id="rasterio:api:mask",
         descriptor_revision="1.0",
-        engine=EngineConstraint(provider_id="rasterio", runtime_id="sw-rasterio", expected_version="1.5.2"),
+        engine=EngineConstraint(
+            provider_id="rasterio", runtime_id="sw-rasterio", expected_version="1.5.2"
+        ),
         project_root=str(project_root),
         workspace=str(project_root / ".staging"),
         inputs={"input": DatasetRef(dataset_id="in", kind=DatasetKind.raster, uri=in_dat.as_uri())},
-        outputs=[OutputPlan(key="output", kind=DatasetKind.raster, uri=(project_root / "mask.tif").as_uri())],
+        outputs=[
+            OutputPlan(
+                key="output", kind=DatasetKind.raster, uri=(project_root / "mask.tif").as_uri()
+            )
+        ],
         parameters={},
     )
     val = adapter.validate(spec)
@@ -536,11 +577,19 @@ def test_audit_validation_failure_handling(project_root: Path):
         task_id="audit-val-failure",
         capability_id="gdal:translate",
         descriptor_revision="1.0",
-        engine=EngineConstraint(provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"),
+        engine=EngineConstraint(
+            provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"
+        ),
         project_root=str(project_root),
         workspace=str(project_root / ".staging"),
-        inputs={"input": DatasetRef(dataset_id="in", kind=DatasetKind.raster, uri=non_existent.as_uri())},
-        outputs=[OutputPlan(key="output", kind=DatasetKind.raster, uri=(project_root / "out.tif").as_uri())],
+        inputs={
+            "input": DatasetRef(dataset_id="in", kind=DatasetKind.raster, uri=non_existent.as_uri())
+        },
+        outputs=[
+            OutputPlan(
+                key="output", kind=DatasetKind.raster, uri=(project_root / "out.tif").as_uri()
+            )
+        ],
         parameters={},
     )
     val = adapter.validate(spec)

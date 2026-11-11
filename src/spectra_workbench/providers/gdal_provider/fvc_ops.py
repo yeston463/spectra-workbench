@@ -115,9 +115,7 @@ def validate_class_edges(edges: list[float]) -> list[float]:
         raise FVCError("fvcClassEdges 不能为空")
     for value in edges:
         if not math.isfinite(value) or not (0.0 < value < 1.0):
-            raise FVCError(
-                f"fvcClassEdges 必须在 (0, 1) 内且有限，实际 {value!r}"
-            )
+            raise FVCError(f"fvcClassEdges 必须在 (0, 1) 内且有限，实际 {value!r}")
     if any(b <= a for a, b in zip(edges, edges[1:], strict=False)):
         raise FVCError("fvcClassEdges 必须严格递增")
     return edges
@@ -165,9 +163,7 @@ def run_fvc(
         raise FVCError(f"无法打开输入栅格: {source}")
     try:
         if ndvi_band < 1 or ndvi_band > int(ds.RasterCount):
-            raise FVCError(
-                f"fvcBand={ndvi_band} 超出范围（数据集共 {ds.RasterCount} 个波段）"
-            )
+            raise FVCError(f"fvcBand={ndvi_band} 超出范围（数据集共 {ds.RasterCount} 个波段）")
         band = ds.GetRasterBand(ndvi_band)
         if gdal.DataTypeIsComplex(band.DataType):
             raise FVCError("FVC 仅支持实数 NDVI 波段")
@@ -178,8 +174,10 @@ def run_fvc(
         gt = tuple(float(v) for v in (ds.GetGeoTransform() or ()))
         proj = ds.GetProjectionRef() or ""
         label = band.GetNoDataValue()
-        nodata = float(src_nodata) if src_nodata is not None else (
-            float(label) if label is not None else None
+        nodata = (
+            float(src_nodata)
+            if src_nodata is not None
+            else (float(label) if label is not None else None)
         )
         width, height = int(ds.RasterXSize), int(ds.RasterYSize)
     finally:
@@ -192,9 +190,7 @@ def run_fvc(
         _progress(callback, 0.15, f"读取掩膜 {mask_file.name}")
         mask_arr = _load_mask_file(gdal, Path(mask_file))
         if mask_arr.shape != (height, width):
-            raise FVCError(
-                f"掩膜形状 {mask_arr.shape} 与 NDVI 网格 {(height, width)} 不一致"
-            )
+            raise FVCError(f"掩膜形状 {mask_arr.shape} 与 NDVI 网格 {(height, width)} 不一致")
         valid &= mask_arr
 
     valid_values = ndvi_raw[valid]
@@ -245,9 +241,7 @@ def run_fvc(
         out_ds.SetMetadataItem("FVC_VEG", f"{veg_value:.12g}")
         out_ds.SetMetadataItem("FVC_CROP", "true" if crop else "false")
         fvc_band = out_ds.GetRasterBand(1)
-        fvc_band.WriteArray(
-            np.where(valid, fvc_output, dst_nodata).astype(np.float32)
-        )
+        fvc_band.WriteArray(np.where(valid, fvc_output, dst_nodata).astype(np.float32))
         fvc_band.SetNoDataValue(float(dst_nodata))
         fvc_band.SetDescription("fvc")
         fvc_band.FlushCache()
@@ -266,13 +260,9 @@ def run_fvc(
         class_ds.SetGeoTransform(gt)
         class_ds.SetProjection(proj)
         class_ds.SetMetadataItem("FVC_MODE", mode)
-        class_ds.SetMetadataItem(
-            "FVC_CLASS_EDGES", ",".join(str(v) for v in edges)
-        )
+        class_ds.SetMetadataItem("FVC_CLASS_EDGES", ",".join(str(v) for v in edges))
         class_band = class_ds.GetRasterBand(1)
-        class_band.WriteArray(
-            np.where(valid, class_arr, np.uint8(0)).astype(np.uint8)
-        )
+        class_band.WriteArray(np.where(valid, class_arr, np.uint8(0)).astype(np.uint8))
         # 类别波段显式用 0 作为 NoData（0 不是任何有效类别号）
         class_band.SetNoDataValue(0.0)
         class_band.SetDescription("fvc_class")

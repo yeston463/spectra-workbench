@@ -80,15 +80,25 @@ class PluginCapabilitySpec(BaseModel):
         for inp in self.inputs:
             k = inp.get("key", "input")
             dt_str = inp.get("data_type", "raster")
-            dt = DatasetKind.raster if dt_str == "raster" else (DatasetKind.vector if dt_str == "vector" else DatasetKind.scalar)
+            dt = (
+                DatasetKind.raster
+                if dt_str == "raster"
+                else (DatasetKind.vector if dt_str == "vector" else DatasetKind.scalar)
+            )
             in_ports.append(PortSpec(key=k, data_type=dt, required=bool(inp.get("required", True))))
 
         out_ports: list[PortSpec] = []
         for outp in self.outputs:
             k = outp.get("key", "output")
             dt_str = outp.get("data_type", "raster")
-            dt = DatasetKind.raster if dt_str == "raster" else (DatasetKind.vector if dt_str == "vector" else DatasetKind.scalar)
-            out_ports.append(PortSpec(key=k, data_type=dt, required=bool(outp.get("required", True))))
+            dt = (
+                DatasetKind.raster
+                if dt_str == "raster"
+                else (DatasetKind.vector if dt_str == "vector" else DatasetKind.scalar)
+            )
+            out_ports.append(
+                PortSpec(key=k, data_type=dt, required=bool(outp.get("required", True)))
+            )
 
         param_specs: list[ParameterSpec] = []
         for p in self.parameters:
@@ -124,7 +134,8 @@ class PluginCapabilitySpec(BaseModel):
                 version_constraint=f">={plugin_manifest.version}",
             ),
             source=CapabilitySource(
-                documentation_url=plugin_manifest.documentation or "https://spectra-workbench.local",
+                documentation_url=plugin_manifest.documentation
+                or "https://spectra-workbench.local",
                 baseline_id=f"plugin:{plugin_manifest.id}",
                 upstream_version=plugin_manifest.version,
             ),

@@ -50,7 +50,9 @@ def test_persistent_manifest_lifecycle_on_gdal_task():
         workspace = temp_root / "workspace"
         target_tif = temp_root / "manifest_test_output.tif"
 
-        worker = WorkerProcess(provider_id="gdal", worker_id="test-manifest-worker", project_root=root)
+        worker = WorkerProcess(
+            provider_id="gdal", worker_id="test-manifest-worker", project_root=root
+        )
         try:
             worker.start(timeout=15.0)
 
@@ -58,11 +60,24 @@ def test_persistent_manifest_lifecycle_on_gdal_task():
                 task_id="t-manifest-01",
                 capability_id="gdal:translate",
                 descriptor_revision="1.0",
-                engine=EngineConstraint(provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"),
+                engine=EngineConstraint(
+                    provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"
+                ),
                 project_root=str(temp_root),
                 workspace=str(workspace),
-                inputs={"input": DatasetRef(dataset_id="in", kind=DatasetKind.raster, uri=in_dat.as_uri())},
-                outputs=[OutputPlan(key="output", kind=DatasetKind.raster, uri=target_tif.as_uri(), overwrite=True)],
+                inputs={
+                    "input": DatasetRef(
+                        dataset_id="in", kind=DatasetKind.raster, uri=in_dat.as_uri()
+                    )
+                },
+                outputs=[
+                    OutputPlan(
+                        key="output",
+                        kind=DatasetKind.raster,
+                        uri=target_tif.as_uri(),
+                        overwrite=True,
+                    )
+                ],
                 parameters={"format": "GTiff"},
             )
             res = worker.execute_task(spec, timeout=20.0)
@@ -80,7 +95,9 @@ def test_persistent_manifest_lifecycle_on_gdal_task():
             staged_info = manifest.staged_files[0]
             assert staged_info["size"] > 500
             assert len(staged_info["sha256"]) == 64  # SHA-256 长度
-            assert str(target_tif.resolve()) in [str(Path(p).resolve()) for p in manifest.committed_files]
+            assert str(target_tif.resolve()) in [
+                str(Path(p).resolve()) for p in manifest.committed_files
+            ]
 
             worker.stop()
         finally:
@@ -110,7 +127,9 @@ def test_cross_volume_or_move_failure_transactional_rollback():
         target_dat.write_bytes(orig_dat_content)
         target_hdr.write_bytes(orig_hdr_content)
 
-        ctx = ExecutionContext(task_id="t-rollback-01", workspace=temp_root, staging_dir=staging_dir)
+        ctx = ExecutionContext(
+            task_id="t-rollback-01", workspace=temp_root, staging_dir=staging_dir
+        )
 
         # 模拟提交第二个文件时发生跨卷或 I/O 故障
         import shutil as real_shutil
@@ -210,7 +229,9 @@ def test_incomplete_staged_outputs_never_registered_as_succeeded():
         workspace = temp_root / "workspace"
         target_tif = temp_root / "must_not_exist.tif"
 
-        worker = WorkerProcess(provider_id="gdal", worker_id="test-fail-manifest", project_root=root)
+        worker = WorkerProcess(
+            provider_id="gdal", worker_id="test-fail-manifest", project_root=root
+        )
         try:
             worker.start(timeout=15.0)
 
@@ -219,11 +240,24 @@ def test_incomplete_staged_outputs_never_registered_as_succeeded():
                 task_id="t-invalid-format",
                 capability_id="gdal:translate",
                 descriptor_revision="1.0",
-                engine=EngineConstraint(provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"),
+                engine=EngineConstraint(
+                    provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"
+                ),
                 project_root=str(temp_root),
                 workspace=str(workspace),
-                inputs={"input": DatasetRef(dataset_id="in", kind=DatasetKind.raster, uri=in_dat.as_uri())},
-                outputs=[OutputPlan(key="output", kind=DatasetKind.raster, uri=target_tif.as_uri(), overwrite=True)],
+                inputs={
+                    "input": DatasetRef(
+                        dataset_id="in", kind=DatasetKind.raster, uri=in_dat.as_uri()
+                    )
+                },
+                outputs=[
+                    OutputPlan(
+                        key="output",
+                        kind=DatasetKind.raster,
+                        uri=target_tif.as_uri(),
+                        overwrite=True,
+                    )
+                ],
                 parameters={"format": "NON_EXISTENT_FORMAT_XYZ"},
             )
             res = worker.execute_task(spec, timeout=20.0)
@@ -284,9 +318,15 @@ def test_real_subprocess_kill_before_backup_preserves_untouched_target():
         )
         try:
             deadline = time.monotonic() + 10
-            while not (temp_root / "paused").exists() and proc.poll() is None and time.monotonic() < deadline:
+            while (
+                not (temp_root / "paused").exists()
+                and proc.poll() is None
+                and time.monotonic() < deadline
+            ):
                 time.sleep(0.02)
-            assert (temp_root / "paused").exists(), f"子进程未能在预期点暂停: {proc.communicate(timeout=2)}"
+            assert (temp_root / "paused").exists(), (
+                f"子进程未能在预期点暂停: {proc.communicate(timeout=2)}"
+            )
 
             # 强杀真实执行提交的子进程
             proc.kill()
@@ -324,9 +364,15 @@ def test_real_subprocess_kill_before_commit_marker_restores_from_backup():
         )
         try:
             deadline = time.monotonic() + 10
-            while not (temp_root / "paused").exists() and proc.poll() is None and time.monotonic() < deadline:
+            while (
+                not (temp_root / "paused").exists()
+                and proc.poll() is None
+                and time.monotonic() < deadline
+            ):
                 time.sleep(0.02)
-            assert (temp_root / "paused").exists(), f"子进程未能在预期点暂停: {proc.communicate(timeout=2)}"
+            assert (temp_root / "paused").exists(), (
+                f"子进程未能在预期点暂停: {proc.communicate(timeout=2)}"
+            )
 
             # 强杀真实执行提交的子进程
             proc.kill()
@@ -398,6 +444,7 @@ def test_restore_error_preserves_staging_and_reports_recovery_failed():
 
 def test_recovered_manifest_is_read_only_terminal_and_replay_preserves_new_files():
     """验证 recovered 是只读终态：恢复完成后在同路径新建独立文件，再次恢复绝不误删该文件。"""
+
     class SimulatedAbruptExit(BaseException):
         pass
 
@@ -418,7 +465,9 @@ def test_recovered_manifest_is_read_only_terminal_and_replay_preserves_new_files
                 raise SimulatedAbruptExit("stop before commit decision落盘")
             return real_save(directory, manifest)
 
-        ctx = ExecutionContext(task_id="t-terminal-recovered", workspace=temp_root, staging_dir=staging)
+        ctx = ExecutionContext(
+            task_id="t-terminal-recovered", workspace=temp_root, staging_dir=staging
+        )
         with (
             patch.object(provider_base, "save_manifest", side_effect=stop_before_marker),
             pytest.raises(SimulatedAbruptExit),
@@ -470,7 +519,9 @@ def test_post_commit_cleanup_failure_retains_committed_targets_and_state():
                     raise OSError("Injected post-commit cleanup metadata error")
             return real_save(directory, manifest)
 
-        ctx = ExecutionContext(task_id="t-post-commit-err", workspace=temp_root, staging_dir=staging)
+        ctx = ExecutionContext(
+            task_id="t-post-commit-err", workspace=temp_root, staging_dir=staging
+        )
 
         # 执行提交，注入后清理阶段的异常
         with (
@@ -514,7 +565,9 @@ def test_commit_delete_rollback_restores_stale_sidecar():
         target_aux.write_bytes(b"OLD AUX")
         stale.write_bytes(b"OLD OVERVIEW")
 
-        ctx = ExecutionContext(task_id="t-delete-rollback", workspace=temp_root, staging_dir=staging)
+        ctx = ExecutionContext(
+            task_id="t-delete-rollback", workspace=temp_root, staging_dir=staging
+        )
         real_move = __import__("shutil").move
 
         def flaky_move(src, dst):
@@ -619,5 +672,3 @@ def test_committed_delete_is_not_restored_by_recovery():
         assert report["action"] == "already_committed"
         assert not target.exists(), "committed 删除不得被恢复"
         assert not backup.exists()
-
-

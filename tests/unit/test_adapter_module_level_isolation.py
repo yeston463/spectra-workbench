@@ -91,8 +91,7 @@ def test_adapter_has_no_module_level_gdal_attribute_access() -> None:
                 ):
                     offenders.append(f"line {sub.lineno}: {value.id}.{sub.attr}")
     assert not offenders, (
-        "adapter 模块级不得访问 GDAL 属性（会在无 osgeo 的 GUI 进程中崩溃）："
-        f"{offenders}"
+        f"adapter 模块级不得访问 GDAL 属性（会在无 osgeo 的 GUI 进程中崩溃）：{offenders}"
     )
 
 

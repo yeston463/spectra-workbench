@@ -90,7 +90,9 @@ def test_concurrent_start_shares_one_handshake() -> None:
         assert worker.state is WorkerState.READY
         assert worker._proc is not None and worker._proc.poll() is None
         timings = worker.startup_timings
-        assert timings["spawn_start"] <= timings["spawn_done"] <= timings["hello"] <= timings["ready"]
+        assert (
+            timings["spawn_start"] <= timings["spawn_done"] <= timings["hello"] <= timings["ready"]
+        )
         assert timings["generation"] == worker.generation
     finally:
         worker.kill()
@@ -125,7 +127,9 @@ def test_stop_during_starting_kills_process_and_converges() -> None:
         assert errors, "启动中停止必须让 start 失败，而不是返回 ready"
         assert worker.state is WorkerState.STOPPED
         assert worker._proc is None or worker._proc.poll() is not None
-        assert not any(t.name.startswith(f"worker-{worker.worker_id}-") for t in threading.enumerate())
+        assert not any(
+            t.name.startswith(f"worker-{worker.worker_id}-") for t in threading.enumerate()
+        )
     finally:
         gate.set()
         worker.kill()
@@ -172,9 +176,7 @@ def test_early_exit_is_reported_and_cleaned(tmp_path: Path) -> None:
     package.mkdir(parents=True)
     (package.parent / "__init__.py").write_text("", encoding="utf-8")
     (package / "__init__.py").write_text("", encoding="utf-8")
-    (package / "entrypoint.py").write_text(
-        "import sys\nsys.exit(7)\n", encoding="utf-8"
-    )
+    (package / "entrypoint.py").write_text("import sys\nsys.exit(7)\n", encoding="utf-8")
     env = os.environ.copy()
     env["PYTHONPATH"] = str(tmp_path / "early") + os.pathsep + str(ROOT / "src")
     worker = WorkerProcess(
@@ -233,8 +235,7 @@ def test_start_stop_cycles_converge_threads_and_handles() -> None:
             assert worker.state is WorkerState.STOPPED
             assert worker._proc is None or worker._proc.poll() is not None
             assert not any(
-                t.name.startswith(f"worker-{worker.worker_id}-")
-                for t in threading.enumerate()
+                t.name.startswith(f"worker-{worker.worker_id}-") for t in threading.enumerate()
             )
         assert len(set(pids)) == len(pids), "每次启动必须是独立进程"
         handles_after = _handle_count()
@@ -284,8 +285,7 @@ def test_concurrent_cycles_converge() -> None:
             assert len(pids[index]) == 3
             assert len(set(pids[index])) == 3, "每轮启动必须是独立进程"
             assert not any(
-                t.name.startswith(f"worker-{worker.worker_id}-")
-                for t in threading.enumerate()
+                t.name.startswith(f"worker-{worker.worker_id}-") for t in threading.enumerate()
             )
         handles_after = _handle_count()
         assert handles_after - handles_before <= 24, (

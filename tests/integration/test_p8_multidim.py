@@ -291,9 +291,7 @@ def test_multidim_slice_units_and_pixels(
     out_dir.mkdir(parents=True, exist_ok=True)
     nc = _make_multidim_nc(gdal_rt, out_dir)
     out = tmp_path / "slice_t1_d0.tif"
-    spec = _spec_dict(
-        nc, out, {"array": "temp", "dimSelect": "time=1,depth=0", "format": "GTiff"}
-    )
+    spec = _spec_dict(nc, out, {"array": "temp", "dimSelect": "time=1,depth=0", "format": "GTiff"})
     result = dispatch(spec)
     assert result.status.value == "succeeded", result.error
     assert out.is_file()
@@ -338,9 +336,7 @@ def test_multidim_slice_preserves_crs(
     out_dir.mkdir(parents=True, exist_ok=True)
     nc = _make_multidim_nc(gdal_rt, out_dir)
     out = tmp_path / "sst_slice.tif"
-    spec = _spec_dict(
-        nc, out, {"array": "sst", "dimSelect": {"time": 0, "depth": 1}}
-    )
+    spec = _spec_dict(nc, out, {"array": "sst", "dimSelect": {"time": 0, "depth": 1}})
     result = dispatch(spec)
     assert result.status.value == "succeeded", result.error
     dump = _dump_gtiff(gdal_rt, out)
@@ -348,9 +344,7 @@ def test_multidim_slice_preserves_crs(
     assert dump["values"] == [[1006.0, 1007.0, 1008.0], [1009.0, 1010.0, 1011.0]]
     assert dump["crs_epsg"] == "4326", "SetSpatialRef 的数组应在切片输出保留 CRS"
     assert dump["unittype"] == "degC"
-    sidecar = json.loads(
-        (out.with_name(out.name + ".mdim_slice.json")).read_text(encoding="utf-8")
-    )
+    sidecar = json.loads((out.with_name(out.name + ".mdim_slice.json")).read_text(encoding="utf-8"))
     assert sidecar["georeferenced"] is True
     assert "4326" in sidecar["crs_wkt"]
 

@@ -23,19 +23,38 @@ from spectra_workbench.ui.main_window import MainWindow
 def run_app(argv: list[str] | None = None) -> int:
     """应用程序入口函数。"""
     parser = argparse.ArgumentParser(description="Spectra Workbench 桌面工作台")
-    parser.add_argument("--open", dest="open_path", type=str, default=None, help="启动时自动打开的影像文件路径")
-    parser.add_argument("--sample", action="store_true", help="启动时自动加载预置 A01 合成多光谱影像样例")
-    parser.add_argument("--screenshot", dest="screenshot_path", type=str, default=None, help="渲染就绪后保存窗口截图并退出")
-    parser.add_argument("--headless", action="store_true", help="无头模式运行 (QT_QPA_PLATFORM=offscreen)")
-    parser.add_argument("--project-root", dest="project_root", type=str, default=None, help="项目根目录")
+    parser.add_argument(
+        "--open", dest="open_path", type=str, default=None, help="启动时自动打开的影像文件路径"
+    )
+    parser.add_argument(
+        "--sample", action="store_true", help="启动时自动加载预置 A01 合成多光谱影像样例"
+    )
+    parser.add_argument(
+        "--screenshot",
+        dest="screenshot_path",
+        type=str,
+        default=None,
+        help="渲染就绪后保存窗口截图并退出",
+    )
+    parser.add_argument(
+        "--headless", action="store_true", help="无头模式运行 (QT_QPA_PLATFORM=offscreen)"
+    )
+    parser.add_argument(
+        "--project-root", dest="project_root", type=str, default=None, help="项目根目录"
+    )
     parser.add_argument("--doctor", action="store_true", help="运行环境与引擎运行时自检诊断")
     parser.add_argument("--json", action="store_true", help="以 JSON 格式输出自检诊断报告")
-    parser.add_argument("--test-init", action="store_true", help="初始化主窗口与引擎后自动安全退出（用于自动化就绪测试）")
+    parser.add_argument(
+        "--test-init",
+        action="store_true",
+        help="初始化主窗口与引擎后自动安全退出（用于自动化就绪测试）",
+    )
 
     args = parser.parse_args(argv or sys.argv[1:])
 
     if args.doctor:
         from spectra_workbench.app.doctor import main as doctor_main
+
         sub_args = ["--json"] if args.json else []
         return doctor_main(sub_args)
 
@@ -82,6 +101,7 @@ def run_app(argv: list[str] | None = None) -> int:
         QTimer.singleShot(1800, _capture)
 
     if args.test_init:
+
         def _on_test_init() -> None:
             window.close()
             app.quit()

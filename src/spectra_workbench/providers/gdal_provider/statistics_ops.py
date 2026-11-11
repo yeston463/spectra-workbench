@@ -93,9 +93,16 @@ def compute_statistics(
     band_list: list[int] | None = None,
     nodata: float | None = None,
     include_gdal_reference: bool = True,
+    mask_path: Path | str | None = None,
+    mask_band: int = 1,
+    mask_value: float | None = None,
+    mask_min: float | None = None,
+    mask_max: float | None = None,
+    mask_invert: bool = False,
 ) -> dict[str, Any]:
     """读取栅格并生成含直方图的统计报告（可 JSON 序列化）。
 
+    支持 maskFile / maskBand / maskValue 掩膜分地类统计：仅对符合掩膜条件的有效像元计算统计。
     ``band_list`` 为 1-based 波段号；``nodata`` 显式给定时覆盖波段自带标签。
     无效像元（NoData / NaN / Inf）一律排除出全部统计与直方图。
     """
@@ -114,6 +121,7 @@ def compute_statistics(
     prev_pam = gdal.GetConfigOption("GDAL_PAM_ENABLED")
     gdal.SetConfigOption("GDAL_PAM_ENABLED", "NO")
     ds = None
+    mask_ds = None
     try:
         ds = gdal.Open(target_path, gdal.GA_ReadOnly)
         if ds is None:
@@ -131,6 +139,18 @@ def compute_statistics(
         read_w = max(1, (w + stride - 1) // stride)
         read_h = max(1, (h + stride - 1) // stride)
 
+        if mask_path is not None:
+            m_target = (
+                normalize_vsi_path(mask_path)
+                if is_vsi_or_remote(mask_path)
+                else str(Path(mask_path))
+            )
+            mask_ds = gdal.Open(m_target, gdal.GA_ReadOnly)
+            if mask_ds is None:
+                raise RuntimeError(f"无法打开掩膜数据集: {m_target}")
+            if mask_band < 1 or mask_band > int(mask_ds.RasterCount):
+                raise ValueError(f"掩膜波段 {mask_band} 超出范围 (共 {mask_ds.RasterCount} 个波段)")
+
         out_bands: list[dict[str, Any]] = []
         for b_idx in target:
             if b_idx < 1 or b_idx > count:
@@ -140,18 +160,60 @@ def compute_statistics(
             if arr is None:
                 raise RuntimeError(f"无法读取波段 {b_idx}: {target_path}")
             data = np.asarray(arr).astype(np.float64)
-            nd = float(nodata) if nodata is not None else (
-                float(band.GetNoDataValue()) if band.GetNoDataValue() is not None else None
+            nd = (
+                float(nodata)
+                if nodata is not None
+                else (float(band.GetNoDataValue()) if band.GetNoDataValue() is not None else None)
             )
             valid = np.isfinite(data)
             if nd is not None:
                 valid &= data != nd
+
+            mask_stat_info: dict[str, Any] | None = None
+            if mask_ds is not None:
+                mb = mask_ds.GetRasterBand(mask_band)
+                m_arr = mb.ReadAsArray(
+                    0,
+                    0,
+                    int(mask_ds.RasterXSize),
+                    int(mask_ds.RasterYSize),
+                    buf_xsize=read_w,
+                    buf_ysize=read_h,
+                )
+                if m_arr is None:
+                    raise RuntimeError(f"读取掩膜波段 {mask_band} 失败")
+                m_data = np.asarray(m_arr, dtype=np.float64)
+                m_nd = mb.GetNoDataValue()
+                m_valid = np.isfinite(m_data)
+                if m_nd is not None:
+                    m_valid &= m_data != float(m_nd)
+
+                if mask_value is not None:
+                    m_active = m_valid & (m_data == float(mask_value))
+                elif mask_min is not None and mask_max is not None:
+                    m_active = m_valid & (m_data >= float(mask_min)) & (m_data <= float(mask_max))
+                else:
+                    m_active = m_valid & (m_data != 0)
+
+                if mask_invert:
+                    m_active = ~m_active
+
+                valid &= m_active
+                mask_stat_info = {
+                    "enabled": True,
+                    "path": str(mask_path),
+                    "band": int(mask_band),
+                    "value": mask_value,
+                    "matched_pixels": int(m_active.sum()),
+                }
+
             vals = data[valid]
             entry: dict[str, Any] = {
                 "band": int(b_idx),
                 "valid_count": int(vals.size),
                 "total_count": int(data.size),
                 "nodata": nd,
+                "mask": mask_stat_info,
                 "min": float(vals.min()) if vals.size else None,
                 "max": float(vals.max()) if vals.size else None,
                 "mean": float(vals.mean()) if vals.size else None,
@@ -169,7 +231,11 @@ def compute_statistics(
                     "counts": [int(x) for x in counts],
                     "edges": [float(x) for x in edges],
                 }
-            if include_gdal_reference and total <= MAX_REFERENCE_PIXELS:
+            if mask_ds is not None:
+                entry["gdal_reference"] = {
+                    "skipped": "按掩膜分地类统计模式下 GDAL 原生统计不适用（仅统计掩膜有效区）"
+                }
+            elif include_gdal_reference and total <= MAX_REFERENCE_PIXELS:
                 entry["gdal_reference"] = _gdal_reference(
                     band,
                     float(entry["min"]) if entry["min"] is not None else float("nan"),
@@ -202,6 +268,8 @@ def compute_statistics(
         }
     finally:
         # 先销毁 dataset（此时 PAM 仍禁用，析构不会补写 sidecar），再恢复全局配置。
+        if mask_ds is not None:
+            del mask_ds
         if ds is not None:
             del ds
         gdal.SetConfigOption("GDAL_PAM_ENABLED", prev_pam)

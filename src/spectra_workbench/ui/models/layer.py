@@ -148,8 +148,10 @@ class LayerItem:
     @property
     def has_mask(self) -> bool:
         bands = self.metadata.get("bands", [])
-        return any(int(b.get("mask_flags", 0)) not in (0, 1) for b in bands) if bands else bool(
-            self.metadata.get("has_mask_band")
+        return (
+            any(int(b.get("mask_flags", 0)) not in (0, 1) for b in bands)
+            if bands
+            else bool(self.metadata.get("has_mask_band"))
         )
 
     def scale_offset(self, band_index: int) -> tuple[float, float]:

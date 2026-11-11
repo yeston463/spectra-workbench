@@ -58,21 +58,78 @@ def build_suppression_mask(
     height: int,
     width: int,
     suppressed_bins: list[tuple[int, int]],
-) -> tuple[Any, list[tuple[int, int]]]:
+    *,
+    transition_width: float = 0.0,
+    notch_regions: list[tuple[int, int, int, int]] | None = None,
+    taper_type: str = "cosine",
+) -> tuple[np.ndarray, list[tuple[int, int]]]:
     """构造频域抑制掩膜（1=保留，0=抑制），自动补厄米对称伙伴。
 
-    bin 允许任意整数（含负数，与 numpy.fft.fftfreq 的语义一致），
-    按模运算归一化到 [0, H)×[0, W)。
-    返回 (掩膜, 实际抑制的 bin 清单——含自动补入的对称伙伴、去重排序)。
+    支持 transition_width 滚降过渡带与 notch_regions 矩形陷波滤波。
+    在 transition_width > 0 时采用余弦/高斯光滑滚降，消除频域硬截断引入的吉布斯环状擦痕。
+    严格满足厄米对称性：mask[fy, fx] == mask[(-fy)%H, (-fx)%W]，确保实数输入逆变换纯实数。
     """
-    mask = np.ones((height, width), dtype=bool)
     applied: set[tuple[int, int]] = set()
+
     for fy, fx in suppressed_bins:
         fy_n, fx_n = fy % height, fx % width
         partner_fy, partner_fx = hermitian_partner(fy_n, fx_n, height, width)
         for bin_y, bin_x in ((fy_n, fx_n), (partner_fy, partner_fx)):
-            mask[bin_y, bin_x] = False
             applied.add((bin_y, bin_x))
+
+    if notch_regions:
+        for r in notch_regions:
+            if len(r) >= 4:
+                min_y, max_y, min_x, max_x = int(r[0]), int(r[1]), int(r[2]), int(r[3])
+                for y in range(min_y, max_y + 1):
+                    for x in range(min_x, max_x + 1):
+                        yn, xn = y % height, x % width
+                        p_yn, p_xn = hermitian_partner(yn, xn, height, width)
+                        applied.add((yn, xn))
+                        applied.add((p_yn, p_xn))
+
+    if not applied:
+        if transition_width <= 0.0:
+            return np.ones((height, width), dtype=bool), []
+        return np.ones((height, width), dtype=np.float64), []
+
+    if transition_width <= 0.0:
+        mask_b = np.ones((height, width), dtype=bool)
+        for bin_y, bin_x in applied:
+            mask_b[bin_y, bin_x] = False
+        return mask_b, sorted(applied)
+
+    # 计算环面周期欧氏距离
+    dist = np.full((height, width), float("inf"), dtype=np.float64)
+    w_rad = int(math.ceil(transition_width))
+
+    for sy, sx in applied:
+        dist[sy, sx] = 0.0
+        for dy in range(-w_rad, w_rad + 1):
+            yy = (sy + dy) % height
+            for dx in range(-w_rad, w_rad + 1):
+                xx = (sx + dx) % width
+                d = math.hypot(dy, dx)
+                if d < dist[yy, xx]:
+                    dist[yy, xx] = d
+
+    mask = np.ones((height, width), dtype=np.float64)
+    in_trans = dist < transition_width
+    d_vals = dist[in_trans]
+
+    if taper_type == "gaussian":
+        sigma = max(0.5, transition_width / 2.5)
+        mask[in_trans] = 1.0 - np.exp(-(d_vals**2) / (2.0 * sigma**2))
+    else:  # cosine 滚降
+        mask[in_trans] = 0.5 * (1.0 - np.cos(np.pi * d_vals / transition_width))
+
+    mask[dist == 0.0] = 0.0
+
+    # 数值严格对称化强制加固：mask[y, x] = 0.5 * (mask[y, x] + mask[(-y)%H, (-x)%W])
+    y_idx = (-np.arange(height)) % height
+    x_idx = (-np.arange(width)) % width
+    mask = 0.5 * (mask + mask[y_idx, :][:, x_idx])
+
     return mask, sorted(applied)
 
 
@@ -82,6 +139,9 @@ def fft_filter(
     *,
     band: int,
     suppressed_bins: list[tuple[int, int]],
+    transition_width: float = 0.0,
+    notch_regions: list[tuple[int, int, int, int]] | None = None,
+    taper_type: str = "cosine",
     src_nodata: float | None = None,
     dst_nodata: float = -9999.0,
     out_format: str = "GTiff",
@@ -90,6 +150,8 @@ def fft_filter(
 ) -> dict[str, Any]:
     """FFT 频域抑制滤波：读单波段 → FFT2 → 对称掩膜 → IFFT2 → 实部落盘。
 
+    支持 transition_width 滚降羽化消除吉布斯环状条纹擦痕；
+    支持 notch_regions 矩形陷波滤波。
     返回可审计元信息（含掩膜 sidecar 路径与逐项对称性断言结果）。
     """
     gdal = _gdal()
@@ -106,9 +168,7 @@ def fft_filter(
         raise RuntimeError(f"无法打开输入栅格: {source}")
     try:
         if band > int(ds.RasterCount):
-            raise ValueError(
-                f"波段 {band} 超出范围（数据集共 {ds.RasterCount} 个波段）"
-            )
+            raise ValueError(f"波段 {band} 超出范围（数据集共 {ds.RasterCount} 个波段）")
         width, height = int(ds.RasterXSize), int(ds.RasterYSize)
         gt = tuple(float(v) for v in (ds.GetGeoTransform() or ()))
         proj = ds.GetProjectionRef() or ""
@@ -125,8 +185,10 @@ def fft_filter(
             raise RuntimeError(f"无法读取波段 {band}")
         raw = np.asarray(raw_obj, dtype=np.float64)
         label = src_band.GetNoDataValue()
-        nodata_value = float(src_nodata) if src_nodata is not None else (
-            float(label) if label is not None else None
+        nodata_value = (
+            float(src_nodata)
+            if src_nodata is not None
+            else (float(label) if label is not None else None)
         )
 
         # NoData 像元以波段均值填充参与 FFT，逆变换后按原掩膜回填输出 NoData
@@ -140,7 +202,14 @@ def fft_filter(
         _progress(callback, 0.30, f"FFT2（{height}×{width}，含奇偶尺寸）")
         spectrum = np.fft.fft2(filled)
 
-        mask, applied_bins = build_suppression_mask(height, width, suppressed_bins)
+        mask, applied_bins = build_suppression_mask(
+            height,
+            width,
+            suppressed_bins,
+            transition_width=transition_width,
+            notch_regions=notch_regions,
+            taper_type=taper_type,
+        )
         _progress(callback, 0.55, f"抑制 {len(applied_bins)} 个频域 bin（含对称伙伴）")
         filtered_spectrum = spectrum * mask
 
@@ -161,9 +230,7 @@ def fft_filter(
         if not applied_bins:
             roundtrip_max_err = float(np.abs(result - filled).max())
             if roundtrip_err_too_large(roundtrip_max_err, filled):
-                raise RuntimeError(
-                    f"空抑制往返误差 {roundtrip_max_err} 超容差：FFT 实现存在缺陷"
-                )
+                raise RuntimeError(f"空抑制往返误差 {roundtrip_max_err} 超容差：FFT 实现存在缺陷")
 
         _progress(callback, 0.85, f"写出成果（{out_format} / Float32）")
         driver = gdal.GetDriverByName(out_format)
@@ -192,12 +259,11 @@ def fft_filter(
                 "source": str(source),
                 "band": band,
                 "size": [height, width],
-                "requested_suppressed_bins": [
-                    [int(fy), int(fx)] for fy, fx in suppressed_bins
-                ],
-                "applied_suppressed_bins": [
-                    [int(fy), int(fx)] for fy, fx in applied_bins
-                ],
+                "requested_suppressed_bins": [[int(fy), int(fx)] for fy, fx in suppressed_bins],
+                "applied_suppressed_bins": [[int(fy), int(fx)] for fy, fx in applied_bins],
+                "transition_width": float(transition_width),
+                "taper_type": taper_type,
+                "notch_regions": notch_regions or [],
                 "hermitian_symmetric": True,
                 "dst_nodata": float(dst_nodata),
                 "note": "用 applied_suppressed_bins 重跑可逐像元复现本成果",
@@ -212,9 +278,7 @@ def fft_filter(
             "size": [height, width],
             "n_nodata_filled": n_nodata,
             "fill_value": fill_value,
-            "applied_suppressed_bins": [
-                [int(fy), int(fx)] for fy, fx in applied_bins
-            ],
+            "applied_suppressed_bins": [[int(fy), int(fx)] for fy, fx in applied_bins],
             "hermitian_symmetric": True,
             "max_imag": max_imag,
             "energy_before": energy_before,

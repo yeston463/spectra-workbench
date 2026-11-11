@@ -120,8 +120,10 @@ def test_doctor_cli_failure_marks_engine_and_overall_error():
     def fake_probe(_python, _script, role, extra_env=None):
         return 0, copy.deepcopy(probes[role]), ""
 
-    with patch.object(doctor, "probe_role", side_effect=fake_probe), \
-         patch.object(doctor, "_run_subproc", return_value=(42, "", "injected CLI failure")):
+    with (
+        patch.object(doctor, "probe_role", side_effect=fake_probe),
+        patch.object(doctor, "_run_subproc", return_value=(42, "", "injected CLI failure")),
+    ):
         report = doctor.run_doctor(root)
 
         assert report.overall_ok is False
@@ -137,10 +139,12 @@ def test_doctor_cli_failure_marks_engine_and_overall_error():
         assert len(report.errors) > 0
 
         # main() 必须返回 1
-        with patch.object(doctor, "run_doctor", return_value=report), \
-             patch.object(doctor, "save_doctor_report"), \
-             patch.object(sys, "argv", ["doctor", "--json"]), \
-             contextlib.redirect_stdout(io.StringIO()):
+        with (
+            patch.object(doctor, "run_doctor", return_value=report),
+            patch.object(doctor, "save_doctor_report"),
+            patch.object(sys, "argv", ["doctor", "--json"]),
+            contextlib.redirect_stdout(io.StringIO()),
+        ):
             exit_code = doctor.main()
         assert exit_code == 1
 
@@ -153,13 +157,18 @@ def test_doctor_gtiff_failure_causes_main_exit_one_and_ui_only_exit_zero():
     probes = {role: entry["probe"] for role, entry in env_report["envs"].items()}
 
     failed_probes = copy.deepcopy(probes)
-    failed_probes["gdal"]["gdal"]["gtiff_roundtrip"] = {"ok": False, "error": "injected write/read failure"}
+    failed_probes["gdal"]["gdal"]["gtiff_roundtrip"] = {
+        "ok": False,
+        "error": "injected write/read failure",
+    }
 
     def failing_gdal_probe(_python, _script, role, extra_env=None):
         return 0, copy.deepcopy(failed_probes[role]), ""
 
-    with patch.object(doctor, "probe_role", side_effect=failing_gdal_probe), \
-         patch.object(doctor, "_run_subproc", return_value=(0, "GDAL 3.13.3", "")):
+    with (
+        patch.object(doctor, "probe_role", side_effect=failing_gdal_probe),
+        patch.object(doctor, "_run_subproc", return_value=(0, "GDAL 3.13.3", "")),
+    ):
         report = doctor.run_doctor(root)
 
     assert report.overall_ok is False
@@ -168,17 +177,21 @@ def test_doctor_gtiff_failure_causes_main_exit_one_and_ui_only_exit_zero():
     assert len(report.errors) > 0
 
     # 全量模式必须退出 1
-    with patch.object(doctor, "run_doctor", return_value=report), \
-         patch.object(doctor, "save_doctor_report"), \
-         patch.object(sys, "argv", ["doctor", "--json"]), \
-         contextlib.redirect_stdout(io.StringIO()):
+    with (
+        patch.object(doctor, "run_doctor", return_value=report),
+        patch.object(doctor, "save_doctor_report"),
+        patch.object(sys, "argv", ["doctor", "--json"]),
+        contextlib.redirect_stdout(io.StringIO()),
+    ):
         assert doctor.main() == 1
 
     # --ui-only 模式因 UI 依赖完备返回 0
-    with patch.object(doctor, "run_doctor", return_value=report), \
-         patch.object(doctor, "save_doctor_report"), \
-         patch.object(sys, "argv", ["doctor", "--json", "--ui-only"]), \
-         contextlib.redirect_stdout(io.StringIO()):
+    with (
+        patch.object(doctor, "run_doctor", return_value=report),
+        patch.object(doctor, "save_doctor_report"),
+        patch.object(sys, "argv", ["doctor", "--json", "--ui-only"]),
+        contextlib.redirect_stdout(io.StringIO()),
+    ):
         assert doctor.main() == 0
 
 
@@ -192,8 +205,10 @@ def test_doctor_empty_cli_version_marks_error():
     def fake_probe(_python, _script, role, extra_env=None):
         return 0, copy.deepcopy(probes[role]), ""
 
-    with patch.object(doctor, "probe_role", side_effect=fake_probe), \
-         patch.object(doctor, "_run_subproc", return_value=(0, "", "")):
+    with (
+        patch.object(doctor, "probe_role", side_effect=fake_probe),
+        patch.object(doctor, "_run_subproc", return_value=(0, "", "")),
+    ):
         report = doctor.run_doctor(root)
 
         assert report.overall_ok is False

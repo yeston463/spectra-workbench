@@ -79,8 +79,10 @@ def _read_band(ds: Any, index: int, src_nodata: float | None) -> tuple[np.ndarra
         raise FusionError(f"无法读取波段 {index}")
     raw = np.asarray(raw_obj, dtype=np.float64)
     label = band.GetNoDataValue()
-    nodata = float(src_nodata) if src_nodata is not None else (
-        float(label) if label is not None else None
+    nodata = (
+        float(src_nodata)
+        if src_nodata is not None
+        else (float(label) if label is not None else None)
     )
     invalid = ~np.isfinite(raw)
     if nodata is not None:
@@ -107,7 +109,9 @@ def brovey_fusion(
     return out, valid
 
 
-def _rgb_to_hsv(r: np.ndarray, g: np.ndarray, b: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def _rgb_to_hsv(
+    r: np.ndarray, g: np.ndarray, b: np.ndarray
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     maxc = np.maximum(np.maximum(r, g), b)
     minc = np.minimum(np.minimum(r, g), b)
     delta = maxc - minc
@@ -126,7 +130,9 @@ def _rgb_to_hsv(r: np.ndarray, g: np.ndarray, b: np.ndarray) -> tuple[np.ndarray
     return h, s, maxc
 
 
-def _hsv_to_rgb(h: np.ndarray, s: np.ndarray, v: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def _hsv_to_rgb(
+    h: np.ndarray, s: np.ndarray, v: np.ndarray
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     h6 = (h % 1.0) * 6.0
     i = np.floor(h6).astype(np.int64) % 6
     f = h6 - np.floor(h6)
@@ -198,9 +204,7 @@ def _resample_ms_to_pan(
             height=pan_h,
             dstSRS=pan_srs.ExportToWkt() if pan_srs is not None else None,
             resampleAlg=resample_alg,
-            srcNodata=(
-                float(src_nodata) if src_nodata is not None else None
-            ),
+            srcNodata=(float(src_nodata) if src_nodata is not None else None),
         ),
     )
 
@@ -222,9 +226,7 @@ def run_pansharpen(
     gdal = _gdal()
     method_name = str(method or "brovey").strip().lower()
     if method_name not in FUSION_METHODS:
-        raise FusionError(
-            f"未知融合方法 {method!r}；可用：{', '.join(FUSION_METHODS)}"
-        )
+        raise FusionError(f"未知融合方法 {method!r}；可用：{', '.join(FUSION_METHODS)}")
     alg = str(resample_alg or "bilinear").strip().lower()
     if alg not in _FUSION_RESAMPLE:
         raise FusionError(f"不支持的融合重采样算法 {resample_alg!r}")
@@ -250,9 +252,7 @@ def run_pansharpen(
     try:
         pan_w, pan_h = int(pan_ds.RasterXSize), int(pan_ds.RasterYSize)
         if int(pan_ds.RasterCount) != 1:
-            raise FusionError(
-                f"全色影像必须恰好 1 个波段，实际 {pan_ds.RasterCount} 个"
-            )
+            raise FusionError(f"全色影像必须恰好 1 个波段，实际 {pan_ds.RasterCount} 个")
         pan_gt = tuple(float(v) for v in (pan_ds.GetGeoTransform() or ()))
         pan_srs = pan_ds.GetSpatialRef()
         ms_srs = ms_ds.GetSpatialRef()
@@ -299,14 +299,10 @@ def run_pansharpen(
     _progress(callback, 0.55, f"执行 {method_name} 融合")
     ms_stack = np.stack(ms_arrays)
     if method_name == "brovey":
-        fused, valid = brovey_fusion(
-            ms_stack, pan_arr, ms_scale=ms_scale, pan_scale=pan_scale
-        )
+        fused, valid = brovey_fusion(ms_stack, pan_arr, ms_scale=ms_scale, pan_scale=pan_scale)
         formula = "out_i = MS_i * Pan_scaled / sum(MS_1..3)"
     else:
-        fused, valid = hsv_fusion(
-            ms_stack, pan_arr, ms_scale=ms_scale, pan_scale=pan_scale
-        )
+        fused, valid = hsv_fusion(ms_stack, pan_arr, ms_scale=ms_scale, pan_scale=pan_scale)
         formula = "RGB->HSV; V := Pan_normalized; HSV->RGB"
     valid &= ~pan_invalid & ~ms_invalid
 
@@ -319,9 +315,7 @@ def run_pansharpen(
         raise FusionError(f"创建输出失败（驱动 {out_format}）: {out_path}")
     try:
         out_ds.SetGeoTransform(pan_gt)
-        out_ds.SetProjection(
-            pan_srs.ExportToWkt() if pan_srs is not None else ""
-        )
+        out_ds.SetProjection(pan_srs.ExportToWkt() if pan_srs is not None else "")
         out_ds.SetMetadataItem("FUSION_METHOD", method_name)
         out_ds.SetMetadataItem("FUSION_FORMULA", formula)
         out_ds.SetMetadataItem("FUSION_MS_BANDS", ",".join(str(b) for b in ms_bands))

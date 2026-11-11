@@ -84,11 +84,15 @@ def _make_dummy_spec(
         attempt=1,
         capability_id="gdal:translate",
         descriptor_revision="1.0",
-        engine=EngineConstraint(provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"),
+        engine=EngineConstraint(
+            provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"
+        ),
         project_root=str(project_root),
         workspace=str(out_path.parent),
         inputs={"input": DatasetRef(dataset_id="in", kind=DatasetKind.raster, uri=src_uri)},
-        outputs=[OutputPlan(key="output", kind=DatasetKind.raster, uri=out_path.as_uri(), overwrite=True)],
+        outputs=[
+            OutputPlan(key="output", kind=DatasetKind.raster, uri=out_path.as_uri(), overwrite=True)
+        ],
         parameters=params or {"format": "GTiff"},
     )
 
@@ -97,7 +101,10 @@ def _make_dummy_spec(
 # 1. Worker 崩溃注入与自动感知重启恢复
 # ==============================================================================
 
-def test_p9_05_worker_crash_injection_detection_and_auto_restart(qapp: QApplication, tmp_path: Path) -> None:
+
+def test_p9_05_worker_crash_injection_detection_and_auto_restart(
+    qapp: QApplication, tmp_path: Path
+) -> None:
     """故障注入 1：Worker 进程在执行期间被强杀，客户端捕获退出，后续请求自动拉起全新 Worker 恢复成功。"""
     client = QtWorkerClient(provider_id="gdal", project_root=tmp_path)
     client.start(timeout=15.0)
@@ -111,11 +118,21 @@ def test_p9_05_worker_crash_injection_detection_and_auto_restart(qapp: QApplicat
             attempt=1,
             capability_id="gdal:calc",
             descriptor_revision="1.0",
-            engine=EngineConstraint(provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"),
+            engine=EngineConstraint(
+                provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"
+            ),
             project_root=str(tmp_path),
             workspace=str(tmp_path),
-            inputs={"inputs": [DatasetRef(dataset_id="in", kind=DatasetKind.raster, uri=BIG_RASTER.as_uri())]},
-            outputs=[OutputPlan(key="output", kind=DatasetKind.raster, uri=out_crash.as_uri(), overwrite=True)],
+            inputs={
+                "inputs": [
+                    DatasetRef(dataset_id="in", kind=DatasetKind.raster, uri=BIG_RASTER.as_uri())
+                ]
+            },
+            outputs=[
+                OutputPlan(
+                    key="output", kind=DatasetKind.raster, uri=out_crash.as_uri(), overwrite=True
+                )
+            ],
             parameters={"expression": "A * 2.0 + numpy.sin(A)", "outputType": "Float32"},
         )
 
@@ -138,7 +155,9 @@ def test_p9_05_worker_crash_injection_detection_and_auto_restart(qapp: QApplicat
 
         assert len(err_holder) > 0, "Worker 进程强杀后客户端未报告错误"
         err_code, err_msg = err_holder[0]
-        assert "task_submission_error" in err_code or "Worker" in err_msg or "exit" in err_msg.lower()
+        assert (
+            "task_submission_error" in err_code or "Worker" in err_msg or "exit" in err_msg.lower()
+        )
         assert client.is_alive is False, "强杀后 client.is_alive 应感知为 False"
 
         # 2. 自动恢复审计：对同一个客户端提交新任务，验证自动重启且成功执行
@@ -148,11 +167,24 @@ def test_p9_05_worker_crash_injection_detection_and_auto_restart(qapp: QApplicat
             attempt=1,
             capability_id="gdal:translate",
             descriptor_revision="1.0",
-            engine=EngineConstraint(provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"),
+            engine=EngineConstraint(
+                provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"
+            ),
             project_root=str(tmp_path),
             workspace=str(tmp_path),
-            inputs={"input": DatasetRef(dataset_id="in", kind=DatasetKind.raster, uri=BIG_RASTER.as_uri())},
-            outputs=[OutputPlan(key="output", kind=DatasetKind.raster, uri=out_recovered.as_uri(), overwrite=True)],
+            inputs={
+                "input": DatasetRef(
+                    dataset_id="in", kind=DatasetKind.raster, uri=BIG_RASTER.as_uri()
+                )
+            },
+            outputs=[
+                OutputPlan(
+                    key="output",
+                    kind=DatasetKind.raster,
+                    uri=out_recovered.as_uri(),
+                    overwrite=True,
+                )
+            ],
             parameters={"format": "GTiff", "srcWin": [0, 0, 128, 128]},
         )
 
@@ -177,6 +209,7 @@ def test_p9_05_worker_crash_injection_detection_and_auto_restart(qapp: QApplicat
 # ==============================================================================
 # 2. 磁盘满（ENOSPC）故障注入与原子回滚
 # ==============================================================================
+
 
 def test_p9_05_disk_full_enospc_injection_and_rollback(tmp_path: Path) -> None:
     """故障注入 2：模拟提交阶段遭遇磁盘满（ENOSPC），事务原子回滚，原目标数据完好无损。"""
@@ -223,6 +256,7 @@ def test_p9_05_disk_full_enospc_injection_and_rollback(tmp_path: Path) -> None:
 # 3. 无权限与访问受阻故障注入
 # ==============================================================================
 
+
 def test_p9_05_permission_denied_fault_injection(qapp: QApplication, tmp_path: Path) -> None:
     """故障注入 3：输入文件不存在或无读权限、输出目录锁定时前置校验拦截并安全报错。"""
     client = QtWorkerClient(provider_id="gdal", project_root=tmp_path)
@@ -248,7 +282,11 @@ def test_p9_05_permission_denied_fault_injection(qapp: QApplication, tmp_path: P
         res_b = client.execute_task_sync(spec_locked, timeout=10.0)
         assert res_b.status == TaskStatus.failed
         err_str = str(res_b.error).lower()
-        assert "output_already_exists" in err_str or "already exists" in err_str or "已存在" in str(res_b.error)
+        assert (
+            "output_already_exists" in err_str
+            or "already exists" in err_str
+            or "已存在" in str(res_b.error)
+        )
         assert locked_target.read_bytes() == b"LOCKED_DATA"
     finally:
         client.stop()
@@ -257,6 +295,7 @@ def test_p9_05_permission_denied_fault_injection(qapp: QApplication, tmp_path: P
 # ==============================================================================
 # 4. 网络失败与远程 VSI 异常注入（404 / 503 / 超时）
 # ==============================================================================
+
 
 def test_p9_05_network_vsi_failures_and_timeout_injection(tmp_path: Path) -> None:
     """故障注入 4：本地模拟远程 HTTP 404、503 故障与可控超时，验证受控失败且 Worker 进程不崩溃。"""
@@ -277,7 +316,9 @@ def test_p9_05_network_vsi_failures_and_timeout_injection(tmp_path: Path) -> Non
             server_404.stop()
 
         # 2. 模拟超时端点（delay 4.0s，探测设置 0.8s 硬超时）
-        server_slow = LocalHttpRangeServer(files={"slow.tif": b"DUMMY_TILED_DATA"}, delay_seconds=4.0)
+        server_slow = LocalHttpRangeServer(
+            files={"slow.tif": b"DUMMY_TILED_DATA"}, delay_seconds=4.0
+        )
         try:
             vsi_slow = server_slow.vsi_url_for("slow.tif")
             t0 = time.perf_counter()
@@ -300,6 +341,7 @@ def test_p9_05_network_vsi_failures_and_timeout_injection(tmp_path: Path) -> Non
 # 5. 任务协作取消与立即复用恢复
 # ==============================================================================
 
+
 def test_p9_05_cancellation_and_resubmission_recovery(qapp: QApplication, tmp_path: Path) -> None:
     """故障注入 5：运行中发起协同取消（<=2s 完成），同一个 Worker 进程不重启直接承接并成功完成新任务。"""
     client = QtWorkerClient(provider_id="gdal", project_root=tmp_path)
@@ -313,12 +355,25 @@ def test_p9_05_cancellation_and_resubmission_recovery(qapp: QApplication, tmp_pa
             attempt=1,
             capability_id="gdal:calc",
             descriptor_revision="1.0",
-            engine=EngineConstraint(provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"),
+            engine=EngineConstraint(
+                provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"
+            ),
             project_root=str(tmp_path),
             workspace=str(tmp_path),
-            inputs={"inputs": [DatasetRef(dataset_id="in", kind=DatasetKind.raster, uri=BIG_RASTER.as_uri())]},
-            outputs=[OutputPlan(key="output", kind=DatasetKind.raster, uri=out_cancel.as_uri(), overwrite=True)],
-            parameters={"expression": "numpy.sqrt(numpy.abs(A)) * numpy.cos(A)", "outputType": "Float32"},
+            inputs={
+                "inputs": [
+                    DatasetRef(dataset_id="in", kind=DatasetKind.raster, uri=BIG_RASTER.as_uri())
+                ]
+            },
+            outputs=[
+                OutputPlan(
+                    key="output", kind=DatasetKind.raster, uri=out_cancel.as_uri(), overwrite=True
+                )
+            ],
+            parameters={
+                "expression": "numpy.sqrt(numpy.abs(A)) * numpy.cos(A)",
+                "outputType": "Float32",
+            },
         )
 
         res_holder: list[Any] = []
@@ -348,11 +403,21 @@ def test_p9_05_cancellation_and_resubmission_recovery(qapp: QApplication, tmp_pa
             attempt=1,
             capability_id="gdal:translate",
             descriptor_revision="1.0",
-            engine=EngineConstraint(provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"),
+            engine=EngineConstraint(
+                provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"
+            ),
             project_root=str(tmp_path),
             workspace=str(tmp_path),
-            inputs={"input": DatasetRef(dataset_id="in", kind=DatasetKind.raster, uri=BIG_RASTER.as_uri())},
-            outputs=[OutputPlan(key="output", kind=DatasetKind.raster, uri=out_ok.as_uri(), overwrite=True)],
+            inputs={
+                "input": DatasetRef(
+                    dataset_id="in", kind=DatasetKind.raster, uri=BIG_RASTER.as_uri()
+                )
+            },
+            outputs=[
+                OutputPlan(
+                    key="output", kind=DatasetKind.raster, uri=out_ok.as_uri(), overwrite=True
+                )
+            ],
             parameters={"format": "GTiff", "srcWin": [0, 0, 100, 100]},
         )
 
@@ -373,7 +438,10 @@ def test_p9_05_cancellation_and_resubmission_recovery(qapp: QApplication, tmp_pa
 # 6. 损坏项目文件安全恢复与原子保存韧性
 # ==============================================================================
 
-def test_p9_05_corrupt_project_file_handling_and_atomic_save_resilience(qapp: QApplication, tmp_path: Path) -> None:
+
+def test_p9_05_corrupt_project_file_handling_and_atomic_save_resilience(
+    qapp: QApplication, tmp_path: Path
+) -> None:
     """故障注入 6：损坏/截断工程文件安全阻断、缺失源进入重定位恢复、保存中途崩溃原工程完好无损。"""
     win = MainWindow(project_root=tmp_path)
     win.show()
@@ -400,8 +468,20 @@ def test_p9_05_corrupt_project_file_handling_and_atomic_save_resilience(qapp: QA
         spec = ProjectSpec(
             path_anchor="project_dir",
             layers=[
-                LayerRecord(layer_id="ly1", name="Valid", source="sample_raster.tif", source_is_relative=True, order=0),
-                LayerRecord(layer_id="ly2", name="Missing", source="deleted_raster.tif", source_is_relative=True, order=1),
+                LayerRecord(
+                    layer_id="ly1",
+                    name="Valid",
+                    source="sample_raster.tif",
+                    source_is_relative=True,
+                    order=0,
+                ),
+                LayerRecord(
+                    layer_id="ly2",
+                    name="Missing",
+                    source="deleted_raster.tif",
+                    source_is_relative=True,
+                    order=1,
+                ),
             ],
         )
         save_project(proj_file, spec)

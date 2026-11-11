@@ -123,15 +123,24 @@ class TestP8DomainPaths:
         assert not is_vsi_or_remote("local.tif")
 
     def test_normalize_vsi_path(self) -> None:
-        assert normalize_vsi_path("http://127.0.0.1:8080/cog.tif") == "/vsicurl/http://127.0.0.1:8080/cog.tif"
-        assert normalize_vsi_path("https://example.com/data.tif") == "/vsicurl/https://example.com/data.tif"
+        assert (
+            normalize_vsi_path("http://127.0.0.1:8080/cog.tif")
+            == "/vsicurl/http://127.0.0.1:8080/cog.tif"
+        )
+        assert (
+            normalize_vsi_path("https://example.com/data.tif")
+            == "/vsicurl/https://example.com/data.tif"
+        )
         assert normalize_vsi_path("s3://bucket/key.tif") == "/vsis3/bucket/key.tif"
         assert normalize_vsi_path("/vsizip/C:\\data\\test.zip") == "/vsizip/C:/data/test.zip"
 
     def test_get_display_name_and_sanitize(self) -> None:
         assert get_display_name("http://127.0.0.1:8080/my_raster.tif?token=123") == "my_raster.tif"
         assert get_display_name("/vsizip/C:/archives/bundle.zip/band1.tif") == "band1.tif"
-        assert sanitize_url("http://example.com/data.tif?token=secret123&region=us") == "http://example.com/data.tif?token=***&region=us"
+        assert (
+            sanitize_url("http://example.com/data.tif?token=secret123&region=us")
+            == "http://example.com/data.tif?token=***&region=us"
+        )
 
 
 class TestP8VsiArchiveReading:
@@ -161,7 +170,9 @@ class TestP8VsiArchiveReading:
             assert meta["driver"] == "GTiff"
 
             # 2. 读取局部切片窗口
-            win = client.read_window(zip_path, x_off=0, y_off=0, win_w=32, win_h=32, out_w=32, out_h=32)
+            win = client.read_window(
+                zip_path, x_off=0, y_off=0, win_w=32, win_h=32, out_w=32, out_h=32
+            )
             assert win["out_w"] == 32
             assert win["out_h"] == 32
             assert win["b64_data"] is not None
@@ -188,7 +199,9 @@ class TestP8VsiArchiveReading:
             assert meta["height"] == 64
             assert meta["count"] == 2
 
-            win = client.read_window(vsi_tar_target, x_off=10, y_off=10, win_w=16, win_h=16, out_w=16, out_h=16)
+            win = client.read_window(
+                vsi_tar_target, x_off=10, y_off=10, win_w=16, win_h=16, out_w=16, out_h=16
+            )
             assert win["out_w"] == 16
             assert win["out_h"] == 16
 
@@ -220,7 +233,9 @@ class TestP8VsiArchiveReading:
             # 单独探测并读取每个子数据集
             meta_red = client.probe_dataset(uris[0])
             assert meta_red["width"] == 64
-            win_red = client.read_window(uris[0], x_off=0, y_off=0, win_w=16, win_h=16, out_w=16, out_h=16)
+            win_red = client.read_window(
+                uris[0], x_off=0, y_off=0, win_w=16, win_h=16, out_w=16, out_h=16
+            )
             assert win_red["out_w"] == 16
 
 
@@ -232,7 +247,9 @@ class TestP8HttpRangeAndResilience:
     ) -> None:
         """测试 127.0.0.1 HTTP Range 范围读取，验证零全量下载。"""
         tif_path = tmp_path / "cog_sample.tif"
-        _make_sample_geotiff(gdal_rt, tif_path, width=512, height=512, bands=3, tiled=True, block_size=128)
+        _make_sample_geotiff(
+            gdal_rt, tif_path, width=512, height=512, bands=3, tiled=True, block_size=128
+        )
         full_size = tif_path.stat().st_size
         assert full_size > 100_000
 
@@ -252,7 +269,9 @@ class TestP8HttpRangeAndResilience:
                 assert meta["count"] == 3
 
                 # 读取仅 32x32 窗口
-                win = client.read_window(remote_url, x_off=0, y_off=0, win_w=32, win_h=32, out_w=32, out_h=32)
+                win = client.read_window(
+                    remote_url, x_off=0, y_off=0, win_w=32, win_h=32, out_w=32, out_h=32
+                )
                 assert win["out_w"] == 32
                 assert win["out_h"] == 32
 
@@ -410,11 +429,16 @@ class TestP8ProjectPersistence:
         assert loaded_ly.source == "/vsicurl/http://127.0.0.1:8080/rasters/cog.tif"
         assert loaded_ly.source_is_relative is False
 
+
 class TestP8GuiRemoteIntegration:
     """验证 MainWindow 界面层对远程数据及 VSI 归档的打开与项目保存/重开。"""
 
     def test_gui_open_remote_dataset_and_dialog(
-        self, qapp: QApplication, gdal_rt: dict[str, Any], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+        self,
+        qapp: QApplication,
+        gdal_rt: dict[str, Any],
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         from PySide6.QtWidgets import QInputDialog
 
@@ -457,7 +481,11 @@ class TestP8GuiRemoteIntegration:
                 # 3. 保存项目并重开
                 proj_file = tmp_path / "gui_remote_proj.spectra.json"
                 from unittest.mock import patch
-                with patch("spectra_workbench.ui.main_window.QFileDialog.getSaveFileName", return_value=(str(proj_file), "")):
+
+                with patch(
+                    "spectra_workbench.ui.main_window.QFileDialog.getSaveFileName",
+                    return_value=(str(proj_file), ""),
+                ):
                     assert win.save_project_action(save_as=True) is True
                 assert proj_file.exists()
             finally:
@@ -475,7 +503,9 @@ class TestP8GuiRemoteIntegration:
                     time.sleep(0.05)
 
                 assert len(win2.layer_panel.layers) == 2
-                assert str(win2.layer_panel.layers[0].file_path).startswith("/vsicurl/http://127.0.0.1:")
+                assert str(win2.layer_panel.layers[0].file_path).startswith(
+                    "/vsicurl/http://127.0.0.1:"
+                )
             finally:
                 win2.close()
                 qapp.processEvents()

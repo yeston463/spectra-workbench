@@ -96,9 +96,7 @@ def compute_index(
     """计算光谱指数并写单波段 Float32 成果，返回可审计元信息。"""
     gdal = _gdal()
     if index not in INDEX_FORMULAS:
-        raise ValueError(
-            f"未知光谱指数 {index!r}；可用：{', '.join(sorted(INDEX_FORMULAS))}"
-        )
+        raise ValueError(f"未知光谱指数 {index!r}；可用：{', '.join(sorted(INDEX_FORMULAS))}")
     if not source.exists():
         raise FileNotFoundError(f"输入栅格不存在: {source}")
     if band_a < 1 or band_b < 1:
@@ -116,9 +114,7 @@ def compute_index(
         width, height = int(ds.RasterXSize), int(ds.RasterYSize)
         for role, idx in (("A", band_a), ("B", band_b)):
             if idx > int(ds.RasterCount):
-                raise ValueError(
-                    f"波段 {role}={idx} 超出范围（数据集共 {ds.RasterCount} 个波段）"
-                )
+                raise ValueError(f"波段 {role}={idx} 超出范围（数据集共 {ds.RasterCount} 个波段）")
         gt = tuple(float(v) for v in (ds.GetGeoTransform() or ()))
         proj = ds.GetProjectionRef() or ""
 
@@ -131,11 +127,15 @@ def compute_index(
         # 变换后再比对标签会漏掉 NoData 像元（第 58 轮自审发现的顺序缺陷）。
         label_a = band_a_obj.GetNoDataValue()
         label_b = band_b_obj.GetNoDataValue()
-        nodata_a = float(src_nodata) if src_nodata is not None else (
-            float(label_a) if label_a is not None else None
+        nodata_a = (
+            float(src_nodata)
+            if src_nodata is not None
+            else (float(label_a) if label_a is not None else None)
         )
-        nodata_b = float(src_nodata) if src_nodata is not None else (
-            float(label_b) if label_b is not None else None
+        nodata_b = (
+            float(src_nodata)
+            if src_nodata is not None
+            else (float(label_b) if label_b is not None else None)
         )
         invalid = np.zeros(raw_a.shape, dtype=bool)
         n_input_invalid = 0

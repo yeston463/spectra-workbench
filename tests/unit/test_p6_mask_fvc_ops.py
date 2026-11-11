@@ -29,9 +29,7 @@ def _ndvi_plane() -> np.ndarray:
 
 
 def test_mask_thresholds_and_invert() -> None:
-    values = np.array(
-        [[0.0, 0.2, 0.5, 0.9, float("nan")], [0.1, 0.3, 0.45, 0.7, 0.95]]
-    )
+    values = np.array([[0.0, 0.2, 0.5, 0.9, float("nan")], [0.1, 0.3, 0.45, 0.7, 0.95]])
     valid = np.isfinite(values)
     valid &= values != 0.0  # 0.0 视为源 NoData 标签
     mask = compute_mask(values, valid, low=0.2, high=0.5, invert=False)

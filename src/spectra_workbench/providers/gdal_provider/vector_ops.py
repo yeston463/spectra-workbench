@@ -15,10 +15,11 @@ polygonize / contour 的成果是**矢量数据集**，不能复用仅栅格的
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-__all__ = ["inspect_vector"]
+__all__ = ["inspect_vector", "run_vector_buffer"]
 
 
 #: 实际读取要素样本的最大条数（对齐 inspect_raster 的采样哲学）。
@@ -114,3 +115,98 @@ def inspect_vector(path: str | Path, *, sample: bool = True) -> dict[str, Any]:
         }
     finally:
         ds = None
+
+
+def run_vector_buffer(
+    in_path: str | Path,
+    out_path: str | Path,
+    distance: float,
+    *,
+    dissolve: bool = False,
+    out_format: str = "GPKG",
+    callback: Callable[..., Any] | None = None,
+) -> dict[str, Any]:
+    """执行矢量缓冲区分析（OGR Geometry Buffer 与可选要素融合 Dissolve）。"""
+    from osgeo import ogr
+
+    src_ds = ogr.Open(str(in_path), 0)
+    if src_ds is None:
+        raise RuntimeError(f"无法打开输入矢量文件: {in_path}")
+
+    driver = ogr.GetDriverByName(out_format)
+    if driver is None:
+        raise RuntimeError(f"不支持的矢量输出驱动: {out_format}")
+
+    out_p = Path(out_path)
+    if out_p.exists():
+        driver.DeleteDataSource(str(out_p))
+
+    out_ds = driver.CreateDataSource(str(out_p))
+    if out_ds is None:
+        raise RuntimeError(f"创建输出矢量数据集失败: {out_p}")
+
+    try:
+        layer_count = src_ds.GetLayerCount()
+        for l_idx in range(layer_count):
+            in_lyr = src_ds.GetLayerByIndex(l_idx)
+            if in_lyr is None:
+                continue
+
+            lyr_name = in_lyr.GetName() or f"buffer_{l_idx}"
+            srs = in_lyr.GetSpatialRef()
+            geom_type = ogr.wkbMultiPolygon if dissolve else ogr.wkbPolygon
+
+            out_lyr = out_ds.CreateLayer(lyr_name, srs, geom_type)
+            in_defn = in_lyr.GetLayerDefn()
+
+            # 复制字段结构
+            if not dissolve:
+                for f_idx in range(in_defn.GetFieldCount()):
+                    out_lyr.CreateField(in_defn.GetFieldDefn(f_idx))
+            else:
+                id_fld = ogr.FieldDefn("dissolved_id", ogr.OFTInteger)
+                out_lyr.CreateField(id_fld)
+
+            in_feat_count = in_lyr.GetFeatureCount(force=1)
+            in_lyr.ResetReading()
+
+            if dissolve:
+                dissolved_geom = None
+                for _f_i in range(in_feat_count):
+                    f = in_lyr.GetNextFeature()
+                    if f is None:
+                        break
+                    g = f.GetGeometryRef()
+                    if g is not None and not g.IsEmpty():
+                        buf_g = g.Buffer(float(distance))
+                        if buf_g is not None and not buf_g.IsEmpty():
+                            if dissolved_geom is None:
+                                dissolved_geom = buf_g.Clone()
+                            else:
+                                dissolved_geom = dissolved_geom.Union(buf_g)
+                if dissolved_geom is not None:
+                    out_feat = ogr.Feature(out_lyr.GetLayerDefn())
+                    out_feat.SetField("dissolved_id", 1)
+                    out_feat.SetGeometry(dissolved_geom)
+                    out_lyr.CreateFeature(out_feat)
+            else:
+                for _f_i in range(in_feat_count):
+                    f = in_lyr.GetNextFeature()
+                    if f is None:
+                        break
+                    g = f.GetGeometryRef()
+                    if g is not None and not g.IsEmpty():
+                        buf_g = g.Buffer(float(distance))
+                        out_feat = ogr.Feature(out_lyr.GetLayerDefn())
+                        # 拷贝字段值
+                        for f_idx in range(in_defn.GetFieldCount()):
+                            out_feat.SetField(f_idx, f.GetField(f_idx))
+                        out_feat.SetGeometry(buf_g)
+                        out_lyr.CreateFeature(out_feat)
+
+        out_ds.FlushCache()
+    finally:
+        out_ds = None
+        src_ds = None
+
+    return inspect_vector(out_p, sample=True)

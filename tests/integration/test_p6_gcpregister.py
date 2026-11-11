@@ -106,7 +106,12 @@ print("OK")
 
 def _make_reference(gdal_rt: dict[str, Any], path: Path) -> Path:
     return _write_raster(
-        gdal_rt, path, REF_GT, None, rows=REF_H, cols=REF_W,
+        gdal_rt,
+        path,
+        REF_GT,
+        None,
+        rows=REF_H,
+        cols=REF_W,
         mapping=lambda px, py: (
             REF_GT[0] + REF_GT[1] * px + REF_GT[2] * py,
             REF_GT[3] + REF_GT[4] * px + REF_GT[5] * py,
@@ -245,10 +250,15 @@ def test_affine_gcp_registration_recovers_reference_grid(
             src_gt[3] + src_gt[4] * px + src_gt[5] * py,
         ),
     )
-    gcp = _write_gcps(tmp_path / "gcps.json", lambda px, py: (
-        src_gt[0] + src_gt[1] * px + src_gt[2] * py,
-        src_gt[3] + src_gt[4] * px + src_gt[5] * py,
-    ), rows=45, cols=45)
+    gcp = _write_gcps(
+        tmp_path / "gcps.json",
+        lambda px, py: (
+            src_gt[0] + src_gt[1] * px + src_gt[2] * py,
+            src_gt[3] + src_gt[4] * px + src_gt[5] * py,
+        ),
+        rows=45,
+        cols=45,
+    )
 
     for transform_name in ("affine", "polynomial2"):
         out = tmp_path / f"registered_{transform_name}.tif"
@@ -347,9 +357,10 @@ def test_quadratic_gcp_requires_polynomial2_and_checkpoints_separate(
     assert poly_result.status is TaskStatus.succeeded, poly_result.error
     poly_payload = _sidecar(poly_out)
     assert poly_payload["forward_checkpoint_error"]["rmse"] <= 1e-8
-    assert poly_payload["forward_checkpoint_error"]["rmse"] < affine_payload[
-        "forward_checkpoint_error"
-    ]["rmse"]
+    assert (
+        poly_payload["forward_checkpoint_error"]["rmse"]
+        < affine_payload["forward_checkpoint_error"]["rmse"]
+    )
 
     expected = np.array(
         [
@@ -368,13 +379,16 @@ def test_quadratic_gcp_requires_polynomial2_and_checkpoints_separate(
     assert float(np.max(np.abs(actual - expected))) <= 0.5
 
 
-def test_gcp_rejections(
-    qapp: QApplication, gdal_rt: dict[str, Any], tmp_path: Path
-) -> None:
+def test_gcp_rejections(qapp: QApplication, gdal_rt: dict[str, Any], tmp_path: Path) -> None:
     ref = _make_reference(gdal_rt, tmp_path / "ref_rej.tif")
     src_gt = (-20.0, 1.0, 0.05, 320.0, 0.02, -1.0)
     source = _write_raster(
-        gdal_rt, tmp_path / "src_rej.tif", src_gt, None, rows=45, cols=45,
+        gdal_rt,
+        tmp_path / "src_rej.tif",
+        src_gt,
+        None,
+        rows=45,
+        cols=45,
         mapping=lambda px, py: (src_gt[0] + px, src_gt[3] - py),
     )
     good_gcp = _write_gcps(

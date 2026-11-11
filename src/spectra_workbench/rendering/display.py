@@ -184,14 +184,16 @@ def physical_values(raw: np.ndarray, meta: dict) -> np.ndarray:
     return arr
 
 
-def _bounds_for(win: WindowData, idx: int, settings: DisplaySettings, stats: dict | None) -> tuple[float, float]:
+def _bounds_for(
+    win: WindowData, idx: int, settings: DisplaySettings, stats: dict | None
+) -> tuple[float, float]:
     arr = win.bands[idx]
     valid = win.valid[idx]
     vals = arr[valid].astype(np.float64)
     if vals.size == 0:
         return (0.0, 1.0)
     if settings.stretch is StretchMode.none:
-        meta = (win.band_meta[idx] if idx < len(win.band_meta) else {})
+        meta = win.band_meta[idx] if idx < len(win.band_meta) else {}
         lo = meta.get("nodata")
         return (0.0, float(np.nanmax(vals)) if lo is None else max(1.0, float(np.nanmax(vals))))
     if settings.stretch is StretchMode.min_max:
@@ -248,7 +250,11 @@ def to_rgba(
     if settings.mode is DisplayMode.rgb:
         if len(win.bands) < 3:
             raise ValueError(f"RGB 合成需要 3 个波段，当前只有 {len(win.bands)}")
-        bounds = list(bounds_override) if bounds_override else compute_stretch_bounds(win, settings, stats)
+        bounds = (
+            list(bounds_override)
+            if bounds_override
+            else compute_stretch_bounds(win, settings, stats)
+        )
         chans = []
         for i in range(3):
             lo, hi = bounds[i]

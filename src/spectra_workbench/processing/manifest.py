@@ -58,8 +58,12 @@ class StagingManifest:
     created_at_utc: str = field(default_factory=_utc_now_iso)
     updated_at_utc: str = field(default_factory=_utc_now_iso)
     planned_outputs: list[dict[str, Any]] = field(default_factory=list)
-    staged_files: list[dict[str, Any]] = field(default_factory=list)  # {"path": ..., "size": ..., "sha256": ...}
-    commit_pairs: list[dict[str, str]] = field(default_factory=list)  # {"staged": ..., "target": ...}
+    staged_files: list[dict[str, Any]] = field(
+        default_factory=list
+    )  # {"path": ..., "size": ..., "sha256": ...}
+    commit_pairs: list[dict[str, str]] = field(
+        default_factory=list
+    )  # {"staged": ..., "target": ...}
     backups: list[dict[str, str]] = field(default_factory=list)  # {"target": ..., "backup": ...}
     file_entries: list[dict[str, Any]] = field(default_factory=list)  # 逐文件 WAL 意图与恢复状态
     committed_files: list[str] = field(default_factory=list)
@@ -149,7 +153,9 @@ def recover_staging(staging_dir: Path) -> dict[str, Any]:
     if manifest.file_entries:
         for entry in manifest.file_entries:
             target_p = Path(str(entry["target_path"]))
-            bak_p: Path | None = Path(str(entry["backup_path"])) if entry.get("backup_path") else None
+            bak_p: Path | None = (
+                Path(str(entry["backup_path"])) if entry.get("backup_path") else None
+            )
             initial_exists = entry.get("initial_exists", False)
             status = entry.get("status", "planned")
 
@@ -177,14 +183,14 @@ def recover_staging(staging_dir: Path) -> dict[str, Any]:
                         preserved_originals.append(str(target_p))
                     elif status == "installed" or (staged_sha and current_sha == staged_sha):
                         # 已被新文件覆盖但备份未找到：保留当前目标防止数据全无，报告错误
-                        errors.append(f"Target {target_p} was replaced but backup is missing. Retained to prevent data loss.")
+                        errors.append(
+                            f"Target {target_p} was replaced but backup is missing. Retained to prevent data loss."
+                        )
                     else:
                         preserved_originals.append(str(target_p))
                 elif status in {"backed_up", "deleted"}:
                     # 原目标已被移走，备份却不在：不能假装恢复成功。
-                    errors.append(
-                        f"Target {target_p} was backed up/deleted but backup is missing."
-                    )
+                    errors.append(f"Target {target_p} was backed up/deleted but backup is missing.")
             else:
                 # 目标原本不存在（本次任务全新创建）：
                 # 严格校验：仅当目标确实存在，且其哈希与本次事务暂存内容确切吻合时，才允许删除半成品
@@ -240,7 +246,9 @@ def recover_staging(staging_dir: Path) -> dict[str, Any]:
         # 恢复失败：保留 staging 文件和备份，标记为 recovery_failed，绝不吞错
         manifest.state = "recovery_failed"
         manifest.error = {"code": "recovery_failed", "details": errors}
-        manifest.recovery_notes = f"Recovery failed with {len(errors)} error(s). Staging and backups preserved for retry."
+        manifest.recovery_notes = (
+            f"Recovery failed with {len(errors)} error(s). Staging and backups preserved for retry."
+        )
         save_manifest(staging_dir, manifest)
         return {
             "recovered": False,

@@ -1,4 +1,4 @@
-﻿"""P8-01 多维数组：数据树探测与二维切片（GDAL multidim API）。
+"""P8-01 多维数组：数据树探测与二维切片（GDAL multidim API）。
 
 **仅 worker 进程 import**；GUI 进程不得 import 本模块（AGENTS #1）。
 
@@ -96,9 +96,7 @@ def _array_info(arr: Any, gedtc_string: int) -> dict[str, Any]:
     srs = arr.GetSpatialRef()
     try:
         nodata = (
-            float(arr.GetNoDataValueAsDouble())
-            if arr.GetNoDataValueAsRaw() is not None
-            else None
+            float(arr.GetNoDataValueAsDouble()) if arr.GetNoDataValueAsRaw() is not None else None
         )
     except Exception:
         nodata = None
@@ -164,10 +162,7 @@ def build_multidim_tree(path: Path | str) -> dict[str, Any]:
 
 
 def _view_expr(rank: int, selected: dict[int, int]) -> str:
-    items = [
-        str(int(selected[i])) if i in selected else ":"
-        for i in range(rank)
-    ]
+    items = [str(int(selected[i])) if i in selected else ":" for i in range(rank)]
     return "[" + ",".join(items) + "]"
 
 
@@ -205,16 +200,8 @@ def run_multidim_slice(
                 arr = grp.OpenMDArray(array)
                 break
         if arr is None:
-            names_all = sorted(
-                {
-                    n
-                    for grp in candidates
-                    for n in list(grp.GetMDArrayNames())
-                }
-            )
-            raise MDimError(
-                f"数组 {array!r} 不存在；可用数组：{', '.join(names_all) or '（无）'}"
-            )
+            names_all = sorted({n for grp in candidates for n in list(grp.GetMDArrayNames())})
+            raise MDimError(f"数组 {array!r} 不存在；可用数组：{', '.join(names_all) or '（无）'}")
 
         info = _array_info(arr, gedtc_string)
         dims: list[str] = info["dims"]
@@ -227,9 +214,7 @@ def run_multidim_slice(
             )
         unknown = [k for k in dim_select if k not in dims]
         if unknown:
-            raise MDimError(
-                f"dimSelect 含未知维度 {unknown}；数组 {array!r} 的维度：{dims}"
-            )
+            raise MDimError(f"dimSelect 含未知维度 {unknown}；数组 {array!r} 的维度：{dims}")
         if len(dim_select) != rank - 2:
             raise MDimError(
                 f"二维切片需要恰好钉死 {rank - 2} 个维度，"
@@ -241,17 +226,13 @@ def run_multidim_slice(
                 raise MDimError(f"维度索引必须是整数：{k}={v!r}")
             idx = int(v)
             if not 0 <= idx < shape[dims.index(k)]:
-                raise MDimError(
-                    f"维度 {k!r} 索引 {idx} 越界（size={shape[dims.index(k)]}）"
-                )
+                raise MDimError(f"维度 {k!r} 索引 {idx} 越界（size={shape[dims.index(k)]}）")
             selected[dims.index(k)] = idx
 
         view = arr.GetView(_view_expr(rank, selected))
         nd = view.ReadAsArray()
         if nd is None or getattr(nd, "ndim", 0) != 2:
-            raise MDimError(
-                f"切片读取失败：期望二维数组，实得 {getattr(nd, 'ndim', None)} 维"
-            )
+            raise MDimError(f"切片读取失败：期望二维数组，实得 {getattr(nd, 'ndim', None)} 维")
     finally:
         del ds
 
@@ -287,9 +268,7 @@ def run_multidim_slice(
     selected_detail: list[dict[str, Any]] = []
     coords: dict[str, list[float]] = {}
     try:
-        coord_holder = gdal.OpenEx(
-            str(in_path), gdal.OF_MULTIDIM_RASTER | gdal.OF_READONLY
-        )
+        coord_holder = gdal.OpenEx(str(in_path), gdal.OF_MULTIDIM_RASTER | gdal.OF_READONLY)
         rg2 = coord_holder.GetRootGroup()
         for dim_name in dims:
             coord = rg2.OpenMDArray(dim_name)
@@ -333,8 +312,7 @@ def run_multidim_slice(
         },
         "selected": selected_detail,
         "remaining_dims": [
-            {"dim": d, "size": int(s)}
-            for d, s in zip(remaining_names, (ny, nx), strict=True)
+            {"dim": d, "size": int(s)} for d, s in zip(remaining_names, (ny, nx), strict=True)
         ],
         "coords": coords,
         "unit": info["unit"],
@@ -347,9 +325,7 @@ def run_multidim_slice(
         "georeferenced": info["srs_wkt"] is not None,
     }
     sidecar_path = staged_path.with_name(staged_path.name + ".mdim_slice.json")
-    sidecar_path.write_text(
-        json.dumps(sidecar, ensure_ascii=False, indent=1), encoding="utf-8"
-    )
+    sidecar_path.write_text(json.dumps(sidecar, ensure_ascii=False, indent=1), encoding="utf-8")
     return {
         "sidecar": str(sidecar_path),
         "shape": [ny, nx],

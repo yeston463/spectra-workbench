@@ -146,9 +146,7 @@ def test_crash_midorite_write_leaves_previous_save_intact(tmp_path: Path) -> Non
         "layers": layers1,
         "notes": "v1",
     }
-    project_path.write_text(
-        json.dumps(spec1, ensure_ascii=False, indent=1), encoding="utf-8"
-    )
+    project_path.write_text(json.dumps(spec1, ensure_ascii=False, indent=1), encoding="utf-8")
     before_bytes = project_path.read_bytes()
 
     # 2. 子进程 os._exit(-1) 在目标文件写了一遍垃圾（覆盖测试），必须不破坏前者
@@ -236,9 +234,7 @@ def test_roi_survives_legacy_migration(tmp_path: Path) -> None:
     (src_dir / "raster_a.tif").write_bytes(b"fake")
     (src_dir / "raster_b.dat").write_bytes(b"fake")
     project_path = tmp_path / "legacy_roi.spectra.json"
-    project_path.write_text(
-        json.dumps(legacy, ensure_ascii=False, indent=1), encoding="utf-8"
-    )
+    project_path.write_text(json.dumps(legacy, ensure_ascii=False, indent=1), encoding="utf-8")
     spec = load_project(project_path)
     assert len(spec.rois) == 1
     from spectra_workbench.domain.roi import ROIShape  # noqa: PLC0415 — 局部断言

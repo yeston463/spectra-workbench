@@ -95,7 +95,9 @@ class TaskScheduler:
         """启动调度线程。"""
         self._stop_event.clear()
         for i in range(self.max_concurrency):
-            t = threading.Thread(target=self._worker_loop, name=f"scheduler-worker-{i}", daemon=True)
+            t = threading.Thread(
+                target=self._worker_loop, name=f"scheduler-worker-{i}", daemon=True
+            )
             t.start()
             self._dispatch_threads.append(t)
 
@@ -235,7 +237,10 @@ class TaskScheduler:
                     task_id=handle.task_id,
                     attempt=handle.spec.attempt,
                     status=TaskStatus.cancelled,
-                    error={"code": "cancelled_before_execution", "message": "Task cancelled before execution started"},
+                    error={
+                        "code": "cancelled_before_execution",
+                        "message": "Task cancelled before execution started",
+                    },
                 )
                 handle.attempts.append(handle.final_result)
                 self._fire_completed(handle, handle.final_result)
@@ -250,7 +255,10 @@ class TaskScheduler:
                     task_id=handle.task_id,
                     attempt=handle.spec.attempt,
                     status=TaskStatus.cancelled,
-                    error={"code": "cancelled_before_execution", "message": "Task cancelled before execution started"},
+                    error={
+                        "code": "cancelled_before_execution",
+                        "message": "Task cancelled before execution started",
+                    },
                 )
                 handle.attempts.append(handle.final_result)
                 self._fire_completed(handle, handle.final_result)
@@ -290,9 +298,14 @@ class TaskScheduler:
 
             try:
                 # 启动一个监控取消的辅助线程
-                def _cancel_monitor(target_worker: WorkerProcess = worker, coop_limit: float = coop_timeout) -> None:
+                def _cancel_monitor(
+                    target_worker: WorkerProcess = worker, coop_limit: float = coop_timeout
+                ) -> None:
                     cancelled_sent = False
-                    while handle.status in {TaskStatus.running, TaskStatus.cancelling} and not self._stop_event.is_set():
+                    while (
+                        handle.status in {TaskStatus.running, TaskStatus.cancelling}
+                        and not self._stop_event.is_set()
+                    ):
                         if handle.cancel_requested.is_set():
                             if handle.cancel_requested_at is None:
                                 handle.cancel_requested_at = time.monotonic()
@@ -305,7 +318,10 @@ class TaskScheduler:
                                 cancelled_sent = True
 
                             elapsed = time.monotonic() - handle.cancel_requested_at
-                            if elapsed >= coop_limit and handle.spec.cancellation.allow_process_termination:
+                            if (
+                                elapsed >= coop_limit
+                                and handle.spec.cancellation.allow_process_termination
+                            ):
                                 logger.warning(
                                     f"Task {handle.task_id} cancellation timed out ({elapsed:.2f}s >= {coop_limit}s); killing worker."
                                 )
@@ -334,7 +350,9 @@ class TaskScheduler:
                     exec_result = TaskResult(
                         task_id=attempt_spec.task_id,
                         attempt=attempt_spec.attempt,
-                        status=TaskStatus.interrupted if handle.cancel_requested.is_set() else TaskStatus.failed,
+                        status=TaskStatus.interrupted
+                        if handle.cancel_requested.is_set()
+                        else TaskStatus.failed,
                         error={
                             "code": "worker_crashed_or_terminated",
                             "message": f"Worker process terminated unexpectedly: {exc}\n{stderr_msg}",
@@ -368,7 +386,9 @@ class TaskScheduler:
 
             if can_retry:
                 # 保留旧 attempt 证据，新建下一次 attempt
-                logger.info(f"Task {handle.task_id} failed on attempt {attempt_spec.attempt}. Auto-retrying...")
+                logger.info(
+                    f"Task {handle.task_id} failed on attempt {attempt_spec.attempt}. Auto-retrying..."
+                )
                 handle.spec = handle.spec.next_attempt()
                 continue  # 进入下一轮 attempt
             else:

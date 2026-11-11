@@ -218,9 +218,7 @@ def test_model_validator_rejects_false_advertising() -> None:
         version_constraint="fake>=1.0",
         documentation_url="https://example.com",
         requirements=[Requirement(kind="package", name="fake", reason="测试依赖")],
-        planned_entrypoints=[
-            Entrypoint(kind="specialized", target="fake:run", available=False)
-        ],
+        planned_entrypoints=[Entrypoint(kind="specialized", target="fake:run", available=False)],
         availability=Availability.missing_dependency,
         gaps=["尚未实现"],
         implemented=False,

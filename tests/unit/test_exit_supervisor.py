@@ -308,7 +308,9 @@ def test_residual_descendant_is_detected_and_cleaned(tmp_path: Path) -> None:
     assert result["residual_processes"], "父进程退出后仍存活的子进程必须被记录"
 
 
-def test_process_observation_failure_is_not_green(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_process_observation_failure_is_not_green(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setattr(run_with_timeout.ProcessJob, "assign", lambda self, pid, handle: False)
     rc, result = _run(
         tmp_path,

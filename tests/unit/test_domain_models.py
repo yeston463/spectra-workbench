@@ -40,7 +40,9 @@ pytestmark = pytest.mark.unit
 
 
 def _engine():
-    return EngineConstraint(provider_id="gdal", runtime_id="qgis-3.44.15", expected_version="3.13.3")
+    return EngineConstraint(
+        provider_id="gdal", runtime_id="qgis-3.44.15", expected_version="3.13.3"
+    )
 
 
 def _task(**over):
@@ -51,7 +53,9 @@ def _task(**over):
         engine=_engine(),
         project_root="C:/work/项目",
         workspace="C:/work/项目/.spectra/tasks/t-1",
-        inputs={"src": DatasetRef(dataset_id="d1", kind=DatasetKind.raster, uri="file:///C:/work/a.tif")},
+        inputs={
+            "src": DatasetRef(dataset_id="d1", kind=DatasetKind.raster, uri="file:///C:/work/a.tif")
+        },
         parameters={"otif": "float32"},
         outputs=[OutputPlan(key="out", kind=DatasetKind.raster, uri="file:///C:/work/out.tif")],
         provenance=Provenance(origin="gui"),
@@ -138,7 +142,9 @@ def test_rotated_affine_allowed_but_degenerate_rejected():
 def test_nodata_zero_mask_alpha_are_distinct_facts():
     m = RasterMetadata(width=4, height=4, band_count=1, dtype="int16", nodata=0)
     assert m.nodata_is_zero is True
-    m2 = RasterMetadata(width=4, height=4, band_count=1, dtype="int16", nodata=-9999, has_mask_band=True)
+    m2 = RasterMetadata(
+        width=4, height=4, band_count=1, dtype="int16", nodata=-9999, has_mask_band=True
+    )
     assert m2.nodata_is_zero is False and m2.has_mask_band and not m2.has_alpha_band
 
 
@@ -179,7 +185,9 @@ def test_capability_state_is_four_independent_dimensions():
             snapshot_sha256="0" * 64,
         ),
         state=CapabilityState(
-            presence=Presence.present, binding=Binding.form, validation=Validation.not_run,
+            presence=Presence.present,
+            binding=Binding.form,
+            validation=Validation.not_run,
             availability=Availability.ready,
         ),
     )
@@ -191,7 +199,12 @@ def test_capability_state_is_four_independent_dimensions():
     with pytest.raises(ValidationError):
         CapabilityDescriptor.model_validate(bad)
     missing_ready = json.loads(json.dumps(payload))
-    missing_ready["state"] = {"presence": "missing", "binding": "none", "validation": "not_run", "availability": "ready"}
+    missing_ready["state"] = {
+        "presence": "missing",
+        "binding": "none",
+        "validation": "not_run",
+        "availability": "ready",
+    }
     with pytest.raises(ValidationError):
         CapabilityDescriptor.model_validate(missing_ready)
 
@@ -233,7 +246,10 @@ def test_state_machine_guards(cur, new, ok):
 
 
 def test_layer_state_carries_dataset_and_revision():
-    ls = LayerState(layer_id="L1", dataset=DatasetRef(dataset_id="d1", kind=DatasetKind.raster, uri="file:///C:/x.tif"))
+    ls = LayerState(
+        layer_id="L1",
+        dataset=DatasetRef(dataset_id="d1", kind=DatasetKind.raster, uri="file:///C:/x.tif"),
+    )
     assert ls.revision == 1
     assert ls.style.opacity == 1.0
     assert CommitMode.new_dataset.value == "new_dataset"

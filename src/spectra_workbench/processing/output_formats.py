@@ -178,7 +178,4 @@ def validate_vector_output_format(format_name: str) -> list[str]:
     key = normalize_output_format(format_name)
     if key in VECTOR_OUTPUT_FORMATS:
         return []
-    return [
-        "矢量成果仅支持 GPKG / GeoJSON / ESRI Shapefile / FlatGeobuf，"
-        f"不支持 {format_name!r}"
-    ]
+    return [f"矢量成果仅支持 GPKG / GeoJSON / ESRI Shapefile / FlatGeobuf，不支持 {format_name!r}"]

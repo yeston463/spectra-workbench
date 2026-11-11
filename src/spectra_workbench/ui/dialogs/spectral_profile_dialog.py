@@ -152,7 +152,9 @@ class SpectralProfileDialog(QDialog):
         else:
             self.plot_widget.setLabel("bottom", "波段序号 (Band Index)")
 
-        self.lbl_info.setText(f"已提取像元 ({col}, {row})，共 {len(values)} 个波段，当前已叠加 {len(self._profiles)} 条曲线")
+        self.lbl_info.setText(
+            f"已提取像元 ({col}, {row})，共 {len(values)} 个波段，当前已叠加 {len(self._profiles)} 条曲线"
+        )
         self.show()
         self.raise_()
         self.activateWindow()
@@ -221,7 +223,11 @@ class SpectralProfileDialog(QDialog):
                     row_data: list[Any] = [b_idx + 1]
                     # 波长列
                     first_p = self._profiles[0]
-                    wl = first_p["x"][b_idx] if (first_p["has_wl"] and b_idx < len(first_p["x"])) else ""
+                    wl = (
+                        first_p["x"][b_idx]
+                        if (first_p["has_wl"] and b_idx < len(first_p["x"]))
+                        else ""
+                    )
                     row_data.append(wl)
                     # 各像元反射率
                     for p in self._profiles:

@@ -119,7 +119,9 @@ def serialize_baseline(
     }
 
 
-def load_baseline_from_dict(data: dict[str, Any]) -> tuple[BaselineMetadata, list[CapabilityDescriptor]]:
+def load_baseline_from_dict(
+    data: dict[str, Any],
+) -> tuple[BaselineMetadata, list[CapabilityDescriptor]]:
     """从字典反序列化基准，并严格校验 SHA-256 签名与模型契约。"""
     meta_dict = data.get("source", {})
     expected_hash = data.get("items_sha256", "")
@@ -156,7 +158,9 @@ def load_baseline_from_dict(data: dict[str, Any]) -> tuple[BaselineMetadata, lis
     return metadata, descriptors
 
 
-def load_baseline_from_file(file_path: Path | str) -> tuple[BaselineMetadata, list[CapabilityDescriptor]]:
+def load_baseline_from_file(
+    file_path: Path | str,
+) -> tuple[BaselineMetadata, list[CapabilityDescriptor]]:
     """从本地 JSON 文件读取并校验能力基准。"""
     p = Path(file_path).resolve()
     if not p.exists():

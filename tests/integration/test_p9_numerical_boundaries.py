@@ -133,11 +133,24 @@ print('OK')
         attempt=1,
         capability_id="gdal:statistics",
         descriptor_revision="1.0",
-        engine=EngineConstraint(provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"),
+        engine=EngineConstraint(
+            provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"
+        ),
         project_root=str(ROOT),
         workspace=str(tmp_path),
-        inputs={"input": DatasetRef(dataset_id="i", kind=DatasetKind.raster, uri=in_int16.resolve().as_uri())},
-        outputs=[OutputPlan(key="output", kind=DatasetKind.artifact, uri=stats_out.resolve().as_uri(), overwrite=True)],
+        inputs={
+            "input": DatasetRef(
+                dataset_id="i", kind=DatasetKind.raster, uri=in_int16.resolve().as_uri()
+            )
+        },
+        outputs=[
+            OutputPlan(
+                key="output",
+                kind=DatasetKind.artifact,
+                uri=stats_out.resolve().as_uri(),
+                overwrite=True,
+            )
+        ],
         parameters={"statisticsMode": "full", "histogramBins": 16},
     )
     res_stats = _dispatch(qapp, worker_client, spec_stats)
@@ -154,11 +167,26 @@ print('OK')
         attempt=1,
         capability_id="gdal:calc",
         descriptor_revision="1.0",
-        engine=EngineConstraint(provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"),
+        engine=EngineConstraint(
+            provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"
+        ),
         project_root=str(ROOT),
         workspace=str(tmp_path),
-        inputs={"inputs": [DatasetRef(dataset_id="a", kind=DatasetKind.raster, uri=in_float32.resolve().as_uri())]},
-        outputs=[OutputPlan(key="output", kind=DatasetKind.raster, uri=out_calc.resolve().as_uri(), overwrite=True)],
+        inputs={
+            "inputs": [
+                DatasetRef(
+                    dataset_id="a", kind=DatasetKind.raster, uri=in_float32.resolve().as_uri()
+                )
+            ]
+        },
+        outputs=[
+            OutputPlan(
+                key="output",
+                kind=DatasetKind.raster,
+                uri=out_calc.resolve().as_uri(),
+                overwrite=True,
+            )
+        ],
         parameters={"expression": "A * -1.0", "outputType": "Float32"},
     )
     res_calc = _dispatch(qapp, worker_client, spec_calc)
@@ -223,11 +251,24 @@ print('OK')
         attempt=1,
         capability_id="gdal:statistics",
         descriptor_revision="1.0",
-        engine=EngineConstraint(provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"),
+        engine=EngineConstraint(
+            provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"
+        ),
         project_root=str(ROOT),
         workspace=str(tmp_path),
-        inputs={"input": DatasetRef(dataset_id="i", kind=DatasetKind.raster, uri=in_raster.resolve().as_uri())},
-        outputs=[OutputPlan(key="output", kind=DatasetKind.artifact, uri=stats_out.resolve().as_uri(), overwrite=True)],
+        inputs={
+            "input": DatasetRef(
+                dataset_id="i", kind=DatasetKind.raster, uri=in_raster.resolve().as_uri()
+            )
+        },
+        outputs=[
+            OutputPlan(
+                key="output",
+                kind=DatasetKind.artifact,
+                uri=stats_out.resolve().as_uri(),
+                overwrite=True,
+            )
+        ],
         parameters={"statisticsMode": "full", "histogramBins": 16},
     )
     res_stats = _dispatch(qapp, worker_client, spec_stats)
@@ -235,7 +276,9 @@ print('OK')
     stats_data = json.loads(stats_out.read_text(encoding="utf-8"))
     b1_stats = stats_data.get("bands", [{}])[0]
     assert b1_stats.get("min") == 0.0, f"合法 0 值未被计入最小值: {b1_stats}"
-    assert abs(b1_stats.get("mean", 0) - 50.0) < 1e-4, f"均值计算错误（未正确剔除 NoData 或误剔除了 0）: {b1_stats}"
+    assert abs(b1_stats.get("mean", 0) - 50.0) < 1e-4, (
+        f"均值计算错误（未正确剔除 NoData 或误剔除了 0）: {b1_stats}"
+    )
 
     # 2. 全 NoData 栅格统计计算：不得发生除零崩溃，安全返回
     all_nodata_out = tmp_path / "stats_all_nodata.json"
@@ -244,15 +287,30 @@ print('OK')
         attempt=1,
         capability_id="gdal:statistics",
         descriptor_revision="1.0",
-        engine=EngineConstraint(provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"),
+        engine=EngineConstraint(
+            provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"
+        ),
         project_root=str(ROOT),
         workspace=str(tmp_path),
-        inputs={"input": DatasetRef(dataset_id="i", kind=DatasetKind.raster, uri=in_all_nodata.resolve().as_uri())},
-        outputs=[OutputPlan(key="output", kind=DatasetKind.artifact, uri=all_nodata_out.resolve().as_uri(), overwrite=True)],
+        inputs={
+            "input": DatasetRef(
+                dataset_id="i", kind=DatasetKind.raster, uri=in_all_nodata.resolve().as_uri()
+            )
+        },
+        outputs=[
+            OutputPlan(
+                key="output",
+                kind=DatasetKind.artifact,
+                uri=all_nodata_out.resolve().as_uri(),
+                overwrite=True,
+            )
+        ],
         parameters={"statisticsMode": "full", "histogramBins": 16},
     )
     res_all_nodata = _dispatch(qapp, worker_client, spec_all_nodata)
-    assert res_all_nodata.status in (TaskStatus.succeeded, TaskStatus.failed), "全 NoData 栅格统计执行崩溃"
+    assert res_all_nodata.status in (TaskStatus.succeeded, TaskStatus.failed), (
+        "全 NoData 栅格统计执行崩溃"
+    )
 
 
 def test_p9_03_nan_and_inf_floating_point_safety(
@@ -285,11 +343,24 @@ print('OK')
         attempt=1,
         capability_id="gdal:calc",
         descriptor_revision="1.0",
-        engine=EngineConstraint(provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"),
+        engine=EngineConstraint(
+            provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"
+        ),
         project_root=str(ROOT),
         workspace=str(tmp_path),
-        inputs={"A": DatasetRef(dataset_id="a", kind=DatasetKind.raster, uri=in_zeros.resolve().as_uri())},
-        outputs=[OutputPlan(key="output", kind=DatasetKind.raster, uri=out_divzero.resolve().as_uri(), overwrite=True)],
+        inputs={
+            "A": DatasetRef(
+                dataset_id="a", kind=DatasetKind.raster, uri=in_zeros.resolve().as_uri()
+            )
+        },
+        outputs=[
+            OutputPlan(
+                key="output",
+                kind=DatasetKind.raster,
+                uri=out_divzero.resolve().as_uri(),
+                overwrite=True,
+            )
+        ],
         parameters={"expression": "(A + 1.0) / A", "outputType": "Float32"},
     )
     res_div = _dispatch(qapp, worker_client, spec_div)
@@ -328,7 +399,16 @@ print('OK')
         ("gdal:fillnodata", {"fillDistance": 5, "smoothIterations": 0}),
         ("gdal:nearblack", {"near": 5}),
         ("gdal:proximity", {"values": [1.0], "distunits": "PIXEL"}),
-        ("gdal:viewshed", {"ox": 500005.0, "oy": 3199995.0, "observerHeight": 2.0, "targetHeight": 0.0, "viewDistance": 100.0}),
+        (
+            "gdal:viewshed",
+            {
+                "ox": 500005.0,
+                "oy": 3199995.0,
+                "observerHeight": 2.0,
+                "targetHeight": 0.0,
+                "viewDistance": 100.0,
+            },
+        ),
     ]
 
     for cap_id, params in real_only_caps:
@@ -338,17 +418,32 @@ print('OK')
             attempt=1,
             capability_id=cap_id,
             descriptor_revision="1.0",
-            engine=EngineConstraint(provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"),
+            engine=EngineConstraint(
+                provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"
+            ),
             project_root=str(ROOT),
             workspace=str(tmp_path),
-            inputs={"input": DatasetRef(dataset_id="i", kind=DatasetKind.raster, uri=complex_tif.resolve().as_uri())},
-            outputs=[OutputPlan(key="output", kind=DatasetKind.raster, uri=out_tif.resolve().as_uri(), overwrite=True)],
+            inputs={
+                "input": DatasetRef(
+                    dataset_id="i", kind=DatasetKind.raster, uri=complex_tif.resolve().as_uri()
+                )
+            },
+            outputs=[
+                OutputPlan(
+                    key="output",
+                    kind=DatasetKind.raster,
+                    uri=out_tif.resolve().as_uri(),
+                    overwrite=True,
+                )
+            ],
             parameters=params,
         )
         res = _dispatch(qapp, worker_client, spec)
         assert res.status == TaskStatus.failed, f"{cap_id} 未能拒绝复数输入"
         err_msg = str(res.error.get("message", "") if res.error else "")
-        assert "复数" in err_msg or "complex" in err_msg.lower(), f"{cap_id} 错误信息缺少复数说明: {err_msg}"
+        assert "复数" in err_msg or "complex" in err_msg.lower(), (
+            f"{cap_id} 错误信息缺少复数说明: {err_msg}"
+        )
         assert not out_tif.exists(), f"{cap_id} 拒绝后产生了残余输出文件"
 
 
@@ -403,11 +498,24 @@ print('AFFINE_ROUNDTRIP_OK')
         attempt=1,
         capability_id="gdal:warp",
         descriptor_revision="1.0",
-        engine=EngineConstraint(provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"),
+        engine=EngineConstraint(
+            provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"
+        ),
         project_root=str(ROOT),
         workspace=str(tmp_path),
-        inputs={"input": DatasetRef(dataset_id="i", kind=DatasetKind.raster, uri=rotated_tif.resolve().as_uri())},
-        outputs=[OutputPlan(key="output", kind=DatasetKind.raster, uri=out_warp.resolve().as_uri(), overwrite=True)],
+        inputs={
+            "input": DatasetRef(
+                dataset_id="i", kind=DatasetKind.raster, uri=rotated_tif.resolve().as_uri()
+            )
+        },
+        outputs=[
+            OutputPlan(
+                key="output",
+                kind=DatasetKind.raster,
+                uri=out_warp.resolve().as_uri(),
+                overwrite=True,
+            )
+        ],
         parameters={"dstSRS": "EPSG:32650", "resample": "near"},
     )
     res_warp = _dispatch(qapp, worker_client, spec_warp)
@@ -472,11 +580,24 @@ print('OK')
         attempt=1,
         capability_id="gdal:sieve",
         descriptor_revision="1.0",
-        engine=EngineConstraint(provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"),
+        engine=EngineConstraint(
+            provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"
+        ),
         project_root=str(ROOT),
         workspace=str(tmp_path),
-        inputs={"input": DatasetRef(dataset_id="i", kind=DatasetKind.raster, uri=raster3b.resolve().as_uri())},
-        outputs=[OutputPlan(key="output", kind=DatasetKind.raster, uri=(tmp_path / "oob_out.tif").resolve().as_uri(), overwrite=True)],
+        inputs={
+            "input": DatasetRef(
+                dataset_id="i", kind=DatasetKind.raster, uri=raster3b.resolve().as_uri()
+            )
+        },
+        outputs=[
+            OutputPlan(
+                key="output",
+                kind=DatasetKind.raster,
+                uri=(tmp_path / "oob_out.tif").resolve().as_uri(),
+                overwrite=True,
+            )
+        ],
         parameters={"threshold": 4, "connectedness": 4, "band": 5},
     )
     res_oob = _dispatch(qapp, worker_client, spec_oob)
@@ -490,11 +611,24 @@ print('OK')
         attempt=1,
         capability_id="gdal:sieve",
         descriptor_revision="1.0",
-        engine=EngineConstraint(provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"),
+        engine=EngineConstraint(
+            provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"
+        ),
         project_root=str(ROOT),
         workspace=str(tmp_path),
-        inputs={"input": DatasetRef(dataset_id="i", kind=DatasetKind.raster, uri=raster3b.resolve().as_uri())},
-        outputs=[OutputPlan(key="output", kind=DatasetKind.raster, uri=(tmp_path / "zero_out.tif").resolve().as_uri(), overwrite=True)],
+        inputs={
+            "input": DatasetRef(
+                dataset_id="i", kind=DatasetKind.raster, uri=raster3b.resolve().as_uri()
+            )
+        },
+        outputs=[
+            OutputPlan(
+                key="output",
+                kind=DatasetKind.raster,
+                uri=(tmp_path / "zero_out.tif").resolve().as_uri(),
+                overwrite=True,
+            )
+        ],
         parameters={"threshold": 4, "connectedness": 4, "band": 0},
     )
     res_zero = _dispatch(qapp, worker_client, spec_zero)
@@ -506,14 +640,27 @@ print('OK')
         attempt=1,
         capability_id="gdal:rasterdiff",
         descriptor_revision="1.0",
-        engine=EngineConstraint(provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"),
+        engine=EngineConstraint(
+            provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"
+        ),
         project_root=str(ROOT),
         workspace=str(tmp_path),
         inputs={
-            "base": DatasetRef(dataset_id="b", kind=DatasetKind.raster, uri=raster10x10.resolve().as_uri()),
-            "target": DatasetRef(dataset_id="t", kind=DatasetKind.raster, uri=raster20x20.resolve().as_uri()),
+            "base": DatasetRef(
+                dataset_id="b", kind=DatasetKind.raster, uri=raster10x10.resolve().as_uri()
+            ),
+            "target": DatasetRef(
+                dataset_id="t", kind=DatasetKind.raster, uri=raster20x20.resolve().as_uri()
+            ),
         },
-        outputs=[OutputPlan(key="output", kind=DatasetKind.raster, uri=(tmp_path / "diff_out.tif").resolve().as_uri(), overwrite=True)],
+        outputs=[
+            OutputPlan(
+                key="output",
+                kind=DatasetKind.raster,
+                uri=(tmp_path / "diff_out.tif").resolve().as_uri(),
+                overwrite=True,
+            )
+        ],
         parameters={"mode": "absolute"},
     )
     res_mismatch = _dispatch(qapp, worker_client, spec_mismatch)
@@ -553,11 +700,24 @@ print('OK')
         attempt=1,
         capability_id="gdal:translate",
         descriptor_revision="1.0",
-        engine=EngineConstraint(provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"),
+        engine=EngineConstraint(
+            provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"
+        ),
         project_root=str(ROOT),
         workspace=str(tmp_path),
-        inputs={"input": DatasetRef(dataset_id="i", kind=DatasetKind.raster, uri=envi_in.resolve().as_uri())},
-        outputs=[OutputPlan(key="output", kind=DatasetKind.raster, uri=envi_out.resolve().as_uri(), overwrite=True)],
+        inputs={
+            "input": DatasetRef(
+                dataset_id="i", kind=DatasetKind.raster, uri=envi_in.resolve().as_uri()
+            )
+        },
+        outputs=[
+            OutputPlan(
+                key="output",
+                kind=DatasetKind.raster,
+                uri=envi_out.resolve().as_uri(),
+                overwrite=True,
+            )
+        ],
         parameters={"format": "ENVI"},
     )
     res_envi = _dispatch(qapp, worker_client, spec_envi)
@@ -599,11 +759,24 @@ print('OK')
         attempt=1,
         capability_id="gdal:translate",
         descriptor_revision="1.0",
-        engine=EngineConstraint(provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"),
+        engine=EngineConstraint(
+            provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"
+        ),
         project_root=str(ROOT),
         workspace=str(complex_dir),
-        inputs={"input": DatasetRef(dataset_id="i", kind=DatasetKind.raster, uri=in_tif.resolve().as_uri())},
-        outputs=[OutputPlan(key="output", kind=DatasetKind.raster, uri=out_tif.resolve().as_uri(), overwrite=True)],
+        inputs={
+            "input": DatasetRef(
+                dataset_id="i", kind=DatasetKind.raster, uri=in_tif.resolve().as_uri()
+            )
+        },
+        outputs=[
+            OutputPlan(
+                key="output",
+                kind=DatasetKind.raster,
+                uri=out_tif.resolve().as_uri(),
+                overwrite=True,
+            )
+        ],
         parameters={},
     )
     res_path = _dispatch(qapp, worker_client, spec_path)

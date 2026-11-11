@@ -42,10 +42,10 @@ def test_calc_param_matrix_and_zero_nodata() -> None:
 @pytest.mark.parametrize(
     "raw",
     [
-        {"calc": "A+1", "xRes": 1.0},       # 能力不消费几何参数
-        {"calc": "   "},                     # 空表达式
-        {"calc": 42},                        # 非字符串
-        {"calc": "A+" * 300},                # 过长
+        {"calc": "A+1", "xRes": 1.0},  # 能力不消费几何参数
+        {"calc": "   "},  # 空表达式
+        {"calc": 42},  # 非字符串
+        {"calc": "A+" * 300},  # 过长
     ],
 )
 def test_calc_invalid_params_are_rejected(raw: dict) -> None:
@@ -57,7 +57,12 @@ def test_statistics_param_matrix_and_aliases() -> None:
     supported = supported_params_for("gdal:statistics")
     assert supported is not None
     assert {
-        "statisticsMode", "histogramBins", "maxSamples", "fullLimit", "bandList", "srcNodata",
+        "statisticsMode",
+        "histogramBins",
+        "maxSamples",
+        "fullLimit",
+        "bandList",
+        "srcNodata",
     } <= set(supported)
     norm = normalize_raster_params(
         {"mode": "FULL", "bins": 32, "max_samples": 1000, "full_limit": 50000, "bandList": [1, 2]},
@@ -77,7 +82,7 @@ def test_statistics_param_matrix_and_aliases() -> None:
         {"histogramBins": 5000},
         {"maxSamples": 0},
         {"fullLimit": -1},
-        {"calc": "A+1"},                     # 统计能力不消费表达式
+        {"calc": "A+1"},  # 统计能力不消费表达式
         {"xRes": 1.0},
     ],
 )
@@ -127,5 +132,8 @@ def test_registry_entries_have_form_entrypoints_and_artifact_output() -> None:
     assert stats is not None
     assert str(stats.outputs[0].data_type) == "artifact"
     assert [p.key for p in stats.parameters][:4] == [
-        "statisticsMode", "histogramBins", "maxSamples", "fullLimit",
+        "statisticsMode",
+        "histogramBins",
+        "maxSamples",
+        "fullLimit",
     ]

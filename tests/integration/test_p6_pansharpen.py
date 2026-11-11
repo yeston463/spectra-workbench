@@ -182,9 +182,7 @@ def test_brovey_and_hsv_formulas(
     expected: np.ndarray,
 ) -> None:
     pan = _make_raster(gdal_rt, tmp_path / f"pan_{method}.tif", np.full((8, 8), 0.8))
-    ms_values = np.stack(
-        [np.full((8, 8), 0.2), np.full((8, 8), 0.4), np.full((8, 8), 0.6)]
-    )
+    ms_values = np.stack([np.full((8, 8), 0.2), np.full((8, 8), 0.4), np.full((8, 8), 0.6)])
     ms = _make_raster(gdal_rt, tmp_path / f"ms_{method}.tif", ms_values)
     out = tmp_path / f"fused_{method}.tif"
 
@@ -223,9 +221,7 @@ def test_ms_is_resampled_to_pan_grid(
     qapp: QApplication, gdal_rt: dict[str, Any], tmp_path: Path
 ) -> None:
     pan = _make_raster(gdal_rt, tmp_path / "pan_hi.tif", np.full((8, 8), 0.8))
-    ms_values = np.stack(
-        [np.full((4, 4), 0.2), np.full((4, 4), 0.4), np.full((4, 4), 0.6)]
-    )
+    ms_values = np.stack([np.full((4, 4), 0.2), np.full((4, 4), 0.4), np.full((4, 4), 0.6)])
     ms = _make_raster(
         gdal_rt,
         tmp_path / "ms_lo.tif",
@@ -253,9 +249,7 @@ def test_ms_is_resampled_to_pan_grid(
         assert float(np.max(np.abs(actual[idx] - expected[idx]))) <= 1e-6
 
 
-def test_fusion_rejections(
-    qapp: QApplication, gdal_rt: dict[str, Any], tmp_path: Path
-) -> None:
+def test_fusion_rejections(qapp: QApplication, gdal_rt: dict[str, Any], tmp_path: Path) -> None:
     pan = _make_raster(gdal_rt, tmp_path / "pan_rej.tif", np.full((4, 4), 0.8))
     ms_values = np.stack([np.full((4, 4), 0.2), np.full((4, 4), 0.4), np.full((4, 4), 0.6)])
     ms = _make_raster(gdal_rt, tmp_path / "ms_rej.tif", ms_values)
@@ -266,9 +260,7 @@ def test_fusion_rejections(
     assert missing.error and missing.error["code"] == "invalid_parameters"
     assert not out.exists()
 
-    duplicate = _run(
-        qapp, {"msFile": str(ms), "msBands": [1, 1, 2]}, pan, out
-    )
+    duplicate = _run(qapp, {"msFile": str(ms), "msBands": [1, 1, 2]}, pan, out)
     assert duplicate.status is TaskStatus.failed
     assert duplicate.error and duplicate.error["code"] == "invalid_parameters"
     assert not out.exists()
@@ -283,23 +275,15 @@ def test_fusion_rejections(
     assert unknown.error and unknown.error["code"] == "invalid_parameters"
     assert not out.exists()
 
-    multi_pan = _make_raster(
-        gdal_rt, tmp_path / "pan_multi.tif", np.full((2, 4, 4), 0.8)
-    )
-    wrong_pan = _run(
-        qapp, {"msFile": str(ms), "msBands": [1, 2, 3]}, multi_pan, out
-    )
+    multi_pan = _make_raster(gdal_rt, tmp_path / "pan_multi.tif", np.full((2, 4, 4), 0.8))
+    wrong_pan = _run(qapp, {"msFile": str(ms), "msBands": [1, 2, 3]}, multi_pan, out)
     assert wrong_pan.status is TaskStatus.failed
     assert wrong_pan.error and wrong_pan.error["code"] == "pansharpen_error"
     assert "1 个波段" in wrong_pan.error["message"]
     assert not out.exists()
 
-    ms_wrong_crs = _make_raster(
-        gdal_rt, tmp_path / "ms_wrong_crs.tif", ms_values, epsg=4326
-    )
-    crs = _run(
-        qapp, {"msFile": str(ms_wrong_crs), "msBands": [1, 2, 3]}, pan, out
-    )
+    ms_wrong_crs = _make_raster(gdal_rt, tmp_path / "ms_wrong_crs.tif", ms_values, epsg=4326)
+    crs = _run(qapp, {"msFile": str(ms_wrong_crs), "msBands": [1, 2, 3]}, pan, out)
     assert crs.status is TaskStatus.failed
     assert crs.error and crs.error["code"] == "pansharpen_error"
     assert "CRS" in crs.error["message"]

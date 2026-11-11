@@ -53,8 +53,17 @@ class ProtocolError(Exception):
         self.line_no = line_no
 
     def to_payload(self) -> dict[str, Any]:
-        preview = self.raw if isinstance(self.raw, str) else (self.raw.decode("utf-8", "replace") if self.raw else "")
-        return {"code": "protocol_error", "message": self.reason, "line_no": self.line_no, "preview": preview[:400]}
+        preview = (
+            self.raw
+            if isinstance(self.raw, str)
+            else (self.raw.decode("utf-8", "replace") if self.raw else "")
+        )
+        return {
+            "code": "protocol_error",
+            "message": self.reason,
+            "line_no": self.line_no,
+            "preview": preview[:400],
+        }
 
 
 class Envelope(BaseModel):
@@ -391,7 +400,12 @@ def encode_message(
             "original_bytes": len(data),
         },
     )
-    return json.dumps(ref.model_dump(mode="json"), ensure_ascii=False, separators=(",", ":")).encode("utf-8") + b"\n"
+    return (
+        json.dumps(ref.model_dump(mode="json"), ensure_ascii=False, separators=(",", ":")).encode(
+            "utf-8"
+        )
+        + b"\n"
+    )
 
 
 @dataclass
@@ -451,13 +465,19 @@ class JsonlStreamParser:
         try:
             obj = json.loads(text)
         except json.JSONDecodeError as exc:
-            raise ProtocolError(f"第 {self._line_no} 行 JSON 解析失败：{exc}", raw=text, line_no=self._line_no) from exc
+            raise ProtocolError(
+                f"第 {self._line_no} 行 JSON 解析失败：{exc}", raw=text, line_no=self._line_no
+            ) from exc
         if not isinstance(obj, dict):
-            raise ProtocolError(f"第 {self._line_no} 行不是 JSON 对象", raw=text, line_no=self._line_no)
+            raise ProtocolError(
+                f"第 {self._line_no} 行不是 JSON 对象", raw=text, line_no=self._line_no
+            )
         try:
             return Envelope.model_validate(obj)
         except Exception as exc:
-            raise ProtocolError(f"第 {self._line_no} 行消息校验失败：{exc}", raw=text, line_no=self._line_no) from exc
+            raise ProtocolError(
+                f"第 {self._line_no} 行消息校验失败：{exc}", raw=text, line_no=self._line_no
+            ) from exc
 
 
 class GenerationGuard:

@@ -214,7 +214,11 @@ def test_ndvi_physical_values_follow_band_metadata(
     assert info["arr"][1][1] == NODATA
     assert info["arr"][1][2] == pytest.approx(0.0, abs=1e-6)
     # 与原值结果不同：波段元数据真实参与（物理量/原值对应）
-    raw = _inspect(gdal_rt, tmp_path / "ndvi_raw.tif") if (tmp_path / "ndvi_raw.tif").exists() else None
+    raw = (
+        _inspect(gdal_rt, tmp_path / "ndvi_raw.tif")
+        if (tmp_path / "ndvi_raw.tif").exists()
+        else None
+    )
     if raw is not None:
         assert raw["arr"][0][0] != info["arr"][0][0]
 
@@ -277,9 +281,7 @@ def test_ndwi_and_savi_formulas(
     assert info3["arr"][0][0] == pytest.approx(1.0 / 3.0, abs=1e-6)
 
 
-def test_sindex_rejections(
-    qapp: QApplication, gdal_rt: dict[str, Any], tmp_path: Path
-) -> None:
+def test_sindex_rejections(qapp: QApplication, gdal_rt: dict[str, Any], tmp_path: Path) -> None:
     src = _make_two_band(gdal_rt, tmp_path / "twoband4.tif")
 
     missing = _run(qapp, {"sindex": "ndvi"}, src, tmp_path / "missing.tif")

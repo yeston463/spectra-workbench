@@ -189,9 +189,7 @@ def test_vector_layer_selection_does_not_enter_raster_pipeline(
         qapp.processEvents()
 
 
-def test_raster_to_vector_to_raster_switching(
-    qapp: QApplication, tmp_path: Path
-) -> None:
+def test_raster_to_vector_to_raster_switching(qapp: QApplication, tmp_path: Path) -> None:
     """栅格 → 矢量 → 栅格：矢量阶段清除旧影像，回到栅格后恢复可渲染状态。"""
     win = MainWindow(project_root=tmp_path)
     win.show()

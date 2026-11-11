@@ -214,9 +214,7 @@ class WorkerProcess:
                 while self._state is WorkerState.STARTING:
                     remaining = deadline - time.monotonic()
                     if remaining <= 0:
-                        raise WorkerTimeoutError(
-                            f"等待其他线程完成 Worker 启动超时 ({timeout}s)"
-                        )
+                        raise WorkerTimeoutError(f"等待其他线程完成 Worker 启动超时 ({timeout}s)")
                     self._state_cv.wait(remaining)
                 if self._state is WorkerState.READY and self._ready_envelope is not None:
                     return self._ready_envelope
@@ -224,9 +222,7 @@ class WorkerProcess:
                     raise self._start_error
                 if self._state is WorkerState.STOPPED:
                     raise WorkerProcessError("Worker 在启动过程中被停止")
-                raise WorkerProcessError(
-                    f"Worker 启动未完成，当前状态 {self._state.value}"
-                )
+                raise WorkerProcessError(f"Worker 启动未完成，当前状态 {self._state.value}")
 
             if self._state is WorkerState.STOPPING:
                 deadline = time.monotonic() + timeout
@@ -303,10 +299,7 @@ class WorkerProcess:
 
         stop_event = threading.Event()
         with self._state_cv:
-            if (
-                self._state is not WorkerState.STARTING
-                or self._start_cancel.is_set()
-            ):
+            if self._state is not WorkerState.STARTING or self._start_cancel.is_set():
                 with contextlib.suppress(Exception):
                     proc.kill()
                     proc.wait(timeout=2.0)
@@ -594,7 +587,10 @@ class WorkerProcess:
                         task_id=spec.task_id,
                         attempt=spec.attempt,
                         status=status_enum,
-                        outputs=[{"uri": art, "data_type": "artifact"} for art in env.payload.get("artifact_ids", [])],
+                        outputs=[
+                            {"uri": art, "data_type": "artifact"}
+                            for art in env.payload.get("artifact_ids", [])
+                        ],
                         warnings=env.payload.get("warnings", []),
                     )
                 elif env.kind is Kind.error:
@@ -764,7 +760,12 @@ class WorkerProcess:
         timeout: float = 15.0,
     ) -> dict[str, Any]:
         """地图坐标 -> 行列号（同时给出中心/角点两种约定）。"""
-        args: dict[str, Any] = {"path": str(path), "x": float(x), "y": float(y), "convention": convention}
+        args: dict[str, Any] = {
+            "path": str(path),
+            "x": float(x),
+            "y": float(y),
+            "convention": convention,
+        }
         if view_crs_wkt:
             args["view_crs_wkt"] = view_crs_wkt
         return self._simple_call("map_to_pixel", args, timeout=timeout)
@@ -808,7 +809,9 @@ class WorkerProcess:
             timeout=timeout,
         )
 
-    def transform_bounds(self, path: Path | str, view_crs_wkt: str, timeout: float = 15.0) -> dict[str, Any]:
+    def transform_bounds(
+        self, path: Path | str, view_crs_wkt: str, timeout: float = 15.0
+    ) -> dict[str, Any]:
         """数据集范围换算到视图 CRS。"""
         return self._simple_call(
             "transform_bounds", {"path": str(path), "view_crs_wkt": view_crs_wkt}, timeout=timeout

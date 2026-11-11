@@ -170,7 +170,9 @@ def test_task_panel_lifecycle(qapp: QApplication) -> None:
         attempt=1,
         capability_id="gdal:translate",
         descriptor_revision="1.0",
-        engine=EngineConstraint(provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"),
+        engine=EngineConstraint(
+            provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"
+        ),
         project_root=".",
         workspace=".",
         outputs=[OutputPlan(key="out", kind=DatasetKind.raster, uri="file:///tmp/out.tif")],

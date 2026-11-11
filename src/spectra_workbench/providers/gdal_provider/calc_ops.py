@@ -81,9 +81,7 @@ def run_calc(
     if not sources:
         raise ValueError("表达式计算至少需要 1 个输入栅格")
     if output_type not in GDAL_TYPE_TO_NUMPY:
-        raise ValueError(
-            f"未知输出类型 {output_type!r}；可用：{', '.join(GDAL_TYPE_TO_NUMPY)}"
-        )
+        raise ValueError(f"未知输出类型 {output_type!r}；可用：{', '.join(GDAL_TYPE_TO_NUMPY)}")
     gdt_name, np_dtype = GDAL_TYPE_TO_NUMPY[output_type]
 
     names = band_names_for_inputs(len(sources))
@@ -97,7 +95,9 @@ def run_calc(
     ref_ready = False
 
     for idx, (source, name) in enumerate(zip(sources, names, strict=True)):
-        _progress(callback, 0.05 + 0.45 * idx / max(1, len(sources)), f"读取输入 {name}: {source.name}")
+        _progress(
+            callback, 0.05 + 0.45 * idx / max(1, len(sources)), f"读取输入 {name}: {source.name}"
+        )
         ds = gdal.Open(str(source), gdal.GA_ReadOnly)
         if ds is None:
             raise RuntimeError(f"无法打开输入栅格：{source}")
@@ -110,8 +110,7 @@ def run_calc(
             else:
                 if (w, h) != (ref_w, ref_h):
                     raise ValueError(
-                        f"输入 {name} 尺寸 {w}x{h} 与首个输入 "
-                        f"{ref_w}x{ref_h} 不一致，拒绝错位计算"
+                        f"输入 {name} 尺寸 {w}x{h} 与首个输入 {ref_w}x{ref_h} 不一致，拒绝错位计算"
                     )
                 if gt != ref_gt:
                     raise ValueError(f"输入 {name} 的仿射变换与首个输入不一致，拒绝错位计算")
@@ -123,8 +122,10 @@ def run_calc(
                 raise RuntimeError(f"无法读取输入栅格第 1 波段：{source}")
             arrays[name] = np.asarray(arr)
             label = band.GetNoDataValue()
-            nodata_values[name] = float(src_nodata) if src_nodata is not None else (
-                float(label) if label is not None else None
+            nodata_values[name] = (
+                float(src_nodata)
+                if src_nodata is not None
+                else (float(label) if label is not None else None)
             )
         finally:
             del ds

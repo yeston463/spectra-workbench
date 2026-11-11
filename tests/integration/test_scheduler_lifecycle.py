@@ -101,7 +101,9 @@ def test_concurrency_limit_and_queue_transitions():
 
             # 等待全量完成
             start_t = time.monotonic()
-            while (not handle_a.is_terminal or not handle_b.is_terminal) and time.monotonic() - start_t < 10.0:
+            while (
+                not handle_a.is_terminal or not handle_b.is_terminal
+            ) and time.monotonic() - start_t < 10.0:
                 time.sleep(0.05)
 
             assert handle_a.status is TaskStatus.succeeded
@@ -150,7 +152,9 @@ def test_real_gdal_task_cooperative_cancellation_during_computation():
         temp_root = Path(temp_dir)
         # 构造足够产生计算分块的 800x800 Float32 栅格 (2.56MB)
         raw_data = b"\x00\x00\x80?" * (800 * 800)
-        _, in_dat = write_envi_raster(temp_root / "large_input", raw_data, 800, 800, bands=1, dtype="float32")
+        _, in_dat = write_envi_raster(
+            temp_root / "large_input", raw_data, 800, 800, bands=1, dtype="float32"
+        )
 
         sched = TaskScheduler(project_root=root, max_concurrency=1)
 
@@ -178,12 +182,24 @@ def test_real_gdal_task_cooperative_cancellation_during_computation():
                 attempt=1,
                 capability_id="gdal:translate",
                 descriptor_revision="1.0",
-                engine=EngineConstraint(provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"),
+                engine=EngineConstraint(
+                    provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"
+                ),
                 project_root=str(temp_root),
                 workspace=str(temp_root / "workspace_cancel"),
-                inputs={"input": DatasetRef(dataset_id="in", kind=DatasetKind.raster, uri=in_dat.as_uri())},
-                outputs=[OutputPlan(key="output", kind=DatasetKind.raster, uri=out_tif.as_uri(), overwrite=True)],
-                cancellation=CancellationPolicy(cooperative_timeout_seconds=5.0, allow_process_termination=True),
+                inputs={
+                    "input": DatasetRef(
+                        dataset_id="in", kind=DatasetKind.raster, uri=in_dat.as_uri()
+                    )
+                },
+                outputs=[
+                    OutputPlan(
+                        key="output", kind=DatasetKind.raster, uri=out_tif.as_uri(), overwrite=True
+                    )
+                ],
+                cancellation=CancellationPolicy(
+                    cooperative_timeout_seconds=5.0, allow_process_termination=True
+                ),
                 parameters={"format": "GTiff", "resample_alg": "cubic"},
             )
 

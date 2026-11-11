@@ -120,8 +120,10 @@ def run_tasseled_cap(
                 raise TasseledCapError(f"无法读取波段 {band_index}")
             raw = np.asarray(raw_obj, dtype=np.float64).ravel()
             label = band.GetNoDataValue()
-            nodata = float(src_nodata) if src_nodata is not None else (
-                float(label) if label is not None else None
+            nodata = (
+                float(src_nodata)
+                if src_nodata is not None
+                else (float(label) if label is not None else None)
             )
             band_valid = np.isfinite(raw)
             if nodata is not None:
@@ -175,9 +177,7 @@ def run_tasseled_cap(
         "product_level": sensor.product_level,
         "band_order": list(sensor.band_order),
         "input_bands": [int(v) for v in bands],
-        "coefficients": [
-            [float(v) for v in row] for row in sensor.coefficients
-        ],
+        "coefficients": [[float(v) for v in row] for row in sensor.coefficients],
         "output_bands": list(TASSELED_CAP_OUTPUT_BANDS),
         "source_citation": sensor.source,
         "source_url": sensor.source_url,

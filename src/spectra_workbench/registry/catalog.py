@@ -168,16 +168,14 @@ class CapabilityRegistry:
 
     def discovered(self, provider: str | None = None) -> list[CapabilityDescriptor]:
         """查询已发现能力（presence == present）。"""
-        return [
-            c for c in self.filter(provider=provider)
-            if c.state.presence == Presence.present
-        ]
+        return [c for c in self.filter(provider=provider) if c.state.presence == Presence.present]
 
     def callable(self, provider: str | None = None) -> list[CapabilityDescriptor]:
         """查询可调用能力（presence == present 且 availability == ready 且已具备可用绑定）。"""
         non_callable_bindings = {Binding.none, Binding.indexed}
         return [
-            c for c in self.filter(provider=provider)
+            c
+            for c in self.filter(provider=provider)
             if c.state.presence == Presence.present
             and c.state.availability == Availability.ready
             and c.state.binding not in non_callable_bindings
@@ -186,24 +184,20 @@ class CapabilityRegistry:
     def verified(self, provider: str | None = None) -> list[CapabilityDescriptor]:
         """查询已完成验证的能力（validation in (smoke_passed, numerical_passed)）。"""
         verified_vals = {Validation.smoke_passed, Validation.numerical_passed}
-        return [
-            c for c in self.filter(provider=provider)
-            if c.state.validation in verified_vals
-        ]
+        return [c for c in self.filter(provider=provider) if c.state.validation in verified_vals]
 
     def platform_executable(self, provider: str | None = None) -> list[CapabilityDescriptor]:
         """查询平台已接线并具备 Adapter 执行器的能力（binding == Binding.form 且 ready）。"""
-        return [
-            c for c in self.callable(provider=provider)
-            if c.state.binding == Binding.form
-        ]
+        return [c for c in self.callable(provider=provider) if c.state.binding == Binding.form]
 
     def missing(self, provider: str | None = None) -> list[CapabilityDescriptor]:
         """查询缺失或受阻能力（presence == missing 或 availability != ready）。保留缺失清单，严禁漏项。"""
         return [
-            c for c in self.filter(provider=provider)
+            c
+            for c in self.filter(provider=provider)
             if c.state.presence == Presence.missing
-            or c.state.availability in (Availability.missing_dependency, Availability.unsupported, Availability.blocked)
+            or c.state.availability
+            in (Availability.missing_dependency, Availability.unsupported, Availability.blocked)
         ]
 
     # --- 覆盖审计报告 ---
@@ -266,9 +260,7 @@ class CapabilityRegistry:
         # 若未限定单一 provider，附带分引擎拆解
         if not provider:
             providers = sorted(list({c.engine.provider_id for c in all_caps}))
-            report["by_provider"] = {
-                p: self.audit_report(provider=p) for p in providers
-            }
+            report["by_provider"] = {p: self.audit_report(provider=p) for p in providers}
 
         return report
 
@@ -305,9 +297,9 @@ class CapabilityRegistry:
             for descriptor in descriptors:
                 if provider and descriptor.engine.provider_id != provider:
                     continue
-                baseline_by_provider.setdefault(
-                    descriptor.engine.provider_id, set()
-                ).add(descriptor.capability_id)
+                baseline_by_provider.setdefault(descriptor.engine.provider_id, set()).add(
+                    descriptor.capability_id
+                )
 
         registry_caps = self.filter(provider=provider)
         registry_ids = {c.capability_id for c in registry_caps}
@@ -341,8 +333,7 @@ class CapabilityRegistry:
 
         by_provider: dict[str, Any] = {}
         provider_names = sorted(
-            set(baseline_by_provider)
-            | {c.engine.provider_id for c in registry_caps}
+            set(baseline_by_provider) | {c.engine.provider_id for c in registry_caps}
         )
         for name in provider_names:
             sub_caps = [c for c in registry_caps if c.engine.provider_id == name]
@@ -350,12 +341,8 @@ class CapabilityRegistry:
             sub_baseline_ids = baseline_by_provider.get(name, set())
             sub_missing = sorted(sub_baseline_ids - sub_registry_ids)
             sub_platform = sorted(sub_registry_ids - sub_baseline_ids)
-            sub_gaps = [
-                item for item in gap_details if item["provider"] == name
-            ]
-            sub_unexplained = [
-                item for item in sub_gaps if not item["limitations"]
-            ]
+            sub_gaps = [item for item in gap_details if item["provider"] == name]
+            sub_unexplained = [item for item in sub_gaps if not item["limitations"]]
             by_provider[name] = {
                 "baseline_count": len(sub_baseline_ids),
                 "registry_count": len(sub_registry_ids),

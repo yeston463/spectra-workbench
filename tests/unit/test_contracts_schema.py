@@ -65,16 +65,28 @@ def message_schema(contracts_dir: Path) -> dict:
 
 def test_meta_schemas_valid(task_schema: dict, capability_schema: dict, message_schema: dict):
     """所有契约 schema 必须是合法的 JSON Schema Draft 2020-12 规范定义。"""
-    for _name, schema in [("task", task_schema), ("capability", capability_schema), ("message", message_schema)]:
+    for _name, schema in [
+        ("task", task_schema),
+        ("capability", capability_schema),
+        ("message", message_schema),
+    ]:
         validator_cls = jsonschema.validators.validator_for(schema)
         validator_cls.check_schema(schema)
 
 
-def test_contract_examples_validate_against_schemas(contracts_dir: Path, task_schema: dict, capability_schema: dict, message_schema: dict):
+def test_contract_examples_validate_against_schemas(
+    contracts_dir: Path, task_schema: dict, capability_schema: dict, message_schema: dict
+):
     """契约模板样例必须通过 schema 校验。"""
-    task_ex = json.loads((contracts_dir / "examples" / "task.example.json").read_text(encoding="utf-8"))
-    cap_ex = json.loads((contracts_dir / "examples" / "capability.example.json").read_text(encoding="utf-8"))
-    msg_ex = json.loads((contracts_dir / "examples" / "message.example.json").read_text(encoding="utf-8"))
+    task_ex = json.loads(
+        (contracts_dir / "examples" / "task.example.json").read_text(encoding="utf-8")
+    )
+    cap_ex = json.loads(
+        (contracts_dir / "examples" / "capability.example.json").read_text(encoding="utf-8")
+    )
+    msg_ex = json.loads(
+        (contracts_dir / "examples" / "message.example.json").read_text(encoding="utf-8")
+    )
 
     jsonschema.validate(task_ex, task_schema)
     jsonschema.validate(cap_ex, capability_schema)
@@ -83,7 +95,9 @@ def test_contract_examples_validate_against_schemas(contracts_dir: Path, task_sc
 
 def test_task_example_deserializes_to_model(contracts_dir: Path):
     """task.example.json 能成功反序列化为 TaskSpec 领域模型。"""
-    task_ex = json.loads((contracts_dir / "examples" / "task.example.json").read_text(encoding="utf-8"))
+    task_ex = json.loads(
+        (contracts_dir / "examples" / "task.example.json").read_text(encoding="utf-8")
+    )
     task = TaskSpec.model_validate(task_ex)
     assert task.template_only is True
     assert task.task_id == "example-convert-not-executable"
@@ -92,7 +106,9 @@ def test_task_example_deserializes_to_model(contracts_dir: Path):
 
 def test_capability_example_deserializes_to_model(contracts_dir: Path):
     """capability.example.json 能成功反序列化为 CapabilityDescriptor 领域模型。"""
-    cap_ex = json.loads((contracts_dir / "examples" / "capability.example.json").read_text(encoding="utf-8"))
+    cap_ex = json.loads(
+        (contracts_dir / "examples" / "capability.example.json").read_text(encoding="utf-8")
+    )
     cap = CapabilityDescriptor.model_validate(cap_ex)
     assert cap.template_only is True
     assert cap.capability_id == "gdal.algorithm.raster.convert"
@@ -101,7 +117,9 @@ def test_capability_example_deserializes_to_model(contracts_dir: Path):
 
 def test_message_example_deserializes_to_model(contracts_dir: Path):
     """message.example.json 能成功反序列化为 Envelope 协议模型。"""
-    msg_ex = json.loads((contracts_dir / "examples" / "message.example.json").read_text(encoding="utf-8"))
+    msg_ex = json.loads(
+        (contracts_dir / "examples" / "message.example.json").read_text(encoding="utf-8")
+    )
     msg = Envelope.model_validate(msg_ex)
     assert msg.template_only is True
     assert msg.kind == Kind.progress
@@ -114,7 +132,9 @@ def test_task_model_serializes_and_passes_jsonschema(task_schema: dict):
         task_id="task-smoke-001",
         capability_id="gdal.algorithm.raster.convert",
         descriptor_revision="rev-sha256-abcdef",
-        engine=EngineConstraint(provider_id="gdal", runtime_id="qgis-3.44.15", expected_version="3.13.3"),
+        engine=EngineConstraint(
+            provider_id="gdal", runtime_id="qgis-3.44.15", expected_version="3.13.3"
+        ),
         project_root="C:/Users/test/project",
         workspace="C:/Users/test/project/work/tasks/task-smoke-001",
         inputs={
@@ -230,9 +250,13 @@ def test_message_model_serializes_and_passes_jsonschema(message_schema: dict):
     jsonschema.validate(dumped, message_schema)
 
 
-def test_task_parameters_preserves_explicit_null_and_falsy_values(contracts_dir: Path, task_schema: dict):
+def test_task_parameters_preserves_explicit_null_and_falsy_values(
+    contracts_dir: Path, task_schema: dict
+):
     """缺陷 1 验收：显式 null、0、false、空字符串、空列表、嵌套字典均被完整保留，不改变任务配置。"""
-    task_ex = json.loads((contracts_dir / "examples" / "task.example.json").read_text(encoding="utf-8"))
+    task_ex = json.loads(
+        (contracts_dir / "examples" / "task.example.json").read_text(encoding="utf-8")
+    )
     test_params = {
         "src_nodata": None,
         "nested": {"optional_value": None, "sub_zero": 0, "active": False},
@@ -284,14 +308,32 @@ def test_task_parameters_preserves_explicit_null_and_falsy_values(contracts_dir:
         (Kind.progress, {"ratio": None, "phase": "indeterminate"}),
         (Kind.log, {"level": "INFO", "message": "job started", "stream": "stdout"}),
         (Kind.log, {"level": "info", "message": "job progress"}),  # 大小写归一化
-        (Kind.artifact, {"artifact_id": "a-1", "uri": "file:///tmp/out.tif", "kind": "raster", "commit_state": "committed"}),
+        (
+            Kind.artifact,
+            {
+                "artifact_id": "a-1",
+                "uri": "file:///tmp/out.tif",
+                "kind": "raster",
+                "commit_state": "committed",
+            },
+        ),
         (Kind.result, {"status": "succeeded", "artifact_ids": ["a-1"], "warnings": ["w1"]}),
-        (Kind.error, {"code": "E_IO", "message": "disk full", "retryable": False, "details": {"free_bytes": 0}}),
+        (
+            Kind.error,
+            {
+                "code": "E_IO",
+                "message": "disk full",
+                "retryable": False,
+                "details": {"free_bytes": 0},
+            },
+        ),
         (Kind.cancel, {"reason": "user clicked cancel"}),
         (Kind.heartbeat, {"monotonic_seconds": 123.45, "active_task_id": "task-001"}),
     ],
 )
-def test_envelope_accepts_valid_payload_for_all_kinds(kind: Kind, valid_payload: dict, message_schema: dict):
+def test_envelope_accepts_valid_payload_for_all_kinds(
+    kind: Kind, valid_payload: dict, message_schema: dict
+):
     """缺陷 2 验收：所有合法消息均能通过 Envelope 模型与 JSON Schema 双重校验。"""
     env = Envelope(
         kind=kind,
@@ -315,10 +357,22 @@ def test_envelope_accepts_valid_payload_for_all_kinds(kind: Kind, valid_payload:
         (Kind.result, {"status": "definitely_not_a_valid_status", "artifact_ids": []}, "status"),
         (Kind.result, {"status": "succeeded", "artifact_ids": [""]}, "artifact_ids"),
         (Kind.result, {"status": "succeeded", "artifact_ids": "not_a_list"}, "artifact_ids"),
-        (Kind.result, {"status": "succeeded", "artifact_ids": ["a1"], "warnings": [123]}, "warnings"),
+        (
+            Kind.result,
+            {"status": "succeeded", "artifact_ids": ["a1"], "warnings": [123]},
+            "warnings",
+        ),
         (Kind.log, {"level": "VERBOSE", "message": "bad level"}, "level"),
-        (Kind.artifact, {"artifact_id": "", "uri": "u", "kind": "k", "commit_state": "committed"}, "artifact_id"),
-        (Kind.artifact, {"artifact_id": "a", "uri": "u", "kind": "k", "commit_state": "bad_state"}, "commit_state"),
+        (
+            Kind.artifact,
+            {"artifact_id": "", "uri": "u", "kind": "k", "commit_state": "committed"},
+            "artifact_id",
+        ),
+        (
+            Kind.artifact,
+            {"artifact_id": "a", "uri": "u", "kind": "k", "commit_state": "bad_state"},
+            "commit_state",
+        ),
         (Kind.error, {"code": "E", "message": "m", "retryable": "not_a_bool"}, "retryable"),
         (Kind.error, {"code": "", "message": "m", "retryable": True}, "code"),
         (Kind.heartbeat, {"monotonic_seconds": -5.0}, "monotonic_seconds"),
@@ -332,7 +386,9 @@ def test_envelope_accepts_valid_payload_for_all_kinds(kind: Kind, valid_payload:
         (Kind.hello, {"provider_id": "", "worker_package_version": "1.0"}, "provider_id"),
     ],
 )
-def test_envelope_rejects_invalid_payload_for_all_kinds(kind: Kind, invalid_payload: dict, error_keyword: str, message_schema: dict):
+def test_envelope_rejects_invalid_payload_for_all_kinds(
+    kind: Kind, invalid_payload: dict, error_keyword: str, message_schema: dict
+):
     """缺陷 2 验收：所有非法消息模型均主动拒绝，且判定与 JSON Schema 完全一致。"""
     # 1. Envelope 模型必须拒绝并抛出 ValueError
     with pytest.raises(ValueError) as ei:
@@ -359,7 +415,9 @@ def test_envelope_rejects_invalid_payload_for_all_kinds(kind: Kind, invalid_payl
         "payload": invalid_payload,
     }
     errors = list(jsonschema.Draft202012Validator(message_schema).iter_errors(raw_env))
-    assert len(errors) > 0, f"Schema 应当拒绝但却接受了非法 payload: kind={kind}, payload={invalid_payload}"
+    assert len(errors) > 0, (
+        f"Schema 应当拒绝但却接受了非法 payload: kind={kind}, payload={invalid_payload}"
+    )
 
 
 @pytest.mark.parametrize(
@@ -368,13 +426,30 @@ def test_envelope_rejects_invalid_payload_for_all_kinds(kind: Kind, invalid_payl
         (Kind.ready, "features", {"runtime_id": "r1"}, ["raster", "vector"], "not_a_list"),
         (Kind.progress, "message", {"ratio": 0.5, "phase": "p1"}, "working", 12345),
         (Kind.log, "stream", {"level": "INFO", "message": "msg"}, "stdout", "invalid_stream"),
-        (Kind.result, "warnings", {"status": "succeeded", "artifact_ids": ["a1"]}, ["warning_1"], "not_a_list"),
-        (Kind.error, "details", {"code": "E1", "message": "m1", "retryable": True}, {"key": "val"}, "not_a_dict"),
+        (
+            Kind.result,
+            "warnings",
+            {"status": "succeeded", "artifact_ids": ["a1"]},
+            ["warning_1"],
+            "not_a_list",
+        ),
+        (
+            Kind.error,
+            "details",
+            {"code": "E1", "message": "m1", "retryable": True},
+            {"key": "val"},
+            "not_a_dict",
+        ),
         (Kind.cancel, "reason", {}, "user clicked cancel", 12345),
     ],
 )
 def test_message_optional_field_null_boundaries(
-    kind: Kind, field_name: str, base_payload: dict, valid_val: Any, invalid_type_val: Any, message_schema: dict
+    kind: Kind,
+    field_name: str,
+    base_payload: dict,
+    valid_val: Any,
+    invalid_type_val: Any,
+    message_schema: dict,
 ):
     """验证 6 个可选字段的四类边界：
     1. 省略：合法，序列化后不包含该字段，Schema 校验通过。
@@ -393,7 +468,9 @@ def test_message_optional_field_null_boundaries(
         payload=base_payload.copy(),
     )
     dumped_omitted = env_omitted.model_dump(mode="json")
-    assert field_name not in dumped_omitted["payload"], f"{field_name} 被省略时不得输出到 payload 中"
+    assert field_name not in dumped_omitted["payload"], (
+        f"{field_name} 被省略时不得输出到 payload 中"
+    )
     jsonschema.validate(dumped_omitted, message_schema)
 
     # 2. 合法值测试

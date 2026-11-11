@@ -50,7 +50,9 @@ def p3_samples() -> dict:
     return ensure_p3_samples()
 
 
-def _wait_layers(win: MainWindow, qapp: QApplication, count: int = 1, timeout: float = 10.0) -> None:
+def _wait_layers(
+    win: MainWindow, qapp: QApplication, count: int = 1, timeout: float = 10.0
+) -> None:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         qapp.processEvents()
@@ -117,7 +119,9 @@ def test_interactive_polygon_roi_lifecycle_with_real_mouse_events(
         drag_target = h0_view_pos + QPoint(30, 20)
         QTest.mousePress(vp, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, h0_view_pos)
         QTest.mouseMove(vp, drag_target)
-        QTest.mouseRelease(vp, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, drag_target)
+        QTest.mouseRelease(
+            vp, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, drag_target
+        )
         qapp.processEvents()
 
         roi_dragged = win.canvas.roi_list()[0]
@@ -125,7 +129,10 @@ def test_interactive_polygon_roi_lifecycle_with_real_mouse_events(
 
         # 6. 保存项目
         proj_file = tmp_path / "interactive_roi_proj.spectra.json"
-        with patch("spectra_workbench.ui.main_window.QFileDialog.getSaveFileName", return_value=(str(proj_file), "")):
+        with patch(
+            "spectra_workbench.ui.main_window.QFileDialog.getSaveFileName",
+            return_value=(str(proj_file), ""),
+        ):
             win.save_project_action(save_as=True)
         assert proj_file.exists()
     finally:
@@ -195,7 +202,9 @@ def test_interactive_polygon_roi_layer_switching_and_isolation(
         QTest.mouseClick(vp, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, p2)
         QTest.mouseClick(vp, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, p3)
         # 点击起点附近闭合
-        QTest.mouseClick(vp, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, QPoint(102, 101))
+        QTest.mouseClick(
+            vp, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, QPoint(102, 101)
+        )
         qapp.processEvents()
 
         assert len(win.canvas.roi_list()) == 1
@@ -238,7 +247,10 @@ def test_interactive_polygon_roi_layer_switching_and_isolation(
 
         # 6. 保存并重开，验证两个图层各自的 ROI 归属完全保全
         proj_file = tmp_path / "multi_layer_roi.spectra.json"
-        with patch("spectra_workbench.ui.main_window.QFileDialog.getSaveFileName", return_value=(str(proj_file), "")):
+        with patch(
+            "spectra_workbench.ui.main_window.QFileDialog.getSaveFileName",
+            return_value=(str(proj_file), ""),
+        ):
             win.save_project_action(save_as=True)
     finally:
         win.close()
@@ -325,7 +337,10 @@ def test_interactive_polygon_roi_rotated_affine_and_view_crs(
 
         # 4. 保存项目
         proj_file = tmp_path / "rotated_affine_roi.spectra.json"
-        with patch("spectra_workbench.ui.main_window.QFileDialog.getSaveFileName", return_value=(str(proj_file), "")):
+        with patch(
+            "spectra_workbench.ui.main_window.QFileDialog.getSaveFileName",
+            return_value=(str(proj_file), ""),
+        ):
             win.save_project_action(save_as=True)
     finally:
         win.close()
@@ -378,16 +393,24 @@ def test_rapid_clicks_quadrilateral_and_octagon_preserve_vertices(
 
         qapp.processEvents()
         # 必须仍处于绘制状态，且恰好有 4 个待闭合顶点（绝不能在第 4 击误闭合成三角形）
-        assert win.canvas._draw_shape == ROIShape.polygon, "4 个不同位置快速点击后绘制状态必须保持激活"
-        assert len(win.canvas._poly_pts) == 4, f"期望 4 个待闭合顶点，实际收到 {len(win.canvas._poly_pts)} 个"
+        assert win.canvas._draw_shape == ROIShape.polygon, (
+            "4 个不同位置快速点击后绘制状态必须保持激活"
+        )
+        assert len(win.canvas._poly_pts) == 4, (
+            f"期望 4 个待闭合顶点，实际收到 {len(win.canvas._poly_pts)} 个"
+        )
         assert len(win.canvas.roi_list()) == 0, "未发送闭合手势前不能产生闭合 ROI"
 
         # 真实右键闭合四边形
-        QTest.mouseClick(vp, Qt.MouseButton.RightButton, Qt.KeyboardModifier.NoModifier, quad_pts[-1])
+        QTest.mouseClick(
+            vp, Qt.MouseButton.RightButton, Qt.KeyboardModifier.NoModifier, quad_pts[-1]
+        )
         qapp.processEvents()
         rois = win.canvas.roi_list()
         assert len(rois) == 1
-        assert len(rois[0].points) == 4, f"四边形必须保留全部 4 个顶点，实际收到 {len(rois[0].points)}"
+        assert len(rois[0].points) == 4, (
+            f"四边形必须保留全部 4 个顶点，实际收到 {len(rois[0].points)}"
+        )
 
         # -----------------------------------------------------------
         # 2. 八边形快速普通点击（8 个不同位置连续快速左键单击）
@@ -407,8 +430,12 @@ def test_rapid_clicks_quadrilateral_and_octagon_preserve_vertices(
             QTest.mouseClick(vp, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, pt)
 
         qapp.processEvents()
-        assert win.canvas._draw_shape == ROIShape.polygon, "8 个不同位置快速点击后绘制状态必须保持激活"
-        assert len(win.canvas._poly_pts) == 8, f"期望 8 个待闭合顶点，实际收到 {len(win.canvas._poly_pts)} 个"
+        assert win.canvas._draw_shape == ROIShape.polygon, (
+            "8 个不同位置快速点击后绘制状态必须保持激活"
+        )
+        assert len(win.canvas._poly_pts) == 8, (
+            f"期望 8 个待闭合顶点，实际收到 {len(win.canvas._poly_pts)} 个"
+        )
 
         # 点击回到起点附近闭合八边形
         QTest.mouseClick(vp, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, oct_pts[0])
@@ -416,7 +443,9 @@ def test_rapid_clicks_quadrilateral_and_octagon_preserve_vertices(
         rois = win.canvas.roi_list()
         assert len(rois) == 2
         oct_roi = next(r for r in rois if r.roi_id != rois[0].roi_id)
-        assert len(oct_roi.points) == 8, f"八边形必须保留全部 8 个顶点，实际收到 {len(oct_roi.points)}"
+        assert len(oct_roi.points) == 8, (
+            f"八边形必须保留全部 8 个顶点，实际收到 {len(oct_roi.points)}"
+        )
 
         # -----------------------------------------------------------
         # 3. 真实同位置双击闭合测试
@@ -488,13 +517,18 @@ def test_rotated_affine_known_point_and_crs_roundtrip_transformation(
 
         # 1. 放置像元坐标多边形 ROI，包含已知角点 (10, 10)
         roi_pts = [(10.0, 10.0), (20.0, 10.0), (15.0, 20.0)]
-        roi = ROI(name="RotKnownROI", shape=ROIShape.polygon, points=roi_pts, coordinate_space="pixel")
+        roi = ROI(
+            name="RotKnownROI", shape=ROIShape.polygon, points=roi_pts, coordinate_space="pixel"
+        )
         win.canvas._add_roi(roi)
 
         # 初始像素视图下，图形 item 坐标就是像素坐标
         state0 = win.canvas._roi_states[roi.roi_id]
         item0 = state0["item"]
-        pts0 = [[float(p.x()), float(p.y())] for p in (item0.mapToParent(pt) for pt in item0.getState()["points"])]
+        pts0 = [
+            [float(p.x()), float(p.y())]
+            for p in (item0.mapToParent(pt) for pt in item0.getState()["points"])
+        ]
         assert pts0 == [[10.0, 10.0], [20.0, 10.0], [15.0, 20.0]]
 
         # 2. 切换到原生地图 CRS (EPSG:32650)
@@ -512,14 +546,29 @@ def test_rotated_affine_known_point_and_crs_roundtrip_transformation(
         # y = 3200000 + 10*0.5 - 10*2 = 3199985.0
         state_map = win.canvas._roi_states[roi.roi_id]
         item_map = state_map["item"]
-        pts_map = [[float(p.x()), float(p.y())] for p in (item_map.mapToParent(pt) for pt in item_map.getState()["points"])]
+        pts_map = [
+            [float(p.x()), float(p.y())]
+            for p in (item_map.mapToParent(pt) for pt in item_map.getState()["points"])
+        ]
 
-        assert abs(pts_map[0][0] - 500025.0) < 1e-4, f"点 0 X 坐标期望 500025.0，实际 {pts_map[0][0]}"
-        assert abs(pts_map[0][1] - 3199985.0) < 1e-4, f"点 0 Y 坐标期望 3199985.0，实际 {pts_map[0][1]}"
-        assert abs(pts_map[1][0] - 500045.0) < 1e-4, f"点 1 X 坐标期望 500045.0，实际 {pts_map[1][0]}"
-        assert abs(pts_map[1][1] - 3199990.0) < 1e-4, f"点 1 Y 坐标期望 3199990.0，实际 {pts_map[1][1]}"
-        assert abs(pts_map[2][0] - 500040.0) < 1e-4, f"点 2 X 坐标期望 500040.0，实际 {pts_map[2][0]}"
-        assert abs(pts_map[2][1] - 3199967.5) < 1e-4, f"点 2 Y 坐标期望 3199967.5，实际 {pts_map[2][1]}"
+        assert abs(pts_map[0][0] - 500025.0) < 1e-4, (
+            f"点 0 X 坐标期望 500025.0，实际 {pts_map[0][0]}"
+        )
+        assert abs(pts_map[0][1] - 3199985.0) < 1e-4, (
+            f"点 0 Y 坐标期望 3199985.0，实际 {pts_map[0][1]}"
+        )
+        assert abs(pts_map[1][0] - 500045.0) < 1e-4, (
+            f"点 1 X 坐标期望 500045.0，实际 {pts_map[1][0]}"
+        )
+        assert abs(pts_map[1][1] - 3199990.0) < 1e-4, (
+            f"点 1 Y 坐标期望 3199990.0，实际 {pts_map[1][1]}"
+        )
+        assert abs(pts_map[2][0] - 500040.0) < 1e-4, (
+            f"点 2 X 坐标期望 500040.0，实际 {pts_map[2][0]}"
+        )
+        assert abs(pts_map[2][1] - 3199967.5) < 1e-4, (
+            f"点 2 Y 坐标期望 3199967.5，实际 {pts_map[2][1]}"
+        )
 
         # 权威模型必须依然保持像素坐标，绝不被视图污染
         auth_roi = win.canvas.roi_list()[0]
@@ -543,13 +592,20 @@ def test_rotated_affine_known_point_and_crs_roundtrip_transformation(
         old_wkt = win.canvas.view_crs_wkt
         win.cmb_view_crs.setCurrentIndex(2)
         deadline = time.monotonic() + 10.0
-        while time.monotonic() < deadline and (win.canvas.view_crs_wkt == old_wkt or win.canvas._view_bounds is None):
+        while time.monotonic() < deadline and (
+            win.canvas.view_crs_wkt == old_wkt or win.canvas._view_bounds is None
+        ):
             qapp.processEvents()
             time.sleep(0.02)
         assert win.canvas._view_bounds is not None and win.canvas.view_crs_wkt != old_wkt
         # 在 4326 视图下，ROI 显示图形转换为了经纬度（坐标大约在东经 117°、北纬 28° 附近）
         state_4326 = win.canvas._roi_states[roi.roi_id]
-        pts_4326 = [[float(p.x()), float(p.y())] for p in (state_4326["item"].mapToParent(pt) for pt in state_4326["item"].getState()["points"])]
+        pts_4326 = [
+            [float(p.x()), float(p.y())]
+            for p in (
+                state_4326["item"].mapToParent(pt) for pt in state_4326["item"].getState()["points"]
+            )
+        ]
         assert len(pts_4326) == 3
         # 经度必须在 (-180, 180)，纬度在 (-90, 90)
         assert -180.0 <= pts_4326[0][0] <= 180.0
@@ -562,13 +618,19 @@ def test_rotated_affine_known_point_and_crs_roundtrip_transformation(
         qapp.processEvents()
         state_back = win.canvas._roi_states[roi.roi_id]
         item_back = state_back["item"]
-        pts_back = [[float(p.x()), float(p.y())] for p in (item_back.mapToParent(pt) for pt in item_back.getState()["points"])]
+        pts_back = [
+            [float(p.x()), float(p.y())]
+            for p in (item_back.mapToParent(pt) for pt in item_back.getState()["points"])
+        ]
         assert abs(pts_back[0][0] - 20.0) < 1e-4
         assert abs(pts_back[0][1] - 10.0) < 1e-4
 
         # 6. 保存项目并重开
         proj_file = tmp_path / "rotated_known_point_roundtrip.spectra.json"
-        with patch("spectra_workbench.ui.main_window.QFileDialog.getSaveFileName", return_value=(str(proj_file), "")):
+        with patch(
+            "spectra_workbench.ui.main_window.QFileDialog.getSaveFileName",
+            return_value=(str(proj_file), ""),
+        ):
             win.save_project_action(save_as=True)
     finally:
         win.close()
@@ -609,7 +671,12 @@ def test_no_crs_and_no_gt_refuses_map_conversion_and_stale_generation_dropped(
         _wait_layers(win, qapp, count=1)
         assert len(win.layer_panel.layers) == 1
 
-        roi = ROI(name="NoGtROI", shape=ROIShape.polygon, points=[(5.0, 5.0), (10.0, 5.0), (7.0, 10.0)], coordinate_space="pixel")
+        roi = ROI(
+            name="NoGtROI",
+            shape=ROIShape.polygon,
+            points=[(5.0, 5.0), (10.0, 5.0), (7.0, 10.0)],
+            coordinate_space="pixel",
+        )
         win.canvas._add_roi(roi)
 
         # 尝试通过 worker 将像元转换为地图坐标：必须显式报错，绝不猜测伪造坐标
@@ -660,7 +727,10 @@ def test_rectangle_roi_affine_rotation_preserves_four_corners_and_area(
     rotated_path = Path(p3_samples["samples"]["rotated"]["path"]).resolve()
 
     def poly_area(pts: list[list[float]]) -> float:
-        return abs(sum(a[0] * b[1] - b[0] * a[1] for a, b in zip(pts, pts[1:] + pts[:1], strict=True))) / 2.0
+        return (
+            abs(sum(a[0] * b[1] - b[0] * a[1] for a, b in zip(pts, pts[1:] + pts[:1], strict=True)))
+            / 2.0
+        )
 
     win = MainWindow()
     win.show()
@@ -669,7 +739,12 @@ def test_rectangle_roi_affine_rotation_preserves_four_corners_and_area(
         _wait_layers(win, qapp, count=1)
 
         # 1. 在像素坐标系下添加矩形 ROI: [(10.0, 10.0), (20.0, 20.0)]
-        roi = ROI(name="Rect1", shape=ROIShape.rectangle, points=[(10.0, 10.0), (20.0, 20.0)], coordinate_space="pixel")
+        roi = ROI(
+            name="Rect1",
+            shape=ROIShape.rectangle,
+            points=[(10.0, 10.0), (20.0, 20.0)],
+            coordinate_space="pixel",
+        )
         win.canvas._add_roi(roi)
         qapp.processEvents()
 
@@ -684,7 +759,9 @@ def test_rectangle_roi_affine_rotation_preserves_four_corners_and_area(
         old_wkt = win.canvas.view_crs_wkt
         win.cmb_view_crs.setCurrentIndex(1)
         deadline = time.monotonic() + 10.0
-        while time.monotonic() < deadline and (win.canvas.view_crs_wkt == old_wkt or win.canvas._view_bounds is None):
+        while time.monotonic() < deadline and (
+            win.canvas.view_crs_wkt == old_wkt or win.canvas._view_bounds is None
+        ):
             qapp.processEvents()
             time.sleep(0.02)
         assert win.canvas._view_bounds is not None, "视图 CRS 切换超时"
@@ -698,7 +775,10 @@ def test_rectangle_roi_affine_rotation_preserves_four_corners_and_area(
         assert all(not h.isVisible() for h in item_map.getHandles()), "变换视图下手柄必须隐藏/禁用"
 
         # 取出地图视图下的 4 个实际显示点位
-        pts_map = [[float(p.x()), float(p.y())] for p in (item_map.mapToParent(pt) for pt in item_map.getState()["points"])]
+        pts_map = [
+            [float(p.x()), float(p.y())]
+            for p in (item_map.mapToParent(pt) for pt in item_map.getState()["points"])
+        ]
         assert len(pts_map) == 4, f"期望 4 个角点，实际收到 {len(pts_map)} 个"
 
         # GT = (500000, 2, 0.5, 3200000, 0.5, -2)
@@ -707,18 +787,28 @@ def test_rectangle_roi_affine_rotation_preserves_four_corners_and_area(
         # 点 2: (20, 20) -> (500050.0, 3199970.0)
         # 点 3: (10, 20) -> (500030.0, 3199965.0)
         assert abs(pts_map[0][0] - 500025.0) < 1e-4, f"角点 0 X 期望 500025.0，实际 {pts_map[0][0]}"
-        assert abs(pts_map[0][1] - 3199985.0) < 1e-4, f"角点 0 Y 期望 3199985.0，实际 {pts_map[0][1]}"
+        assert abs(pts_map[0][1] - 3199985.0) < 1e-4, (
+            f"角点 0 Y 期望 3199985.0，实际 {pts_map[0][1]}"
+        )
         assert abs(pts_map[1][0] - 500045.0) < 1e-4, f"角点 1 X 期望 500045.0，实际 {pts_map[1][0]}"
-        assert abs(pts_map[1][1] - 3199990.0) < 1e-4, f"角点 1 Y 期望 3199990.0，实际 {pts_map[1][1]}"
+        assert abs(pts_map[1][1] - 3199990.0) < 1e-4, (
+            f"角点 1 Y 期望 3199990.0，实际 {pts_map[1][1]}"
+        )
         assert abs(pts_map[2][0] - 500050.0) < 1e-4, f"角点 2 X 期望 500050.0，实际 {pts_map[2][0]}"
-        assert abs(pts_map[2][1] - 3199970.0) < 1e-4, f"角点 2 Y 期望 3199970.0，实际 {pts_map[2][1]}"
+        assert abs(pts_map[2][1] - 3199970.0) < 1e-4, (
+            f"角点 2 Y 期望 3199970.0，实际 {pts_map[2][1]}"
+        )
         assert abs(pts_map[3][0] - 500030.0) < 1e-4, f"角点 3 X 期望 500030.0，实际 {pts_map[3][0]}"
-        assert abs(pts_map[3][1] - 3199965.0) < 1e-4, f"角点 3 Y 期望 3199965.0，实际 {pts_map[3][1]}"
+        assert abs(pts_map[3][1] - 3199965.0) < 1e-4, (
+            f"角点 3 Y 期望 3199965.0，实际 {pts_map[3][1]}"
+        )
 
         # 面积断言：真实多边形面积必须精确等于 425.0，且绝不能等于错误的轴对齐包围面积 375.0！
         actual_area = poly_area(pts_map)
         assert abs(actual_area - 425.0) < 1e-4, f"真实覆盖面积期望 425.0，实际 {actual_area}"
-        assert abs(actual_area - 375.0) > 10.0, "覆盖面积绝不可退化为错误的对角点轴对齐矩形面积 375.0"
+        assert abs(actual_area - 375.0) > 10.0, (
+            "覆盖面积绝不可退化为错误的对角点轴对齐矩形面积 375.0"
+        )
 
         # 权威模型必须依然保持像素坐标，绝不被视图污染
         auth_roi = win.canvas.roi_list()[0]
@@ -729,12 +819,19 @@ def test_rectangle_roi_affine_rotation_preserves_four_corners_and_area(
         old_wkt = win.canvas.view_crs_wkt
         win.cmb_view_crs.setCurrentIndex(2)
         deadline = time.monotonic() + 10.0
-        while time.monotonic() < deadline and (win.canvas.view_crs_wkt == old_wkt or win.canvas._view_bounds is None):
+        while time.monotonic() < deadline and (
+            win.canvas.view_crs_wkt == old_wkt or win.canvas._view_bounds is None
+        ):
             qapp.processEvents()
             time.sleep(0.02)
         assert win.canvas._view_bounds is not None and win.canvas.view_crs_wkt != old_wkt
         st_4326 = win.canvas._roi_states[roi.roi_id]
-        pts_4326 = [[float(p.x()), float(p.y())] for p in (st_4326["item"].mapToParent(pt) for pt in st_4326["item"].getState()["points"])]
+        pts_4326 = [
+            [float(p.x()), float(p.y())]
+            for p in (
+                st_4326["item"].mapToParent(pt) for pt in st_4326["item"].getState()["points"]
+            )
+        ]
         assert len(pts_4326) == 4
         for pt in pts_4326:
             assert -180.0 <= pt[0] <= 180.0
@@ -754,7 +851,10 @@ def test_rectangle_roi_affine_rotation_preserves_four_corners_and_area(
 
         # 6. 保存项目并重开
         proj_file = tmp_path / "rect_rotated_roundtrip.spectra.json"
-        with patch("spectra_workbench.ui.main_window.QFileDialog.getSaveFileName", return_value=(str(proj_file), "")):
+        with patch(
+            "spectra_workbench.ui.main_window.QFileDialog.getSaveFileName",
+            return_value=(str(proj_file), ""),
+        ):
             win.save_project_action(save_as=True)
     finally:
         win.close()
@@ -803,8 +903,18 @@ def test_roi_coordinate_transform_failure_hides_item_and_preserves_authority(
         layer = win.layer_panel.layers[0]
 
         # 1. 添加矩形 ROI 与多边形 ROI 各一个
-        roi_rect = ROI(name="RectFail", shape=ROIShape.rectangle, points=[(10.0, 10.0), (20.0, 20.0)], coordinate_space="pixel")
-        roi_poly = ROI(name="PolyFail", shape=ROIShape.polygon, points=[(10.0, 10.0), (20.0, 10.0), (15.0, 20.0)], coordinate_space="pixel")
+        roi_rect = ROI(
+            name="RectFail",
+            shape=ROIShape.rectangle,
+            points=[(10.0, 10.0), (20.0, 20.0)],
+            coordinate_space="pixel",
+        )
+        roi_poly = ROI(
+            name="PolyFail",
+            shape=ROIShape.polygon,
+            points=[(10.0, 10.0), (20.0, 10.0), (15.0, 20.0)],
+            coordinate_space="pixel",
+        )
         win.canvas._add_roi(roi_rect)
         win.canvas._add_roi(roi_poly)
         qapp.processEvents()
@@ -813,7 +923,9 @@ def test_roi_coordinate_transform_failure_hides_item_and_preserves_authority(
         with patch.object(
             win.canvas._client,
             "transform_coordinates_async",
-            side_effect=lambda *a, **kw: kw["on_error"]("injected coordinate transformation failure"),
+            side_effect=lambda *a, **kw: kw["on_error"](
+                "injected coordinate transformation failure"
+            ),
         ):
             win.canvas.set_view_crs(layer.metadata["crs_wkt"])
             deadline = time.monotonic() + 10.0
@@ -840,8 +952,15 @@ def test_roi_coordinate_transform_failure_hides_item_and_preserves_authority(
         # 权威模型必须依然保持像素坐标与原点位
         rois = win.canvas.roi_list()
         assert len(rois) == 2
-        assert rois[0].coordinate_space == "pixel" and rois[0].points == [(10.0, 10.0), (20.0, 20.0)]
-        assert rois[1].coordinate_space == "pixel" and rois[1].points == [(10.0, 10.0), (20.0, 10.0), (15.0, 20.0)]
+        assert rois[0].coordinate_space == "pixel" and rois[0].points == [
+            (10.0, 10.0),
+            (20.0, 20.0),
+        ]
+        assert rois[1].coordinate_space == "pixel" and rois[1].points == [
+            (10.0, 10.0),
+            (20.0, 10.0),
+            (15.0, 20.0),
+        ]
 
         # 4. 故障恢复：切换回像元坐标系，ROI 必须重新可见
         win.canvas.set_view_crs(None)
@@ -859,7 +978,11 @@ def test_roi_coordinate_transform_failure_hides_item_and_preserves_authority(
         assert not st_poly_restored.get("transform_error", False)
 
         # 5. 测试反算异常保护：当反算 Worker 报错时，_roi_geometry 必须返回原权威模型，不崩溃、不篡改
-        with patch.object(win.canvas._client, "transform_coordinates", side_effect=RuntimeError("injected worker failure")):
+        with patch.object(
+            win.canvas._client,
+            "transform_coordinates",
+            side_effect=RuntimeError("injected worker failure"),
+        ):
             res = win.canvas._roi_geometry(st_poly_restored)
             assert res.points == roi_poly.points
     finally:
@@ -903,7 +1026,12 @@ def test_roi_transform_failure_fault_matrix(
         win.open_dataset(rotated_path)
         _wait_layers(win, qapp, count=1)
 
-        roi = ROI(name="RectA", shape=ROIShape.rectangle, points=list(pixel_rect), coordinate_space="pixel")
+        roi = ROI(
+            name="RectA",
+            shape=ROIShape.rectangle,
+            points=list(pixel_rect),
+            coordinate_space="pixel",
+        )
         win.canvas._add_roi(roi)
         qapp.processEvents()
         st = win.canvas._roi_states[roi.roi_id]
@@ -1051,7 +1179,9 @@ def test_roi_transform_failure_fault_matrix(
         assert len(win2.layer_panel.layers) == 1, "C: 项目必须能打开"
         assert len(win2.canvas.roi_list()) == 1, "C: 重开后权威模型中必须仍有该 ROI"
         assert win2.canvas.roi_list()[0].points == map_rect_c, "C: 重开后权威几何必须完好"
-        assert win2.layer_panel.layers[0].rois[0].points == map_rect_c, "C: 重开后图层权威几何必须完好"
+        assert win2.layer_panel.layers[0].rois[0].points == map_rect_c, (
+            "C: 重开后图层权威几何必须完好"
+        )
         # 失败态必须被显式标记，而不是无声消失
         assert win2.canvas.roi_transform_failed_ids(), "C: 重开转换失败必须显式标记"
     finally:
@@ -1093,16 +1223,22 @@ def test_roi_transform_failure_fault_matrix(
             item.movePoint(0, pg.Point(500030.0, 3199995.0))
 
         st = win.canvas._roi_states[poly.roi_id]
-        after_display = [(round(p.x(), 3), round(p.y(), 3)) for p in st["item"].getState()["points"]]
+        after_display = [
+            (round(p.x(), 3), round(p.y(), 3)) for p in st["item"].getState()["points"]
+        ]
         assert after_display == before_display, (
             f"D: 反算失败后显示图形必须恢复原轮廓，实际 {after_display} != {before_display}"
         )
         assert st["item"].isVisible(), "D: 反算失败后图形不得被隐藏，应保持原样可继续编辑"
         assert poly.points == [(10.0, 10.0), (20.0, 10.0), (15.0, 20.0)], "D: 权威几何必须保持不变"
-        assert roi_snapshot(win) == [((10.0, 10.0), (20.0, 10.0), (15.0, 20.0))], "D: roi_list 必须返回原权威几何"
-        assert win.layer_panel.layers[0].rois[0].points == [(10.0, 10.0), (20.0, 10.0), (15.0, 20.0)], (
-            "D: 图层权威几何必须保持不变"
+        assert roi_snapshot(win) == [((10.0, 10.0), (20.0, 10.0), (15.0, 20.0))], (
+            "D: roi_list 必须返回原权威几何"
         )
+        assert win.layer_panel.layers[0].rois[0].points == [
+            (10.0, 10.0),
+            (20.0, 10.0),
+            (15.0, 20.0),
+        ], "D: 图层权威几何必须保持不变"
     finally:
         win.close()
         win.deleteLater()
@@ -1114,7 +1250,12 @@ def test_roi_transform_failure_fault_matrix(
     try:
         win.open_dataset(rotated_path)
         _wait_layers(win, qapp, count=1)
-        roi = ROI(name="RectE", shape=ROIShape.rectangle, points=list(pixel_rect), coordinate_space="pixel")
+        roi = ROI(
+            name="RectE",
+            shape=ROIShape.rectangle,
+            points=list(pixel_rect),
+            coordinate_space="pixel",
+        )
         win.canvas._add_roi(roi)
         qapp.processEvents()
 
@@ -1133,7 +1274,9 @@ def test_roi_transform_failure_fault_matrix(
         assert win.canvas.view_crs_wkt is not None, "E: 前置条件：视图 CRS 必须已切换"
 
         # 触发代际递增（模拟切换图层/CRS），此后第一次请求的响应即成为「过期响应」
-        win.canvas._gen.bump(win.canvas.current_layer.layer_id if win.canvas.current_layer else None)
+        win.canvas._gen.bump(
+            win.canvas.current_layer.layer_id if win.canvas.current_layer else None
+        )
         gen_after_bump = win.canvas.generation
 
         # 迟到响应现在才投递：代际保护必须让它被丢弃
@@ -1144,8 +1287,12 @@ def test_roi_transform_failure_fault_matrix(
         assert win.canvas.generation == gen_after_bump, "E: 代际号不应被迟到响应改变"
         st = win.canvas._roi_states[roi.roi_id]
         # 迟到响应绝不能污染权威几何
-        assert roi_snapshot(win) == [pixel_rect_t], f"E: 迟到响应污染了权威几何：{roi_snapshot(win)}"
-        assert win.layer_panel.layers[0].rois[0].points == pixel_rect, "E: 迟到响应污染了图层权威几何"
+        assert roi_snapshot(win) == [pixel_rect_t], (
+            f"E: 迟到响应污染了权威几何：{roi_snapshot(win)}"
+        )
+        assert win.layer_panel.layers[0].rois[0].points == pixel_rect, (
+            "E: 迟到响应污染了图层权威几何"
+        )
         # 图形不得显示迟到的假坐标
         disp = st["display_points"]
         if disp is not None:

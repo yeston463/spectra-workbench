@@ -54,10 +54,7 @@ def _make_raster(
 ) -> Path:
     alpha_stmt = ""
     if alpha:
-        alpha_stmt = (
-            f"    if i == {bands}:\n"
-            "        b.SetColorInterpretation(gdal.GCI_AlphaBand)"
-        )
+        alpha_stmt = f"    if i == {bands}:\n        b.SetColorInterpretation(gdal.GCI_AlphaBand)"
     script = f"""
 import numpy as np
 from osgeo import gdal, osr
@@ -99,7 +96,9 @@ def _run_task(
         attempt=1,
         capability_id=capability_id,
         descriptor_revision="1.0",
-        engine=EngineConstraint(provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"),
+        engine=EngineConstraint(
+            provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"
+        ),
         project_root=str(ROOT),
         workspace=str(out_path.parent),
         inputs={

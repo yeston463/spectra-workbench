@@ -1,4 +1,4 @@
-﻿"""P6-06 辐射定标 / DOS1 / 多时相去云端到端验收。"""
+"""P6-06 辐射定标 / DOS1 / 多时相去云端到端验收。"""
 
 from __future__ import annotations
 

@@ -34,7 +34,10 @@ USER_WORKSPACE = CLEAN_BASE / "user_workspace"
 @pytest.fixture(scope="session", autouse=True)
 def ensure_onedir_and_installation() -> Path:
     """确保 onedir 发布包已构建，并预先安装至独立干净测试环境。"""
-    if not (DIST_DIR / "SpectraWorkbench.exe").exists() or not (DIST_DIR / "manifest.json").exists():
+    if (
+        not (DIST_DIR / "SpectraWorkbench.exe").exists()
+        or not (DIST_DIR / "manifest.json").exists()
+    ):
         build_onedir_package(DIST_DIR, mode="link")
 
     install_package(DIST_DIR, INSTALLED_APP, mode="link")
@@ -77,6 +80,7 @@ def test_p10_02_install_upgrade_uninstall_and_user_project_preservation() -> Non
     test_install_dir = CLEAN_BASE / "lifecycle_test" / "SpectraWorkbench"
     if test_install_dir.exists():
         import shutil
+
         shutil.rmtree(test_install_dir.parent, ignore_errors=True)
 
     # 1. 首次安装
@@ -96,11 +100,15 @@ def test_p10_02_install_upgrade_uninstall_and_user_project_preservation() -> Non
         "layers": [{"source": "data/sample.tif", "name": "B1-Ramp"}],
         "notes": "这是用户在实地采集的重点研究数据，严禁被安装程序清理",
     }
-    internal_user_proj.write_text(json.dumps(sample_proj_data, indent=2, ensure_ascii=False), encoding="utf-8")
+    internal_user_proj.write_text(
+        json.dumps(sample_proj_data, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
     original_bytes = internal_user_proj.read_bytes()
 
     external_user_proj = USER_WORKSPACE / "field_survey_2026.spectra.json"
-    external_user_proj.write_text(json.dumps(sample_proj_data, indent=2, ensure_ascii=False), encoding="utf-8")
+    external_user_proj.write_text(
+        json.dumps(sample_proj_data, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
     ext_bytes = external_user_proj.read_bytes()
 
     # 3. 模拟应用无缝升级到 v1.0.1
@@ -157,7 +165,9 @@ def test_p10_02_clean_machine_scrubbed_env_and_no_dev_dir(tmp_path: Path) -> Non
         timeout=30,
     )
 
-    assert proc.returncode == 0, f"干净机启动 doctor 失败: stdout={proc.stdout}, stderr={proc.stderr}"
+    assert proc.returncode == 0, (
+        f"干净机启动 doctor 失败: stdout={proc.stdout}, stderr={proc.stderr}"
+    )
     # 解析输出中的 JSON 报告
     report_data = None
     for line in proc.stdout.splitlines():
@@ -170,7 +180,9 @@ def test_p10_02_clean_machine_scrubbed_env_and_no_dev_dir(tmp_path: Path) -> Non
                 pass
 
     if report_data:
-        assert report_data.get("overall_ok") is True, f"Doctor 总体判定不通过: {report_data.get('errors')}"
+        assert report_data.get("overall_ok") is True, (
+            f"Doctor 总体判定不通过: {report_data.get('errors')}"
+        )
         assert report_data.get("gui_can_start") is True
         envs = report_data.get("envs", {})
         assert envs.get("ui", {}).get("status") == "ok"
@@ -246,7 +258,9 @@ print('P10_GDAL_HILLSHADE_OFFLINE_SUCCESS')
         cwd=str(tmp_path),
         timeout=25,
     )
-    assert proc.returncode == 0, f"GDAL 离线主要处理失败: stdout={proc.stdout}, stderr={proc.stderr}"
+    assert proc.returncode == 0, (
+        f"GDAL 离线主要处理失败: stdout={proc.stdout}, stderr={proc.stderr}"
+    )
     assert "P10_GDAL_HILLSHADE_OFFLINE_SUCCESS" in proc.stdout
 
 
@@ -306,7 +320,9 @@ print('P10_RASTERIO_NDVI_OFFLINE_SUCCESS')
         cwd=str(tmp_path),
         timeout=25,
     )
-    assert proc.returncode == 0, f"Rasterio 离线处理失败: stdout={proc.stdout}, stderr={proc.stderr}"
+    assert proc.returncode == 0, (
+        f"Rasterio 离线处理失败: stdout={proc.stdout}, stderr={proc.stderr}"
+    )
     assert "P10_RASTERIO_NDVI_OFFLINE_SUCCESS" in proc.stdout
 
 
@@ -327,4 +343,6 @@ def test_p10_02_offline_headless_ui_startup(tmp_path: Path) -> None:
         cwd=str(tmp_path),
         timeout=30,
     )
-    assert proc.returncode == 0, f"干净机离线 UI 启动失败: stdout={proc.stdout}, stderr={proc.stderr}"
+    assert proc.returncode == 0, (
+        f"干净机离线 UI 启动失败: stdout={proc.stdout}, stderr={proc.stderr}"
+    )

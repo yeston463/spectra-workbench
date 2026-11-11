@@ -238,18 +238,14 @@ def test_grid_band_and_format_rejections(
         a,
         gt=(101.0, 10.0, 0.0, 200.0, 0.0, -10.0),
     )
-    mismatch = _run(
-        qapp, {"diffMode": "difference", "referenceFile": str(shifted)}, src, out
-    )
+    mismatch = _run(qapp, {"diffMode": "difference", "referenceFile": str(shifted)}, src, out)
     assert mismatch.status is TaskStatus.failed
     assert mismatch.error and mismatch.error["code"] == "rasterdiff_error"
     assert "GeoTransform" in mismatch.error["message"]
     assert not out.exists()
 
     one_band = _make_raster(gdal_rt, tmp_path / "b_oneband.tif", np.ones((1, 2, 2)))
-    src_two = _make_raster(
-        gdal_rt, tmp_path / "a_two.tif", np.ones((2, 2, 2))
-    )
+    src_two = _make_raster(gdal_rt, tmp_path / "a_two.tif", np.ones((2, 2, 2)))
     band_mismatch = _run(
         qapp, {"diffMode": "difference", "referenceFile": str(one_band)}, src_two, out
     )

@@ -122,15 +122,30 @@ class TaskStatus(StrEnum):
 
     @property
     def terminal(self) -> bool:
-        return self in {TaskStatus.succeeded, TaskStatus.failed, TaskStatus.cancelled, TaskStatus.interrupted}
+        return self in {
+            TaskStatus.succeeded,
+            TaskStatus.failed,
+            TaskStatus.cancelled,
+            TaskStatus.interrupted,
+        }
 
 
 _TERMINAL = {TaskStatus.succeeded, TaskStatus.failed, TaskStatus.cancelled, TaskStatus.interrupted}
 
 _ALLOWED_TRANSITIONS: dict[TaskStatus, set[TaskStatus]] = {
     TaskStatus.queued: {TaskStatus.validating, TaskStatus.cancelled, TaskStatus.interrupted},
-    TaskStatus.validating: {TaskStatus.running, TaskStatus.failed, TaskStatus.cancelled, TaskStatus.interrupted},
-    TaskStatus.running: {TaskStatus.succeeded, TaskStatus.failed, TaskStatus.cancelling, TaskStatus.interrupted},
+    TaskStatus.validating: {
+        TaskStatus.running,
+        TaskStatus.failed,
+        TaskStatus.cancelled,
+        TaskStatus.interrupted,
+    },
+    TaskStatus.running: {
+        TaskStatus.succeeded,
+        TaskStatus.failed,
+        TaskStatus.cancelling,
+        TaskStatus.interrupted,
+    },
     TaskStatus.cancelling: {TaskStatus.cancelled, TaskStatus.failed, TaskStatus.interrupted},
 }
 
@@ -362,7 +377,15 @@ class ParameterSpec(ContractModel):
     def _serialize(self, handler: Any) -> dict[str, Any]:
         d = handler(self)
         if isinstance(d, dict):
-            for k in ("repeatable", "default", "choices", "constraints", "help", "advanced", "extensions"):
+            for k in (
+                "repeatable",
+                "default",
+                "choices",
+                "constraints",
+                "help",
+                "advanced",
+                "extensions",
+            ):
                 if d.get(k) is None:
                     d.pop(k, None)
         return d
@@ -485,14 +508,21 @@ class CapabilityDescriptor(ContractModel):
     @classmethod
     def _schema_supported(cls, v: str):
         if v != SCHEMA_VERSION:
-            raise ValueError(f"不支持的 capability schema_version：{v}（本实现支持 {SCHEMA_VERSION}）")
+            raise ValueError(
+                f"不支持的 capability schema_version：{v}（本实现支持 {SCHEMA_VERSION}）"
+            )
         return v
 
     @model_validator(mode="after")
     def _no_unverified_claim(self):
         if self.state.validation is Validation.numerical_passed and not self.validation_evidence:
-            raise ValueError("validation=numerical_passed 必须给出 validation_evidence，不得空口宣称已验证")
-        if self.state.availability is Availability.ready and self.state.presence is Presence.missing:
+            raise ValueError(
+                "validation=numerical_passed 必须给出 validation_evidence，不得空口宣称已验证"
+            )
+        if (
+            self.state.availability is Availability.ready
+            and self.state.presence is Presence.missing
+        ):
             raise ValueError("presence=missing 不能同时 availability=ready")
         return self
 
@@ -559,21 +589,29 @@ class TaskSpec(ContractModel):
     parameters: dict[str, Any] = Field(default_factory=dict)
     outputs: list[OutputPlan] = Field(default_factory=list)
     resources: ResourceRequest = Field(
-        default_factory=lambda: ResourceRequest(max_cpu_threads=1, ram_limit_mib=512, priority=Priority.normal)
+        default_factory=lambda: ResourceRequest(
+            max_cpu_threads=1, ram_limit_mib=512, priority=Priority.normal
+        )
     )
     configuration: dict[str, Any] = Field(default_factory=dict)
     cancellation: CancellationPolicy = Field(
-        default_factory=lambda: CancellationPolicy(cooperative_timeout_seconds=5.0, allow_process_termination=True)
+        default_factory=lambda: CancellationPolicy(
+            cooperative_timeout_seconds=5.0, allow_process_termination=True
+        )
     )
     provenance: Provenance = Field(default_factory=lambda: Provenance(origin="gui"))
-    retry: RetryPolicy = Field(default_factory=lambda: RetryPolicy(max_automatic_retries=0, external_side_effects=False))
+    retry: RetryPolicy = Field(
+        default_factory=lambda: RetryPolicy(max_automatic_retries=0, external_side_effects=False)
+    )
     extensions: dict[str, Any] = Field(default_factory=dict)
 
     @field_validator("protocol_version")
     @classmethod
     def _protocol_supported(cls, v: str):
         if v not in SUPPORTED_PROTOCOL_VERSIONS:
-            raise ValueError(f"不支持的 protocol_version：{v}（支持 {sorted(SUPPORTED_PROTOCOL_VERSIONS)}）")
+            raise ValueError(
+                f"不支持的 protocol_version：{v}（支持 {sorted(SUPPORTED_PROTOCOL_VERSIONS)}）"
+            )
         return v
 
     @model_validator(mode="after")

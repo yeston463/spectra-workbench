@@ -107,7 +107,11 @@ def _create_dummy_adapter() -> ProviderAdapter:
                     category=["test"],
                     description="Test no-op",
                     engine=CapabilityEngineSpec(provider_id="dummy", version_constraint=">=1.0"),
-                    source=CapabilitySource(documentation_url="https://example.com", baseline_id="dummy", upstream_version="1.0"),
+                    source=CapabilitySource(
+                        documentation_url="https://example.com",
+                        baseline_id="dummy",
+                        upstream_version="1.0",
+                    ),
                     inputs=[PortSpec(key="input", data_type=DatasetKind.scalar, required=False)],
                     outputs=[PortSpec(key="output", data_type=DatasetKind.scalar, required=True)],
                     state=CapabilityState(
@@ -161,7 +165,15 @@ def _create_dummy_adapter() -> ProviderAdapter:
                 "crs_wkt": None,
                 "geotransform": [0.0, 1.0, 0.0, 16.0, 0.0, -1.0],
                 "bounds": [0.0, 0.0, 16.0, 16.0],
-                "bands": [{"band": 1, "dtype": "Float32", "nodata": None, "color_interp": "Gray", "overviews": 0}],
+                "bands": [
+                    {
+                        "band": 1,
+                        "dtype": "Float32",
+                        "nodata": None,
+                        "color_interp": "Gray",
+                        "overviews": 0,
+                    }
+                ],
             }
 
         def read_window(
@@ -178,6 +190,7 @@ def _create_dummy_adapter() -> ProviderAdapter:
             overview: str = "auto",
         ) -> dict[str, Any]:
             import base64
+
             buf = bytearray(out_w * out_h)
             for y in range(out_h):
                 for x in range(out_w):
@@ -206,7 +219,11 @@ def _create_dummy_adapter() -> ProviderAdapter:
             dst_crs_wkt: str | None = None,
             convention: str = "corner",
         ) -> dict[str, Any]:
-            return {"points": [list(p) for p in points], "from_space": from_space, "to_space": to_space}
+            return {
+                "points": [list(p) for p in points],
+                "from_space": from_space,
+                "to_space": to_space,
+            }
 
     return DummyAdapter()
 
@@ -357,7 +374,9 @@ class WorkerRuntime:
         )
 
         # 2. 启动后台任务执行线程
-        executor_thread = threading.Thread(target=self._executor_loop, name="worker-executor", daemon=True)
+        executor_thread = threading.Thread(
+            target=self._executor_loop, name="worker-executor", daemon=True
+        )
         executor_thread.start()
 
         # 3. 主线程持续读取标准输入分帧
@@ -409,7 +428,9 @@ class WorkerRuntime:
             return
 
         if env.kind is Kind.cancel:
-            if self._active_context is not None and (env.task_id is None or env.task_id == self._active_context.task_id):
+            if self._active_context is not None and (
+                env.task_id is None or env.task_id == self._active_context.task_id
+            ):
                 self._active_context.cancel()
             return
 
@@ -502,7 +523,17 @@ class WorkerRuntime:
         "transform_bounds": ("transform_bounds", ("view_crs_wkt",), True),
         "read_view_window": (
             "read_view_window",
-            ("view_crs_wkt", "x_min", "y_min", "x_max", "y_max", "out_w", "out_h", "bands", "resampling"),
+            (
+                "view_crs_wkt",
+                "x_min",
+                "y_min",
+                "x_max",
+                "y_max",
+                "out_w",
+                "out_h",
+                "bands",
+                "resampling",
+            ),
             True,
         ),
         "probe_vector": ("probe_vector", (), True),
@@ -554,7 +585,12 @@ class WorkerRuntime:
             data = method(uri)
             self.send_kind(
                 Kind.result,
-                {"status": "succeeded", "artifact_ids": [], "action": "probe_subdataset", "data": data},
+                {
+                    "status": "succeeded",
+                    "artifact_ids": [],
+                    "action": "probe_subdataset",
+                    "data": data,
+                },
                 request_id=env.request_id,
                 task_id=env.task_id,
             )
@@ -588,7 +624,12 @@ class WorkerRuntime:
                 pass
             self.send_kind(
                 Kind.result,
-                {"status": "succeeded", "artifact_ids": [], "action": "configure_credentials", "applied_keys": list(env_vars.keys())},
+                {
+                    "status": "succeeded",
+                    "artifact_ids": [],
+                    "action": "configure_credentials",
+                    "applied_keys": list(env_vars.keys()),
+                },
                 request_id=env.request_id,
             )
         except Exception as exc:
@@ -630,7 +671,9 @@ class WorkerRuntime:
                 kwargs[key] = args[key]
         try:
             if needs_path and path_str is not None:
-                resolved = resolve_input_resource(path_str, getattr(self, "project_root", Path.cwd()))
+                resolved = resolve_input_resource(
+                    path_str, getattr(self, "project_root", Path.cwd())
+                )
                 data = method(resolved, **kwargs)
             else:
                 data = method(**kwargs)
@@ -814,7 +857,6 @@ class WorkerRuntime:
             task_id=spec.task_id,
         )
 
-
         workspace = resolve_dataset_path(spec.workspace, spec.project_root)
         staging_dir = workspace / ".staging" / spec.task_id
 
@@ -856,7 +898,10 @@ class WorkerRuntime:
                 task_id=spec.task_id,
                 attempt=spec.attempt,
                 status=TaskStatus.cancelled,
-                error={"code": "task_cancelled", "message": f"Task {spec.task_id} was cancelled cooperatively"},
+                error={
+                    "code": "task_cancelled",
+                    "message": f"Task {spec.task_id} was cancelled cooperatively",
+                },
             )
         except Exception as exc:
             from spectra_workbench.domain.models import TaskResult
@@ -873,7 +918,11 @@ class WorkerRuntime:
             self._active_task_id = None
 
         # 发送 result 终态
-        art_ids = [o["uri"] for o in result.outputs] if result.outputs else [f"task-result-{spec.task_id}"]
+        art_ids = (
+            [o["uri"] for o in result.outputs]
+            if result.outputs
+            else [f"task-result-{spec.task_id}"]
+        )
         res_payload: dict[str, Any] = {
             "status": result.status.value,
             "artifact_ids": art_ids,
@@ -895,7 +944,9 @@ class WorkerRuntime:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Spectra Workbench Engine Worker CLI")
-    parser.add_argument("provider_id", help="Engine provider identifier (e.g. gdal, rasterio, science, dummy)")
+    parser.add_argument(
+        "provider_id", help="Engine provider identifier (e.g. gdal, rasterio, science, dummy)"
+    )
     parser.add_argument("--worker-id", default=None, help="Explicit worker ID string")
     parser.add_argument("--generation", type=int, default=0, help="Process generation number")
 

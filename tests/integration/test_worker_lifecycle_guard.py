@@ -92,9 +92,7 @@ def _alive_pids(pids: list[int]) -> int:
 
 def test_worker_process_del_kills_child(qapp: QApplication) -> None:
     """WorkerProcess 被回收时必须调用 kill 终止子进程（兜底防孤儿）。"""
-    worker = WorkerProcess(
-        provider_id="gdal", worker_id="del-guard-test", project_root=str(ROOT)
-    )
+    worker = WorkerProcess(provider_id="gdal", worker_id="del-guard-test", project_root=str(ROOT))
     worker.start(timeout=30.0)
     assert worker._proc is not None
     assert worker.is_alive
@@ -115,9 +113,7 @@ def test_worker_process_del_kills_child(qapp: QApplication) -> None:
 
 def test_worker_process_stop_kills_when_not_alive(qapp: QApplication) -> None:
     """stop() 在进程「未存活」分支也必须确保 kill，避免子进程残留。"""
-    worker = WorkerProcess(
-        provider_id="gdal", worker_id="stop-guard-test", project_root=str(ROOT)
-    )
+    worker = WorkerProcess(provider_id="gdal", worker_id="stop-guard-test", project_root=str(ROOT))
     worker.start(timeout=30.0)
     assert worker._proc is not None
 
@@ -172,4 +168,6 @@ def test_no_orphan_worker_processes_after_context_managers(qapp: QApplication) -
     time.sleep(1.0)
 
     alive = _alive_pids(started_pids)
-    assert alive == 0, f"上下文管理器退出后仍有 {alive}/{len(started_pids)} 个 worker 存活（孤儿进程）"
+    assert alive == 0, (
+        f"上下文管理器退出后仍有 {alive}/{len(started_pids)} 个 worker 存活（孤儿进程）"
+    )

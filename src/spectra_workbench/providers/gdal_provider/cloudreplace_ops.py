@@ -129,9 +129,7 @@ def run_cloud_replace(
         pr_w, pr_h = int(pr_ds.RasterXSize), int(pr_ds.RasterYSize)
         ref_w, ref_h = int(sec_ds.RasterXSize), int(sec_ds.RasterYSize)
         if (pr_w, pr_h) != (ref_w, ref_h):
-            raise CloudReplaceError(
-                f"两时相影像尺寸不一致：{pr_w}x{pr_h} vs {ref_w}x{ref_h}"
-            )
+            raise CloudReplaceError(f"两时相影像尺寸不一致：{pr_w}x{pr_h} vs {ref_w}x{ref_h}")
         band_count = int(pr_ds.RasterCount)
         if band_count != int(sec_ds.RasterCount):
             raise CloudReplaceError(
@@ -157,9 +155,7 @@ def run_cloud_replace(
         _progress(callback, 0.25, "读取云掩膜")
         cloud_mask, _mask_h = _load_mask(gdal, mask_path)
         if cloud_mask.shape != (pr_h, pr_w):
-            raise CloudReplaceError(
-                f"掩膜形状 {cloud_mask.shape} 与影像网格 {(pr_h, pr_w)} 不一致"
-            )
+            raise CloudReplaceError(f"掩膜形状 {cloud_mask.shape} 与影像网格 {(pr_h, pr_w)} 不一致")
         if int(mask_dilate_pixels) > 0:
             cloud_mask = _dilate_mask(cloud_mask, int(mask_dilate_pixels))
 
@@ -175,9 +171,7 @@ def run_cloud_replace(
                 raise CloudReplaceError(f"无法读取一期波段 {index}")
             primary_arrs.append(np.asarray(raw, dtype=np.float64))
             label = band.GetNoDataValue()
-            primary_labels.append(
-                float(label) if label is not None else None
-            )
+            primary_labels.append(float(label) if label is not None else None)
         secondary_arrs: list[np.ndarray] = []
         secondary_labels: list[float | None] = []
         for index in band_list:
@@ -189,9 +183,7 @@ def run_cloud_replace(
                 raise CloudReplaceError(f"无法读取二期波段 {index}")
             secondary_arrs.append(np.asarray(raw, dtype=np.float64))
             label = band.GetNoDataValue()
-            secondary_labels.append(
-                float(label) if label is not None else None
-            )
+            secondary_labels.append(float(label) if label is not None else None)
     finally:
         sec_ds = None
         pr_ds = None
@@ -201,9 +193,7 @@ def run_cloud_replace(
     n_cloud = int(cloud_mask.sum())
     n_clean = int((~cloud_mask).sum())
     n_both_nodata = 0
-    for pr_idx, (primary_arr, sec_arr) in enumerate(
-        zip(primary_arrs, secondary_arrs, strict=True)
-    ):
+    for pr_idx, (primary_arr, sec_arr) in enumerate(zip(primary_arrs, secondary_arrs, strict=True)):
         pr_label = primary_labels[pr_idx]
         sec_label = secondary_labels[pr_idx]
         label = (
@@ -221,22 +211,16 @@ def run_cloud_replace(
             pr_valid &= primary_arr != label
             sec_valid &= sec_arr != label
         out_arr = np.where(cloud_mask, sec_arr, primary_arr)
-        effective_valid = np.where(cloud_mask, sec_valid, pr_valid) & (
-            ~cloud_mask | sec_valid
-        )
+        effective_valid = np.where(cloud_mask, sec_valid, pr_valid) & (~cloud_mask | sec_valid)
         out_arr = np.where(effective_valid, out_arr, dst_nodata)
-        n_both_nodata += int(
-            np.count_nonzero(cloud_mask & ~sec_valid & ~pr_valid)
-        )
+        n_both_nodata += int(np.count_nonzero(cloud_mask & ~sec_valid & ~pr_valid))
         merged_outputs.append(np.where(effective_valid, out_arr, dst_nodata))
 
     _progress(callback, 0.78, f"写出成果（{out_format} / Float32，{len(merged_outputs)} 波段）")
     driver = gdal.GetDriverByName(out_format)
     if driver is None:
         raise CloudReplaceError(f"不可用输出驱动：{out_format}")
-    out_ds = driver.Create(
-        str(out_path), pr_w, pr_h, len(merged_outputs), gdal.GDT_Float32
-    )
+    out_ds = driver.Create(str(out_path), pr_w, pr_h, len(merged_outputs), gdal.GDT_Float32)
     if out_ds is None:
         raise CloudReplaceError(f"创建输出失败（驱动 {out_format}）: {out_path}")
     try:
@@ -266,21 +250,15 @@ def run_cloud_replace(
         "secondary": str(secondary),
         "mask_file": str(mask_path),
         "bands": [int(v) for v in band_list],
-        "primary_time": (
-            str(primary_time) if primary_time is not None else None
-        ),
-        "secondary_time": (
-            str(secondary_time) if secondary_time is not None else None
-        ),
+        "primary_time": (str(primary_time) if primary_time is not None else None),
+        "secondary_time": (str(secondary_time) if secondary_time is not None else None),
         "mask_dilate_pixels": int(mask_dilate_pixels),
         "n_cloud": n_cloud,
         "n_clean": n_clean,
         "n_both_nodata": int(n_both_nodata),
         "src_nodata": src_nodata,
         "dst_nodata": float(dst_nodata),
-        "pixel_source_rule": (
-            "clean: primary, cloud: secondary; source recorded via sidecar"
-        ),
+        "pixel_source_rule": ("clean: primary, cloud: secondary; source recorded via sidecar"),
         "disclaimer": (
             f"输出是 mask 驱动的两时相替换；云下来的值来自 secondTime="
             f"{secondary_time!r}（若提供），不是「恢复了原时刻真实地表」。"
@@ -297,11 +275,7 @@ def run_cloud_replace(
         "n_cloud": n_cloud,
         "n_clean": n_clean,
         "n_both_nodata": int(n_both_nodata),
-        "primary_time": (
-            str(primary_time) if primary_time is not None else None
-        ),
-        "secondary_time": (
-            str(secondary_time) if secondary_time is not None else None
-        ),
+        "primary_time": (str(primary_time) if primary_time is not None else None),
+        "secondary_time": (str(secondary_time) if secondary_time is not None else None),
         "sidecar": str(sidecar),
     }

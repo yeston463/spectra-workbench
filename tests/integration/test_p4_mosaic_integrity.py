@@ -106,12 +106,18 @@ def two_gap_sources(gdal_rt: dict, tmp_path) -> tuple[Path, Path]:
     import numpy as np
 
     c = _make_raster(
-        gdal_rt, tmp_path / "c.tif", np.full((2, 2), 5.0),
-        (100.0, 1.0, 0.0, 30.0, 0.0, -1.0), nodata=-9999.0,
+        gdal_rt,
+        tmp_path / "c.tif",
+        np.full((2, 2), 5.0),
+        (100.0, 1.0, 0.0, 30.0, 0.0, -1.0),
+        nodata=-9999.0,
     )
     d = _make_raster(
-        gdal_rt, tmp_path / "d.tif", np.full((2, 2), 7.0),
-        (103.0, 1.0, 0.0, 30.0, 0.0, -1.0), nodata=-9999.0,
+        gdal_rt,
+        tmp_path / "d.tif",
+        np.full((2, 2), 7.0),
+        (103.0, 1.0, 0.0, 30.0, 0.0, -1.0),
+        nodata=-9999.0,
     )
     return c, d
 
@@ -219,9 +225,7 @@ def test_envi_output_commits_header_sidecar(qapp, gdal_rt, two_gap_sources, tmp_
     assert result.status is TaskStatus.succeeded, result.error
 
     assert out_dat.exists(), "ENVI 主文件未落盘"
-    assert out_dat.with_suffix(".hdr").exists(), (
-        "ENVI 头文件未随主文件一起提交（成果集合不完整）"
-    )
+    assert out_dat.with_suffix(".hdr").exists(), "ENVI 头文件未随主文件一起提交（成果集合不完整）"
 
     # 独立 GDAL 重开最终 .dat 必须成功（头文件就位才可识别）
     info = _inspect(gdal_rt, out_dat)
@@ -313,12 +317,18 @@ def test_valid_zero_value_conflict_is_rejected(qapp, gdal_rt, tmp_path) -> None:
 
     # 源：有效区含 0 值，缺口为 -9999
     src = _make_raster(
-        gdal_rt, tmp_path / "z.tif", np.array([[0.0, 5.0], [7.0, 9.0]]),
-        (100.0, 1.0, 0.0, 30.0, 0.0, -1.0), nodata=-9999.0,
+        gdal_rt,
+        tmp_path / "z.tif",
+        np.array([[0.0, 5.0], [7.0, 9.0]]),
+        (100.0, 1.0, 0.0, 30.0, 0.0, -1.0),
+        nodata=-9999.0,
     )
     other = _make_raster(
-        gdal_rt, tmp_path / "z2.tif", np.array([[11.0, 12.0], [13.0, 14.0]]),
-        (102.0, 1.0, 0.0, 30.0, 0.0, -1.0), nodata=-9999.0,
+        gdal_rt,
+        tmp_path / "z2.tif",
+        np.array([[11.0, 12.0], [13.0, 14.0]]),
+        (102.0, 1.0, 0.0, 30.0, 0.0, -1.0),
+        nodata=-9999.0,
     )
     out = tmp_path / "zero_valid.tif"
     result = _run_gdal_task(
@@ -347,12 +357,18 @@ def test_mixed_crs_sources_are_rejected(qapp, gdal_rt, tmp_path) -> None:
     import numpy as np
 
     wgs = _make_raster(
-        gdal_rt, tmp_path / "wgs.tif", np.full((2, 2), 5.0),
-        (100.0, 1.0, 0.0, 30.0, 0.0, -1.0), epsg=4326,
+        gdal_rt,
+        tmp_path / "wgs.tif",
+        np.full((2, 2), 5.0),
+        (100.0, 1.0, 0.0, 30.0, 0.0, -1.0),
+        epsg=4326,
     )
     web = _make_raster(
-        gdal_rt, tmp_path / "web.tif", np.full((2, 2), 99.0),
-        (11131949.0, 1000.0, 0.0, 0.0, 0.0, -1000.0), epsg=3857,
+        gdal_rt,
+        tmp_path / "web.tif",
+        np.full((2, 2), 99.0),
+        (11131949.0, 1000.0, 0.0, 0.0, 0.0, -1000.0),
+        epsg=3857,
     )
     out = tmp_path / "mixed.tif"
     result = _run_gdal_task(qapp, "gdal:merge", {"format": "GTiff"}, [wgs, web], out)
@@ -370,12 +386,18 @@ def test_mixed_band_count_sources_are_rejected(qapp, gdal_rt, tmp_path) -> None:
     import numpy as np
 
     one = _make_raster(
-        gdal_rt, tmp_path / "b1.tif", np.full((2, 2), 5.0),
-        (100.0, 1.0, 0.0, 30.0, 0.0, -1.0), bands=1,
+        gdal_rt,
+        tmp_path / "b1.tif",
+        np.full((2, 2), 5.0),
+        (100.0, 1.0, 0.0, 30.0, 0.0, -1.0),
+        bands=1,
     )
     three = _make_raster(
-        gdal_rt, tmp_path / "b3.tif", np.full((2, 2), 7.0),
-        (102.0, 1.0, 0.0, 30.0, 0.0, -1.0), bands=3,
+        gdal_rt,
+        tmp_path / "b3.tif",
+        np.full((2, 2), 7.0),
+        (102.0, 1.0, 0.0, 30.0, 0.0, -1.0),
+        bands=3,
     )
     out = tmp_path / "mixed_bands.tif"
     result = _run_gdal_task(qapp, "gdal:merge", {"format": "GTiff"}, [one, three], out)
@@ -390,12 +412,18 @@ def test_rejection_does_not_overwrite_existing_output(qapp, gdal_rt, tmp_path) -
     import numpy as np
 
     wgs = _make_raster(
-        gdal_rt, tmp_path / "wgs.tif", np.full((2, 2), 5.0),
-        (100.0, 1.0, 0.0, 30.0, 0.0, -1.0), epsg=4326,
+        gdal_rt,
+        tmp_path / "wgs.tif",
+        np.full((2, 2), 5.0),
+        (100.0, 1.0, 0.0, 30.0, 0.0, -1.0),
+        epsg=4326,
     )
     web = _make_raster(
-        gdal_rt, tmp_path / "web.tif", np.full((2, 2), 99.0),
-        (11131949.0, 1000.0, 0.0, 0.0, 0.0, -1000.0), epsg=3857,
+        gdal_rt,
+        tmp_path / "web.tif",
+        np.full((2, 2), 99.0),
+        (11131949.0, 1000.0, 0.0, 0.0, 0.0, -1000.0),
+        epsg=3857,
     )
     out = tmp_path / "existing.tif"
     out.write_bytes(b"original content marker")
@@ -406,7 +434,9 @@ def test_rejection_does_not_overwrite_existing_output(qapp, gdal_rt, tmp_path) -
 
 
 # ------------------------------------- 4. relativePaths 开关
-def test_relative_paths_false_keeps_absolute_references(qapp, gdal_rt, two_gap_sources, tmp_path) -> None:
+def test_relative_paths_false_keeps_absolute_references(
+    qapp, gdal_rt, two_gap_sources, tmp_path
+) -> None:
     pc, pd = two_gap_sources
     """relativePaths=False 时最终源引用必须是**绝对路径**。
 
@@ -414,18 +444,16 @@ def test_relative_paths_false_keeps_absolute_references(qapp, gdal_rt, two_gap_s
     """
     pc, pd = two_gap_sources
     out = tmp_path / "abs.vrt"
-    result = _run_gdal_task(
-        qapp, "gdal:buildvrt", {"relativePaths": False}, [pc, pd], out
-    )
+    result = _run_gdal_task(qapp, "gdal:buildvrt", {"relativePaths": False}, [pc, pd], out)
     assert result.status is TaskStatus.succeeded, result.error
     text = out.read_text(encoding="utf-8")
-    assert 'relativeToVRT="1"' not in text, (
-        "绝对模式下不得保留相对引用：\n" + text[:800]
-    )
+    assert 'relativeToVRT="1"' not in text, "绝对模式下不得保留相对引用：\n" + text[:800]
     assert 'relativeToVRT="0"' in text, "绝对模式应写出 relativeToVRT=0"
 
 
-def test_relative_paths_true_writes_relative_references(qapp, gdal_rt, two_gap_sources, tmp_path) -> None:
+def test_relative_paths_true_writes_relative_references(
+    qapp, gdal_rt, two_gap_sources, tmp_path
+) -> None:
     pc, pd = two_gap_sources
     """relativePaths=True（默认）时源引用是相对路径且相对最终目录。"""
     pc, pd = two_gap_sources
@@ -444,9 +472,7 @@ def test_absolute_mode_vrt_still_opens(qapp, gdal_rt, two_gap_sources, tmp_path)
     """绝对模式产出的 VRT 必须可正常打开（源引用未被破坏）。"""
     pc, pd = two_gap_sources
     out = tmp_path / "abs_open.vrt"
-    result = _run_gdal_task(
-        qapp, "gdal:buildvrt", {"relativePaths": False}, [pc, pd], out
-    )
+    result = _run_gdal_task(qapp, "gdal:buildvrt", {"relativePaths": False}, [pc, pd], out)
     assert result.status is TaskStatus.succeeded, result.error
     info = _inspect(gdal_rt, out)
     assert info["w"] == 5, f"绝对模式 VRT 宽度应为 5，实际 {info['w']}"
@@ -462,12 +488,18 @@ def test_stack_multiband_sources_order(qapp, gdal_rt, tmp_path) -> None:
     import numpy as np
 
     a = _make_raster(
-        gdal_rt, tmp_path / "ma.tif", np.full((2, 2), 5.0),
-        (100.0, 1.0, 0.0, 30.0, 0.0, -1.0), bands=2,
+        gdal_rt,
+        tmp_path / "ma.tif",
+        np.full((2, 2), 5.0),
+        (100.0, 1.0, 0.0, 30.0, 0.0, -1.0),
+        bands=2,
     )
     b = _make_raster(
-        gdal_rt, tmp_path / "mb.tif", np.full((2, 2), 7.0),
-        (100.0, 1.0, 0.0, 30.0, 0.0, -1.0), bands=3,
+        gdal_rt,
+        tmp_path / "mb.tif",
+        np.full((2, 2), 7.0),
+        (100.0, 1.0, 0.0, 30.0, 0.0, -1.0),
+        bands=3,
     )
     out = tmp_path / "stack_mb.tif"
     result = _run_gdal_task(
@@ -651,32 +683,44 @@ print(json.dumps(out))
 
 
 # ------------------------------------- 6. ENVI 覆盖 / 事务失败与中断
-def test_envi_overwrite_replaces_data_and_header_as_bundle(qapp, gdal_rt, two_gap_sources, tmp_path) -> None:
+def test_envi_overwrite_replaces_data_and_header_as_bundle(
+    qapp, gdal_rt, two_gap_sources, tmp_path
+) -> None:
     """覆盖既有 ENVI 时，新 .dat 与新 .hdr 必须成套替换，不能新数据配旧头。"""
     import numpy as np
 
     out_dat = tmp_path / "reuse.dat"
     first = _run_gdal_task(
-        qapp, "gdal:merge", {"format": "ENVI", "srcNodata": -9999, "vrtNodata": -9999},
-        list(two_gap_sources), out_dat,
+        qapp,
+        "gdal:merge",
+        {"format": "ENVI", "srcNodata": -9999, "vrtNodata": -9999},
+        list(two_gap_sources),
+        out_dat,
     )
     assert first.status is TaskStatus.succeeded, first.error
     assert _inspect(gdal_rt, out_dat)["w"] == 5
 
     # 新成果尺寸/内容完全不同；若旧 .hdr 残留，GDAL 会按旧 samples/lines 读取
     a = _make_raster(
-        gdal_rt, tmp_path / "n1.tif",
-        np.array([[42.0, 42.0, 42.0, 42.0]]), (200.0, 1.0, 0.0, 31.0, 0.0, -1.0),
+        gdal_rt,
+        tmp_path / "n1.tif",
+        np.array([[42.0, 42.0, 42.0, 42.0]]),
+        (200.0, 1.0, 0.0, 31.0, 0.0, -1.0),
         nodata=-9999.0,
     )
     b = _make_raster(
-        gdal_rt, tmp_path / "n2.tif",
-        np.array([[43.0, 43.0, 43.0, 43.0]]), (204.0, 1.0, 0.0, 31.0, 0.0, -1.0),
+        gdal_rt,
+        tmp_path / "n2.tif",
+        np.array([[43.0, 43.0, 43.0, 43.0]]),
+        (204.0, 1.0, 0.0, 31.0, 0.0, -1.0),
         nodata=-9999.0,
     )
     second = _run_gdal_task(
-        qapp, "gdal:merge", {"format": "ENVI", "srcNodata": -9999, "vrtNodata": -9999},
-        [a, b], out_dat,
+        qapp,
+        "gdal:merge",
+        {"format": "ENVI", "srcNodata": -9999, "vrtNodata": -9999},
+        [a, b],
+        out_dat,
     )
     assert second.status is TaskStatus.succeeded, second.error
     info = _inspect(gdal_rt, out_dat)
@@ -712,7 +756,10 @@ def test_envi_commit_failure_restores_old_data_and_header(tmp_path) -> None:
     real_move = __import__("shutil").move
 
     def flaky_move(src, dst):
-        if Path(src).resolve() == staged_hdr.resolve() and Path(dst).resolve() == target_hdr.resolve():
+        if (
+            Path(src).resolve() == staged_hdr.resolve()
+            and Path(dst).resolve() == target_hdr.resolve()
+        ):
             raise OSError("simulated header move failure")
         return real_move(src, dst)
 
@@ -800,12 +847,18 @@ def test_buildvrt_rejects_mixed_crs(qapp, gdal_rt, tmp_path) -> None:
     import numpy as np
 
     wgs = _make_raster(
-        gdal_rt, tmp_path / "wgs.tif", np.full((2, 2), 5.0),
-        (100.0, 1.0, 0.0, 30.0, 0.0, -1.0), epsg=4326,
+        gdal_rt,
+        tmp_path / "wgs.tif",
+        np.full((2, 2), 5.0),
+        (100.0, 1.0, 0.0, 30.0, 0.0, -1.0),
+        epsg=4326,
     )
     web = _make_raster(
-        gdal_rt, tmp_path / "web.tif", np.full((2, 2), 99.0),
-        (11131949.0, 1000.0, 0.0, 0.0, 0.0, -1000.0), epsg=3857,
+        gdal_rt,
+        tmp_path / "web.tif",
+        np.full((2, 2), 99.0),
+        (11131949.0, 1000.0, 0.0, 0.0, 0.0, -1000.0),
+        epsg=3857,
     )
     out = tmp_path / "mixed.vrt"
     result = _run_gdal_task(qapp, "gdal:buildvrt", {}, [wgs, web], out)
@@ -820,12 +873,18 @@ def test_buildvrt_rejects_mixed_band_structure(qapp, gdal_rt, tmp_path) -> None:
     import numpy as np
 
     one = _make_raster(
-        gdal_rt, tmp_path / "one.tif", np.full((2, 2), 5.0),
-        (100.0, 1.0, 0.0, 30.0, 0.0, -1.0), bands=1,
+        gdal_rt,
+        tmp_path / "one.tif",
+        np.full((2, 2), 5.0),
+        (100.0, 1.0, 0.0, 30.0, 0.0, -1.0),
+        bands=1,
     )
     three = _make_raster(
-        gdal_rt, tmp_path / "three.tif", np.full((2, 2), 7.0),
-        (102.0, 1.0, 0.0, 30.0, 0.0, -1.0), bands=3,
+        gdal_rt,
+        tmp_path / "three.tif",
+        np.full((2, 2), 7.0),
+        (102.0, 1.0, 0.0, 30.0, 0.0, -1.0),
+        bands=3,
     )
     out = tmp_path / "bands.vrt"
     result = _run_gdal_task(qapp, "gdal:buildvrt", {}, [one, three], out)
@@ -851,17 +910,21 @@ def test_buildvrt_separate_multiband_keeps_each_band(qapp, gdal_rt, tmp_path) ->
     import numpy as np
 
     a = _make_raster(
-        gdal_rt, tmp_path / "sep_a.tif", np.full((2, 2), 5.0),
-        (100.0, 1.0, 0.0, 30.0, 0.0, -1.0), bands=2,
+        gdal_rt,
+        tmp_path / "sep_a.tif",
+        np.full((2, 2), 5.0),
+        (100.0, 1.0, 0.0, 30.0, 0.0, -1.0),
+        bands=2,
     )
     b = _make_raster(
-        gdal_rt, tmp_path / "sep_b.tif", np.full((2, 2), 7.0),
-        (100.0, 1.0, 0.0, 30.0, 0.0, -1.0), bands=3,
+        gdal_rt,
+        tmp_path / "sep_b.tif",
+        np.full((2, 2), 7.0),
+        (100.0, 1.0, 0.0, 30.0, 0.0, -1.0),
+        bands=3,
     )
     out = tmp_path / "sep.vrt"
-    result = _run_gdal_task(
-        qapp, "gdal:buildvrt", {"separate": True}, [a, b], out
-    )
+    result = _run_gdal_task(qapp, "gdal:buildvrt", {"separate": True}, [a, b], out)
     assert result.status is TaskStatus.succeeded, result.error
     info = _inspect_all_bands(gdal_rt, out)
     assert info["bands"] == 5
@@ -880,7 +943,9 @@ def test_stack_separate_allows_ungeoreferenced_sources(qapp, gdal_rt, tmp_path) 
     assert [band[0][0] for band in info["arrays"]] == [5.0, 7.0]
 
 
-def test_all_unreadable_sources_rejected_and_existing_output_preserved(qapp, gdal_rt, tmp_path) -> None:
+def test_all_unreadable_sources_rejected_and_existing_output_preserved(
+    qapp, gdal_rt, tmp_path
+) -> None:
     """全部源不可读时必须失败，且不得破坏既有目标。"""
     bad1 = tmp_path / "bad1.tif"
     bad2 = tmp_path / "bad2.tif"
@@ -908,15 +973,16 @@ def test_buildvrt_escaped_unicode_paths_relative_and_absolute(qapp, gdal_rt, tmp
         nodata=-9999.0,
     )
     normal = _make_raster(
-        gdal_rt, tmp_path / "normal.tif", np.full((2, 2), 22.0),
-        (102.0, 1.0, 0.0, 30.0, 0.0, -1.0), nodata=-9999.0,
+        gdal_rt,
+        tmp_path / "normal.tif",
+        np.full((2, 2), 22.0),
+        (102.0, 1.0, 0.0, 30.0, 0.0, -1.0),
+        nodata=-9999.0,
     )
 
     rel_out = tmp_path / "rel" / "escaped.vrt"
     rel_out.parent.mkdir()
-    rel = _run_gdal_task(
-        qapp, "gdal:buildvrt", {"relativePaths": True}, [weird, normal], rel_out
-    )
+    rel = _run_gdal_task(qapp, "gdal:buildvrt", {"relativePaths": True}, [weird, normal], rel_out)
     assert rel.status is TaskStatus.succeeded, rel.error
     rel_text = rel_out.read_text(encoding="utf-8")
     assert "源 数据 &amp; 1.tif" in rel_text, "& 必须按 XML 实体转义"
@@ -941,12 +1007,12 @@ def test_buildvrt_escaped_unicode_paths_relative_and_absolute(qapp, gdal_rt, tmp
 
 
 # ------------------------------------- 9. 输出格式明确拒绝
-def test_buildvrt_explicit_unsupported_format_rejected(qapp, gdal_rt, two_gap_sources, tmp_path) -> None:
+def test_buildvrt_explicit_unsupported_format_rejected(
+    qapp, gdal_rt, two_gap_sources, tmp_path
+) -> None:
     """显式要求 buildvrt 输出 GTiff 时必须拒绝，不能写 VRT 后按 GTiff 报成功。"""
     out = tmp_path / "should_not_exist.vrt"
-    result = _run_gdal_task(
-        qapp, "gdal:buildvrt", {"format": "GTiff"}, list(two_gap_sources), out
-    )
+    result = _run_gdal_task(qapp, "gdal:buildvrt", {"format": "GTiff"}, list(two_gap_sources), out)
     assert result.status is TaskStatus.failed
     assert result.error and result.error.get("code") == "unsupported_output_format"
     assert not out.exists()
@@ -956,9 +1022,11 @@ def test_merge_to_vrt_output_is_readable(qapp, gdal_rt, two_gap_sources, tmp_pat
     """merge 请求 VRT 输出时：committed VRT 可按最终目录解析源并读取像元。"""
     out = tmp_path / "merged.vrt"
     result = _run_gdal_task(
-        qapp, "gdal:merge",
+        qapp,
+        "gdal:merge",
         {"format": "VRT", "srcNodata": -9999, "vrtNodata": -9999},
-        list(two_gap_sources), out,
+        list(two_gap_sources),
+        out,
     )
     assert result.status is TaskStatus.succeeded, result.error
     assert result.outputs and result.outputs[0].get("driver", "").upper() == "VRT"
@@ -979,15 +1047,15 @@ def test_merge_unknown_output_format_rejected(qapp, gdal_rt, two_gap_sources, tm
     assert out.read_bytes() == b"ORIGINAL"
 
 
-def test_stale_envi_header_blocks_non_envi_rewrite(qapp, gdal_rt, two_gap_sources, tmp_path) -> None:
+def test_stale_envi_header_blocks_non_envi_rewrite(
+    qapp, gdal_rt, two_gap_sources, tmp_path
+) -> None:
     """目标 out.dat 旁已有旧 .hdr 时，GTiff 改写必须拒绝，避免新数据配旧头。"""
     out = tmp_path / "stale.dat"
     out.write_bytes(b"OLD DATA MARKER")
     hdr = tmp_path / "stale.hdr"
     hdr.write_text("ENVI\nsamples = 2\nlines = 2\nbands = 1\n", encoding="utf-8")
-    result = _run_gdal_task(
-        qapp, "gdal:merge", {"format": "GTiff"}, list(two_gap_sources), out
-    )
+    result = _run_gdal_task(qapp, "gdal:merge", {"format": "GTiff"}, list(two_gap_sources), out)
     assert result.status is TaskStatus.failed
     assert result.error and result.error.get("code") == "stale_header_conflict"
     assert out.read_bytes() == b"OLD DATA MARKER"
@@ -1007,14 +1075,19 @@ def test_explicit_mask_gap_remapped_and_mask_consistent(qapp, gdal_rt, tmp_path)
         mask=[[255, 0], [255, 255]],
     )
     other = _make_raster(
-        gdal_rt, tmp_path / "masked_other.tif", np.full((2, 2), 7.0),
-        (102.0, 1.0, 0.0, 30.0, 0.0, -1.0), nodata=-9999.0,
+        gdal_rt,
+        tmp_path / "masked_other.tif",
+        np.full((2, 2), 7.0),
+        (102.0, 1.0, 0.0, 30.0, 0.0, -1.0),
+        nodata=-9999.0,
     )
     out = tmp_path / "masked_out.tif"
     result = _run_gdal_task(
-        qapp, "gdal:merge",
+        qapp,
+        "gdal:merge",
         {"format": "GTiff", "srcNodata": -9999, "vrtNodata": -9999, "dstNodata": 0},
-        [masked, other], out,
+        [masked, other],
+        out,
     )
     assert result.status is TaskStatus.succeeded, result.error
     info = _inspect(gdal_rt, out)
@@ -1034,9 +1107,11 @@ def test_alpha_gap_remapped_with_consistent_mask(qapp, gdal_rt, tmp_path) -> Non
     )
     out = tmp_path / "rgba_out.tif"
     result = _run_gdal_task(
-        qapp, "gdal:merge",
+        qapp,
+        "gdal:merge",
         {"format": "GTiff", "dstNodata": 0},
-        [alpha, alpha], out,
+        [alpha, alpha],
+        out,
     )
     assert result.status is TaskStatus.succeeded, result.error
     info = _inspect_all_bands(gdal_rt, out)
@@ -1072,7 +1147,9 @@ def test_merge_cancellation_during_computation_cleans_staging(qapp, gdal_rt, tmp
         attempt=1,
         capability_id="gdal:merge",
         descriptor_revision="1.0",
-        engine=EngineConstraint(provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"),
+        engine=EngineConstraint(
+            provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"
+        ),
         project_root=str(ROOT),
         workspace=str(workspace),
         inputs={
@@ -1081,8 +1158,12 @@ def test_merge_cancellation_during_computation_cleans_staging(qapp, gdal_rt, tmp
                 DatasetRef(dataset_id="b", kind=DatasetKind.raster, uri=src_b.as_uri()),
             ]
         },
-        outputs=[OutputPlan(key="output", kind=DatasetKind.raster, uri=out.as_uri(), overwrite=True)],
-        cancellation=CancellationPolicy(cooperative_timeout_seconds=5.0, allow_process_termination=True),
+        outputs=[
+            OutputPlan(key="output", kind=DatasetKind.raster, uri=out.as_uri(), overwrite=True)
+        ],
+        cancellation=CancellationPolicy(
+            cooperative_timeout_seconds=5.0, allow_process_termination=True
+        ),
         parameters={"format": "GTiff"},
     )
     sched = TaskScheduler(project_root=ROOT, max_concurrency=1)
@@ -1108,7 +1189,9 @@ def test_merge_cancellation_during_computation_cleans_staging(qapp, gdal_rt, tmp
             time.sleep(0.05)
         assert cancel_triggered.is_set(), "未能在真实 GDAL 计算中触发取消"
         assert handle.status is TaskStatus.cancelled
-        assert handle.final_result is not None and handle.final_result.status is TaskStatus.cancelled
+        assert (
+            handle.final_result is not None and handle.final_result.status is TaskStatus.cancelled
+        )
         assert not out.exists(), "取消的任务不得提交最终成果"
         staging = workspace / ".staging" / spec.task_id
         if staging.exists():

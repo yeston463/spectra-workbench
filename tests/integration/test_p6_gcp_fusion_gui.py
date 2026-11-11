@@ -129,19 +129,14 @@ def _window_with_errors(
     return win, results, errors
 
 
-def test_gcp_registration_form(
-    qapp: QApplication, gdal_rt: dict[str, Any], tmp_path: Path
-) -> None:
+def test_gcp_registration_form(qapp: QApplication, gdal_rt: dict[str, Any], tmp_path: Path) -> None:
     ref_values = np.array(
         [[_plane(x + 0.5, 300.0 - (y + 0.5)) for x in range(10)] for y in range(10)]
     )
     ref = _make_raster(gdal_rt, tmp_path / "ref_gui.tif", ref_values)
     src_gt = (-5.0, 1.0, 0.0, 315.0, 0.0, -1.0)
     src_values = np.array(
-        [
-            [_plane(-5.0 + x + 0.5, 315.0 - (y + 0.5)) for x in range(12)]
-            for y in range(12)
-        ]
+        [[_plane(-5.0 + x + 0.5, 315.0 - (y + 0.5)) for x in range(12)] for y in range(12)]
     )
     source = _make_raster(gdal_rt, tmp_path / "src_gui.tif", src_values, gt=src_gt)
     points = []
@@ -160,7 +155,12 @@ def test_gcp_registration_form(
     gcp = tmp_path / "gcps_gui.json"
     gcp.write_text(
         json.dumps(
-            {"type": "spectra_gcp_set", "schema_version": "1.0", "srs": "EPSG:32650", "points": points}
+            {
+                "type": "spectra_gcp_set",
+                "schema_version": "1.0",
+                "srs": "EPSG:32650",
+                "points": points,
+            }
         ),
         encoding="utf-8",
     )
@@ -198,9 +198,7 @@ def test_gcp_registration_form(
     assert not win.gdal_client.is_alive
 
 
-def test_rasterdiff_form(
-    qapp: QApplication, gdal_rt: dict[str, Any], tmp_path: Path
-) -> None:
+def test_rasterdiff_form(qapp: QApplication, gdal_rt: dict[str, Any], tmp_path: Path) -> None:
     a = np.array([[[1.0, 2.0], [3.0, 4.0]]])
     b = np.array([[[0.0, 2.0], [5.0, 1.0]]])
     src = _make_raster(gdal_rt, tmp_path / "a_gui.tif", a)
@@ -237,13 +235,9 @@ def test_rasterdiff_form(
     assert not win.gdal_client.is_alive
 
 
-def test_pansharpen_form(
-    qapp: QApplication, gdal_rt: dict[str, Any], tmp_path: Path
-) -> None:
+def test_pansharpen_form(qapp: QApplication, gdal_rt: dict[str, Any], tmp_path: Path) -> None:
     pan = _make_raster(gdal_rt, tmp_path / "pan_gui.tif", np.full((6, 6), 0.8))
-    ms_values = np.stack(
-        [np.full((6, 6), 0.2), np.full((6, 6), 0.4), np.full((6, 6), 0.6)]
-    )
+    ms_values = np.stack([np.full((6, 6), 0.2), np.full((6, 6), 0.4), np.full((6, 6), 0.6)])
     ms = _make_raster(gdal_rt, tmp_path / "ms_gui.tif", ms_values)
     out = tmp_path / "fused_gui.tif"
 

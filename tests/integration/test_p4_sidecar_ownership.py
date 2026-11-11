@@ -118,7 +118,9 @@ def _run_task(
         attempt=1,
         capability_id=capability_id,
         descriptor_revision="1.0",
-        engine=EngineConstraint(provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"),
+        engine=EngineConstraint(
+            provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"
+        ),
         project_root=str(ROOT),
         workspace=str(out_path.parent),
         inputs={
@@ -171,7 +173,9 @@ def _run_single_task(
         attempt=1,
         capability_id=capability_id,
         descriptor_revision="1.0",
-        engine=EngineConstraint(provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"),
+        engine=EngineConstraint(
+            provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"
+        ),
         project_root=str(ROOT),
         workspace=str(out_path.parent),
         inputs={
@@ -190,7 +194,9 @@ def _run_single_task(
         ],
         parameters=parameters,
     )
-    client = QtWorkerClient(provider_id="gdal", worker_id="s3-single-worker", project_root=str(ROOT))
+    client = QtWorkerClient(
+        provider_id="gdal", worker_id="s3-single-worker", project_root=str(ROOT)
+    )
     results = []
     errors: list[tuple[str, str]] = []
     client.sig_result.connect(results.append)
@@ -236,11 +242,7 @@ def test_gtiff_stale_sidecar_is_removed_transactionally(
     qapp, gdal_rt, tmp_path, sidecar: str
 ) -> None:
     target = _make_raster(gdal_rt, tmp_path / "existing.tif", 111.0)
-    marker = (
-        target.with_suffix(sidecar)
-        if sidecar == ".tfw"
-        else Path(f"{target}{sidecar}")
-    )
+    marker = target.with_suffix(sidecar) if sidecar == ".tfw" else Path(f"{target}{sidecar}")
     marker.write_bytes(b"OLD SIDECAR MARKER")
     a = _make_raster(gdal_rt, tmp_path / "a.tif", 5.0, 200.0)
     b = _make_raster(gdal_rt, tmp_path / "b.tif", 7.0, 202.0)
@@ -255,9 +257,7 @@ def test_envi_overwrite_without_stale_sidecar_succeeds(qapp, gdal_rt, tmp_path) 
     target = _make_envi(gdal_rt, tmp_path / "existing.dat", 111.0)
     a = _make_raster(gdal_rt, tmp_path / "a.tif", 5.0, 200.0)
     b = _make_raster(gdal_rt, tmp_path / "b.tif", 7.0, 202.0)
-    result = _run_task(
-        qapp, "gdal:merge", {"format": "ENVI"}, [a, b], target
-    )
+    result = _run_task(qapp, "gdal:merge", {"format": "ENVI"}, [a, b], target)
     assert result.status is TaskStatus.succeeded, result.error
     assert target.with_suffix(".hdr").exists()
     assert _inspect(gdal_rt, target)["driver"].upper() == "ENVI"
@@ -302,9 +302,7 @@ def _sha(path: Path) -> str:
 
 
 @pytest.mark.parametrize("capability", ["gdal:merge", "gdal:stack"])
-def test_output_shared_envi_header_is_rejected(
-    qapp, gdal_rt, tmp_path, capability: str
-) -> None:
+def test_output_shared_envi_header_is_rejected(qapp, gdal_rt, tmp_path, capability: str) -> None:
     """source.dat 输入、source.img 输出共享 source.hdr：必须拒绝且不改输入。"""
     source = _make_envi(gdal_rt, tmp_path / "source.dat", 5.0)
     other = _make_envi(gdal_rt, tmp_path / "other.dat", 7.0, gt_x=104.0)

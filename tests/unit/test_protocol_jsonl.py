@@ -26,7 +26,9 @@ WORKER = "sw-gdal-0"
 
 
 def _log(text: str) -> bytes:
-    return encode_message(new_message(Kind.log, WORKER, {"level": "info", "message": text}, generation=3))
+    return encode_message(
+        new_message(Kind.log, WORKER, {"level": "info", "message": text}, generation=3)
+    )
 
 
 def test_single_complete_line():
@@ -88,13 +90,26 @@ def test_invalid_json_line_raises_with_raw_preview():
 def test_json_scalar_line_rejected():
     p = JsonlStreamParser()
     with pytest.raises(ProtocolError):
-        p.feed(b'123\n')
+        p.feed(b"123\n")
 
 
 def test_unknown_kind_rejected():
     p = JsonlStreamParser()
-    bad = json.dumps({"protocol_version": "1.0", "kind": "telepathy", "message_id": "m", "request_id": None,
-                      "task_id": None, "worker_id": WORKER, "generation": 0, "payload": {}}).encode() + b"\n"
+    bad = (
+        json.dumps(
+            {
+                "protocol_version": "1.0",
+                "kind": "telepathy",
+                "message_id": "m",
+                "request_id": None,
+                "task_id": None,
+                "worker_id": WORKER,
+                "generation": 0,
+                "payload": {},
+            }
+        ).encode()
+        + b"\n"
+    )
     with pytest.raises(ProtocolError) as ei:
         p.feed(bad)
     assert "telepathy" in ei.value.reason
@@ -102,18 +117,41 @@ def test_unknown_kind_rejected():
 
 def test_unsupported_protocol_version_rejected():
     p = JsonlStreamParser()
-    bad = json.dumps({"protocol_version": "9.9", "kind": "heartbeat", "message_id": "m", "request_id": None,
-                      "task_id": None, "worker_id": WORKER, "generation": 0,
-                      "payload": {"monotonic_seconds": 1.0}}).encode() + b"\n"
+    bad = (
+        json.dumps(
+            {
+                "protocol_version": "9.9",
+                "kind": "heartbeat",
+                "message_id": "m",
+                "request_id": None,
+                "task_id": None,
+                "worker_id": WORKER,
+                "generation": 0,
+                "payload": {"monotonic_seconds": 1.0},
+            }
+        ).encode()
+        + b"\n"
+    )
     with pytest.raises(ProtocolError):
         p.feed(bad)
 
 
 def test_missing_envelope_field_is_reported():
     p = JsonlStreamParser()
-    bad = json.dumps({"protocol_version": "1.0", "kind": "log", "message_id": "m",
-                      "request_id": None, "task_id": None, "generation": 0,
-                      "payload": {"level": "info", "message": "x"}}).encode() + b"\n"
+    bad = (
+        json.dumps(
+            {
+                "protocol_version": "1.0",
+                "kind": "log",
+                "message_id": "m",
+                "request_id": None,
+                "task_id": None,
+                "generation": 0,
+                "payload": {"level": "info", "message": "x"},
+            }
+        ).encode()
+        + b"\n"
+    )
     with pytest.raises(ProtocolError) as ei:
         p.feed(bad)
     assert "worker_id" in ei.value.reason
@@ -122,7 +160,9 @@ def test_missing_envelope_field_is_reported():
 def test_kind_specific_payload_requirements():
     with pytest.raises(ValueError):
         new_message(Kind.hello, WORKER, {"provider_id": "gdal"})  # 缺 worker_package_version
-    env = new_message(Kind.hello, WORKER, {"provider_id": "gdal", "worker_package_version": "0.0.1"})
+    env = new_message(
+        Kind.hello, WORKER, {"provider_id": "gdal", "worker_package_version": "0.0.1"}
+    )
     assert env.kind is Kind.hello
 
 
@@ -145,7 +185,9 @@ def test_oversized_control_message_spills_to_file(tmp_path: Path):
 
 
 def test_oversized_without_spill_dir_is_an_error(tmp_path: Path):
-    env = new_message(Kind.log, WORKER, {"level": "info", "message": "y" * (MAX_CONTROL_MESSAGE_BYTES + 1)})
+    env = new_message(
+        Kind.log, WORKER, {"level": "info", "message": "y" * (MAX_CONTROL_MESSAGE_BYTES + 1)}
+    )
     with pytest.raises(ProtocolError):
         encode_message(env)
 
@@ -176,9 +218,15 @@ def test_generation_guard_rejects_stale_responses():
 
 def test_round_trip_keeps_chinese_and_paths(tmp_path: Path):
     env = new_message(
-        Kind.request, WORKER,
-        {"action": "gdal.translate", "arguments": {"input": "C:/数据/影像 1.tif", "bands": [1, 4, 7]}},
-        request_id="r-9", task_id="t-9", generation=7,
+        Kind.request,
+        WORKER,
+        {
+            "action": "gdal.translate",
+            "arguments": {"input": "C:/数据/影像 1.tif", "bands": [1, 4, 7]},
+        },
+        request_id="r-9",
+        task_id="t-9",
+        generation=7,
     )
     p = JsonlStreamParser()
     got = p.feed(encode_message(env))
@@ -188,8 +236,16 @@ def test_round_trip_keeps_chinese_and_paths(tmp_path: Path):
 
 def test_envelope_forbids_extra_fields():
     with pytest.raises(ValueError):
-        Envelope.model_validate({
-            "protocol_version": "1.0", "kind": "heartbeat", "message_id": "m", "request_id": None,
-            "task_id": None, "worker_id": WORKER, "generation": 0, "payload": {"monotonic_seconds": 0.1},
-            "extra": 1,
-        })
+        Envelope.model_validate(
+            {
+                "protocol_version": "1.0",
+                "kind": "heartbeat",
+                "message_id": "m",
+                "request_id": None,
+                "task_id": None,
+                "worker_id": WORKER,
+                "generation": 0,
+                "payload": {"monotonic_seconds": 0.1},
+                "extra": 1,
+            }
+        )

@@ -162,9 +162,7 @@ class PluginManager:
                     info.incompatibility_reason = reason
                 elif consecutive_fails >= self.failure_threshold:
                     info.status = PluginStatus.failed
-                    info.incompatibility_reason = (
-                        f"连续崩溃/失败 {consecutive_fails} 次（达到阈值 {self.failure_threshold}），已自动隔离禁用"
-                    )
+                    info.incompatibility_reason = f"连续崩溃/失败 {consecutive_fails} 次（达到阈值 {self.failure_threshold}），已自动隔离禁用"
                 else:
                     stored_status = stored.get("status")
                     if stored_status in (PluginStatus.disabled.value, PluginStatus.disabled):
@@ -212,7 +210,14 @@ class PluginManager:
 
         elif src.suffix.lower() in (".zip", ".bundle"):
             with zipfile.ZipFile(src, "r") as zf:
-                json_name = next((n for n in zf.namelist() if Path(n).name in ("plugin.json", "manifest.json", "spectra-plugin.json")), None)
+                json_name = next(
+                    (
+                        n
+                        for n in zf.namelist()
+                        if Path(n).name in ("plugin.json", "manifest.json", "spectra-plugin.json")
+                    ),
+                    None,
+                )
                 if not json_name:
                     raise PluginError(f"压缩包中未找到 plugin.json: {src}")
                 manifest_raw = json.loads(zf.read(json_name).decode("utf-8"))
@@ -221,14 +226,14 @@ class PluginManager:
                 if target_dir.exists():
                     shutil.rmtree(target_dir, ignore_errors=True)
                 target_dir.mkdir(parents=True, exist_ok=True)
-                
+
                 # 若压缩包包含顶层目录包裹，剥离该前缀使 plugin.json 位于 target_dir 根部
                 prefix = str(Path(json_name).parent).replace("\\", "/")
                 if prefix and prefix != ".":
                     prefix_with_slash = prefix if prefix.endswith("/") else f"{prefix}/"
                     for member in zf.namelist():
                         if member.startswith(prefix_with_slash):
-                            rel_name = member[len(prefix_with_slash):]
+                            rel_name = member[len(prefix_with_slash) :]
                             if not rel_name:
                                 continue
                             dest = target_dir / rel_name
@@ -275,7 +280,9 @@ class PluginManager:
             if info.status == PluginStatus.incompatible:
                 raise PluginError(f"插件版本不兼容，无法启用: {info.incompatibility_reason}")
             if info.status == PluginStatus.failed:
-                raise PluginError(f"插件处于失败隔离状态，请先调用 reset_plugin_failure 恢复: {info.incompatibility_reason}")
+                raise PluginError(
+                    f"插件处于失败隔离状态，请先调用 reset_plugin_failure 恢复: {info.incompatibility_reason}"
+                )
 
             info.status = PluginStatus.enabled
             if self.registry is not None:
@@ -306,9 +313,7 @@ class PluginManager:
             info.consecutive_failures += 1
             if info.consecutive_failures >= self.failure_threshold:
                 info.status = PluginStatus.failed
-                info.incompatibility_reason = (
-                    f"连续崩溃/失败 {info.consecutive_failures} 次（达到阈值 {self.failure_threshold}），已自动熔断隔离"
-                )
+                info.incompatibility_reason = f"连续崩溃/失败 {info.consecutive_failures} 次（达到阈值 {self.failure_threshold}），已自动熔断隔离"
                 if self.registry is not None:
                     for cap in info.manifest.capabilities:
                         self.registry.unregister(cap.capability_id)
@@ -330,7 +335,9 @@ class PluginManager:
             if info is None:
                 raise PluginError(f"插件不存在: {plugin_id}")
 
-            compat, reason = info.manifest.check_compatibility(PLATFORM_API_VERSION, PLATFORM_VERSION)
+            compat, reason = info.manifest.check_compatibility(
+                PLATFORM_API_VERSION, PLATFORM_VERSION
+            )
             info.consecutive_failures = 0
             if not compat:
                 info.status = PluginStatus.incompatible

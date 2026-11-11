@@ -159,9 +159,9 @@ def test_course_envi_without_header_is_rejected_clearly(
     with pytest.raises(Exception) as exc:
         gdal_client.probe_dataset(orphan, timeout=30.0)
     message = str(exc.value)
-    assert message and (
-        "supported file format" in message.lower() or "无法打开" in message
-    ), f"应给出明确的格式不支持信息，实际：{message}"
+    assert message and ("supported file format" in message.lower() or "无法打开" in message), (
+        f"应给出明确的格式不支持信息，实际：{message}"
+    )
 
 
 def test_course_real_data_gui_open_render_save_reopen(

@@ -67,10 +67,7 @@ TASSELED_CAP_SENSORS: dict[str, TasseledCapSensor] = {
             "reflectance factor data. Remote Sensing of Environment 17(3):301-306."
         ),
         source_url="https://doi.org/10.1016/0034-4257(85)90102-6",
-        notes=(
-            "输入应为 TM 波段的 reflectance factor（反射率因子）；"
-            "系数顺序为 TM 1,2,3,4,5,7。"
-        ),
+        notes=("输入应为 TM 波段的 reflectance factor（反射率因子）；系数顺序为 TM 1,2,3,4,5,7。"),
     ),
     "landsat7_etm": TasseledCapSensor(
         key="landsat7_etm",
@@ -91,10 +88,7 @@ TASSELED_CAP_SENSORS: dict[str, TasseledCapSensor] = {
             "23(8):1741-1748."
         ),
         source_url="https://pubs.usgs.gov/publication/70024815",
-        notes=(
-            "输入应为 ETM+ 的大气顶（at-satellite）反射率；"
-            "系数顺序为 ETM+ 1,2,3,4,5,7。"
-        ),
+        notes=("输入应为 ETM+ 的大气顶（at-satellite）反射率；系数顺序为 ETM+ 1,2,3,4,5,7。"),
     ),
     "landsat8_oli": TasseledCapSensor(
         key="landsat8_oli",
@@ -133,9 +127,7 @@ def get_sensor(key: str) -> TasseledCapSensor:
     try:
         return TASSELED_CAP_SENSORS[normalized]
     except KeyError as exc:
-        raise ValueError(
-            f"未登记的缨帽传感器 {key!r}；可用：{', '.join(sensor_keys())}"
-        ) from exc
+        raise ValueError(f"未登记的缨帽传感器 {key!r}；可用：{', '.join(sensor_keys())}") from exc
 
 
 def sensor_source_line(key: str) -> str:

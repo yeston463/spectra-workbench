@@ -1,4 +1,4 @@
-﻿"""P3-01 / P3-03 / P3-04 / P3-05 的界面级验收。
+"""P3-01 / P3-03 / P3-04 / P3-05 的界面级验收。
 
 覆盖：打开→查询→ROI→调整显示→保存→关闭→重开 的完整流程，
 双视图联动、缓存预算与过期响应、显示不改源像元、关闭图层释放文件句柄。
@@ -92,7 +92,9 @@ def wait_render(canvas: ImageCanvas, qapp: QApplication, seconds: float = 12.0) 
 # ---------------------------------------------------------------- 打开与元数据
 
 
-def test_open_dataset_populates_layer_and_metadata(window: MainWindow, qapp: QApplication, samples: dict) -> None:
+def test_open_dataset_populates_layer_and_metadata(
+    window: MainWindow, qapp: QApplication, samples: dict
+) -> None:
     rot = samples["samples"]["rotated"]
     window.open_dataset(rot["path"])
     wait_layers(window, qapp)
@@ -104,7 +106,9 @@ def test_open_dataset_populates_layer_and_metadata(window: MainWindow, qapp: QAp
     assert layer.overview_levels, "概览层级必须可见"
     assert layer.display.mode is DisplayMode.rgb, "3 波段默认应为彩色合成"
     wait_render(window.canvas, qapp)
-    assert "RGB" in window.canvas.lbl_status.text() or "rgb" in window.canvas.lbl_status.text().lower()
+    assert (
+        "RGB" in window.canvas.lbl_status.text() or "rgb" in window.canvas.lbl_status.text().lower()
+    )
 
 
 # ---------------------------------------------------------------- 坐标查询
@@ -213,7 +217,9 @@ def test_rect_roi_lifecycle_create_edit_delete_save(
     item.scale(1.5, 1.5, [0, 0])
     pump(qapp, 0.2)
     sized = next(r for r in window.canvas.roi_list() if r.roi_id == roi_id)
-    assert sized.points[1][0] - sized.points[0][0] == pytest.approx(width_before * 1.5), sized.points
+    assert sized.points[1][0] - sized.points[0][0] == pytest.approx(width_before * 1.5), (
+        sized.points
+    )
     assert [r.roi_id for r in layer.rois] == [roi_id], "画布编辑必须写回图层模型"
 
     # 保存到项目并重开，ROI 必须还在
@@ -247,7 +253,7 @@ def test_polygon_roi_requires_three_vertices(
     assert window.canvas.finish_polygon() is None, "0 顶点应被拒绝"
 
     window.canvas.begin_polygon_roi()
-    for (c, r) in [(5, 5), (40, 8), (30, 45), (8, 38)]:
+    for c, r in [(5, 5), (40, 8), (30, 45), (8, 38)]:
         window.canvas.add_polygon_vertex(c, r)
     roi_id = window.canvas.finish_polygon()
     assert roi_id is not None
@@ -278,8 +284,13 @@ def test_display_changes_never_alter_source_pixels(
 
     for settings in (
         DisplaySettings(mode=DisplayMode.gray, gray_band=2, stretch=StretchMode.min_max),
-        DisplaySettings(mode=DisplayMode.pseudo, gray_band=3, stretch=StretchMode.percentile,
-                        pseudocolor="jet", opacity=0.5),
+        DisplaySettings(
+            mode=DisplayMode.pseudo,
+            gray_band=3,
+            stretch=StretchMode.percentile,
+            pseudocolor="jet",
+            opacity=0.5,
+        ),
         DisplaySettings(mode=DisplayMode.rgb, rgb_bands=(3, 2, 1), stretch=StretchMode.stddev),
     ):
         window.display_panel.set_layer(layer.band_count, settings)
@@ -312,7 +323,9 @@ def test_percentile_and_minmax_bounds_differ_on_spike(
 
     window.display_panel.set_layer(
         layer.band_count,
-        DisplaySettings(mode=DisplayMode.gray, stretch=StretchMode.percentile, percentiles=(2.0, 98.0)),
+        DisplaySettings(
+            mode=DisplayMode.gray, stretch=StretchMode.percentile, percentiles=(2.0, 98.0)
+        ),
     )
     window.display_panel.sig_display_changed.emit(window.display_panel.current_settings())
     wait_render(window.canvas, qapp)
@@ -346,8 +359,17 @@ def test_invalid_pixels_are_transparent_valid_zero_is_not(
 def test_cache_budget_is_enforced_across_many_views(qapp: QApplication) -> None:
     cache = TileCache(budget_bytes=64 * 1024)
     for i in range(60):
-        key = TileKey(source="a.tif", bands=(1,), x_off=i * 512, y_off=0, win_w=512, win_h=512,
-                      out_w=512, out_h=512, overview=-1)
+        key = TileKey(
+            source="a.tif",
+            bands=(1,),
+            x_off=i * 512,
+            y_off=0,
+            win_w=512,
+            win_h=512,
+            out_w=512,
+            out_h=512,
+            overview=-1,
+        )
         cache.put(key, b"y" * (8 * 1024))
     assert cache.stats.bytes <= 64 * 1024
     assert cache.stats.evictions > 0
@@ -382,8 +404,15 @@ def test_stale_response_cannot_overwrite_newest_view(qapp: QApplication, samples
     canvas = ImageCanvas(cache=TileCache(budget_bytes=8 * 1024 * 1024))
     # 合成本次视图所需的最大范围；读取由 DelayClient 伪造，不触盘，因此用大影幅让对齐窗口互不相同
     layer = LayerItem(
-        name="stale", file_path=samples["samples"]["rotated"]["path"],
-        metadata={"width": 2048, "height": 1536, "count": 1, "driver": "GTiff", "spatial_model": "affine"},
+        name="stale",
+        file_path=samples["samples"]["rotated"]["path"],
+        metadata={
+            "width": 2048,
+            "height": 1536,
+            "count": 1,
+            "driver": "GTiff",
+            "spatial_model": "affine",
+        },
     )
     try:
         canvas.set_layer(layer, client)
@@ -405,19 +434,40 @@ def test_stale_response_cannot_overwrite_newest_view(qapp: QApplication, samples
             import base64
 
             return {
-                "raw": True, "x_off": kw["x_off"], "y_off": kw["y_off"],
-                "win_w": kw["win_w"], "win_h": kw["win_h"], "out_w": w, "out_h": h,
-                "bands": kw.get("bands") or [1], "shape": [1, h, w], "numpy_dtype": "uint16",
+                "raw": True,
+                "x_off": kw["x_off"],
+                "y_off": kw["y_off"],
+                "win_w": kw["win_w"],
+                "win_h": kw["win_h"],
+                "out_w": w,
+                "out_h": h,
+                "bands": kw.get("bands") or [1],
+                "shape": [1, h, w],
+                "numpy_dtype": "uint16",
                 "data_b64": base64.b64encode(arr.tobytes()).decode(),
                 "valid_bits_b64": base64.b64encode(
                     np.packbits(valid.reshape(-1), axis=None).tobytes()
                 ).decode(),
                 "valid_bits_count": int(valid.size),
-                "band_meta": [{"band": 1, "dtype": "UInt16", "numpy_dtype": "uint16", "nodata": None,
-                               "scale": None, "offset": None, "mask_flags": 1, "has_alpha": False,
-                               "all_valid_mask": True, "min": 0.0, "max": 255.0,
-                               "valid_count": w * h, "total_count": w * h}],
-                "overview_used": -1, "is_rgb": False,
+                "band_meta": [
+                    {
+                        "band": 1,
+                        "dtype": "UInt16",
+                        "numpy_dtype": "uint16",
+                        "nodata": None,
+                        "scale": None,
+                        "offset": None,
+                        "mask_flags": 1,
+                        "has_alpha": False,
+                        "all_valid_mask": True,
+                        "min": 0.0,
+                        "max": 255.0,
+                        "valid_count": w * h,
+                        "total_count": w * h,
+                    }
+                ],
+                "overview_used": -1,
+                "is_rgb": False,
             }
 
         latest = client.pending[-1]
@@ -430,7 +480,9 @@ def test_stale_response_cannot_overwrite_newest_view(qapp: QApplication, samples
         for kw in older:
             stale = f"窗口 [{kw['x_off']},{kw['y_off']}] {kw['win_w']}x{kw['win_h']}"
             assert stale not in status, "旧视图不得成为最终显示"
-            assert (kw["x_off"], kw["win_w"]) != (latest["x_off"], latest["win_w"]), "用例需保证各请求视图不同"
+            assert (kw["x_off"], kw["win_w"]) != (latest["x_off"], latest["win_w"]), (
+                "用例需保证各请求视图不同"
+            )
     finally:
         canvas.clear()
         canvas.close()
@@ -502,7 +554,9 @@ def test_project_saves_order_visibility_display_and_view(
         # 图层顺序必须跟随“发起打开的顺序”，与探测响应回来的先后无关
         assert [ly.name for ly in layers] == ["p3_rotated", "p3_north"], [ly.name for ly in layers]
         layers[1].visible = False
-        layers[0].display = DisplaySettings(mode=DisplayMode.pseudo, pseudocolor="terrain", opacity=0.4)
+        layers[0].display = DisplaySettings(
+            mode=DisplayMode.pseudo, pseudocolor="terrain", opacity=0.4
+        )
         view_before = win.canvas.view_state()
 
         proj = tmp_path / "两个图层.spectra.json"
@@ -547,9 +601,15 @@ def test_layer_order_follows_open_request_not_probe_arrival(
 
         def probe_dataset_async(self, path, on_success=None, on_error=None):
             meta = {
-                "width": 64, "height": 48, "count": 1, "driver": "GTiff",
-                "spatial_model": "affine", "crs_epsg": None, "geotransform": None,
-                "overview_levels": [], "bands": [],
+                "width": 64,
+                "height": 48,
+                "count": 1,
+                "driver": "GTiff",
+                "spatial_model": "affine",
+                "crs_epsg": None,
+                "geotransform": None,
+                "overview_levels": [],
+                "bands": [],
             }
             self.queued.append((meta, on_success, on_error))
             return "probe"
@@ -629,7 +689,9 @@ def test_relink_after_moving_data(tmp_path: Path, qapp: QApplication, samples: d
 
     # 数据源被改名 -> 打开项目时缺失
     moved_file.rename(data / "改名后的影像.tif")
-    spec = __import__("spectra_workbench.project.model", fromlist=["load_project"]).load_project(proj)
+    spec = __import__("spectra_workbench.project.model", fromlist=["load_project"]).load_project(
+        proj
+    )
     from spectra_workbench.project.model import find_missing, relink, resolve_source
 
     missing = find_missing(root, spec)
@@ -643,12 +705,16 @@ def test_relink_after_moving_data(tmp_path: Path, qapp: QApplication, samples: d
 
     fixed = relink(root, spec, {layer_id: data / "改名后的影像.tif"})
     assert find_missing(root, fixed) == []
-    assert resolve_source(root, fixed.layers[0].source, is_relative=fixed.layers[0].source_is_relative).exists()
+    assert resolve_source(
+        root, fixed.layers[0].source, is_relative=fixed.layers[0].source_is_relative
+    ).exists()
     win2.close()
     pump(qapp, 0.2)
 
 
-def test_closing_layer_releases_file_handle(window: MainWindow, qapp: QApplication, samples: dict) -> None:
+def test_closing_layer_releases_file_handle(
+    window: MainWindow, qapp: QApplication, samples: dict
+) -> None:
     """关闭图层后文件必须可被重命名/删除（Windows 句柄实测）。"""
     tmp = Path(samples["samples"]["rotated"]["path"]).parent / "handle_probe.tif"
     shutil.copyfile(samples["samples"]["rotated"]["path"], tmp)
@@ -668,13 +734,17 @@ def test_closing_layer_releases_file_handle(window: MainWindow, qapp: QApplicati
     os.remove(tmp.with_name("handle_probe_moved.tif"))
 
 
-def test_view_crs_switch_uses_worker_wkt(window: MainWindow, qapp: QApplication, samples: dict) -> None:
+def test_view_crs_switch_uses_worker_wkt(
+    window: MainWindow, qapp: QApplication, samples: dict
+) -> None:
     geo = samples["samples"]["geographic"]
     window.open_dataset(geo["path"])
     wait_layers(window, qapp)
     wait_render(window.canvas, qapp)
 
-    idx = next(i for i in range(window.cmb_view_crs.count()) if window.cmb_view_crs.itemData(i) == 32650)
+    idx = next(
+        i for i in range(window.cmb_view_crs.count()) if window.cmb_view_crs.itemData(i) == 32650
+    )
     window.cmb_view_crs.setCurrentIndex(idx)
     pump(qapp, 20.0, until=lambda: window.canvas._view_bounds is not None)
     assert window.canvas.view_crs_wkt and "32650" in window.canvas.view_crs_wkt

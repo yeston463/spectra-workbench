@@ -27,6 +27,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from spectra_workbench.ui.icons import get_icon
+
 if TYPE_CHECKING:
     from spectra_workbench.project.model import MissingSource
     from spectra_workbench.ui.models.layer import LayerItem
@@ -58,16 +60,19 @@ class LayerPanel(QWidget):
 
         # 1. 顶部操作栏
         top_bar = QHBoxLayout()
-        self.btn_open = QPushButton("📂 打开影像...")
+        self.btn_open = QPushButton("打开影像...")
+        self.btn_open.setIcon(get_icon("open_raster", 16))
         self.btn_open.clicked.connect(self.sig_open_file_requested.emit)
         top_bar.addWidget(self.btn_open)
 
-        self.btn_remove = QPushButton("🗑️ 移除")
+        self.btn_remove = QPushButton("移除")
+        self.btn_remove.setIcon(get_icon("roi_delete", 16))
         self.btn_remove.setEnabled(False)
         self.btn_remove.clicked.connect(self._on_remove_clicked)
         top_bar.addWidget(self.btn_remove)
 
-        self.btn_clip = QPushButton("✂️ 按ROI裁剪")
+        self.btn_clip = QPushButton("按ROI裁剪")
+        self.btn_clip.setIcon(get_icon("roi_clip", 16))
         self.btn_clip.setEnabled(False)
         self.btn_clip.setToolTip("使用当前 ROI 裁剪选中的栅格图层")
         self.btn_clip.clicked.connect(self._on_clip_clicked)
@@ -93,10 +98,12 @@ class LayerPanel(QWidget):
         missing_layout.addWidget(self.list_missing)
 
         missing_btns = QHBoxLayout()
-        self.btn_relink_missing = QPushButton("🔗 重新关联…")
+        self.btn_relink_missing = QPushButton("重新关联…")
+        self.btn_relink_missing.setIcon(get_icon("sync_link", 16))
         self.btn_relink_missing.setEnabled(False)
         self.btn_relink_missing.clicked.connect(self._on_relink_missing_clicked)
-        self.btn_remove_missing = QPushButton("🗑️ 移除记录")
+        self.btn_remove_missing = QPushButton("移除记录")
+        self.btn_remove_missing.setIcon(get_icon("roi_delete", 16))
         self.btn_remove_missing.setEnabled(False)
         self.btn_remove_missing.clicked.connect(self._on_remove_missing_clicked)
         missing_btns.addWidget(self.btn_relink_missing)
@@ -295,7 +302,7 @@ class LayerPanel(QWidget):
     def _on_mode_toggled(self, btn_id: int, checked: bool) -> None:
         if not checked:
             return
-        is_rgb = (btn_id == 1)
+        is_rgb = btn_id == 1
         self.widget_gray.setVisible(not is_rgb)
         self.widget_rgb.setVisible(is_rgb)
 

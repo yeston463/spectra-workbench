@@ -41,7 +41,9 @@ def p3_samples() -> dict:
     return ensure_p3_samples()
 
 
-def _wait_layers(win: MainWindow, qapp: QApplication, count: int = 1, timeout: float = 10.0) -> None:
+def _wait_layers(
+    win: MainWindow, qapp: QApplication, count: int = 1, timeout: float = 10.0
+) -> None:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         qapp.processEvents()
@@ -74,7 +76,10 @@ def test_dock_layout_floating_and_visibility_persistence(
 
         # 保存项目
         proj_file = tmp_path / "dock_floating_proj.spectra.json"
-        with patch("spectra_workbench.ui.main_window.QFileDialog.getSaveFileName", return_value=(str(proj_file), "")):
+        with patch(
+            "spectra_workbench.ui.main_window.QFileDialog.getSaveFileName",
+            return_value=(str(proj_file), ""),
+        ):
             win.save_project_action(save_as=True)
         assert proj_file.exists()
     finally:
@@ -122,7 +127,10 @@ def test_dock_layout_area_rearrangement_persistence(
         assert win.dockWidgetArea(win.dock_right) == Qt.DockWidgetArea.LeftDockWidgetArea
 
         proj_file = tmp_path / "dock_area_proj.spectra.json"
-        with patch("spectra_workbench.ui.main_window.QFileDialog.getSaveFileName", return_value=(str(proj_file), "")):
+        with patch(
+            "spectra_workbench.ui.main_window.QFileDialog.getSaveFileName",
+            return_value=(str(proj_file), ""),
+        ):
             win.save_project_action(save_as=True)
         assert proj_file.exists()
     finally:

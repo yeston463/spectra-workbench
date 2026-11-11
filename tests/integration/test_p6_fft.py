@@ -72,8 +72,7 @@ def _pattern(rows: int, cols: int) -> list[list[float]]:
 
 def _without_x_stripe(rows: int, cols: int) -> list[list[float]]:
     return [
-        [10.0 + 5.0 * math.sin(2.0 * math.pi * y / rows) for _ in range(cols)]
-        for y in range(rows)
+        [10.0 + 5.0 * math.sin(2.0 * math.pi * y / rows) for _ in range(cols)] for y in range(rows)
     ]
 
 
@@ -223,7 +222,9 @@ def _mask_payload(out: Path) -> dict[str, Any]:
     return json.loads(sidecar.read_text(encoding="utf-8"))
 
 
-def _assert_close(actual: list[list[float]], expected: list[list[float]], atol: float = 1e-4) -> None:
+def _assert_close(
+    actual: list[list[float]], expected: list[list[float]], atol: float = 1e-4
+) -> None:
     a = np.asarray(actual, dtype=np.float64)
     e = np.asarray(expected, dtype=np.float64)
     assert a.shape == e.shape
@@ -369,9 +370,7 @@ def test_rejections_missing_band_out_of_range_and_complex_input(
     assert malformed.error and malformed.error["code"] == "invalid_parameters"
     assert not (tmp_path / "bad_bins.tif").exists()
 
-    complex_src = _make_raster(
-        gdal_rt, tmp_path / "complex_src.tif", 8, 8, complex_band=True
-    )
+    complex_src = _make_raster(gdal_rt, tmp_path / "complex_src.tif", 8, 8, complex_band=True)
     complex_out = _run(qapp, {"fftBand": 1}, complex_src, tmp_path / "complex_out.tif")
     assert complex_out.status is TaskStatus.failed
     assert complex_out.error and complex_out.error["code"] == "fftfilter_error"

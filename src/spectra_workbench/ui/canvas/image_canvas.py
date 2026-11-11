@@ -39,6 +39,7 @@ from spectra_workbench.rendering.display import (
     decode_window,
     to_rgba,
 )
+from spectra_workbench.ui.icons import get_icon
 
 if TYPE_CHECKING:
     from spectra_workbench.scheduler.client import QtWorkerClient
@@ -56,7 +57,9 @@ class SwipeImageItem(pg.ImageItem):
         super().__init__(*args, **kwargs)
         self.swipe_enabled: bool = False
         self.split_coord: float = 0.0
-        self.swipe_orientation: str = "vertical"  # "vertical"（左右卷帘）或 "horizontal"（上下卷帘）
+        self.swipe_orientation: str = (
+            "vertical"  # "vertical"（左右卷帘）或 "horizontal"（上下卷帘）
+        )
 
     def set_swipe(self, enabled: bool, split_coord: float, orientation: str = "vertical") -> None:
         self.swipe_enabled = enabled
@@ -185,8 +188,11 @@ class ImageCanvas(QWidget):
         self.btn_poly.toggled.connect(lambda on: self.set_roi_draw(ROIShape.polygon, on))
         bar.addWidget(self.btn_poly)
 
-        self.btn_clip_roi = QPushButton("✂️ 按ROI裁剪")
-        self.btn_clip_roi.setToolTip("使用当前绘制或选中的 ROI 裁剪活动栅格图层（多边形外部赋 NoData）")
+        self.btn_clip_roi = QPushButton("按ROI裁剪")
+        self.btn_clip_roi.setIcon(get_icon("roi_clip", 16))
+        self.btn_clip_roi.setToolTip(
+            "使用当前绘制或选中的 ROI 裁剪活动栅格图层（多边形外部赋 NoData）"
+        )
         self.btn_clip_roi.clicked.connect(self._on_clip_roi_clicked)
         bar.addWidget(self.btn_clip_roi)
 
@@ -227,7 +233,9 @@ class ImageCanvas(QWidget):
         bar_meas_layout = QHBoxLayout(self.measure_bar)
         bar_meas_layout.setContentsMargins(6, 2, 6, 2)
         bar_meas_layout.setSpacing(6)
-        self.lbl_measure_status = QLabel("测距模式：鼠标左键点击拾取起点，连续点击添加顶点，右键/双击完成")
+        self.lbl_measure_status = QLabel(
+            "测距模式：鼠标左键点击拾取起点，连续点击添加顶点，右键/双击完成"
+        )
         self.lbl_measure_status.setStyleSheet("color: #d35400; font-weight: bold;")
         bar_meas_layout.addWidget(self.lbl_measure_status, stretch=1)
         self.btn_clear_measure = QPushButton("清除测距")
@@ -340,9 +348,7 @@ class ImageCanvas(QWidget):
         if client is not None:
             self._client = client
         same = bool(
-            layer is not None
-            and self._layer is not None
-            and layer.layer_id == self._layer.layer_id
+            layer is not None and self._layer is not None and layer.layer_id == self._layer.layer_id
         )
         self._gen.bump(layer.layer_id if layer else None)
         self._bounds_gen = -1
@@ -433,7 +439,9 @@ class ImageCanvas(QWidget):
         h = float(sg.height()) if sg.isValid() and sg.height() > 0 else float(self.height())
         half_w = max(5.0, w / 2.0)
         half_h = max(5.0, h / 2.0)
-        vb.setRange(xRange=(cx - half_w, cx + half_w), yRange=(cy + half_h, cy - half_h), padding=0.0)
+        vb.setRange(
+            xRange=(cx - half_w, cx + half_w), yRange=(cy + half_h, cy - half_h), padding=0.0
+        )
         self.refresh()
 
     def _on_range_changed(self, *args: Any) -> None:
@@ -577,7 +585,9 @@ class ImageCanvas(QWidget):
                 if pts is not None and len(pts) > 0:
                     with contextlib.suppress(Exception):
                         self.plot_item.removeItem(old_item)
-                    new_item = self._create_roi_item(st["roi"], pts, selected=(rid == self._selected_roi_id))
+                    new_item = self._create_roi_item(
+                        st["roi"], pts, selected=(rid == self._selected_roi_id)
+                    )
                     new_item.setVisible(True)
                     st["item"] = new_item
                     st["display_points"] = pts
@@ -621,7 +631,9 @@ class ImageCanvas(QWidget):
             bounds_ready = True
             _try_finish()
 
-        self._client.transform_bounds_async(layer.file_path, target_view_crs, on_success=_on_bounds_ok, on_error=_on_bounds_err)
+        self._client.transform_bounds_async(
+            layer.file_path, target_view_crs, on_success=_on_bounds_ok, on_error=_on_bounds_err
+        )
 
         if not pending_roi_ids:
             return
@@ -633,6 +645,7 @@ class ImageCanvas(QWidget):
                 roi_results[rid] = [(float(c), float(r)) for (c, r) in roi.points]
                 _try_finish()
             else:
+
                 def _make_ok(r_id: str):
                     def _ok_roi(res: dict[str, Any]) -> None:
                         # 过期响应（代际已变）必须直接丢弃，不得写入结果字典，
@@ -642,6 +655,7 @@ class ImageCanvas(QWidget):
                         pts = [(float(p[0]), float(p[1])) for p in res.get("points", [])]
                         roi_results[r_id] = pts if pts else None
                         _try_finish()
+
                     return _ok_roi
 
                 def _make_err(r_id: str):
@@ -651,6 +665,7 @@ class ImageCanvas(QWidget):
                         self._status(f"ROI [{r_id}] 转换到视图 CRS 失败：{msg}")
                         roi_results[r_id] = None
                         _try_finish()
+
                     return _err_roi
 
                 self._client.transform_coordinates_async(
@@ -666,13 +681,19 @@ class ImageCanvas(QWidget):
                 )
 
     def _sync_rois_to_view(
-        self, current_gen: int, current_layer_id: str | None, target_space: str, target_crs: str | None
+        self,
+        current_gen: int,
+        current_layer_id: str | None,
+        target_space: str,
+        target_crs: str | None,
     ) -> None:
         layer = self._layer
         for rid, state in list(self._roi_states.items()):
             roi: ROI = state["roi"]
             pts: list[tuple[float, float]] | None = None
-            if roi.coordinate_space == target_space and (target_space == "pixel" or roi.crs_wkt == target_crs):
+            if roi.coordinate_space == target_space and (
+                target_space == "pixel" or roi.crs_wkt == target_crs
+            ):
                 pts = [(float(c), float(r)) for (c, r) in roi.points]
             elif self._client is not None and layer is not None:
                 try:
@@ -922,7 +943,9 @@ class ImageCanvas(QWidget):
             return
 
         self.img_swipe_item.setImage(rgba, autoLevels=False)
-        self.img_swipe_item.setRect(QRectF(float(win.x_off), float(win.y_off), float(win.win_w), float(win.win_h)))
+        self.img_swipe_item.setRect(
+            QRectF(float(win.x_off), float(win.y_off), float(win.win_w), float(win.win_h))
+        )
         self.img_swipe_item.set_swipe(True, self.swipe_line.value(), self._swipe_orientation)
         self.img_swipe_item.setVisible(True)
 
@@ -941,7 +964,9 @@ class ImageCanvas(QWidget):
             self.set_roi_draw(ROIShape.polygon, False)
             self.btn_rect.setChecked(False)
             self.btn_poly.setChecked(False)
-            self.lbl_measure_status.setText("测距模式：左键点击拾取起点，连续点击添加顶点，右键/双击完成")
+            self.lbl_measure_status.setText(
+                "测距模式：左键点击拾取起点，连续点击添加顶点，右键/双击完成"
+            )
             self._status("折线测距已开启：鼠标左键点击开始测量")
         else:
             if self._measure_rubber is not None:
@@ -990,7 +1015,10 @@ class ImageCanvas(QWidget):
                 phi1, phi2 = math.radians(lat1), math.radians(lat2)
                 dphi = math.radians(lat2 - lat1)
                 dlambda = math.radians(lon2 - lon1)
-                a = math.sin(dphi / 2.0) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2.0) ** 2
+                a = (
+                    math.sin(dphi / 2.0) ** 2
+                    + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2.0) ** 2
+                )
                 dist_m = 2.0 * r * math.atan2(math.sqrt(a), math.sqrt(max(0.0, 1.0 - a)))
             else:
                 # 投影平面直角坐标系 (米制)
@@ -1010,7 +1038,7 @@ class ImageCanvas(QWidget):
             return
         pos = vb.mapSceneToView(event.scenePos())
         btn = event.button() if hasattr(event, "button") and callable(event.button) else None
-        is_right = (btn == Qt.MouseButton.RightButton)
+        is_right = btn == Qt.MouseButton.RightButton
         is_double = False
         if hasattr(event, "double") and callable(event.double):
             is_double = bool(event.double())
@@ -1031,12 +1059,19 @@ class ImageCanvas(QWidget):
         self._measure_rubber.setData([last_pt[0], curr_pt[0]], [last_pt[1], curr_pt[1]])
 
         seg_dist, seg_str = self._compute_segment_distance(last_pt, curr_pt)
-        total_dist = sum(
-            self._compute_segment_distance(self._measure_points[i], self._measure_points[i + 1])[0]
-            for i in range(len(self._measure_points) - 1)
-        ) + seg_dist
+        total_dist = (
+            sum(
+                self._compute_segment_distance(
+                    self._measure_points[i], self._measure_points[i + 1]
+                )[0]
+                for i in range(len(self._measure_points) - 1)
+            )
+            + seg_dist
+        )
 
-        total_str = f"{total_dist / 1000.0:.3f} km" if total_dist >= 1000.0 else f"{total_dist:.2f} m"
+        total_str = (
+            f"{total_dist / 1000.0:.3f} km" if total_dist >= 1000.0 else f"{total_dist:.2f} m"
+        )
         status_txt = f"当前段长: {seg_str} | 累计总长: {total_str} (单击添加顶点，右键/双击完成)"
         self.lbl_measure_status.setText(status_txt)
         self.sig_measure_status.emit(status_txt)
@@ -1051,7 +1086,9 @@ class ImageCanvas(QWidget):
             self._compute_segment_distance(self._measure_points[i], self._measure_points[i + 1])[0]
             for i in range(len(self._measure_points) - 1)
         )
-        total_str = f"{total_dist / 1000.0:.3f} km" if total_dist >= 1000.0 else f"{total_dist:.2f} m"
+        total_str = (
+            f"{total_dist / 1000.0:.3f} km" if total_dist >= 1000.0 else f"{total_dist:.2f} m"
+        )
         finish_txt = f"测距完成：共 {len(self._measure_points)} 个顶点，累计总距离 {total_str}"
         self.lbl_measure_status.setText(finish_txt)
         self.sig_measure_status.emit(finish_txt)
@@ -1144,7 +1181,9 @@ class ImageCanvas(QWidget):
         )
         hit = self._cache.get(key)
         if hit is not None:
-            self._render(_payload_from_cache(hit), key, generation, layer, settings, from_cache=True)
+            self._render(
+                _payload_from_cache(hit), key, generation, layer, settings, from_cache=True
+            )
             return
 
         self._status(f"读取窗口 [{x_off},{y_off} {win_w}x{win_h}] -> {out_w}x{out_h}")
@@ -1195,8 +1234,11 @@ class ImageCanvas(QWidget):
         )
         hit = self._cache.get(key)
         if hit is not None:
-            self._render(_payload_from_cache(hit), key, generation, layer, settings, from_cache=True)
+            self._render(
+                _payload_from_cache(hit), key, generation, layer, settings, from_cache=True
+            )
             return
+
         def _on_ok(payload: dict[str, Any], k=key, g=generation, ly=layer, st=settings) -> None:
             self._after_fetch(payload, k, g, ly, st)
 
@@ -1261,7 +1303,9 @@ class ImageCanvas(QWidget):
             x1, y1 = float(grid.get("x_max", 1.0)), float(grid.get("y_max", 1.0))
             self.img_item.setRect(QRectF(x0, y1, max(x1 - x0, 1e-9), max(y1 - y0, 1e-9)))
         else:
-            self.img_item.setRect(QRectF(float(win.x_off), float(win.y_off), float(win.win_w), float(win.win_h)))
+            self.img_item.setRect(
+                QRectF(float(win.x_off), float(win.y_off), float(win.win_w), float(win.win_h))
+            )
 
         ov = payload.get("overview_used", -1)
         ratio = payload.get("overview_ratio")
@@ -1358,7 +1402,9 @@ class ImageCanvas(QWidget):
     def select_roi(self, roi_id: str | None) -> None:
         self._selected_roi_id = roi_id
         for rid, state in self._roi_states.items():
-            state["item"].setPen(pg.mkPen((255, 220, 0) if rid == roi_id else (0, 200, 255), width=3))
+            state["item"].setPen(
+                pg.mkPen((255, 220, 0) if rid == roi_id else (0, 200, 255), width=3)
+            )
 
     def selected_roi(self) -> ROI | None:
         """返回当前选中的 ROI 模型对象；若未显式选中但仅有 1 个 ROI 时返回该 ROI。"""
@@ -1444,7 +1490,9 @@ class ImageCanvas(QWidget):
             # 显示点与当前视图不在同一坐标空间：拒绝反算，权威几何原样保留
             return base, True
 
-        if base.coordinate_space == disp_space and (disp_space == "pixel" or base.crs_wkt == disp_crs):
+        if base.coordinate_space == disp_space and (
+            disp_space == "pixel" or base.crs_wkt == disp_crs
+        ):
             return base.model_copy(update={"points": view_points}), False
 
         if base.shape is ROIShape.rectangle and not isinstance(state["item"], pg.RectROI):
@@ -1540,7 +1588,10 @@ class ImageCanvas(QWidget):
                 item.translatable = False
         else:
             item = pg.PolyLineROI(
-                [(float(c), float(r)) for (c, r) in display_points], closed=True, pen=pen, movable=True
+                [(float(c), float(r)) for (c, r) in display_points],
+                closed=True,
+                pen=pen,
+                movable=True,
             )
         item.setZValue(self.roi_z)
         return item
@@ -1550,7 +1601,9 @@ class ImageCanvas(QWidget):
         view_crs = self.view_crs_wkt
 
         if display_points is None:
-            if roi.coordinate_space == view_space and (view_space == "pixel" or roi.crs_wkt == view_crs):
+            if roi.coordinate_space == view_space and (
+                view_space == "pixel" or roi.crs_wkt == view_crs
+            ):
                 display_points = [(float(c), float(r)) for (c, r) in roi.points]
             elif self._client is not None and self._layer is not None:
                 try:
@@ -1580,7 +1633,9 @@ class ImageCanvas(QWidget):
                 roi = roi.model_copy(update={"attributes": attrs})
 
         if display_points is not None and len(display_points) > 0:
-            item = self._create_roi_item(roi, display_points, selected=(roi.roi_id == self._selected_roi_id))
+            item = self._create_roi_item(
+                roi, display_points, selected=(roi.roi_id == self._selected_roi_id)
+            )
             item.setVisible(True)
             transform_error = False
         else:
@@ -1711,7 +1766,7 @@ class ImageCanvas(QWidget):
 
         now = time.monotonic()
         btn = event.button() if hasattr(event, "button") and callable(event.button) else None
-        is_right = (btn == Qt.MouseButton.RightButton)
+        is_right = btn == Qt.MouseButton.RightButton
 
         # Qt / pyqtgraph 传递的显式双击标记
         is_double = False

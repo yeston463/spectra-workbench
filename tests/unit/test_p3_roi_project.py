@@ -165,13 +165,24 @@ def sample_spec(root: Path) -> ProjectSpec:
     sb, relb = store_source(root, b)
     return ProjectSpec(
         layers=[
-            LayerRecord(layer_id="L1", name="A", source=sa, source_is_relative=rela, order=0,
-                        display=DisplaySettings(mode="pseudo", pseudocolor="jet", opacity=0.6), visible=False),
+            LayerRecord(
+                layer_id="L1",
+                name="A",
+                source=sa,
+                source_is_relative=rela,
+                order=0,
+                display=DisplaySettings(mode="pseudo", pseudocolor="jet", opacity=0.6),
+                visible=False,
+            ),
             LayerRecord(layer_id="L2", name="B", source=sb, source_is_relative=relb, order=1),
         ],
         rois=[rect(), poly()],
-        views=[ViewRecord(view_id="V1", center_col=100.5, center_row=200.25, scale=2.5, linked_views=["V2"]),
-               ViewRecord(view_id="V2", center_col=1.0, center_row=2.0, scale=1.0)],
+        views=[
+            ViewRecord(
+                view_id="V1", center_col=100.5, center_row=200.25, scale=2.5, linked_views=["V2"]
+            ),
+            ViewRecord(view_id="V2", center_col=1.0, center_row=2.0, scale=1.0),
+        ],
         active_layer_id="L2",
         active_view_id="V1",
         layout_b64="QUJD",
@@ -244,10 +255,14 @@ def test_layer_order_must_be_contiguous(tmp_path: Path):
     root = tmp_path / "p"
     root.mkdir()
     spec = sample_spec(root)
-    broken = spec.model_copy(update={"layers": [
-        spec.layers[0].model_copy(update={"order": 0}),
-        spec.layers[1].model_copy(update={"order": 5}),
-    ]})
+    broken = spec.model_copy(
+        update={
+            "layers": [
+                spec.layers[0].model_copy(update={"order": 0}),
+                spec.layers[1].model_copy(update={"order": 5}),
+            ]
+        }
+    )
     with pytest.raises(ValidationError, match="连续序号"):
         ProjectSpec.model_validate(broken.model_dump(mode="json"))
 
@@ -318,7 +333,6 @@ def test_project_version_constant_is_declared(tmp_path: Path):
     assert PROJECT_SCHEMA_VERSION == "1.0"
 
 
-
 def test_rebase_project_relocates_relative_sources_correctly(tmp_path: Path):
     from spectra_workbench.project.model import rebase_project
 
@@ -329,13 +343,19 @@ def test_rebase_project_relocates_relative_sources_correctly(tmp_path: Path):
     img = old_root / "data" / "a.tif"
     img.write_bytes(b"data")
     spec = ProjectSpec(
-        layers=[LayerRecord(layer_id="L1", name="A", source="data/a.tif", source_is_relative=True, order=0)]
+        layers=[
+            LayerRecord(
+                layer_id="L1", name="A", source="data/a.tif", source_is_relative=True, order=0
+            )
+        ]
     )
     # 另存到 new_root（原文件在 old_root，不在 new_root 之下）-> 转为绝对路径保留对原数据的指向
     rebased = rebase_project(spec, old_root, new_root)
     assert rebased.layers[0].source_is_relative is False
     assert (
-        resolve_source(new_root, rebased.layers[0].source, is_relative=rebased.layers[0].source_is_relative)
+        resolve_source(
+            new_root, rebased.layers[0].source, is_relative=rebased.layers[0].source_is_relative
+        )
         == img.resolve()
     )
 

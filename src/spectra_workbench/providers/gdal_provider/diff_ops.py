@@ -71,8 +71,10 @@ def _read_band(ds: Any, index: int, src_nodata: float | None) -> tuple[np.ndarra
         raise DiffError(f"无法读取波段 {index}")
     raw = np.asarray(raw_obj, dtype=np.float64)
     label = band.GetNoDataValue()
-    nodata = float(src_nodata) if src_nodata is not None else (
-        float(label) if label is not None else None
+    nodata = (
+        float(src_nodata)
+        if src_nodata is not None
+        else (float(label) if label is not None else None)
     )
     invalid = ~np.isfinite(raw)
     if nodata is not None:
@@ -116,15 +118,12 @@ def run_raster_diff(
         ref_w, ref_h = int(ref_ds.RasterXSize), int(ref_ds.RasterYSize)
         if (src_w, src_h) != (ref_w, ref_h):
             raise DiffError(
-                f"两景尺寸不一致：输入 {src_w}×{src_h}，参考 {ref_w}×{ref_h}；"
-                "差值不做隐式重采样"
+                f"两景尺寸不一致：输入 {src_w}×{src_h}，参考 {ref_w}×{ref_h}；差值不做隐式重采样"
             )
         src_bands = int(src_ds.RasterCount)
         ref_bands = int(ref_ds.RasterCount)
         if src_bands != ref_bands:
-            raise DiffError(
-                f"两景波段数不一致：输入 {src_bands}，参考 {ref_bands}"
-            )
+            raise DiffError(f"两景波段数不一致：输入 {src_bands}，参考 {ref_bands}")
         src_gt = tuple(float(v) for v in (src_ds.GetGeoTransform() or ()))
         ref_gt = tuple(float(v) for v in (ref_ds.GetGeoTransform() or ()))
         if src_gt != ref_gt:

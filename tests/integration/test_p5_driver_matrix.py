@@ -48,6 +48,7 @@ def qapp() -> QApplication:
 def gdal_rt() -> dict[str, Any]:
     return resolve_gdal_runtime(ROOT)
 
+
 #: 实测矩阵的驱动集合：四个点名驱动 + 已装扩展驱动代表。
 MATRIX_DRIVERS = (
     "GTiff",
@@ -238,15 +239,21 @@ def test_driver_four_mode_matrix_separated_and_honest(
             declared_yes = declared[dcap_key]
             actual_ok = _actual_ok(actual[mode])
             if declared_yes != actual_ok and not (
-                not declared_yes and actual_ok and (name, dcap_key) in KNOWN_DECLARED_FALSE_BUT_WORKS
+                not declared_yes
+                and actual_ok
+                and (name, dcap_key) in KNOWN_DECLARED_FALSE_BUT_WORKS
             ):
-                mismatches.append((f"{name}.{mode}", f"declared={declared_yes} actual={actual[mode]}"))
+                mismatches.append(
+                    (f"{name}.{mode}", f"declared={declared_yes} actual={actual[mode]}")
+                )
 
     # 声明与实况的错位必须在已知白名单内——新错位 = GDAL 行为变化，必须显式过目
     assert not mismatches, "驱动声明与实测行为存在未知错位：" + repr(mismatches)
 
     # 点名驱动的关键事实（分开实测，不以声明代替）
-    assert all(_actual_ok(matrix["GTiff"]["actual"][m]) for m in ("read", "create", "createcopy", "update"))
+    assert all(
+        _actual_ok(matrix["GTiff"]["actual"][m]) for m in ("read", "create", "createcopy", "update")
+    )
     assert _actual_ok(matrix["ENVI"]["actual"]["create"])
     assert _actual_ok(matrix["ENVI"]["actual"]["update"])
     assert _actual_ok(matrix["ENVI"]["actual"]["createcopy"])  # 声明 false，实测可用

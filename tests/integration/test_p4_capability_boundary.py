@@ -306,9 +306,7 @@ def test_supported_params_matrix_is_consistent() -> None:
 
 
 # ------------------------------------------- 2. GUI 能力切换的状态隔离
-def test_hidden_controls_do_not_leak_after_capability_switch(
-    qapp, tmp_path, source_raster
-) -> None:
+def test_hidden_controls_do_not_leak_after_capability_switch(qapp, tmp_path, source_raster) -> None:
     """切到 Rasterio convert 后，隐藏的裁剪/分辨率控件不得进入 TaskSpec。"""
     form, emitted = _form(qapp, tmp_path, "gdal:translate")
     try:
@@ -415,9 +413,7 @@ def test_warp_source_window_uses_lazy_vrt(qapp, gdal_rt, source_raster, tmp_path
     """
     import json as _json
 
-    script_path = (
-        Path(__file__).resolve().parents[1] / "fixtures" / "probe_crop_driver.py"
-    )
+    script_path = Path(__file__).resolve().parents[1] / "fixtures" / "probe_crop_driver.py"
     proc = subprocess.run(
         [str(gdal_rt["python"]), str(script_path), str(source_raster)],
         capture_output=True,
@@ -438,7 +434,6 @@ def test_warp_source_window_uses_lazy_vrt(qapp, gdal_rt, source_raster, tmp_path
     # NoData 与 GeoTransform 语义保持
     assert info["nodata"] == pytest.approx(-9999.0)
     assert info["gt"][0] == pytest.approx(100.002)
-
 
 
 def test_warp_source_window_semantics_preserved_with_vrt(

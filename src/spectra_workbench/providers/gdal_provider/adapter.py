@@ -70,7 +70,15 @@ from spectra_workbench.providers.base import (
     ProviderAdapter,
     resolve_dataset_path,
 )
+from spectra_workbench.providers.gdal_provider.advanced_mosaic_ops import (
+    run_advanced_mosaic,
+)
 from spectra_workbench.providers.gdal_provider.calc_ops import run_calc
+from spectra_workbench.providers.gdal_provider.classify_ops import (
+    compute_confusion_matrix,
+    run_kmeans_classification,
+    run_supervised_classification,
+)
 from spectra_workbench.providers.gdal_provider.cleanup_ops import (
     CLEANUP_CAPABILITIES,
     CleanupError,
@@ -79,6 +87,9 @@ from spectra_workbench.providers.gdal_provider.cleanup_ops import (
 )
 from spectra_workbench.providers.gdal_provider.clip_ops import ClipError, run_clip_mask
 from spectra_workbench.providers.gdal_provider.cloudreplace_ops import run_cloud_replace
+from spectra_workbench.providers.gdal_provider.density_slice_ops import (
+    run_density_slice,
+)
 from spectra_workbench.providers.gdal_provider.diff_ops import run_raster_diff
 from spectra_workbench.providers.gdal_provider.dos_ops import run_dos1
 from spectra_workbench.providers.gdal_provider.expression_ops import ExpressionError
@@ -86,6 +97,7 @@ from spectra_workbench.providers.gdal_provider.fft_ops import fft_filter
 from spectra_workbench.providers.gdal_provider.fusion_ops import run_pansharpen
 from spectra_workbench.providers.gdal_provider.fvc_ops import run_fvc
 from spectra_workbench.providers.gdal_provider.gcp_ops import run_gcp_registration
+from spectra_workbench.providers.gdal_provider.hyperspectral_ops import run_sam
 from spectra_workbench.providers.gdal_provider.index_ops import compute_index
 from spectra_workbench.providers.gdal_provider.mask_ops import run_mask
 from spectra_workbench.providers.gdal_provider.mdim_ops import (
@@ -124,12 +136,18 @@ from spectra_workbench.providers.gdal_provider.sidecars import (
     collect_protected_inputs,
     ensure_no_stale_sidecars,
 )
+from spectra_workbench.providers.gdal_provider.spatial_analyst_ops import (
+    run_dem_sample,
+)
 from spectra_workbench.providers.gdal_provider.statistics_ops import (
     compute_statistics,
     write_statistics_report,
 )
 from spectra_workbench.providers.gdal_provider.tasseledcap_ops import run_tasseled_cap
-from spectra_workbench.providers.gdal_provider.vector_ops import inspect_vector
+from spectra_workbench.providers.gdal_provider.vector_ops import (
+    inspect_vector,
+    run_vector_buffer,
+)
 from spectra_workbench.registry.gdal_index import (
     GDAL_VERSION,
     build_gdal_baseline,
@@ -157,6 +175,35 @@ def _resolve_input_str(path: Path | str) -> str:
             if candidate.exists():
                 return str(candidate)
     return str(p)
+
+
+def _parse_bad_bands(ds: Any, count: int) -> set[int]:
+    """解析 ENVI bbl (bad band list) 与数据集质量标记，返回 1-based 坏波段集合。"""
+    bad_set: set[int] = set()
+    try:
+        envi_meta = ds.GetMetadata("ENVI") or {}
+        raw_bbl = (
+            envi_meta.get("bbl") or envi_meta.get("bad_band_list") or envi_meta.get("bad band list")
+        )
+        if not raw_bbl:
+            def_meta = ds.GetMetadata() or {}
+            raw_bbl = def_meta.get("bbl") or def_meta.get("bad_band_list")
+
+        if raw_bbl:
+            clean_str = raw_bbl.strip().strip("{}").strip()
+            tokens = [t.strip() for t in clean_str.replace(",", " ").split() if t.strip()]
+            for idx, token in enumerate(tokens[:count]):
+                if token == "0":
+                    bad_set.add(idx + 1)
+
+        for b_idx in range(1, count + 1):
+            band = ds.GetRasterBand(b_idx)
+            b_meta = band.GetMetadata() or {}
+            if b_meta.get("bbl") == "0" or b_meta.get("quality") in ("bad", "invalid", "0"):
+                bad_set.add(b_idx)
+    except Exception:
+        pass
+    return bad_set
 
 
 #: P4-02 能力集合：这些能力统一走多输入提取（inputs["inputs"] 列表）。
@@ -206,9 +253,7 @@ def _extract_raster_inputs(spec: Any) -> list[Path]:
     paths: list[Path] = []
     for ref in raw_list:
         raw_uri = ref.uri if hasattr(ref, "uri") else str(ref)
-        paths.append(
-            _resolve_raster_input(resolve_dataset_path(raw_uri, spec.project_root))
-        )
+        paths.append(_resolve_raster_input(resolve_dataset_path(raw_uri, spec.project_root)))
     return paths
 
 
@@ -320,7 +365,10 @@ class GDALProviderAdapter(ProviderAdapter):
 
     def runtime_info(self) -> dict[str, Any]:
         if not GDAL_AVAILABLE or gdal is None or osr is None:
-            return {"available": False, "error": "osgeo module not importable in current environment"}
+            return {
+                "available": False,
+                "error": "osgeo module not importable in current environment",
+            }
 
         return {
             "available": True,
@@ -380,6 +428,18 @@ class GDALProviderAdapter(ProviderAdapter):
         "gdal:fvc",
         # --- P11-07：多边形 ROI 与矢量 cutline 掩膜裁剪 ---
         "gdal:clip_mask",
+        # --- P11-06：密度分割 ---
+        "gdal:density_slice",
+        # --- P11-03：高级图像镶嵌 ---
+        "gdal:mosaic_advanced",
+        # --- P11-05：SAM 光谱角制图 ---
+        "gdal:sam",
+        # --- P11-02：遥感分类整链与精度评估 ---
+        "gdal:classify",
+        "gdal:accuracy_assessment",
+        # --- P11-09：次级空间分析 ---
+        "ogr:buffer",
+        "gdal:dem_sample",
         # --- P6-06：辐射定标 / DOS1 大气校正 / 掩膜驱动多时相去云 ---
         "gdal:calibrate",
         "gdal:dos1",
@@ -406,6 +466,7 @@ class GDALProviderAdapter(ProviderAdapter):
         "gdal:merge",
         "gdal_merge",
         "gdal:stack",
+        "gdal:mosaic_advanced",
     }
 
     def validate(self, spec: TaskSpec) -> dict[str, Any]:
@@ -415,7 +476,9 @@ class GDALProviderAdapter(ProviderAdapter):
             return {
                 "valid": False,
                 "code": "unsupported_capability",
-                "errors": [f"GDAL 引擎尚未接入该能力执行器: '{spec.capability_id}'（当前已支持: gdal:translate, gdal:warp）"],
+                "errors": [
+                    f"GDAL 引擎尚未接入该能力执行器: '{spec.capability_id}'（当前已支持: gdal:translate, gdal:warp）"
+                ],
             }
 
         is_multi = spec.capability_id in self.MULTI_INPUT_CAPABILITIES
@@ -429,9 +492,7 @@ class GDALProviderAdapter(ProviderAdapter):
                 else None
             )
             if len(srcs) != 1:
-                errors.append(
-                    f"能力 {spec.capability_id} 需要恰好 1 个输入源，实际 {len(srcs)} 个"
-                )
+                errors.append(f"能力 {spec.capability_id} 需要恰好 1 个输入源，实际 {len(srcs)} 个")
                 code = "input_not_found"
             elif inplace_target is None:
                 errors.append("TaskSpec outputs 必须声明至少一个输出计划")
@@ -450,9 +511,7 @@ class GDALProviderAdapter(ProviderAdapter):
             # 波段管理：恰好 1 个输入源，但同样用 inputs["inputs"] 列表形式
             srcs = _extract_raster_inputs(spec)
             if len(srcs) != 1:
-                errors.append(
-                    f"能力 {spec.capability_id} 需要恰好 1 个输入源，实际 {len(srcs)} 个"
-                )
+                errors.append(f"能力 {spec.capability_id} 需要恰好 1 个输入源，实际 {len(srcs)} 个")
                 code = "input_not_found"
             else:
                 for in_path in srcs:
@@ -534,7 +593,10 @@ class GDALProviderAdapter(ProviderAdapter):
                 task_id=spec.task_id,
                 attempt=spec.attempt,
                 status=TaskStatus.failed,
-                error={"code": "gdal_missing", "message": "GDAL is not available in current worker process"},
+                error={
+                    "code": "gdal_missing",
+                    "message": "GDAL is not available in current worker process",
+                },
             )
 
         # 0. 准入与路由核验：非支持能力直接报错，禁止回退到 Translate
@@ -549,14 +611,21 @@ class GDALProviderAdapter(ProviderAdapter):
             )
 
         start_time = time.monotonic()
-        context.log("INFO", f"GDAL Worker initializing task {spec.task_id} with GDAL {gdal.__version__}")
+        context.log(
+            "INFO", f"GDAL Worker initializing task {spec.task_id} with GDAL {gdal.__version__}"
+        )
         context.progress(0.05, "initializing", "Verifying inputs and parameters")
 
         # 1. 严格解析输入路径（基于 project_root）
         is_p402 = spec.capability_id in P402_CAPABILITIES
-        if is_p402:
-            # P4-02 能力：输入来自 inputs["inputs"] 列表（多输入），
-            # 由 P4-02 分支自行解析与校验，这里不强制要求单输入端口。
+        is_custom_multi = spec.capability_id in (
+            "gdal:mosaic_advanced",
+            "mosaic_advanced",
+            "gdal:accuracy_assessment",
+            "accuracy_assessment",
+        )
+        if is_p402 or is_custom_multi:
+            # 多输入/专用报告能力：输入由专属分支解析与校验，不强制要求单 input 端口。
             in_path = None
         else:
             in_ref = spec.inputs["input"]
@@ -567,7 +636,10 @@ class GDALProviderAdapter(ProviderAdapter):
                     task_id=spec.task_id,
                     attempt=spec.attempt,
                     status=TaskStatus.failed,
-                    error={"code": "input_not_found", "message": f"Input raster file does not exist: {in_path}"},
+                    error={
+                        "code": "input_not_found",
+                        "message": f"Input raster file does not exist: {in_path}",
+                    },
                 )
 
         # 2. 严格解析目标输出路径（基于 project_root）
@@ -583,7 +655,10 @@ class GDALProviderAdapter(ProviderAdapter):
                 task_id=spec.task_id,
                 attempt=spec.attempt,
                 status=TaskStatus.failed,
-                error={"code": "input_output_conflict", "message": f"Input and output target point to the same file: {target_path}"},
+                error={
+                    "code": "input_output_conflict",
+                    "message": f"Input and output target point to the same file: {target_path}",
+                },
                 duration_seconds=round(time.monotonic() - start_time, 4),
             )
 
@@ -594,17 +669,30 @@ class GDALProviderAdapter(ProviderAdapter):
                 task_id=spec.task_id,
                 attempt=spec.attempt,
                 status=TaskStatus.failed,
-                error={"code": "output_already_exists", "message": f"Target file already exists and overwrite=false: {target_path}"},
+                error={
+                    "code": "output_already_exists",
+                    "message": f"Target file already exists and overwrite=false: {target_path}",
+                },
                 duration_seconds=round(time.monotonic() - start_time, 4),
             )
 
-        if out_format.upper() == "ENVI" and target_path.with_suffix(".hdr").exists() and not overwrite:
-            context.log("ERROR", f"Target ENVI header already exists and overwrite=false: {target_path.with_suffix('.hdr')}")
+        if (
+            out_format.upper() == "ENVI"
+            and target_path.with_suffix(".hdr").exists()
+            and not overwrite
+        ):
+            context.log(
+                "ERROR",
+                f"Target ENVI header already exists and overwrite=false: {target_path.with_suffix('.hdr')}",
+            )
             return TaskResult(
                 task_id=spec.task_id,
                 attempt=spec.attempt,
                 status=TaskStatus.failed,
-                error={"code": "output_already_exists", "message": f"Target header file already exists and overwrite=false: {target_path.with_suffix('.hdr')}"},
+                error={
+                    "code": "output_already_exists",
+                    "message": f"Target header file already exists and overwrite=false: {target_path.with_suffix('.hdr')}",
+                },
                 duration_seconds=round(time.monotonic() - start_time, 4),
             )
 
@@ -617,9 +705,7 @@ class GDALProviderAdapter(ProviderAdapter):
             "gdal:stack",
             "gdal:bandmanage",
         ):
-            format_explicit = bool(
-                str(spec.parameters.get("format") or "").strip()
-            )
+            format_explicit = bool(str(spec.parameters.get("format") or "").strip())
             fmt_err = self._validate_p402_output_format(
                 spec.capability_id, out_format, format_explicit=format_explicit
             )
@@ -705,6 +791,9 @@ class GDALProviderAdapter(ProviderAdapter):
                 "gdal:dos1",
                 "gdal:cloudreplace",
                 "gdal:mdim_slice",
+                "gdal:density_slice",
+                "gdal:mosaic_advanced",
+                "gdal:sam",
             )
             and spec.capability_id not in CLEANUP_CAPABILITIES
             and spec.capability_id not in VECTOR_OUTPUT_CAPABILITIES
@@ -747,6 +836,29 @@ class GDALProviderAdapter(ProviderAdapter):
                 start_time=start_time,
             )
 
+        # P11-02 混淆矩阵与精度评估报告
+        if spec.capability_id in ("gdal:accuracy_assessment", "accuracy_assessment"):
+            return self._execute_accuracy_assessment(
+                spec,
+                context,
+                norm=norm,
+                target_path=target_path,
+                staged_path=staged_path,
+                start_time=start_time,
+            )
+
+        # P11-09 DEM 区域平均采样统计报告
+        if spec.capability_id in ("gdal:dem_sample", "dem_sample"):
+            return self._execute_dem_sample(
+                spec,
+                context,
+                norm=norm,
+                in_path=in_path,
+                target_path=target_path,
+                staged_path=staged_path,
+                start_time=start_time,
+            )
+
         # P5-02 矢量成果（polygonize / contour）：成果是 OGR 数据集，
         # 建层/写要素/OGR 重开校验与栅格完全不同，走独立分支。
         # 矢量成果能力是单输入能力，validate() 已保证 input 端口存在，
@@ -778,6 +890,14 @@ class GDALProviderAdapter(ProviderAdapter):
         is_mask = spec.capability_id == "gdal:mask"
         is_fvc = spec.capability_id == "gdal:fvc"
         is_clip_mask = spec.capability_id in ("gdal:clip_mask", "clip_mask")
+        is_density_slice = spec.capability_id in (
+            "gdal:density_slice",
+            "density_slice",
+            "gdal_density_slice",
+        )
+        is_advanced_mosaic = spec.capability_id in ("gdal:mosaic_advanced", "mosaic_advanced")
+        is_sam = spec.capability_id in ("gdal:sam", "sam")
+        is_classify = spec.capability_id in ("gdal:classify", "classify", "gdal_classify")
         is_calibrate = spec.capability_id == "gdal:calibrate"
         is_dos1 = spec.capability_id == "gdal:dos1"
         is_cloudreplace = spec.capability_id == "gdal:cloudreplace"
@@ -894,8 +1014,10 @@ class GDALProviderAdapter(ProviderAdapter):
                     )
 
         if is_dos1:
-            if norm.get("dosEsun") is None or norm.get("sunZenAngle") is None or (
-                norm.get("hazeDN") is None
+            if (
+                norm.get("dosEsun") is None
+                or norm.get("sunZenAngle") is None
+                or (norm.get("hazeDN") is None)
             ):
                 return TaskResult(
                     task_id=spec.task_id,
@@ -978,11 +1100,7 @@ class GDALProviderAdapter(ProviderAdapter):
             finally:
                 del probe_ds
             req_bands = norm.get("bandList")
-            planned = (
-                len(req_bands)
-                if req_bands is not None
-                else cloud_bands
-            )
+            planned = len(req_bands) if req_bands is not None else cloud_bands
             cloud_violations = validate_output_format(
                 out_format,
                 dtype="Float32",
@@ -1222,7 +1340,10 @@ class GDALProviderAdapter(ProviderAdapter):
                         task_id=spec.task_id,
                         attempt=spec.attempt,
                         status=TaskStatus.failed,
-                        error={"code": "input_not_found", "message": f"无法打开输入栅格: {in_path}"},
+                        error={
+                            "code": "input_not_found",
+                            "message": f"无法打开输入栅格: {in_path}",
+                        },
                         duration_seconds=round(time.monotonic() - start_time, 4),
                     )
                 try:
@@ -1449,10 +1570,7 @@ class GDALProviderAdapter(ProviderAdapter):
                     },
                     duration_seconds=round(time.monotonic() - start_time, 4),
                 )
-            if all(
-                norm.get(key) is None
-                for key in ("xRes", "yRes", "width", "height")
-            ):
+            if all(norm.get(key) is None for key in ("xRes", "yRes", "width", "height")):
                 message = "gdal:rasterize 需要 xRes/yRes 或 width/height 以确定输出网格"
                 return TaskResult(
                     task_id=spec.task_id,
@@ -1559,17 +1677,13 @@ class GDALProviderAdapter(ProviderAdapter):
                     if norm.get("zField"):
                         grid_kwargs["zfield"] = str(norm["zField"])
                     if norm.get("outputBounds") is not None:
-                        grid_kwargs["outputBounds"] = [
-                            float(v) for v in norm["outputBounds"]
-                        ]
+                        grid_kwargs["outputBounds"] = [float(v) for v in norm["outputBounds"]]
                     else:
                         bounds = _vector_bounds(src_ds)
                         if bounds is not None:
                             grid_kwargs["outputBounds"] = bounds
                     if norm.get("outputType") is not None:
-                        grid_kwargs["outputType"] = getattr(
-                            gdal, f"GDT_{norm['outputType']}"
-                        )
+                        grid_kwargs["outputType"] = getattr(gdal, f"GDT_{norm['outputType']}")
                     if norm.get("noData") is not None:
                         grid_kwargs["noData"] = float(norm["noData"])
                     if out_format.upper() == "GTIFF":
@@ -1580,9 +1694,7 @@ class GDALProviderAdapter(ProviderAdapter):
                             options=gdal.GridOptions(**grid_kwargs),
                         )
                     else:
-                        raw_path = staged_path.with_name(
-                            f"{staged_path.stem}_raw.tif"
-                        )
+                        raw_path = staged_path.with_name(f"{staged_path.stem}_raw.tif")
                         grid_kwargs["format"] = "GTiff"
                         raw_ds = gdal.Grid(
                             str(raw_path),
@@ -1634,13 +1746,9 @@ class GDALProviderAdapter(ProviderAdapter):
                     if norm.get("height") is not None:
                         rasterize_kwargs["height"] = int(norm["height"])
                     if norm.get("outputBounds") is not None:
-                        rasterize_kwargs["outputBounds"] = [
-                            float(v) for v in norm["outputBounds"]
-                        ]
+                        rasterize_kwargs["outputBounds"] = [float(v) for v in norm["outputBounds"]]
                     if norm.get("outputType") is not None:
-                        rasterize_kwargs["outputType"] = getattr(
-                            gdal, f"GDT_{norm['outputType']}"
-                        )
+                        rasterize_kwargs["outputType"] = getattr(gdal, f"GDT_{norm['outputType']}")
                     if norm.get("noData") is not None:
                         rasterize_kwargs["noData"] = float(norm["noData"])
                     if "outputBounds" not in rasterize_kwargs:
@@ -1658,9 +1766,7 @@ class GDALProviderAdapter(ProviderAdapter):
                         # Rasterize can only create drivers with DCAP_CREATE;
                         # PNG/JPEG/COG are CreateCopy-only. Rasterize to a
                         # temporary GTiff and translate to the requested format.
-                        raw_path = staged_path.with_name(
-                            f"{staged_path.stem}_raw.tif"
-                        )
+                        raw_path = staged_path.with_name(f"{staged_path.stem}_raw.tif")
                         rasterize_kwargs["format"] = "GTiff"
                         raw_ds = gdal.Rasterize(
                             str(raw_path),
@@ -1716,9 +1822,7 @@ class GDALProviderAdapter(ProviderAdapter):
                         ),
                         matrix=str(norm.get("pcaMatrix") or "covariance"),
                         src_nodata=(
-                            float(norm["srcNodata"])
-                            if norm.get("srcNodata") is not None
-                            else None
+                            float(norm["srcNodata"]) if norm.get("srcNodata") is not None else None
                         ),
                         dst_nodata=(
                             float(norm["dstNodata"])
@@ -1750,9 +1854,7 @@ class GDALProviderAdapter(ProviderAdapter):
                             else None
                         ),
                         src_nodata=(
-                            float(norm["srcNodata"])
-                            if norm.get("srcNodata") is not None
-                            else None
+                            float(norm["srcNodata"]) if norm.get("srcNodata") is not None else None
                         ),
                         dst_nodata=(
                             float(norm["dstNodata"])
@@ -1776,14 +1878,10 @@ class GDALProviderAdapter(ProviderAdapter):
                     sensor_key=str(norm["tcSensor"]),
                     bands=[int(v) for v in norm["tcBands"]],
                     src_nodata=(
-                        float(norm["srcNodata"])
-                        if norm.get("srcNodata") is not None
-                        else None
+                        float(norm["srcNodata"]) if norm.get("srcNodata") is not None else None
                     ),
                     dst_nodata=(
-                        float(norm["dstNodata"])
-                        if norm.get("dstNodata") is not None
-                        else -9999.0
+                        float(norm["dstNodata"]) if norm.get("dstNodata") is not None else -9999.0
                     ),
                     out_format=out_format,
                     callback=_gdal_cb,
@@ -1810,14 +1908,10 @@ class GDALProviderAdapter(ProviderAdapter):
                     transform=str(norm.get("gcpTransform") or "affine"),
                     resample_alg=str(norm.get("gcpResample") or "bilinear"),
                     src_nodata=(
-                        float(norm["srcNodata"])
-                        if norm.get("srcNodata") is not None
-                        else None
+                        float(norm["srcNodata"]) if norm.get("srcNodata") is not None else None
                     ),
                     dst_nodata=(
-                        float(norm["dstNodata"])
-                        if norm.get("dstNodata") is not None
-                        else -9999.0
+                        float(norm["dstNodata"]) if norm.get("dstNodata") is not None else -9999.0
                     ),
                     out_format=out_format,
                     callback=_gdal_cb,
@@ -1841,14 +1935,10 @@ class GDALProviderAdapter(ProviderAdapter):
                     reference_path,
                     mode=str(norm.get("diffMode") or "difference"),
                     src_nodata=(
-                        float(norm["srcNodata"])
-                        if norm.get("srcNodata") is not None
-                        else None
+                        float(norm["srcNodata"]) if norm.get("srcNodata") is not None else None
                     ),
                     dst_nodata=(
-                        float(norm["dstNodata"])
-                        if norm.get("dstNodata") is not None
-                        else -9999.0
+                        float(norm["dstNodata"]) if norm.get("dstNodata") is not None else -9999.0
                     ),
                     out_format=out_format,
                     callback=_gdal_cb,
@@ -1871,14 +1961,10 @@ class GDALProviderAdapter(ProviderAdapter):
                     ms_bands=[int(v) for v in norm["msBands"]],
                     resample_alg=str(norm.get("fusionResample") or "bilinear"),
                     src_nodata=(
-                        float(norm["srcNodata"])
-                        if norm.get("srcNodata") is not None
-                        else None
+                        float(norm["srcNodata"]) if norm.get("srcNodata") is not None else None
                     ),
                     dst_nodata=(
-                        float(norm["dstNodata"])
-                        if norm.get("dstNodata") is not None
-                        else -9999.0
+                        float(norm["dstNodata"]) if norm.get("dstNodata") is not None else -9999.0
                     ),
                     out_format=out_format,
                     callback=_gdal_cb,
@@ -1895,21 +1981,11 @@ class GDALProviderAdapter(ProviderAdapter):
                     staged_path,
                     in_path,  # type: ignore[arg-type]
                     band=int(norm.get("maskBand") or 1),
-                    low=(
-                        float(norm["maskLow"])
-                        if norm.get("maskLow") is not None
-                        else None
-                    ),
-                    high=(
-                        float(norm["maskHigh"])
-                        if norm.get("maskHigh") is not None
-                        else None
-                    ),
+                    low=(float(norm["maskLow"]) if norm.get("maskLow") is not None else None),
+                    high=(float(norm["maskHigh"]) if norm.get("maskHigh") is not None else None),
                     invert=bool(norm.get("maskInvert") or False),
                     src_nodata=(
-                        float(norm["srcNodata"])
-                        if norm.get("srcNodata") is not None
-                        else None
+                        float(norm["srcNodata"]) if norm.get("srcNodata") is not None else None
                     ),
                     out_format=out_format,
                     callback=_gdal_cb,
@@ -1938,34 +2014,20 @@ class GDALProviderAdapter(ProviderAdapter):
                         if norm.get("highPercentile") is not None
                         else 98.0
                     ),
-                    soil=(
-                        float(norm["fvcSoil"])
-                        if norm.get("fvcSoil") is not None
-                        else None
-                    ),
-                    veg=(
-                        float(norm["fvcVeg"])
-                        if norm.get("fvcVeg") is not None
-                        else None
-                    ),
+                    soil=(float(norm["fvcSoil"]) if norm.get("fvcSoil") is not None else None),
+                    veg=(float(norm["fvcVeg"]) if norm.get("fvcVeg") is not None else None),
                     class_edges=(
                         [float(v) for v in norm["fvcClassEdges"]]
                         if norm.get("fvcClassEdges") is not None
                         else None
                     ),
-                    mask_file=(
-                        Path(str(mask_path)).expanduser() if mask_path else None
-                    ),
+                    mask_file=(Path(str(mask_path)).expanduser() if mask_path else None),
                     crop=bool(norm.get("crop") if norm.get("crop") is not None else True),
                     src_nodata=(
-                        float(norm["srcNodata"])
-                        if norm.get("srcNodata") is not None
-                        else None
+                        float(norm["srcNodata"]) if norm.get("srcNodata") is not None else None
                     ),
                     dst_nodata=(
-                        float(norm["dstNodata"])
-                        if norm.get("dstNodata") is not None
-                        else -9999.0
+                        float(norm["dstNodata"]) if norm.get("dstNodata") is not None else -9999.0
                     ),
                     out_format=out_format,
                     callback=_gdal_cb,
@@ -1992,14 +2054,10 @@ class GDALProviderAdapter(ProviderAdapter):
                         roi_space=str(norm.get("roiSpace") or "pixel"),
                         crop_to_cutline=bool(norm.get("cropToCutline", True)),
                         dst_nodata=(
-                            float(norm["dstNodata"])
-                            if norm.get("dstNodata") is not None
-                            else None
+                            float(norm["dstNodata"]) if norm.get("dstNodata") is not None else None
                         ),
                         src_nodata=(
-                            float(norm["srcNodata"])
-                            if norm.get("srcNodata") is not None
-                            else None
+                            float(norm["srcNodata"]) if norm.get("srcNodata") is not None else None
                         ),
                         cutline_where=norm.get("cutlineWhere"),
                         cutline_layer=norm.get("cutlineLayer"),
@@ -2029,6 +2087,124 @@ class GDALProviderAdapter(ProviderAdapter):
                     f"sidecar：{clip_info['sidecar']}",
                 )
                 ds = gdal.Open(str(staged_path), gdal.GA_ReadOnly)
+            elif is_density_slice:
+                try:
+                    slice_info = run_density_slice(
+                        staged_path,
+                        in_path,  # type: ignore[arg-type]
+                        band=int(norm.get("band", 1)),
+                        slices=norm.get("slices"),
+                        num_slices=int(norm.get("numSlices", 5)),
+                        slice_mode=str(norm.get("sliceMode", "equal_interval")),
+                        dst_nodata=int(norm.get("dstNodata", 0)),
+                        out_format=out_format,
+                        callback=_gdal_cb,
+                    )
+                except Exception as exc:
+                    return TaskResult(
+                        task_id=spec.task_id,
+                        attempt=spec.attempt,
+                        status=TaskStatus.failed,
+                        error={"code": "density_slice_error", "message": str(exc)},
+                        duration_seconds=round(time.monotonic() - start_time, 4),
+                    )
+                context.log(
+                    "INFO",
+                    f"密度分割完成：共划分 {len(slice_info['slices'])} 个离散区间，"
+                    f"有效像元 {slice_info['valid_pixels']}；"
+                    f"sidecar：{slice_info['sidecar_path']}",
+                )
+                ds = gdal.Open(str(staged_path), gdal.GA_ReadOnly)
+            elif is_advanced_mosaic:
+                source_paths = _extract_raster_inputs(spec)
+                try:
+                    mosaic_info = run_advanced_mosaic(
+                        staged_path,
+                        source_paths,
+                        match_histogram=bool(norm.get("matchHistogram", True)),
+                        master_index=int(norm.get("masterIndex", 0)),
+                        feather_width=int(norm.get("featherWidth", 50)),
+                        dst_nodata=float(norm.get("dstNodata", -9999.0)),
+                        out_format=out_format,
+                        callback=_gdal_cb,
+                    )
+                except Exception as exc:
+                    return TaskResult(
+                        task_id=spec.task_id,
+                        attempt=spec.attempt,
+                        status=TaskStatus.failed,
+                        error={"code": "mosaic_error", "message": str(exc)},
+                        duration_seconds=round(time.monotonic() - start_time, 4),
+                    )
+                context.log("INFO", f"高级图像镶嵌完成：{mosaic_info['dimensions']}")
+                ds = gdal.Open(str(staged_path), gdal.GA_ReadOnly)
+            elif is_sam:
+                try:
+                    sam_info = run_sam(
+                        staged_path,
+                        in_path,  # type: ignore[arg-type]
+                        reference_spectrum=list(norm.get("referenceSpectrum") or []),
+                        angle_unit=str(norm.get("angleUnit") or "radians"),
+                        max_angle=float(norm["maxAngle"])
+                        if norm.get("maxAngle") is not None
+                        else None,
+                        dst_nodata=float(norm.get("dstNodata") or -9999.0),
+                        out_format=out_format,
+                        callback=_gdal_cb,
+                    )
+                except Exception as exc:
+                    return TaskResult(
+                        task_id=spec.task_id,
+                        attempt=spec.attempt,
+                        status=TaskStatus.failed,
+                        error={"code": "sam_error", "message": str(exc)},
+                        duration_seconds=round(time.monotonic() - start_time, 4),
+                    )
+                context.log("INFO", f"SAM 光谱角制图完成：匹配像元 {sam_info['matched_pixels']}")
+                ds = gdal.Open(str(staged_path), gdal.GA_ReadOnly)
+            elif is_classify:
+                mask_p = None
+                if norm.get("maskFile"):
+                    mask_p = _resolve_raster_input(
+                        resolve_dataset_path(norm["maskFile"], spec.project_root)
+                    )
+                roi_train = norm.get("roiTraining")
+                try:
+                    if roi_train:
+                        cls_info = run_supervised_classification(
+                            staged_path,
+                            in_path,  # type: ignore[arg-type]
+                            training_classes=roi_train,
+                            method=str(norm.get("method") or "minimum_distance"),
+                            mask_path=mask_p,
+                            dst_nodata=int(norm.get("dstNodata") or 0),
+                            out_format=out_format,
+                            callback=_gdal_cb,
+                        )
+                    else:
+                        cls_info = run_kmeans_classification(
+                            staged_path,
+                            in_path,  # type: ignore[arg-type]
+                            num_classes=int(norm.get("numClasses") or 5),
+                            max_iterations=int(norm.get("maxIterations") or 20),
+                            mask_path=mask_p,
+                            dst_nodata=int(norm.get("dstNodata") or 0),
+                            out_format=out_format,
+                            callback=_gdal_cb,
+                        )
+                except Exception as exc:
+                    return TaskResult(
+                        task_id=spec.task_id,
+                        attempt=spec.attempt,
+                        status=TaskStatus.failed,
+                        error={"code": "classification_error", "message": str(exc)},
+                        duration_seconds=round(time.monotonic() - start_time, 4),
+                    )
+                context.log(
+                    "INFO",
+                    f"遥感分类完成：有效像元 {cls_info['valid_pixels']}，类别数 {len(cls_info['classes'])}",
+                )
+                ds = gdal.Open(str(staged_path), gdal.GA_ReadOnly)
             elif is_calibrate:
                 calibrate_info = run_calibration(
                     staged_path,
@@ -2050,19 +2226,13 @@ class GDALProviderAdapter(ProviderAdapter):
                         else None
                     ),
                     sun_zen_angle=(
-                        float(norm["sunZenAngle"])
-                        if norm.get("sunZenAngle") is not None
-                        else None
+                        float(norm["sunZenAngle"]) if norm.get("sunZenAngle") is not None else None
                     ),
                     src_nodata=(
-                        float(norm["srcNodata"])
-                        if norm.get("srcNodata") is not None
-                        else None
+                        float(norm["srcNodata"]) if norm.get("srcNodata") is not None else None
                     ),
                     dst_nodata=(
-                        float(norm["dstNodata"])
-                        if norm.get("dstNodata") is not None
-                        else -9999.0
+                        float(norm["dstNodata"]) if norm.get("dstNodata") is not None else -9999.0
                     ),
                     out_format=out_format,
                     callback=_gdal_cb,
@@ -2081,30 +2251,18 @@ class GDALProviderAdapter(ProviderAdapter):
                     haze_dn=float(norm["hazeDN"]),
                     esun=float(norm["dosEsun"]),
                     sun_zen_angle=float(norm["sunZenAngle"]),
-                    gain=(
-                        float(norm["dosGain"])
-                        if norm.get("dosGain") is not None
-                        else 1.0
-                    ),
-                    offset=(
-                        float(norm["dosOffset"])
-                        if norm.get("dosOffset") is not None
-                        else 0.0
-                    ),
+                    gain=(float(norm["dosGain"]) if norm.get("dosGain") is not None else 1.0),
+                    offset=(float(norm["dosOffset"]) if norm.get("dosOffset") is not None else 0.0),
                     earth_sun_distance=(
                         float(norm["earthSunDistance"])
                         if norm.get("earthSunDistance") is not None
                         else 1.0
                     ),
                     src_nodata=(
-                        float(norm["srcNodata"])
-                        if norm.get("srcNodata") is not None
-                        else None
+                        float(norm["srcNodata"]) if norm.get("srcNodata") is not None else None
                     ),
                     dst_nodata=(
-                        float(norm["dstNodata"])
-                        if norm.get("dstNodata") is not None
-                        else -9999.0
+                        float(norm["dstNodata"]) if norm.get("dstNodata") is not None else -9999.0
                     ),
                     out_format=out_format,
                     callback=_gdal_cb,
@@ -2142,14 +2300,10 @@ class GDALProviderAdapter(ProviderAdapter):
                         else 0
                     ),
                     src_nodata=(
-                        float(norm["srcNodata"])
-                        if norm.get("srcNodata") is not None
-                        else None
+                        float(norm["srcNodata"]) if norm.get("srcNodata") is not None else None
                     ),
                     dst_nodata=(
-                        float(norm["dstNodata"])
-                        if norm.get("dstNodata") is not None
-                        else -9999.0
+                        float(norm["dstNodata"]) if norm.get("dstNodata") is not None else -9999.0
                     ),
                     out_format=out_format,
                     callback=_gdal_cb,
@@ -2207,9 +2361,8 @@ class GDALProviderAdapter(ProviderAdapter):
                         duration_seconds=round(time.monotonic() - start_time, 4),
                     )
                 sel_txt = "；".join(
-                    f"{s['dim']}={s['index']}" + (
-                        f"@{s['value']}" if s.get("value") is not None else ""
-                    )
+                    f"{s['dim']}={s['index']}"
+                    + (f"@{s['value']}" if s.get("value") is not None else "")
                     for s in mdim_info["selected"]
                 )
                 context.log(
@@ -2254,9 +2407,7 @@ class GDALProviderAdapter(ProviderAdapter):
                     band_a=int(norm["bandA"]),
                     band_b=int(norm["bandB"]),
                     # 零值合法（L=0 退化为 NDVI）：按 None 判断，绝不用 truthiness
-                    savi_l=(
-                        float(norm["saviL"]) if norm.get("saviL") is not None else 0.5
-                    ),
+                    savi_l=(float(norm["saviL"]) if norm.get("saviL") is not None else 0.5),
                     use_physical=bool(norm.get("usePhysical", True)),
                     src_nodata=(
                         float(norm["srcNodata"]) if norm.get("srcNodata") is not None else None
@@ -2277,14 +2428,15 @@ class GDALProviderAdapter(ProviderAdapter):
                 ds = gdal.Open(str(staged_path), gdal.GA_ReadOnly)
             elif is_fftfilter:
                 # 零值/空列表合法：suppressBins 为空 = 恒等掩膜（往返校验路径）
-                suppress_bins = [
-                    (int(fy), int(fx)) for fy, fx in (norm.get("suppressBins") or [])
-                ]
+                suppress_bins = [(int(fy), int(fx)) for fy, fx in (norm.get("suppressBins") or [])]
                 fft_info = fft_filter(
                     staged_path,
                     in_path,  # type: ignore[arg-type]
                     band=int(norm["fftBand"]),
                     suppressed_bins=suppress_bins,
+                    transition_width=float(norm.get("transitionWidth") or 0.0),
+                    notch_regions=norm.get("notchRegions"),
+                    taper_type=str(norm.get("taperType") or "cosine"),
                     src_nodata=(
                         float(norm["srcNodata"]) if norm.get("srcNodata") is not None else None
                     ),
@@ -2446,6 +2598,14 @@ class GDALProviderAdapter(ProviderAdapter):
                 if is_fvc
                 else "ClipMask"
                 if is_clip_mask
+                else "DensitySlice"
+                if is_density_slice
+                else "MosaicAdvanced"
+                if is_advanced_mosaic
+                else "SAM"
+                if is_sam
+                else "Classify"
+                if is_classify
                 else "Calibrate"
                 if is_calibrate
                 else "DOS1"
@@ -2507,6 +2667,14 @@ class GDALProviderAdapter(ProviderAdapter):
                 if is_fvc
                 else "ClipMask"
                 if is_clip_mask
+                else "DensitySlice"
+                if is_density_slice
+                else "MosaicAdvanced"
+                if is_advanced_mosaic
+                else "SAM"
+                if is_sam
+                else "Classify"
+                if is_classify
                 else "Calibrate"
                 if is_calibrate
                 else "DOS1"
@@ -2523,7 +2691,10 @@ class GDALProviderAdapter(ProviderAdapter):
                 task_id=spec.task_id,
                 attempt=spec.attempt,
                 status=TaskStatus.failed,
-                error={"code": f"{op_name.lower()}_returned_none", "message": gdal.GetLastErrorMsg() or f"{op_name} failed"},
+                error={
+                    "code": f"{op_name.lower()}_returned_none",
+                    "message": gdal.GetLastErrorMsg() or f"{op_name} failed",
+                },
                 duration_seconds=round(time.monotonic() - start_time, 4),
             )
 
@@ -2547,9 +2718,7 @@ class GDALProviderAdapter(ProviderAdapter):
             if tc_sidecar.exists():
                 staged_files.append(tc_sidecar.resolve())
         if is_gcpregister:
-            gcp_sidecar = staged_path.with_name(
-                staged_path.name + ".gcpregistration.json"
-            )
+            gcp_sidecar = staged_path.with_name(staged_path.name + ".gcpregistration.json")
             if gcp_sidecar.exists():
                 staged_files.append(gcp_sidecar.resolve())
         if is_rasterdiff:
@@ -2557,9 +2726,7 @@ class GDALProviderAdapter(ProviderAdapter):
             if diff_sidecar.exists():
                 staged_files.append(diff_sidecar.resolve())
         if is_pansharpen:
-            fusion_sidecar = staged_path.with_name(
-                staged_path.name + ".pansharpen.json"
-            )
+            fusion_sidecar = staged_path.with_name(staged_path.name + ".pansharpen.json")
             if fusion_sidecar.exists():
                 staged_files.append(fusion_sidecar.resolve())
         if is_mask:
@@ -2577,10 +2744,24 @@ class GDALProviderAdapter(ProviderAdapter):
             clip_sidecar = staged_path.with_name(staged_path.name + ".clip.json")
             if clip_sidecar.exists():
                 staged_files.append(clip_sidecar.resolve())
+        if is_density_slice:
+            slice_sidecar = staged_path.with_name(staged_path.name + ".density_slice.json")
+            if slice_sidecar.exists():
+                staged_files.append(slice_sidecar.resolve())
+        if is_advanced_mosaic:
+            mosaic_sidecar = staged_path.with_name(staged_path.name + ".mosaic.json")
+            if mosaic_sidecar.exists():
+                staged_files.append(mosaic_sidecar.resolve())
+        if is_sam:
+            sam_sidecar = staged_path.with_name(staged_path.name + ".sam.json")
+            if sam_sidecar.exists():
+                staged_files.append(sam_sidecar.resolve())
+        if is_classify:
+            classify_sidecar = staged_path.with_name(staged_path.name + ".classify.json")
+            if classify_sidecar.exists():
+                staged_files.append(classify_sidecar.resolve())
         if is_calibrate:
-            calibrate_sidecar = staged_path.with_name(
-                staged_path.name + ".calibrate.json"
-            )
+            calibrate_sidecar = staged_path.with_name(staged_path.name + ".calibrate.json")
             if calibrate_sidecar.exists():
                 staged_files.append(calibrate_sidecar.resolve())
         if is_dos1:
@@ -2588,9 +2769,7 @@ class GDALProviderAdapter(ProviderAdapter):
             if dos_sidecar.exists():
                 staged_files.append(dos_sidecar.resolve())
         if is_cloudreplace:
-            cloud_sidecar = staged_path.with_name(
-                staged_path.name + ".cloudreplace.json"
-            )
+            cloud_sidecar = staged_path.with_name(staged_path.name + ".cloudreplace.json")
             if cloud_sidecar.exists():
                 staged_files.append(cloud_sidecar.resolve())
         if is_mdim_slice:
@@ -2616,7 +2795,9 @@ class GDALProviderAdapter(ProviderAdapter):
                 auth_code = srs.GetAuthorityCode(None)
                 clean_expected = str(dst_srs).upper().replace("EPSG:", "").strip()
                 if auth_code and auth_code != clean_expected:
-                    raise RuntimeError(f"Warp 成果空间参考不匹配：期望 {clean_expected}，实际 {auth_code}")
+                    raise RuntimeError(
+                        f"Warp 成果空间参考不匹配：期望 {clean_expected}，实际 {auth_code}"
+                    )
             del verify_ds
         except Exception as verify_err:
             context.log("ERROR", f"Verification of staged output failed: {verify_err}")
@@ -2638,7 +2819,7 @@ class GDALProviderAdapter(ProviderAdapter):
             elif sf.name.endswith(".aux.xml"):
                 tf = target_path.parent / f"{target_path.name}.aux.xml"
             elif sf.name.startswith(staged_path.name):
-                tail = sf.name[len(staged_path.name):]
+                tail = sf.name[len(staged_path.name) :]
                 tf = target_path.parent / f"{target_path.name}{tail}"
             else:
                 tf = target_path.parent / sf.name
@@ -2676,8 +2857,7 @@ class GDALProviderAdapter(ProviderAdapter):
         if stale_sidecars:
             context.log(
                 "INFO",
-                "旧 sidecar 将随事务备份后删除："
-                + ", ".join(p.name for p in stale_sidecars),
+                "旧 sidecar 将随事务备份后删除：" + ", ".join(p.name for p in stale_sidecars),
             )
 
         # 8. 事务性提交全部成果文件
@@ -2727,7 +2907,10 @@ class GDALProviderAdapter(ProviderAdapter):
 
         duration = round(time.monotonic() - start_time, 4)
         context.progress(1.0, "completed", "Conversion completed successfully")
-        context.log("INFO", f"Task {spec.task_id} completed in {duration}s -> {target_path} ({w}x{h}, {bands} bands)")
+        context.log(
+            "INFO",
+            f"Task {spec.task_id} completed in {duration}s -> {target_path} ({w}x{h}, {bands} bands)",
+        )
 
         output_record = {
             "key": out_plan.key,
@@ -2854,7 +3037,7 @@ class GDALProviderAdapter(ProviderAdapter):
             # ENVI 头文件必须与最终主文件同 stem，不能保留 staging 前缀
             return target_path.with_suffix(".hdr")
         if sf.name.startswith(staged_path.name):
-            tail = sf.name[len(staged_path.name):]
+            tail = sf.name[len(staged_path.name) :]
             return target_path.parent / f"{target_path.name}{tail}"
         if sf.stem == staged_path.stem:
             return target_path.with_suffix(sf.suffix)
@@ -3030,12 +3213,8 @@ class GDALProviderAdapter(ProviderAdapter):
         if ds is None:
             return []
         try:
-            dtype = norm.get("outputType") or gdal.GetDataTypeName(
-                ds.GetRasterBand(1).DataType
-            )
-            has_nodata = any(
-                norm.get(key) is not None for key in ("noData", "dstNodata")
-            )
+            dtype = norm.get("outputType") or gdal.GetDataTypeName(ds.GetRasterBand(1).DataType)
+            has_nodata = any(norm.get(key) is not None for key in ("noData", "dstNodata"))
             has_alpha = False
             has_mask = False
             for i in range(1, ds.RasterCount + 1):
@@ -3044,9 +3223,7 @@ class GDALProviderAdapter(ProviderAdapter):
                 has_alpha = has_alpha or int(band.GetColorInterpretation()) == int(
                     gdal.GCI_AlphaBand
                 )
-                has_mask = has_mask or bool(
-                    int(band.GetMaskFlags()) & int(gdal.GMF_PER_DATASET)
-                )
+                has_mask = has_mask or bool(int(band.GetMaskFlags()) & int(gdal.GMF_PER_DATASET))
             if has_alpha:
                 has_mask = False
             return validate_output_format(
@@ -3125,13 +3302,17 @@ class GDALProviderAdapter(ProviderAdapter):
             # in-place 前置校验：输出必须是输入自身；原地改必须显式允许覆盖。
             src = sources[0]
             if src.resolve() != target_path.resolve():
-                context.log("ERROR", f"in-place 能力要求输出与输入为同一文件: {src} vs {target_path}")
+                context.log(
+                    "ERROR", f"in-place 能力要求输出与输入为同一文件: {src} vs {target_path}"
+                )
                 return TaskResult(
                     task_id=spec.task_id,
                     attempt=spec.attempt,
                     status=TaskStatus.failed,
-                    error={"code": "invalid_output_plan",
-                           "message": f"in-place 能力要求输出与输入为同一文件：{src} vs {target_path}"},
+                    error={
+                        "code": "invalid_output_plan",
+                        "message": f"in-place 能力要求输出与输入为同一文件：{src} vs {target_path}",
+                    },
                     duration_seconds=round(time.monotonic() - start_time, 4),
                 )
             overwrite = bool(spec.outputs[0].overwrite)
@@ -3141,8 +3322,10 @@ class GDALProviderAdapter(ProviderAdapter):
                     task_id=spec.task_id,
                     attempt=spec.attempt,
                     status=TaskStatus.failed,
-                    error={"code": "output_already_exists",
-                           "message": "in-place 更新会覆盖源文件，必须显式 overwrite=true"},
+                    error={
+                        "code": "output_already_exists",
+                        "message": "in-place 更新会覆盖源文件，必须显式 overwrite=true",
+                    },
                     duration_seconds=round(time.monotonic() - start_time, 4),
                 )
             # 复制源文件集合（主文件 + sidecar）到 staging：改副本、成套提交，
@@ -3413,16 +3596,12 @@ class GDALProviderAdapter(ProviderAdapter):
             else:
                 expected_driver = out_format
             if driver.upper() != expected_driver.upper():
-                raise RuntimeError(
-                    f"staging 成果驱动不符：期望 {expected_driver}，实际 {driver}"
-                )
+                raise RuntimeError(f"staging 成果驱动不符：期望 {expected_driver}，实际 {driver}")
 
             if driver.upper() == "ENVI":
                 header = staged_path.with_suffix(".hdr")
                 if not header.exists():
-                    raise RuntimeError(
-                        f"ENVI 头文件未与主文件同目录就绪：{header.name}"
-                    )
+                    raise RuntimeError(f"ENVI 头文件未与主文件同目录就绪：{header.name}")
 
             if driver.upper() == "VRT":
                 # VRT 的源引用以**最终目标目录**为基准；在 commit 前按 final_dir
@@ -3439,9 +3618,7 @@ class GDALProviderAdapter(ProviderAdapter):
                     f"相对 {summary['relative_count']} 条）",
                 )
 
-            expected = self._inspect_staged_for_commit(
-                staged_path, target_path, driver=driver
-            )
+            expected = self._inspect_staged_for_commit(staged_path, target_path, driver=driver)
             if expected["driver"].upper() != expected_driver.upper():
                 raise RuntimeError(
                     f"提交前重开驱动不符：期望 {expected_driver}，实际 {expected['driver']}"
@@ -3451,8 +3628,7 @@ class GDALProviderAdapter(ProviderAdapter):
             )
             if actual_format_violations:
                 raise RuntimeError(
-                    "实际成果不符合输出格式矩阵："
-                    + "；".join(actual_format_violations)
+                    "实际成果不符合输出格式矩阵：" + "；".join(actual_format_violations)
                 )
             context.log(
                 "INFO",
@@ -3528,8 +3704,7 @@ class GDALProviderAdapter(ProviderAdapter):
         if stale_sidecars:
             context.log(
                 "INFO",
-                "旧 sidecar 将随事务备份后删除："
-                + ", ".join(p.name for p in stale_sidecars),
+                "旧 sidecar 将随事务备份后删除：" + ", ".join(p.name for p in stale_sidecars),
             )
 
         # ---- 事务提交全部成果文件 ----
@@ -3684,6 +3859,12 @@ class GDALProviderAdapter(ProviderAdapter):
                 full_limit=int(norm.get("fullLimit", 50_000_000)),
                 band_list=norm.get("bandList"),
                 nodata=norm.get("srcNodata"),
+                mask_path=norm.get("maskFile"),
+                mask_band=int(norm.get("maskBand", 1)),
+                mask_value=norm.get("maskValue"),
+                mask_min=norm.get("maskMin"),
+                mask_max=norm.get("maskMax"),
+                mask_invert=bool(norm.get("maskInvert", False)),
             )
         except ValueError as exc:
             return TaskResult(
@@ -3798,6 +3979,142 @@ class GDALProviderAdapter(ProviderAdapter):
             duration_seconds=duration,
         )
 
+    def _execute_accuracy_assessment(
+        self,
+        spec: Any,
+        context: Any,
+        *,
+        norm: dict[str, Any],
+        target_path: Path,
+        staged_path: Path,
+        start_time: float,
+    ) -> Any:
+        """P11-02 混淆矩阵与精度评估：写出 .accuracy.json 审计报告。"""
+        out_plan = spec.outputs[0]
+        c_ref = (
+            norm.get("classifiedFile") or spec.inputs.get("classified") or spec.inputs.get("input")
+        )
+        r_ref = norm.get("referenceFile") or spec.inputs.get("reference")
+        if not c_ref or not r_ref:
+            return TaskResult(
+                task_id=spec.task_id,
+                attempt=spec.attempt,
+                status=TaskStatus.failed,
+                error={
+                    "code": "missing_parameters",
+                    "message": "accuracy_assessment 需要 classifiedFile 与 referenceFile",
+                },
+                duration_seconds=round(time.monotonic() - start_time, 4),
+            )
+        c_raw = c_ref.uri if hasattr(c_ref, "uri") else str(c_ref)
+        r_raw = r_ref.uri if hasattr(r_ref, "uri") else str(r_ref)
+        c_path = _resolve_raster_input(resolve_dataset_path(c_raw, spec.project_root))
+        r_path = _resolve_raster_input(resolve_dataset_path(r_raw, spec.project_root))
+
+        context.progress(0.20, "processing", "计算分类混淆矩阵与 Kappa 系数")
+        try:
+            report = compute_confusion_matrix(c_path, r_path)
+            staged_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(staged_path, "w", encoding="utf-8") as f:
+                json.dump(report, f, indent=2, ensure_ascii=False)
+            context.commit_files([(staged_path, target_path)], overwrite=out_plan.overwrite)
+        except Exception as exc:
+            return TaskResult(
+                task_id=spec.task_id,
+                attempt=spec.attempt,
+                status=TaskStatus.failed,
+                error={"code": "accuracy_assessment_error", "message": str(exc)},
+                duration_seconds=round(time.monotonic() - start_time, 4),
+            )
+
+        context.log(
+            "INFO",
+            f"精度评估完成：OA={report['overall_accuracy_percent']}%, Kappa={report['kappa_coefficient']}",
+        )
+        return TaskResult(
+            task_id=spec.task_id,
+            attempt=spec.attempt,
+            status=TaskStatus.succeeded,
+            outputs=[
+                {
+                    "key": out_plan.key,
+                    "uri": target_path.as_uri(),
+                    "driver": "JSON",
+                    "kind": "artifact",
+                    "overall_accuracy_percent": report["overall_accuracy_percent"],
+                    "kappa_coefficient": report["kappa_coefficient"],
+                    "total_tested_pixels": report["total_tested_pixels"],
+                }
+            ],
+            duration_seconds=round(time.monotonic() - start_time, 4),
+        )
+
+    def _execute_dem_sample(
+        self,
+        spec: Any,
+        context: Any,
+        *,
+        norm: dict[str, Any],
+        in_path: Path | None,
+        target_path: Path,
+        staged_path: Path,
+        start_time: float,
+    ) -> Any:
+        """P11-09 DEM 区域平均采样：写出 .dem_sample.json 统计报告。"""
+        out_plan = spec.outputs[0]
+        dem_ref = in_path or norm.get("demFile")
+        zone_ref = norm.get("zoneVector")
+        if not dem_ref or not zone_ref:
+            return TaskResult(
+                task_id=spec.task_id,
+                attempt=spec.attempt,
+                status=TaskStatus.failed,
+                error={
+                    "code": "missing_parameters",
+                    "message": "dem_sample 需要 demFile 与 zoneVector",
+                },
+                duration_seconds=round(time.monotonic() - start_time, 4),
+            )
+        dem_path = (
+            in_path if in_path is not None else resolve_dataset_path(str(dem_ref), spec.project_root)
+        )
+        zone_path = resolve_dataset_path(str(zone_ref), spec.project_root)
+
+        context.progress(0.20, "processing", "统计矢量分区内 DEM 高程")
+        try:
+            report = run_dem_sample(
+                dem_path,
+                zone_path,
+                out_json_path=staged_path,
+                dem_band=int(norm.get("demBand") or 1),
+            )
+            context.commit_files([(staged_path, target_path)], overwrite=out_plan.overwrite)
+        except Exception as exc:
+            return TaskResult(
+                task_id=spec.task_id,
+                attempt=spec.attempt,
+                status=TaskStatus.failed,
+                error={"code": "dem_sample_error", "message": str(exc)},
+                duration_seconds=round(time.monotonic() - start_time, 4),
+            )
+
+        context.log("INFO", f"DEM 区域采样完成：共统计 {report['zones_count']} 个分区")
+        return TaskResult(
+            task_id=spec.task_id,
+            attempt=spec.attempt,
+            status=TaskStatus.succeeded,
+            outputs=[
+                {
+                    "key": out_plan.key,
+                    "uri": target_path.as_uri(),
+                    "driver": "JSON",
+                    "kind": "artifact",
+                    "zones_count": report["zones_count"],
+                }
+            ],
+            duration_seconds=round(time.monotonic() - start_time, 4),
+        )
+
     # ------------------------------------------------------------------
     # P5-02：矢量成果（polygonize / contour）
     # ------------------------------------------------------------------
@@ -3837,24 +4154,20 @@ class GDALProviderAdapter(ProviderAdapter):
 
         # 1. 输出格式：显式 format/driver 必须是受支持的 OGR 驱动；未给时默认 GPKG。
         explicit_format = (
-            str(spec.parameters.get("format") or "").strip()
-            or str(out_plan.driver or "").strip()
+            str(spec.parameters.get("format") or "").strip() or str(out_plan.driver or "").strip()
         )
         effective_format = explicit_format or "GPKG"
         vector_violations = validate_vector_output_format(effective_format)
         if vector_violations:
             context.log("ERROR", f"矢量输出格式不受支持: {vector_violations}")
-            return _fail(
-                "unsupported_format_combination", "；".join(vector_violations)
-            )
-        ogr_driver_name = VECTOR_OUTPUT_FORMATS[
-            normalize_output_format(effective_format)
-        ]
+            return _fail("unsupported_format_combination", "；".join(vector_violations))
+        ogr_driver_name = VECTOR_OUTPUT_FORMATS[normalize_output_format(effective_format)]
 
         # 2. 能力级参数门禁（取值合法性已由 normalize_raster_params 保证）
         is_contour = spec.capability_id == "gdal:contour"
         is_polygonize = spec.capability_id == "gdal:polygonize"
         is_translate = spec.capability_id == "ogr:vectortranslate"
+        is_buffer = spec.capability_id in ("ogr:buffer", "buffer")
         if is_contour and not norm.get("interval") and not norm.get("fixedLevels"):
             return _fail(
                 "invalid_parameters",
@@ -3863,7 +4176,9 @@ class GDALProviderAdapter(ProviderAdapter):
 
         layer_name = target_path.stem
         op_name = (
-            "VectorTranslate"
+            "VectorBuffer"
+            if is_buffer
+            else "VectorTranslate"
             if is_translate
             else "ContourGenerate"
             if is_contour
@@ -3872,16 +4187,25 @@ class GDALProviderAdapter(ProviderAdapter):
 
         # 3. 生成矢量成果（staging 内）
         try:
-            # vectortranslate 的输入是矢量，其余两项输入是栅格
-            open_flags = gdal.OF_VECTOR if is_translate else gdal.OF_RASTER
+            # vectortranslate 与 buffer 的输入是矢量，其余两项输入是栅格
+            open_flags = gdal.OF_VECTOR if (is_translate or is_buffer) else gdal.OF_RASTER
             src_ds = gdal.OpenEx(str(in_path), open_flags | gdal.OF_READONLY)
             if src_ds is None:
-                kind_text = "矢量" if is_translate else "栅格"
+                kind_text = "矢量" if (is_translate or is_buffer) else "栅格"
                 raise RuntimeError(f"无法作为{kind_text}打开输入: {in_path}")
             try:
                 from osgeo import ogr
 
-                if is_translate:
+                if is_buffer:
+                    run_vector_buffer(
+                        in_path,
+                        staged_path,
+                        distance=float(norm.get("distance") or 10.0),
+                        dissolve=bool(norm.get("dissolve", False)),
+                        out_format=ogr_driver_name,
+                        callback=callback,
+                    )
+                elif is_translate:
                     # 假重投影防护（GDAL 3.13.3 实测）：源图层无空间参考时，
                     # 即使 dstSRS + reproject=True 也**不会**重投影、只把输出
                     # SRS 标签写成目标 CRS——产出坐标原样、标签错误的假成果，
@@ -3909,14 +4233,10 @@ class GDALProviderAdapter(ProviderAdapter):
                     if norm.get("where"):
                         translate_kwargs["where"] = str(norm["where"])
                     if norm.get("select"):
-                        translate_kwargs["selectFields"] = [
-                            str(v) for v in norm["select"]
-                        ]
+                        translate_kwargs["selectFields"] = [str(v) for v in norm["select"]]
                     if norm.get("spat"):
                         # 轴序与单位：spatFilter 按源图层 CRS 解释（投影 CRS 为米）
-                        translate_kwargs["spatFilter"] = tuple(
-                            float(v) for v in norm["spat"]
-                        )
+                        translate_kwargs["spatFilter"] = tuple(float(v) for v in norm["spat"])
                     vds = gdal.VectorTranslate(
                         str(staged_path),
                         src_ds,
@@ -3924,9 +4244,7 @@ class GDALProviderAdapter(ProviderAdapter):
                         callback=callback,
                     )
                     if vds is None:
-                        raise RuntimeError(
-                            gdal.GetLastErrorMsg() or "VectorTranslate 失败"
-                        )
+                        raise RuntimeError(gdal.GetLastErrorMsg() or "VectorTranslate 失败")
                     # 显式释放句柄刷新到磁盘（FlatGeobuf 等驱动延迟落盘）
                     vds = None
                 else:
@@ -3937,9 +4255,7 @@ class GDALProviderAdapter(ProviderAdapter):
                             f"band 超出范围：{band_index}（数据集共 {src_ds.RasterCount} 个波段）",
                         )
                     band = src_ds.GetRasterBand(band_index)
-                    ods = ogr.GetDriverByName(ogr_driver_name).CreateDataSource(
-                        str(staged_path)
-                    )
+                    ods = ogr.GetDriverByName(ogr_driver_name).CreateDataSource(str(staged_path))
                     if ods is None:
                         raise RuntimeError(
                             f"无法创建矢量输出（驱动 {ogr_driver_name}）: {staged_path}"
@@ -3950,9 +4266,7 @@ class GDALProviderAdapter(ProviderAdapter):
                             layer = ods.CreateLayer(
                                 layer_name, src_ds.GetSpatialRef(), ogr.wkbUnknown
                             )
-                            layer.CreateField(
-                                ogr.FieldDefn(field_name, ogr.OFTInteger)
-                            )
+                            layer.CreateField(ogr.FieldDefn(field_name, ogr.OFTInteger))
                             connectedness = int(norm.get("connectedness") or 4)
                             options = ["8CONNECTED=YES"] if connectedness == 8 else []
                             # GDAL 3.13.3 实测：options 必须传列表（None 会被拒绝）
@@ -3961,8 +4275,7 @@ class GDALProviderAdapter(ProviderAdapter):
                             )
                             if rc != 0:
                                 raise RuntimeError(
-                                    gdal.GetLastErrorMsg()
-                                    or f"Polygonize 失败（rc={rc}）"
+                                    gdal.GetLastErrorMsg() or f"Polygonize 失败（rc={rc}）"
                                 )
                         else:
                             layer = ods.CreateLayer(
@@ -3978,9 +4291,7 @@ class GDALProviderAdapter(ProviderAdapter):
                             # （docstring 的 fixedLevelCount 已被 typemap 折叠），
                             # 非空时**完全替代** interval/base 等差序列（interval=0 也可）；
                             # 传 [] 表示按 interval/base 生成
-                            fixed_levels = [
-                                float(v) for v in norm.get("fixedLevels") or []
-                            ]
+                            fixed_levels = [float(v) for v in norm.get("fixedLevels") or []]
                             interval_value = (
                                 float(norm["interval"]) if norm.get("interval") else 0.0
                             )
@@ -3998,8 +4309,7 @@ class GDALProviderAdapter(ProviderAdapter):
                             )
                             if rc != 0:
                                 raise RuntimeError(
-                                    gdal.GetLastErrorMsg()
-                                    or f"ContourGenerate 失败（rc={rc}）"
+                                    gdal.GetLastErrorMsg() or f"ContourGenerate 失败（rc={rc}）"
                                 )
                     finally:
                         # 显式关闭矢量数据源，Windows 上释放文件锁并刷新到磁盘
@@ -4008,9 +4318,7 @@ class GDALProviderAdapter(ProviderAdapter):
                 src_ds = None
         except Exception as exc:
             if context.is_cancelled.is_set():
-                context.log(
-                    "WARNING", f"Task {spec.task_id} was cancelled during {op_name}"
-                )
+                context.log("WARNING", f"Task {spec.task_id} was cancelled during {op_name}")
                 staged_path.unlink(missing_ok=True)
                 return TaskResult(
                     task_id=spec.task_id,
@@ -4056,7 +4364,7 @@ class GDALProviderAdapter(ProviderAdapter):
             commit_pairs.append((sidecar, target_path.with_suffix(sidecar.suffix)))
 
         # 5.5 sidecar 所有权预检：输入碰撞拒绝；旧成果残留 sidecar 随事务备份后删除
-        #（覆盖已有 Shapefile 时旧 .shx/.dbf 与新成果不配对会污染图层，必须清掉）
+        # （覆盖已有 Shapefile 时旧 .shx/.dbf 与新成果不配对会污染图层，必须清掉）
         new_targets = [tf for _, tf in commit_pairs]
         protected_inputs = collect_protected_inputs([in_path]) if in_path else set()
         try:
@@ -4073,14 +4381,11 @@ class GDALProviderAdapter(ProviderAdapter):
                 str(sidecar_err),
             )
         new_target_set = {p.resolve() for p in new_targets}
-        stale_sidecars = [
-            p for p in sidecar_report.owned if p.resolve() not in new_target_set
-        ]
+        stale_sidecars = [p for p in sidecar_report.owned if p.resolve() not in new_target_set]
         if stale_sidecars:
             context.log(
                 "INFO",
-                "旧 sidecar 将随事务备份后删除："
-                + ", ".join(p.name for p in stale_sidecars),
+                "旧 sidecar 将随事务备份后删除：" + ", ".join(p.name for p in stale_sidecars),
             )
 
         # 6. 事务提交
@@ -4115,10 +4420,9 @@ class GDALProviderAdapter(ProviderAdapter):
             for layer in final_info["layers"]
             if "feature_count" in layer
         ]
-        if (
-            staged_info["layer_count"] != final_info["layer_count"]
-            or sorted(staged_counts) != sorted(final_counts)
-        ):
+        if staged_info["layer_count"] != final_info["layer_count"] or sorted(
+            staged_counts
+        ) != sorted(final_counts):
             message = (
                 f"提交前后矢量成果不一致：layers {staged_info['layer_count']}→"
                 f"{final_info['layer_count']}，features {sorted(staged_counts)}→"
@@ -4188,7 +4492,7 @@ class GDALProviderAdapter(ProviderAdapter):
             else:
                 if f.name.startswith(src_name):
                     # 同主名扩展形态（如 .dat.aux.xml、.dat.ovr）：保留 tail
-                    tail = f.name[len(src_name):]
+                    tail = f.name[len(src_name) :]
                     dst = staged_path.parent / f"{staged_path.name}{tail}"
                 elif f.stem == source.stem and f.suffix:
                     # 同 stem 不同后缀（ENVI 的 .dat 对 .hdr）：后缀对齐 staged 主名。
@@ -4260,9 +4564,7 @@ class GDALProviderAdapter(ProviderAdapter):
                     creation_options.append(option)
             except ET.ParseError:
                 # 个别驱动的选项 XML 不规范：如实保留原文，不编造解析结果
-                creation_options = [
-                    {"name": "_raw", "type": "raw", "description": option_xml}
-                ]
+                creation_options = [{"name": "_raw", "type": "raw", "description": option_xml}]
 
         long_name = ""
         try:
@@ -4323,7 +4625,16 @@ class GDALProviderAdapter(ProviderAdapter):
                     text = str(raw_source)
                     lowered = text.lower()
                     if lowered.startswith(
-                        ("/vsi", "http://", "https://", "s3://", "gs://", "az://", "zip://", "tar://")
+                        (
+                            "/vsi",
+                            "http://",
+                            "https://",
+                            "s3://",
+                            "gs://",
+                            "az://",
+                            "zip://",
+                            "tar://",
+                        )
                     ):
                         continue
                     source_path = Path(text)
@@ -4335,9 +4646,7 @@ class GDALProviderAdapter(ProviderAdapter):
                     if not source_path.exists():
                         missing.append(text)
                 if missing:
-                    raise FileNotFoundError(
-                        "VRT 引用的源文件不存在: " + ", ".join(missing)
-                    )
+                    raise FileNotFoundError("VRT 引用的源文件不存在: " + ", ".join(missing))
             gt = ds.GetGeoTransform(can_return_null=True)
             geotransform = [float(x) for x in gt] if gt else None
             # 范围按四个像元外边界角点计算，旋转/倾斜仿射下不会漏角
@@ -4352,6 +4661,7 @@ class GDALProviderAdapter(ProviderAdapter):
                     crs_epsg = int(code_str)
                 crs_wkt = srs.ExportToWkt()
 
+            bad_bands_set = _parse_bad_bands(ds, count)
             bands_info: list[dict[str, Any]] = []
             overview_levels: list[int] = []
             for b_idx in range(1, count + 1):
@@ -4364,30 +4674,37 @@ class GDALProviderAdapter(ProviderAdapter):
                 offset = b.GetOffset()
                 unit = b.GetUnitType() or None
                 desc = b.GetDescription() or None
+                is_bad = b_idx in bad_bands_set
                 ov_list = []
                 for i in range(int(b.GetOverviewCount())):
                     ov = b.GetOverview(i)
                     if ov is not None and ov.XSize:
-                        ov_list.append({"level": i, "width": int(ov.XSize), "height": int(ov.YSize)})
+                        ov_list.append(
+                            {"level": i, "width": int(ov.XSize), "height": int(ov.YSize)}
+                        )
                 if b_idx == 1:
                     # 层级 = 相对全幅的抽取倍数（2/4/8…），不是概览的像素宽度
                     overview_levels = [int(round(w / x["width"])) for x in ov_list if x["width"]]
-                bands_info.append({
-                    "band": b_idx,
-                    "dtype": dt_name,
-                    "nodata": float(nd) if nd is not None else None,
-                    "color_interp": ci,
-                    "overviews": int(b.GetOverviewCount()),
-                    "overview_sizes": ov_list,
-                    "mask_flags": flags,
-                    "has_alpha": bool(flags & gdal.GMF_ALPHA),
-                    "all_valid": bool(flags & gdal.GMF_ALL_VALID),
-                    "has_nodata_flag": bool(flags & gdal.GMF_NODATA),
-                    "scale": float(scale) if scale is not None else None,
-                    "offset": float(offset) if offset is not None else None,
-                    "unit": unit,
-                    "description": desc,
-                })
+                bands_info.append(
+                    {
+                        "band": b_idx,
+                        "dtype": dt_name,
+                        "nodata": float(nd) if nd is not None else None,
+                        "color_interp": ci,
+                        "overviews": int(b.GetOverviewCount()),
+                        "overview_sizes": ov_list,
+                        "mask_flags": flags,
+                        "has_alpha": bool(flags & gdal.GMF_ALPHA),
+                        "all_valid": bool(flags & gdal.GMF_ALL_VALID),
+                        "has_nodata_flag": bool(flags & gdal.GMF_NODATA),
+                        "scale": float(scale) if scale is not None else None,
+                        "offset": float(offset) if offset is not None else None,
+                        "unit": unit,
+                        "description": desc,
+                        "is_bad": is_bad,
+                        "quality_status": "bad" if is_bad else "good",
+                    }
+                )
 
             # 空间模型：区分 affine / GCP / 无地理参考，避免把默认值当成地理参考
             gcp_count = int(ds.GetGCPCount())
@@ -4422,6 +4739,8 @@ class GDALProviderAdapter(ProviderAdapter):
                 "units": [b["unit"] for b in bands_info],
                 "band_names": [b["description"] for b in bands_info],
                 "bands": bands_info,
+                "bad_bands": sorted(bad_bands_set),
+                "has_bad_bands": bool(bad_bands_set),
             }
             if target_str.startswith(("/vsizip/", "/vsitar/")):
                 entries = gdal.ReadDir(target_str) or []
@@ -4763,10 +5082,12 @@ class GDALProviderAdapter(ProviderAdapter):
             raster_exts = {".tif", ".tiff", ".img", ".dat", ".vrt", ".png", ".jpg"}
             for e in disk_entries:
                 if Path(e).suffix.lower() in raster_exts:
-                    entries.append({
-                        "uri": f"{in_path_str.rstrip('/')}/{e}",
-                        "description": e,
-                    })
+                    entries.append(
+                        {
+                            "uri": f"{in_path_str.rstrip('/')}/{e}",
+                            "description": e,
+                        }
+                    )
 
         if not entries:
             try:
@@ -4876,7 +5197,9 @@ class GDALProviderAdapter(ProviderAdapter):
                   拉伸与伪彩由 GUI 侧完成（原值/物理值/显示值分离）。
         """
         if raw:
-            return self._read_window_raw(path, x_off, y_off, win_w, win_h, out_w, out_h, bands, overview)
+            return self._read_window_raw(
+                path, x_off, y_off, win_w, win_h, out_w, out_h, bands, overview
+            )
 
         import base64
 
@@ -4903,7 +5226,9 @@ class GDALProviderAdapter(ProviderAdapter):
             out_w = max(1, min(out_w, 2048))
             out_h = max(1, min(out_h, 2048))
 
-            target_bands = bands if bands else ([1] if total_bands == 1 else [1, 2, 3][:total_bands])
+            target_bands = (
+                bands if bands else ([1] if total_bands == 1 else [1, 2, 3][:total_bands])
+            )
             band_arrays: list[np.ndarray] = []
             stats: list[dict[str, Any]] = []
 
@@ -5069,7 +5394,11 @@ class GDALProviderAdapter(ProviderAdapter):
                     valid &= np.isfinite(arr)
                 try:
                     mb = band.GetMaskBand()
-                    msrc = mb.GetOverview(ov_level) if ov_level >= 0 and mb.GetOverviewCount() > ov_level else mb
+                    msrc = (
+                        mb.GetOverview(ov_level)
+                        if ov_level >= 0 and mb.GetOverviewCount() > ov_level
+                        else mb
+                    )
                     m = msrc.ReadAsArray(lx, ly, lw, lh, buf_xsize=out_w, buf_ysize=out_h)
                     if m is not None:
                         valid &= np.asarray(m) > 0
@@ -5081,21 +5410,23 @@ class GDALProviderAdapter(ProviderAdapter):
                 vals = arr[valid]
                 arrays.append(arr)
                 valids.append(valid.astype(np.uint8))
-                metas.append({
-                    "band": b_idx,
-                    "dtype": gdal.GetDataTypeName(band.DataType),
-                    "numpy_dtype": str(arr.dtype),
-                    "nodata": float(nd) if nd is not None else None,
-                    "scale": float(scale) if scale is not None else None,
-                    "offset": float(offset) if offset is not None else None,
-                    "mask_flags": flags,
-                    "has_alpha": bool(flags & gdal.GMF_ALPHA),
-                    "all_valid_mask": bool(flags & gdal.GMF_ALL_VALID),
-                    "min": float(vals.min()) if vals.size else None,
-                    "max": float(vals.max()) if vals.size else None,
-                    "valid_count": int(vals.size),
-                    "total_count": int(arr.size),
-                })
+                metas.append(
+                    {
+                        "band": b_idx,
+                        "dtype": gdal.GetDataTypeName(band.DataType),
+                        "numpy_dtype": str(arr.dtype),
+                        "nodata": float(nd) if nd is not None else None,
+                        "scale": float(scale) if scale is not None else None,
+                        "offset": float(offset) if offset is not None else None,
+                        "mask_flags": flags,
+                        "has_alpha": bool(flags & gdal.GMF_ALPHA),
+                        "all_valid_mask": bool(flags & gdal.GMF_ALL_VALID),
+                        "min": float(vals.min()) if vals.size else None,
+                        "max": float(vals.max()) if vals.size else None,
+                        "valid_count": int(vals.size),
+                        "total_count": int(arr.size),
+                    }
+                )
 
             stacked = np.stack(arrays, axis=0)
             valid_stack = np.stack(valids, axis=0)
@@ -5112,7 +5443,9 @@ class GDALProviderAdapter(ProviderAdapter):
                 "bands": target_bands,
                 "shape": [int(stacked.shape[0]), int(stacked.shape[1]), int(stacked.shape[2])],
                 "numpy_dtype": str(stacked.dtype),
-                "data_b64": base64.b64encode(np.ascontiguousarray(stacked).tobytes()).decode("ascii"),
+                "data_b64": base64.b64encode(np.ascontiguousarray(stacked).tobytes()).decode(
+                    "ascii"
+                ),
                 "valid_bits_b64": base64.b64encode(packed_valid.tobytes()).decode("ascii"),
                 "valid_bits_count": int(valid_stack.size),
                 "band_meta": metas,
@@ -5129,7 +5462,9 @@ class GDALProviderAdapter(ProviderAdapter):
         return (gt[0] + gt[1] * x + gt[2] * y, gt[3] + gt[4] * x + gt[5] * y)
 
     @staticmethod
-    def _affine_inv(gt: list[float] | tuple[float, ...], mx: float, my: float) -> tuple[float, float]:
+    def _affine_inv(
+        gt: list[float] | tuple[float, ...], mx: float, my: float
+    ) -> tuple[float, float]:
         det = gt[1] * gt[5] - gt[2] * gt[4]
         if det == 0:
             raise ValueError("GeoTransform 退化（行列式为 0），无法反算行列号")
@@ -5209,7 +5544,11 @@ class GDALProviderAdapter(ProviderAdapter):
                 offset = band.GetOffset()
                 physical = None
                 if val is not None:
-                    physical = val * float(scale) + float(offset) if (scale is not None or offset is not None) else val
+                    physical = (
+                        val * float(scale) + float(offset)
+                        if (scale is not None or offset is not None)
+                        else val
+                    )
                 mask_val = None
                 if inside:
                     try:
@@ -5234,18 +5573,20 @@ class GDALProviderAdapter(ProviderAdapter):
                             status = "alpha_zero"
                     except Exception:
                         pass
-                band_values.append({
-                    "band": b_idx,
-                    "raw": val,
-                    "physical": physical,
-                    "nodata": float(nd) if nd is not None else None,
-                    "scale": float(scale) if scale is not None else None,
-                    "offset": float(offset) if offset is not None else None,
-                    "mask": mask_val,
-                    "mask_flags": flags_now,
-                    "status": status,
-                    "is_zero": bool(val == 0.0) if val is not None else False,
-                })
+                band_values.append(
+                    {
+                        "band": b_idx,
+                        "raw": val,
+                        "physical": physical,
+                        "nodata": float(nd) if nd is not None else None,
+                        "scale": float(scale) if scale is not None else None,
+                        "offset": float(offset) if offset is not None else None,
+                        "mask": mask_val,
+                        "mask_flags": flags_now,
+                        "status": status,
+                        "is_zero": bool(val == 0.0) if val is not None else False,
+                    }
+                )
             return {
                 "path": str(in_path_str),
                 "row": row,
@@ -5287,7 +5628,9 @@ class GDALProviderAdapter(ProviderAdapter):
             w, h = int(ds.RasterXSize), int(ds.RasterYSize)
             gt = ds.GetGeoTransform(can_return_null=True)
             if not gt:
-                raise ValueError("数据集没有存储的 GeoTransform（GDAL 默认值不构成地理参考），只能使用像元坐标")
+                raise ValueError(
+                    "数据集没有存储的 GeoTransform（GDAL 默认值不构成地理参考），只能使用像元坐标"
+                )
             srs = ds.GetSpatialRef()
             crs_wkt = srs.ExportToWkt() if srs is not None else None
             wx, wy = float(x), float(y)
@@ -5351,7 +5694,15 @@ class GDALProviderAdapter(ProviderAdapter):
             include_gdal_reference=False,
         )
         keys = (
-            "band", "valid_count", "total_count", "min", "max", "mean", "std", "p2", "p98",
+            "band",
+            "valid_count",
+            "total_count",
+            "min",
+            "max",
+            "mean",
+            "std",
+            "p2",
+            "p98",
         )
         return {
             "path": report["path"],
@@ -5422,8 +5773,15 @@ class GDALProviderAdapter(ProviderAdapter):
             dst.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
             ct = osr.CoordinateTransformation(src, dst)
             corners = []
-            for (x, y) in [
-                (0, 0), (w, 0), (w, h), (0, h), (w / 2, 0), (w / 2, h), (0, h / 2), (w, h / 2)
+            for x, y in [
+                (0, 0),
+                (w, 0),
+                (w, h),
+                (0, h),
+                (w / 2, 0),
+                (w / 2, h),
+                (0, h / 2),
+                (w, h / 2),
             ]:
                 mx, my = self._affine_xy(gt, x, y)
                 tx, ty, _ = ct.TransformPoint(mx, my)
@@ -5485,7 +5843,9 @@ class GDALProviderAdapter(ProviderAdapter):
 
             if from_space == "pixel" and to_space == "map":
                 if not gt:
-                    raise ValueError("数据集没有地理参考（GeoTransform），无法由像元坐标换算到地图坐标")
+                    raise ValueError(
+                        "数据集没有地理参考（GeoTransform），无法由像元坐标换算到地图坐标"
+                    )
                 if not ds_crs_wkt:
                     raise ValueError("数据集缺少 CRS，无法换算到地图坐标")
                 target_crs_wkt = dst_crs_wkt or ds_crs_wkt
@@ -5515,7 +5875,9 @@ class GDALProviderAdapter(ProviderAdapter):
 
             elif from_space == "map" and to_space == "pixel":
                 if not gt:
-                    raise ValueError("数据集没有地理参考（GeoTransform），无法由地图坐标换算到像元坐标")
+                    raise ValueError(
+                        "数据集没有地理参考（GeoTransform），无法由地图坐标换算到像元坐标"
+                    )
                 if not ds_crs_wkt:
                     raise ValueError("数据集缺少 CRS，无法由地图坐标换算到像元坐标")
                 source_crs_wkt = src_crs_wkt or ds_crs_wkt
@@ -5606,14 +5968,16 @@ class GDALProviderAdapter(ProviderAdapter):
             raise RuntimeError(f"无法打开数据集: {in_path_str}")
         try:
             total_bands = int(src.RasterCount)
-            target_bands = [b for b in (bands or list(range(1, min(3, total_bands) + 1))) if 1 <= b <= total_bands]
+            target_bands = [
+                b
+                for b in (bands or list(range(1, min(3, total_bands) + 1)))
+                if 1 <= b <= total_bands
+            ]
             if not target_bands:
                 raise ValueError(f"请求波段 {bands} 全部越界（数据集有 {total_bands} 个波段）")
             # 该 GDAL 构建的 WarpOptions 未暴露选波段参数，因此重投影全部波段后
             # 按源波段序号取带（顺序一致，不重排）。
-            mem_name = (
-                f"/vsimem/spectra_view/{get_display_name(in_path_str)}_{int(time.time_ns())}_{out_w}x{out_h}"
-            )
+            mem_name = f"/vsimem/spectra_view/{get_display_name(in_path_str)}_{int(time.time_ns())}_{out_w}x{out_h}"
             warped = gdal.Warp(
                 mem_name,
                 src,
@@ -5641,19 +6005,25 @@ class GDALProviderAdapter(ProviderAdapter):
                     if nd is not None:
                         valid &= arr != float(nd)
                     arrays.append(arr)
-                    metas.append({
-                        "band": int(b_idx),
-                        "dtype": gdal.GetDataTypeName(band.DataType),
-                        "numpy_dtype": str(arr.dtype),
-                        "nodata": float(nd) if nd is not None else None,
-                        "scale": (src_band.GetScale() if src_band.GetScale() is not None else None),
-                        "offset": (src_band.GetOffset() if src_band.GetOffset() is not None else None),
-                        "mask_flags": int(src_band.GetMaskFlags()),
-                        "min": float(arr[valid].min()) if valid.any() else None,
-                        "max": float(arr[valid].max()) if valid.any() else None,
-                        "valid_count": int(valid.sum()),
-                        "total_count": int(arr.size),
-                    })
+                    metas.append(
+                        {
+                            "band": int(b_idx),
+                            "dtype": gdal.GetDataTypeName(band.DataType),
+                            "numpy_dtype": str(arr.dtype),
+                            "nodata": float(nd) if nd is not None else None,
+                            "scale": (
+                                src_band.GetScale() if src_band.GetScale() is not None else None
+                            ),
+                            "offset": (
+                                src_band.GetOffset() if src_band.GetOffset() is not None else None
+                            ),
+                            "mask_flags": int(src_band.GetMaskFlags()),
+                            "min": float(arr[valid].min()) if valid.any() else None,
+                            "max": float(arr[valid].max()) if valid.any() else None,
+                            "valid_count": int(valid.sum()),
+                            "total_count": int(arr.size),
+                        }
+                    )
                 stacked = np.stack(arrays, axis=0)
                 valid_stack = np.stack([np.isfinite(a.astype(np.float64)) for a in arrays], axis=0)
                 for i, meta in enumerate(metas):
@@ -5683,7 +6053,9 @@ class GDALProviderAdapter(ProviderAdapter):
                     "bands": target_bands,
                     "shape": [int(stacked.shape[0]), out_h, out_w],
                     "numpy_dtype": str(stacked.dtype),
-                    "data_b64": base64.b64encode(np.ascontiguousarray(stacked).tobytes()).decode("ascii"),
+                    "data_b64": base64.b64encode(np.ascontiguousarray(stacked).tobytes()).decode(
+                        "ascii"
+                    ),
                     "valid_bits_b64": base64.b64encode(packed.tobytes()).decode("ascii"),
                     "valid_bits_count": int(valid_stack.size),
                     "band_meta": metas,
@@ -5713,12 +6085,19 @@ class GDALProviderAdapter(ProviderAdapter):
                 ov = band.GetOverview(i)
                 if ov is None:
                     continue
-                levels.append({
-                    "level": i,
-                    "width": int(ov.XSize),
-                    "height": int(ov.YSize),
-                    "ratio": float(w) / float(ov.XSize) if ov.XSize else 0.0,
-                })
-            return {"path": str(in_path_str), "width": w, "height": int(ds.RasterYSize), "overviews": levels}
+                levels.append(
+                    {
+                        "level": i,
+                        "width": int(ov.XSize),
+                        "height": int(ov.YSize),
+                        "ratio": float(w) / float(ov.XSize) if ov.XSize else 0.0,
+                    }
+                )
+            return {
+                "path": str(in_path_str),
+                "width": w,
+                "height": int(ds.RasterYSize),
+                "overviews": levels,
+            }
         finally:
             del ds

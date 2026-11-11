@@ -66,9 +66,7 @@ def _resolve_engine_python(engine: str, root: Path) -> Path:
     elif engine == "rasterio":
         py = root / ".venvs" / "sw-rasterio" / "Scripts" / "python.exe"
     else:
-        raise SessionError(
-            f"未知脚本会话引擎 {engine!r}；可用：{', '.join(SESSION_ENGINES)}"
-        )
+        raise SessionError(f"未知脚本会话引擎 {engine!r}；可用：{', '.join(SESSION_ENGINES)}")
     if not py.exists():
         raise SessionError(f"未能找到 {engine} 解释器：{py}")
     return py
@@ -159,9 +157,7 @@ class ScriptSession:
     ) -> None:
         engine = str(engine or "").strip().lower()
         if engine not in SESSION_ENGINES:
-            raise SessionError(
-                f"未知脚本会话引擎 {engine!r}；可用：{', '.join(SESSION_ENGINES)}"
-            )
+            raise SessionError(f"未知脚本会话引擎 {engine!r}；可用：{', '.join(SESSION_ENGINES)}")
         self.engine = engine
         self.session_id = session_id or uuid.uuid4().hex[:12]
         self._root = _project_root()

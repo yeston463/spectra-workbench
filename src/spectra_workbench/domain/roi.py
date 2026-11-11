@@ -111,9 +111,7 @@ class ROI(BaseModel):
 
     # ------------------------------------------------------------------
     def moved(self, dcol: float, drow: float) -> ROI:
-        return self.model_copy(
-            update={"points": [(p[0] + dcol, p[1] + drow) for p in self.points]}
-        )
+        return self.model_copy(update={"points": [(p[0] + dcol, p[1] + drow) for p in self.points]})
 
     def with_vertex(self, index: int, col: float, row: float) -> ROI:
         if index < 0 or index >= len(self.points):

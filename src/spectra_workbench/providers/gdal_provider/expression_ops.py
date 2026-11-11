@@ -35,8 +35,8 @@ __all__ = [
 
 _ALLOWED_FUNCS: dict[str, Any] = {
     "abs": np.abs,
-    "min": np.minimum,   # 双参语义：逐像元 min(A,B)
-    "max": np.maximum,   # 逐像元 max(A,B)
+    "min": np.minimum,  # 双参语义：逐像元 min(A,B)
+    "max": np.maximum,  # 逐像元 max(A,B)
     "sqrt": np.sqrt,
     "exp": np.exp,
     "log": np.log,
@@ -45,11 +45,23 @@ _ALLOWED_FUNCS: dict[str, Any] = {
 
 #: 白名单函数的参数个数（逐像元 min/max 是二元，其余一元）。
 _FUNC_ARITY: dict[str, int] = {
-    "abs": 1, "min": 2, "max": 2, "sqrt": 1, "exp": 1, "log": 1, "log10": 1,
+    "abs": 1,
+    "min": 2,
+    "max": 2,
+    "sqrt": 1,
+    "exp": 1,
+    "log": 1,
+    "log10": 1,
 }
 
 _ALLOWED_BINOPS = {
-    ast.Add, ast.Sub, ast.Mult, ast.Div, ast.FloorDiv, ast.Mod, ast.Pow,
+    ast.Add,
+    ast.Sub,
+    ast.Mult,
+    ast.Div,
+    ast.FloorDiv,
+    ast.Mod,
+    ast.Pow,
 }
 _ALLOWED_UNARYOPS = {ast.USub, ast.UAdd}
 
@@ -107,15 +119,11 @@ def safe_compile(expr: str, allowed_names: list[str]) -> ast.expr:
         elif isinstance(node, ast.Constant):
             # bool 是 int 的子类，必须显式拒绝；字符串/复数/None 同样拒绝。
             if isinstance(node.value, bool) or not isinstance(node.value, (int, float)):
-                raise ExpressionError(
-                    f"只允许数值常量，拒绝 {type(node.value).__name__} 常量"
-                )
+                raise ExpressionError(f"只允许数值常量，拒绝 {type(node.value).__name__} 常量")
         elif isinstance(node, ast.Call):
             if not isinstance(node.func, ast.Name) or node.func.id not in funcs:
                 got = getattr(node.func, "id", type(node.func).__name__)
-                raise ExpressionError(
-                    f"只允许白名单函数 {sorted(funcs)}，拒绝 {got!r}"
-                )
+                raise ExpressionError(f"只允许白名单函数 {sorted(funcs)}，拒绝 {got!r}")
             if node.keywords:
                 raise ExpressionError(f"函数 {node.func.id!r} 不接受关键字参数")
             expected = _FUNC_ARITY[node.func.id]

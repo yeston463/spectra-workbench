@@ -112,7 +112,9 @@ def _pump(qapp: QApplication, predicate: Any, timeout: float = 30.0, label: str 
     raise AssertionError(f"等待超时（{timeout}s）：{label}")
 
 
-def _window_with_errors(qapp: QApplication, project_root: Path) -> tuple[Any, list[Any], list[tuple[str, str]]]:
+def _window_with_errors(
+    qapp: QApplication, project_root: Path
+) -> tuple[Any, list[Any], list[tuple[str, str]]]:
     win = MainWindow(project_root=project_root)
     results: list[Any] = []
     errors: list[tuple[str, str]] = []

@@ -162,7 +162,9 @@ def test_dem_slope_and_aspect_match_analytic_plane(
     src = _make_plane(gdal_rt, tmp_path / "plane.tif")
     expected_slope = math.degrees(math.atan(math.sqrt(13.0)))
 
-    slope = _run(qapp, "gdal:dem", {"format": "GTiff", "processing": "slope"}, src, tmp_path / "slope.tif")
+    slope = _run(
+        qapp, "gdal:dem", {"format": "GTiff", "processing": "slope"}, src, tmp_path / "slope.tif"
+    )
     assert slope.status is TaskStatus.succeeded, slope.error
     slope_info = _inspect(gdal_rt, tmp_path / "slope.tif")
     assert slope_info["dtype"] == "Float32" and slope_info["bands"] == 1
@@ -170,7 +172,9 @@ def test_dem_slope_and_aspect_match_analytic_plane(
     assert slope_info["arr"][4][4] == pytest.approx(expected_slope, abs=1e-4)
     assert slope_info["arr"][4][1] == pytest.approx(expected_slope, abs=1e-4)
 
-    aspect = _run(qapp, "gdal:dem", {"format": "GTiff", "processing": "aspect"}, src, tmp_path / "aspect.tif")
+    aspect = _run(
+        qapp, "gdal:dem", {"format": "GTiff", "processing": "aspect"}, src, tmp_path / "aspect.tif"
+    )
     assert aspect.status is TaskStatus.succeeded, aspect.error
     aspect_info = _inspect(gdal_rt, tmp_path / "aspect.tif")
     assert aspect_info["arr"][4][4] == pytest.approx(326.3099365234375, abs=1e-4)

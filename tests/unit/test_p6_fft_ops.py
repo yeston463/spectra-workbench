@@ -32,9 +32,7 @@ def _pattern(rows: int, cols: int) -> np.ndarray:
     """常量 + x 方向周期 2 的余弦 + y 方向周期 1 的正弦（整数周期，无泄漏）。"""
     y, x = np.mgrid[0:rows, 0:cols]
     return (
-        10.0
-        + 3.0 * np.cos(2.0 * math.pi * 2.0 * x / cols)
-        + 5.0 * np.sin(2.0 * math.pi * y / rows)
+        10.0 + 3.0 * np.cos(2.0 * math.pi * 2.0 * x / cols) + 5.0 * np.sin(2.0 * math.pi * y / rows)
     )
 
 
@@ -50,9 +48,7 @@ def test_mask_is_hermitian_symmetric_for_even_and_odd_sizes(rows: int, cols: int
     assert not mask[partner]
     for fy, fx in applied:
         assert not mask[fy, fx], f"({fy},{fx}) 应被抑制"
-        assert not mask[hermitian_partner(fy, fx, rows, cols)], (
-            f"({fy},{fx}) 的厄米伙伴未被抑制"
-        )
+        assert not mask[hermitian_partner(fy, fx, rows, cols)], f"({fy},{fx}) 的厄米伙伴未被抑制"
     # 除了实际抑制的 bin，其余全部保留（1）。
     assert int(mask.sum()) == rows * cols - len(applied)
 

@@ -54,7 +54,9 @@ def test_probe_reports_spatial_model_and_overviews(worker: WorkerProcess, sample
     assert meta["bands"][0]["nodata"] == 65535.0
 
 
-def test_probe_distinguishes_no_crs_and_no_geotransform(worker: WorkerProcess, samples: dict) -> None:
+def test_probe_distinguishes_no_crs_and_no_geotransform(
+    worker: WorkerProcess, samples: dict
+) -> None:
     no_crs = worker.probe_dataset(samples["samples"]["no_crs"]["path"])
     assert no_crs["crs_wkt"] is None and no_crs["crs_epsg"] is None
     assert no_crs["has_geotransform"] is True, "无 CRS 但有像元坐标参考，是两种不同缺口"
@@ -83,7 +85,9 @@ def test_probe_reports_mask_alpha_and_scale_offset(worker: WorkerProcess, sample
 # ------------------------------------------------------------------ 坐标查询
 
 
-def test_query_pixel_separates_nodata_valid_zero_and_mask(worker: WorkerProcess, samples: dict) -> None:
+def test_query_pixel_separates_nodata_valid_zero_and_mask(
+    worker: WorkerProcess, samples: dict
+) -> None:
     rot = samples["samples"]["rotated"]
     r0, c0, r1, c1 = rot["nodata_block"]
     q_nd = worker.query_pixel(rot["path"], row=r0 + 1, col=c0 + 1)
@@ -134,10 +138,18 @@ def test_map_to_pixel_roundtrip_on_rotated_affine(worker: WorkerProcess, samples
         q = worker.query_pixel(path, row=row, col=col)
         for key in ("map_center", "map_corner"):
             back = worker.map_to_pixel(path, q[key][0], q[key][1], convention="corner")
-            assert (back["col"], back["row"]) == (col, row), (key, row, col, back["col"], back["row"])
+            assert (back["col"], back["row"]) == (col, row), (
+                key,
+                row,
+                col,
+                back["col"],
+                back["row"],
+            )
 
 
-def test_pixel_center_and_corner_conventions_are_documented(worker: WorkerProcess, samples: dict) -> None:
+def test_pixel_center_and_corner_conventions_are_documented(
+    worker: WorkerProcess, samples: dict
+) -> None:
     """角点约定 floor(u)，中心约定 floor(u+0.5)；差异只应出现在 frac>=0.5 时。"""
     path = samples["samples"]["rotated"]["path"]
     gt = samples["samples"]["rotated"]["geotransform"]
@@ -153,7 +165,9 @@ def test_pixel_center_and_corner_conventions_are_documented(worker: WorkerProces
         assert got["inside"] is True
 
 
-def test_map_to_pixel_refuses_dataset_without_geotransform(worker: WorkerProcess, samples: dict) -> None:
+def test_map_to_pixel_refuses_dataset_without_geotransform(
+    worker: WorkerProcess, samples: dict
+) -> None:
     with pytest.raises(RuntimeError, match="GeoTransform"):
         worker.map_to_pixel(samples["samples"]["no_gt"]["path"], 1.0, 1.0)
 
@@ -201,7 +215,9 @@ def test_stats_sampled_is_labelled_and_full_is_exact(worker: WorkerProcess, samp
     assert full["bands"][0]["valid_count"] == 200 * 150 - nd_count
 
 
-def test_stats_full_is_refused_beyond_limit_not_silently_downgraded(worker: WorkerProcess, samples: dict) -> None:
+def test_stats_full_is_refused_beyond_limit_not_silently_downgraded(
+    worker: WorkerProcess, samples: dict
+) -> None:
     with pytest.raises(RuntimeError, match="拒绝"):
         worker.compute_stats(samples["samples"]["rotated"]["path"], mode="full", full_limit=1000)
 
@@ -218,7 +234,9 @@ def test_percentile_stats_ignore_isolated_spike(worker: WorkerProcess, samples: 
 
 def _decode(payload: dict) -> np.ndarray:
     nb, h, w = (int(v) for v in payload["shape"])
-    return np.frombuffer(base64.b64decode(payload["data_b64"]), dtype=payload["numpy_dtype"]).reshape(nb, h, w)
+    return np.frombuffer(
+        base64.b64decode(payload["data_b64"]), dtype=payload["numpy_dtype"]
+    ).reshape(nb, h, w)
 
 
 def _valid(payload: dict) -> np.ndarray:
@@ -232,8 +250,9 @@ def _valid(payload: dict) -> np.ndarray:
 
 def test_read_window_raw_preserves_dtype_and_values(worker: WorkerProcess, samples: dict) -> None:
     path = samples["samples"]["rotated"]["path"]
-    payload = worker.read_window(path, x_off=0, y_off=0, win_w=64, win_h=48, out_w=64, out_h=48,
-                                 bands=[1, 2, 3], raw=True)
+    payload = worker.read_window(
+        path, x_off=0, y_off=0, win_w=64, win_h=48, out_w=64, out_h=48, bands=[1, 2, 3], raw=True
+    )
     assert payload["raw"] is True
     arr = _decode(payload)
     assert arr.dtype == np.uint16, "raw 模式必须保留原始 dtype，而不是预先拉伸成 uint8"
@@ -243,7 +262,9 @@ def test_read_window_raw_preserves_dtype_and_values(worker: WorkerProcess, sampl
             assert int(arr[band_idx][3][col]) == expect, (band_idx, col, arr[band_idx][3][col])
 
 
-def test_read_window_raw_marks_nodata_and_masked_invalid_but_keeps_zero(worker: WorkerProcess, samples: dict) -> None:
+def test_read_window_raw_marks_nodata_and_masked_invalid_but_keeps_zero(
+    worker: WorkerProcess, samples: dict
+) -> None:
     rot = samples["samples"]["rotated"]
     r0, c0, r1, c1 = rot["nodata_block"]
     payload = worker.read_window(
@@ -252,14 +273,24 @@ def test_read_window_raw_marks_nodata_and_masked_invalid_but_keeps_zero(worker: 
     valid = _valid(payload)
     assert not valid[0][1, 1], "NoData 像元必须无效"
 
-    qzero = worker.read_window(rot["path"], x_off=0, y_off=0, win_w=16, win_h=16,
-                               out_w=16, out_h=16, bands=[1], raw=True)
+    qzero = worker.read_window(
+        rot["path"], x_off=0, y_off=0, win_w=16, win_h=16, out_w=16, out_h=16, bands=[1], raw=True
+    )
     assert _valid(qzero)[0][3, 0], "值为 0 的合法像元必须有效"
 
     mrec = samples["samples"]["masked"]
     mr0, mc0, mr1, mc1 = mrec["mask_block"]
-    mp = worker.read_window(mrec["path"], x_off=mc0 - 10, y_off=mr0 - 10, win_w=32, win_h=32,
-                            out_w=32, out_h=32, bands=[1], raw=True)
+    mp = worker.read_window(
+        mrec["path"],
+        x_off=mc0 - 10,
+        y_off=mr0 - 10,
+        win_w=32,
+        win_h=32,
+        out_w=32,
+        out_h=32,
+        bands=[1],
+        raw=True,
+    )
     mvalid = _valid(mp)
     assert not mvalid[0][10 + 2, 10 + 2], "掩膜区必须无效"
     assert mvalid[0][30, 30], "掩膜外必须有效"
@@ -267,12 +298,14 @@ def test_read_window_raw_marks_nodata_and_masked_invalid_but_keeps_zero(worker: 
 
 def test_overview_is_used_only_when_decimating(worker: WorkerProcess, samples: dict) -> None:
     path = samples["samples"]["rotated"]["path"]
-    full = worker.read_window(path, x_off=0, y_off=0, win_w=200, win_h=150, out_w=200, out_h=150,
-                              bands=[1], raw=True)
+    full = worker.read_window(
+        path, x_off=0, y_off=0, win_w=200, win_h=150, out_w=200, out_h=150, bands=[1], raw=True
+    )
     assert full["overview_used"] == -1, "1:1 读取不得用概览"
 
-    small = worker.read_window(path, x_off=0, y_off=0, win_w=200, win_h=150, out_w=25, out_h=19,
-                               bands=[1], raw=True)
+    small = worker.read_window(
+        path, x_off=0, y_off=0, win_w=200, win_h=150, out_w=25, out_h=19, bands=[1], raw=True
+    )
     assert small["overview_used"] >= 0, f"需要 8 倍降采样时应使用概览：{small}"
     assert small["overview_ratio"] > 1.0
     assert small["needed_decimation"] == pytest.approx(200 / 25)
@@ -285,8 +318,16 @@ def test_read_view_window_reprojects_into_common_grid(worker: WorkerProcess, sam
     tb = worker.transform_bounds(path, wkt_32650)
     x0, y0, x1, y1 = tb["bounds"]
     payload = worker.read_view_window(
-        path, view_crs_wkt=wkt_32650, x_min=x0, y_min=y0, x_max=x1, y_max=y1,
-        out_w=64, out_h=64, bands=[1], resampling="near",
+        path,
+        view_crs_wkt=wkt_32650,
+        x_min=x0,
+        y_min=y0,
+        x_max=x1,
+        y_max=y1,
+        out_w=64,
+        out_h=64,
+        bands=[1],
+        resampling="near",
     )
     assert payload["reprojected"] is True
     grid = payload["grid"]
@@ -303,7 +344,9 @@ def test_read_view_window_reprojects_into_common_grid(worker: WorkerProcess, sam
     assert _valid(payload).sum() > 0
 
 
-def test_invalid_band_request_is_reported_not_silently_clamped(worker: WorkerProcess, samples: dict) -> None:
+def test_invalid_band_request_is_reported_not_silently_clamped(
+    worker: WorkerProcess, samples: dict
+) -> None:
     with pytest.raises(RuntimeError, match="越界"):
         worker.read_window(samples["samples"]["rotated"]["path"], bands=[9], raw=True)
 
@@ -323,8 +366,16 @@ def test_spill_files_cleaned_after_success_and_stop(tmp_path: Path, samples: dic
     try:
         # 2048x2048 x 3 波段 uint16 原始值 -> 远超 1 MiB 控制消息上限
         payload = wp.read_window(
-            samples["samples"]["rotated"]["path"], x_off=0, y_off=0, win_w=200, win_h=150,
-            out_w=2048, out_h=2048, bands=[1, 2, 3], raw=True, timeout=60,
+            samples["samples"]["rotated"]["path"],
+            x_off=0,
+            y_off=0,
+            win_w=200,
+            win_h=150,
+            out_w=2048,
+            out_h=2048,
+            bands=[1, 2, 3],
+            raw=True,
+            timeout=60,
         )
         assert payload["raw"] is True
         mine = [d for d in root.glob("worker-*") if d not in before]

@@ -1,4 +1,4 @@
-﻿"""P7-03 批处理端到端验收（真实 GDAL worker）。
+"""P7-03 批处理端到端验收（真实 GDAL worker）。
 
 验收标准（BACKLOG P7-03「多输入、多输出、参数变化、同名冲突、单项失败继续策略通过」）：
 - **模板展开**：per-item 路径与参数真实下发；多输入/多输出展开；
@@ -61,9 +61,7 @@ def gdal_rt() -> dict[str, Any]:
     return resolve_gdal_runtime(ROOT)
 
 
-def _make_raster(
-    gdal_rt: dict[str, Any], path: Path, values: list[list[float]]
-) -> Path:
+def _make_raster(gdal_rt: dict[str, Any], path: Path, values: list[list[float]]) -> Path:
     script = f"""
 import numpy as np
 from osgeo import gdal, osr

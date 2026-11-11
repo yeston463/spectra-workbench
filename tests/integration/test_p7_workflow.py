@@ -58,9 +58,7 @@ def gdal_rt() -> dict[str, Any]:
     return resolve_gdal_runtime(ROOT)
 
 
-def _make_raster(
-    gdal_rt: dict[str, Any], path: Path, values: list[list[float]]
-) -> Path:
+def _make_raster(gdal_rt: dict[str, Any], path: Path, values: list[list[float]]) -> Path:
     """QGIS 引擎 python 建 2×2 合成 GTiff（GUI 进程零原生依赖）。"""
     script = f"""
 import numpy as np

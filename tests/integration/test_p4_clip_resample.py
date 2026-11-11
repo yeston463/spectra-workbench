@@ -396,7 +396,9 @@ def test_nodata_propagates_to_output(qapp, gdal_rt, source_raster, tmp_path) -> 
     assert info["GMF_ALPHA"] == 4, f"GMF_ALPHA 常量应为 4，实际 {info['GMF_ALPHA']}"
 
     # NoData **元数据**与实际 **mask** 分别核对，不能只看其中之一。
-    assert info["nodata"] == pytest.approx(-32768), f"输出 NoData 应为 -32768，实际 {info['nodata']}"
+    assert info["nodata"] == pytest.approx(-32768), (
+        f"输出 NoData 应为 -32768，实际 {info['nodata']}"
+    )
     assert info["mask_flags"] & info["GMF_NODATA"], (
         f"掩膜标志应含 GMF_NODATA({info['GMF_NODATA']})，实际 {info['mask_flags']}"
     )

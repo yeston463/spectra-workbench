@@ -376,9 +376,7 @@ def test_mask_file_chain_with_gdal_mask(
     assert fvc_result.status is TaskStatus.succeeded, fvc_result.error
     payload = _sidecar(fvc_out, ".fvc.json")
     assert payload["mask_file"] == str(mask_out)
-    valid = np.asarray(
-        _inspect(gdal_rt, mask_out)["band_list"][0]["arr"], dtype=np.int64
-    ) == 1
+    valid = np.asarray(_inspect(gdal_rt, mask_out)["band_list"][0]["arr"], dtype=np.int64) == 1
     assert payload["n_valid"] == int(valid.sum())
     expected_soil = float(np.percentile(values[valid], 2.0))
     assert payload["endmembers"]["soil"] == pytest.approx(expected_soil, rel=1e-6)

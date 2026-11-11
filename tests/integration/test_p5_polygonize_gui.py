@@ -104,7 +104,9 @@ def _pump(qapp: QApplication, predicate: Any, timeout: float = 60.0, label: str 
     raise AssertionError(f"等待超时（{timeout}s）：{label}")
 
 
-def test_polygonize_form_submit(qapp: QApplication, gdal_rt: dict[str, Any], tmp_path: Path) -> None:
+def test_polygonize_form_submit(
+    qapp: QApplication, gdal_rt: dict[str, Any], tmp_path: Path
+) -> None:
     src = _make_labels(gdal_rt, tmp_path / "labels.tif")
     out = tmp_path / "poly.gpkg"
     win = MainWindow(project_root=tmp_path)

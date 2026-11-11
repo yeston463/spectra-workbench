@@ -57,12 +57,16 @@ def find_project_root(start_path: Path | str | None = None) -> Path:
     for p in [current, *current.parents]:
         if (p / "pyproject.toml").is_file() and (p / "src" / "spectra_workbench").is_dir():
             return p
-        if (p / "runtimes").is_dir() and ((p / "SpectraWorkbench.exe").is_file() or (p / "app").is_dir()):
+        if (p / "runtimes").is_dir() and (
+            (p / "SpectraWorkbench.exe").is_file() or (p / "app").is_dir()
+        ):
             return p
     return current
 
 
-def _run_subproc(cmd: list[str], env: dict[str, str] | None = None, timeout: float = 30.0) -> tuple[int, str, str]:
+def _run_subproc(
+    cmd: list[str], env: dict[str, str] | None = None, timeout: float = 30.0
+) -> tuple[int, str, str]:
     sub_env = os.environ.copy()
     if env:
         sub_env.update(env)
@@ -254,7 +258,9 @@ def run_doctor(project_root: Path | str | None = None) -> DoctorReport:
                     ui_status = "error"
                     msgs.append(f"Isolation violation: {geo} is importable in UI process!")
             if ui_status == "ok":
-                msgs.append("All core UI packages present and geospatial engines properly isolated.")
+                msgs.append(
+                    "All core UI packages present and geospatial engines properly isolated."
+                )
 
             envs_report["ui"] = EngineReport(
                 role="ui",
@@ -333,7 +339,9 @@ def run_doctor(project_root: Path | str | None = None) -> DoctorReport:
                             "stderr": c_err.strip(),
                             "error": f"Process exited with code {c_code}: {c_err.strip() or 'unknown failure'}",
                         }
-                        gdal_errors.append(f"GDAL CLI {exe} execution failed (exit code {c_code}): {c_err.strip()}")
+                        gdal_errors.append(
+                            f"GDAL CLI {exe} execution failed (exit code {c_code}): {c_err.strip()}"
+                        )
                     else:
                         ver_line = c_out.splitlines()[0].strip() if c_out.strip() else ""
                         if not ver_line:
@@ -343,7 +351,9 @@ def run_doctor(project_root: Path | str | None = None) -> DoctorReport:
                                 "exit_code": 0,
                                 "error": "empty version output from CLI",
                             }
-                            gdal_errors.append(f"GDAL CLI {exe} returned exit code 0 but version output was empty")
+                            gdal_errors.append(
+                                f"GDAL CLI {exe} returned exit code 0 but version output was empty"
+                            )
                         else:
                             cli_results[exe] = {
                                 "available": True,
@@ -353,7 +363,9 @@ def run_doctor(project_root: Path | str | None = None) -> DoctorReport:
                             }
 
             if not gtiff_chk.get("ok"):
-                gdal_errors.append(f"GDAL GTiff roundtrip failed: {gtiff_chk.get('reason') or gtiff_chk.get('error')}")
+                gdal_errors.append(
+                    f"GDAL GTiff roundtrip failed: {gtiff_chk.get('reason') or gtiff_chk.get('error')}"
+                )
             if not coord_chk.get("ok"):
                 gdal_errors.append(f"GDAL coordinate transform failed: {coord_chk.get('error')}")
             if not res_chk.get("gdal_data_valid"):
@@ -363,8 +375,12 @@ def run_doctor(project_root: Path | str | None = None) -> DoctorReport:
 
             # Check drivers
             if not drivers.get("HDF4", False):
-                warnings.append("GDAL driver HDF4 is absent (optional driver; core GUI & raster functions remain fully operational)")
-                msgs.append("HDF4 absent: optional driver, core unaffected. GUI can start normally.")
+                warnings.append(
+                    "GDAL driver HDF4 is absent (optional driver; core GUI & raster functions remain fully operational)"
+                )
+                msgs.append(
+                    "HDF4 absent: optional driver, core unaffected. GUI can start normally."
+                )
             else:
                 msgs.append("HDF4 driver present.")
 
@@ -376,7 +392,9 @@ def run_doctor(project_root: Path | str | None = None) -> DoctorReport:
                 msgs.extend(gdal_errors)
                 errors.extend(gdal_errors)
             else:
-                msgs.append(f"GDAL {gdal_data_info.get('gdal_release')} verified ({gdal_data_info.get('driver_count')} drivers, PROJ {gdal_data_info.get('proj_version')}).")
+                msgs.append(
+                    f"GDAL {gdal_data_info.get('gdal_release')} verified ({gdal_data_info.get('driver_count')} drivers, PROJ {gdal_data_info.get('proj_version')})."
+                )
 
             envs_report["gdal"] = EngineReport(
                 role="gdal",
@@ -443,7 +461,9 @@ def run_doctor(project_root: Path | str | None = None) -> DoctorReport:
             msgs = []
             rio_errors = []
             if not gtiff_chk.get("ok"):
-                rio_errors.append(f"Rasterio GTiff roundtrip failed: {gtiff_chk.get('error') or gtiff_chk.get('reason')}")
+                rio_errors.append(
+                    f"Rasterio GTiff roundtrip failed: {gtiff_chk.get('error') or gtiff_chk.get('reason')}"
+                )
             # CLI check：严格校验 rio 存在、退出码与版本输出
             rio_cli_path = venvs_dir / "sw-rasterio" / "Scripts" / "rio.exe"
             if not rio_cli_path.exists():
@@ -474,7 +494,9 @@ def run_doctor(project_root: Path | str | None = None) -> DoctorReport:
                         "stderr": c_err.strip(),
                         "error": f"Process exited with code {c_code}: {c_err.strip() or 'unknown failure'}",
                     }
-                    rio_errors.append(f"rio CLI execution failed (exit code {c_code}): {c_err.strip()}")
+                    rio_errors.append(
+                        f"rio CLI execution failed (exit code {c_code}): {c_err.strip()}"
+                    )
                 else:
                     ver = c_out.strip()
                     if not ver:
@@ -498,7 +520,9 @@ def run_doctor(project_root: Path | str | None = None) -> DoctorReport:
                 msgs.extend(rio_errors)
                 errors.extend(rio_errors)
             else:
-                msgs.append(f"Rasterio {rio_data.get('rasterio_version')} verified (linked GDAL {rio_data.get('gdal_version')}).")
+                msgs.append(
+                    f"Rasterio {rio_data.get('rasterio_version')} verified (linked GDAL {rio_data.get('gdal_version')})."
+                )
 
             envs_report["rasterio"] = EngineReport(
                 role="rasterio",
@@ -561,13 +585,17 @@ def run_doctor(project_root: Path | str | None = None) -> DoctorReport:
             msgs = []
             sci_errors = []
             if not fft_chk.get("ok"):
-                sci_errors.append(f"FFT 2D roundtrip test failed: {fft_chk.get('error') or fft_chk.get('reason')}")
+                sci_errors.append(
+                    f"FFT 2D roundtrip test failed: {fft_chk.get('error') or fft_chk.get('reason')}"
+                )
             if sci_errors:
                 sci_status = "error"
                 msgs.extend(sci_errors)
                 errors.extend(sci_errors)
             else:
-                msgs.append(f"NumPy {sci_data.get('numpy_version')}, SciPy {sci_data.get('scipy_version')} verified (FFT roundtrip diff < 1e-12).")
+                msgs.append(
+                    f"NumPy {sci_data.get('numpy_version')}, SciPy {sci_data.get('scipy_version')} verified (FFT roundtrip diff < 1e-12)."
+                )
 
             envs_report["science"] = EngineReport(
                 role="science",
@@ -618,9 +646,15 @@ def format_console_report(report: DoctorReport) -> str:
     lines.append(f"   项目根目录: {report.project_root}")
     lines.append("=" * 72)
 
-    status_tag = "【通过 ALL OK】" if report.overall_ok else ("【就绪 READY (含警告)】" if report.gui_can_start else "【失败 FAIL】")
+    status_tag = (
+        "【通过 ALL OK】"
+        if report.overall_ok
+        else ("【就绪 READY (含警告)】" if report.gui_can_start else "【失败 FAIL】")
+    )
     lines.append(f"总体判定: {status_tag}")
-    lines.append(f"GUI 启动许可: {'允许 (UI环境与核心依赖就绪)' if report.gui_can_start else '拒绝 (依赖未满足)'}")
+    lines.append(
+        f"GUI 启动许可: {'允许 (UI环境与核心依赖就绪)' if report.gui_can_start else '拒绝 (依赖未满足)'}"
+    )
     lines.append("-" * 72)
 
     for role, env in report.envs.items():
@@ -643,26 +677,40 @@ def format_console_report(report: DoctorReport) -> str:
             lines.append(f"   依赖隔离: {iso_str}")
             lines.append(f"   Qt / PySide6 版本: {env.version_info.get('qt_version', 'unknown')}")
         elif role == "gdal":
-            lines.append(f"   GDAL 版本: {env.version_info.get('gdal_version')} | PROJ: {env.version_info.get('proj_version')}")
+            lines.append(
+                f"   GDAL 版本: {env.version_info.get('gdal_version')} | PROJ: {env.version_info.get('proj_version')}"
+            )
             gt = env.checks.get("gtiff_roundtrip", {})
             ct = env.checks.get("coord_transform", {})
             rd = env.checks.get("resource_dirs", {})
-            lines.append(f"   GTiff 往返: {'成功' if gt.get('ok') else '失败'} | 坐标转换 (4326->3857): {'成功' if ct.get('ok') else '失败'}")
-            lines.append(f"   资源目录: GDAL_DATA={'有效' if rd.get('gdal_data_valid') else '无效'}, PROJ_DATA={'有效' if rd.get('proj_data_valid') else '无效'}")
+            lines.append(
+                f"   GTiff 往返: {'成功' if gt.get('ok') else '失败'} | 坐标转换 (4326->3857): {'成功' if ct.get('ok') else '失败'}"
+            )
+            lines.append(
+                f"   资源目录: GDAL_DATA={'有效' if rd.get('gdal_data_valid') else '无效'}, PROJ_DATA={'有效' if rd.get('proj_data_valid') else '无效'}"
+            )
             drvs = env.drivers
             drv_str = " ".join(f"{k}:{'[OK]' if v else '[-]'}" for k, v in drvs.items())
             lines.append(f"   驱动支持: {drv_str}")
             clis = env.cli_tools
-            cli_str = " ".join(f"{k}:{'[OK]' if v.get('available') else '[-]'}" for k, v in clis.items())
+            cli_str = " ".join(
+                f"{k}:{'[OK]' if v.get('available') else '[-]'}" for k, v in clis.items()
+            )
             lines.append(f"   CLI 工具: {cli_str}")
         elif role == "rasterio":
-            lines.append(f"   Rasterio: {env.version_info.get('rasterio_version')} (链接 GDAL: {env.version_info.get('gdal_version')})")
+            lines.append(
+                f"   Rasterio: {env.version_info.get('rasterio_version')} (链接 GDAL: {env.version_info.get('gdal_version')})"
+            )
             gt = env.checks.get("gtiff_roundtrip", {})
             lines.append(f"   GTiff 往返: {'成功' if gt.get('ok') else '失败'}")
             rio_cli = env.cli_tools.get("rio", {})
-            lines.append(f"   rio CLI: {'可用 (' + rio_cli.get('version', '') + ')' if rio_cli.get('available') else '缺失'}")
+            lines.append(
+                f"   rio CLI: {'可用 (' + rio_cli.get('version', '') + ')' if rio_cli.get('available') else '缺失'}"
+            )
         elif role == "science":
-            lines.append(f"   NumPy: {env.version_info.get('numpy_version')} | SciPy: {env.version_info.get('scipy_version')}")
+            lines.append(
+                f"   NumPy: {env.version_info.get('numpy_version')} | SciPy: {env.version_info.get('scipy_version')}"
+            )
             fft = env.checks.get("fft_roundtrip", {})
             lines.append(f"   FFT 2D 往返: {'成功 (误差 < 1e-12)' if fft.get('ok') else '失败'}")
 
@@ -707,7 +755,11 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Spectra Workbench Doctor")
     parser.add_argument("--json", action="store_true", help="Output JSON only")
     parser.add_argument("--out", type=str, default=None, help="Save report JSON to path")
-    parser.add_argument("--ui-only", action="store_true", help="Only verify UI environment readiness for starting the GUI")
+    parser.add_argument(
+        "--ui-only",
+        action="store_true",
+        help="Only verify UI environment readiness for starting the GUI",
+    )
     args = parser.parse_args(argv)
 
     report = run_doctor()
@@ -719,6 +771,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.json:
         from spectra_workbench.domain.credentials import sanitize_dict
+
         print(json.dumps(sanitize_dict(report.to_dict()), indent=2, ensure_ascii=False))
     else:
         print(format_console_report(report))

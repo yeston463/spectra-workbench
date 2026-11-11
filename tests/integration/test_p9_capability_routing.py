@@ -322,9 +322,7 @@ print("NUMERICAL_VERIFIED_OK")
         client.stop(timeout=5.0)
 
 
-def test_p9_02_five_cleanup_algorithms_param_form(
-    qapp: QApplication, tmp_path: Path
-) -> None:
+def test_p9_02_five_cleanup_algorithms_param_form(qapp: QApplication, tmp_path: Path) -> None:
     """图形参数表单 CapabilityFormWidget 正确加载 5 项算法并能下发收集参数。"""
     reg = get_default_registry()
     caps = [

@@ -139,9 +139,7 @@ def _dummy_slow_spec(task_id: str) -> TaskSpec:
 
 
 # ------------------------------------------------------- 主流程（八环串联）
-def test_full_flow_open_configure_execute_load_export_save_reopen(
-    qapp, gdal_rt, tmp_path
-) -> None:
+def test_full_flow_open_configure_execute_load_export_save_reopen(qapp, gdal_rt, tmp_path) -> None:
     src = _make_raster(gdal_rt, tmp_path / "flow_src.tif", size=8)
     out = tmp_path / "flow_processed.tif"
     view_png = tmp_path / "flow_view.png"

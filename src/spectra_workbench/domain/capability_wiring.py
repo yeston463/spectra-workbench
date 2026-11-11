@@ -77,6 +77,18 @@ CONNECTED_CAPABILITIES: frozenset[str] = frozenset(
         "gdal:fvc",
         # P11-07：多边形 ROI 与矢量 cutline 掩膜裁剪
         "gdal:clip_mask",
+        # P11-06：密度分割
+        "gdal:density_slice",
+        # P11-03：高级图像镶嵌
+        "gdal:mosaic_advanced",
+        # P11-05：光谱角制图 SAM
+        "gdal:sam",
+        # P11-02：遥感分类整链与精度评估
+        "gdal:classify",
+        "gdal:accuracy_assessment",
+        # P11-09：次级空间分析（矢量缓冲区与 DEM 区域平均采样）
+        "ogr:buffer",
+        "gdal:dem_sample",
         # P6-06：辐射定标 / DOS1 大气校正 / 掩膜驱动多时相去云
         "gdal:calibrate",
         "gdal:dos1",
@@ -103,6 +115,8 @@ MULTI_INPUT_CAPABILITIES: frozenset[str] = frozenset(
         "gdal:stack",
         # gdal:calc 用列表形式表达 A/B/C… 映射（允许只给 1 个输入）
         "gdal:calc",
+        # P11-03：高级图像镶嵌（多景输入）
+        "gdal:mosaic_advanced",
     }
 )
 
@@ -120,6 +134,8 @@ VECTOR_OUTPUT_CAPABILITIES: frozenset[str] = frozenset(
         "gdal:contour",
         # P5-04：矢量处理 / SQL / 坐标转换（ogr2ogr 通道）
         "ogr:vectortranslate",
+        # P11-09：矢量缓冲区分析
+        "ogr:buffer",
     }
 )
 
@@ -158,6 +174,11 @@ FORMAT_CAPABILITIES: frozenset[str] = frozenset(
         "gdal:mask",
         "gdal:fvc",
         "gdal:clip_mask",
+        "gdal:density_slice",
+        "gdal:mosaic_advanced",
+        "gdal:sam",
+        "gdal:classify",
+        "ogr:buffer",
         "gdal:calibrate",
         "gdal:dos1",
         "gdal:cloudreplace",

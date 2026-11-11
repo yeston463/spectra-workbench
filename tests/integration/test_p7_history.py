@@ -60,9 +60,7 @@ def gdal_rt() -> dict[str, Any]:
     return resolve_gdal_runtime(ROOT)
 
 
-def _make_raster(
-    gdal_rt: dict[str, Any], path: Path, values: list[list[float]]
-) -> Path:
+def _make_raster(gdal_rt: dict[str, Any], path: Path, values: list[list[float]]) -> Path:
     script = f"""
 import numpy as np
 from osgeo import gdal, osr
@@ -395,10 +393,7 @@ def test_history_schema_migration_and_newer_version_refused(tmp_path: Path) -> N
     assert store.schema_version() == 1
     conn = sqlite3.connect(db)
     tables = {
-        r[0]
-        for r in conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table'"
-        ).fetchall()
+        r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
     }
     assert {"meta", "runs", "run_inputs", "run_outputs"} <= tables
     # 人为降级：模拟旧库 → 重新打开应自动迁移回 1

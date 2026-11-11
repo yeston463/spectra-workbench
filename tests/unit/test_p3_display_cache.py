@@ -43,7 +43,9 @@ def make_payload(arr: np.ndarray, valid: np.ndarray, **over) -> dict:
         "win_h": h,
         "out_w": w,
         "out_h": h,
-        "band_meta": [{"band": i + 1, "nodata": None, "scale": None, "offset": None} for i in range(nb)],
+        "band_meta": [
+            {"band": i + 1, "nodata": None, "scale": None, "offset": None} for i in range(nb)
+        ],
         "overview_used": -1,
     }
     payload.update(over)
@@ -131,7 +133,9 @@ def test_rgb_mode_requires_three_bands_and_maps_channels():
     arr = np.stack([a + 0, a + 50, a + 100])
     valid = np.ones((3, 4, 4), dtype=bool)
     win = decode_window(make_payload(arr, valid))
-    rgba, bounds = to_rgba(win, DisplayMode and DisplaySettings(mode=DisplayMode.rgb, stretch=StretchMode.min_max))
+    rgba, bounds = to_rgba(
+        win, DisplayMode and DisplaySettings(mode=DisplayMode.rgb, stretch=StretchMode.min_max)
+    )
     assert len(bounds) == 3
     # 每波段各自 min-max 后都应是同一个低值 -> 三通道相等
     assert rgba[0, 0, 0] == rgba[0, 0, 1] == rgba[0, 0, 2]
@@ -145,7 +149,9 @@ def test_pseudocolor_maps_gray_through_lut():
     arr = np.array([[0, 255], [128, 64]], dtype=np.uint8)
     valid = np.ones((2, 2), dtype=bool)
     win = decode_window(make_payload(arr, valid))
-    settings = DisplaySettings(mode=DisplayMode.pseudo, pseudocolor="viridis", stretch=StretchMode.min_max)
+    settings = DisplaySettings(
+        mode=DisplayMode.pseudo, pseudocolor="viridis", stretch=StretchMode.min_max
+    )
     rgba, _ = to_rgba(win, settings)
     lut = colormap_lut("viridis")
     assert lut.shape == (256, 3)
@@ -175,7 +181,10 @@ def test_stretch_degenerate_range_returns_zero():
 def test_stats_source_label_distinguishes_sampled_and_full():
     assert stats_source_label(None) == "窗口抽样(当前视图)"
     assert stats_source_label({"mode": "full", "source": "full_raster"}) == "全量统计"
-    assert stats_source_label({"mode": "sampled", "source": "sampled_grid", "stride": 4}) == "抽样统计(stride=4)"
+    assert (
+        stats_source_label({"mode": "sampled", "source": "sampled_grid", "stride": 4})
+        == "抽样统计(stride=4)"
+    )
 
 
 def test_display_settings_round_trip_and_band_validation():
@@ -195,7 +204,17 @@ def test_display_settings_round_trip_and_band_validation():
 
 
 def _key(bands=(1,), x=0, ov=-1, source="a.tif"):
-    return TileKey(source=source, bands=tuple(bands), x_off=x, y_off=0, win_w=64, win_h=64, out_w=64, out_h=64, overview=ov)
+    return TileKey(
+        source=source,
+        bands=tuple(bands),
+        x_off=x,
+        y_off=0,
+        win_w=64,
+        win_h=64,
+        out_w=64,
+        out_h=64,
+        overview=ov,
+    )
 
 
 def test_cache_respects_byte_budget_with_lru():

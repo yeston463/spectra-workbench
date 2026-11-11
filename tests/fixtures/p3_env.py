@@ -59,7 +59,9 @@ def ensure_p3_samples(dest: Path | None = None) -> dict[str, Any]:
     return json.loads(proc.stdout.strip().splitlines()[-1])
 
 
-def run_engine_script(script: Path, args: list[str], timeout: int = 600) -> subprocess.CompletedProcess:
+def run_engine_script(
+    script: Path, args: list[str], timeout: int = 600
+) -> subprocess.CompletedProcess:
     """在 GDAL 运行时里执行脚本（性能测量等非测试用途）。"""
     py = gdal_runtime_python()
     if py is None:

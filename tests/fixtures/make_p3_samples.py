@@ -121,7 +121,7 @@ def write_raster(
 
 def ramp(b: int, w: int, h: int) -> np.ndarray:
     """每列值 = col*b，含 0 值列与一个 NoData 像元位置约定。"""
-    arr = ((np.arange(w, dtype=np.int64)[None, :] * b) % 60000)
+    arr = (np.arange(w, dtype=np.int64)[None, :] * b) % 60000
     return np.broadcast_to(arr, (h, w)).astype(np.uint16).copy()
 
 
@@ -130,7 +130,6 @@ def spike(b: int, w: int, h: int) -> np.ndarray:
     arr = np.full((h, w), 100 + b * 10, dtype=np.uint16)
     arr[h // 2, w // 2] = 60000
     return arr
-
 
 
 def write_vector_samples(out: Path) -> dict:
@@ -289,29 +288,81 @@ def main() -> int:
     man: dict = {"samples": {}}
 
     man["samples"]["rotated"] = write_raster(
-        out / "p3_rotated.tif", 200, 150, 3, ramp, gt=ROT_GT, epsg=32650, nodata=65535,
-        overviews=(2, 4, 8), nodata_block=(100, 150, 104, 154),
+        out / "p3_rotated.tif",
+        200,
+        150,
+        3,
+        ramp,
+        gt=ROT_GT,
+        epsg=32650,
+        nodata=65535,
+        overviews=(2, 4, 8),
+        nodata_block=(100, 150, 104, 154),
     )
     man["samples"]["north"] = write_raster(
-        out / "p3_north.tif", 200, 150, 3, ramp, gt=NORTH_GT, epsg=32650, nodata=65535,
-        overviews=(2, 4, 8), nodata_block=(100, 150, 104, 154),
+        out / "p3_north.tif",
+        200,
+        150,
+        3,
+        ramp,
+        gt=NORTH_GT,
+        epsg=32650,
+        nodata=65535,
+        overviews=(2, 4, 8),
+        nodata_block=(100, 150, 104, 154),
     )
     man["samples"]["spike"] = write_raster(
-        out / "p3_spike.tif", 64, 64, 1, spike, gt=NORTH_GT, epsg=32650, nodata=None,
+        out / "p3_spike.tif",
+        64,
+        64,
+        1,
+        spike,
+        gt=NORTH_GT,
+        epsg=32650,
+        nodata=None,
     )
     man["samples"]["geographic"] = write_raster(
-        out / "p3_geo.tif", 64, 64, 1, ramp, gt=GEO_GT, epsg=4326, nodata=65535,
+        out / "p3_geo.tif",
+        64,
+        64,
+        1,
+        ramp,
+        gt=GEO_GT,
+        epsg=4326,
+        nodata=65535,
         nodata_block=(40, 40, 44, 44),
     )
     man["samples"]["no_crs"] = write_raster(
-        out / "p3_nocrs.tif", 64, 64, 1, ramp, gt=NORTH_GT, epsg=None, nodata=65535,
+        out / "p3_nocrs.tif",
+        64,
+        64,
+        1,
+        ramp,
+        gt=NORTH_GT,
+        epsg=None,
+        nodata=65535,
     )
     man["samples"]["no_gt"] = write_raster(
-        out / "p3_nogt.tif", 64, 64, 1, ramp, gt=None, epsg=None, nodata=65535,
+        out / "p3_nogt.tif",
+        64,
+        64,
+        1,
+        ramp,
+        gt=None,
+        epsg=None,
+        nodata=65535,
     )
     man["samples"]["scale_offset"] = write_raster(
-        out / "p3_phys.tif", 64, 64, 1, ramp, gt=NORTH_GT, epsg=32650, nodata=None,
-        scale=1e-4, offset=0.5,
+        out / "p3_phys.tif",
+        64,
+        64,
+        1,
+        ramp,
+        gt=NORTH_GT,
+        epsg=32650,
+        nodata=None,
+        scale=1e-4,
+        offset=0.5,
     )
 
     MASK_BLOCK = (20, 40, 30, 50)  # (r0, c0, r1, c1)：被掩膜但像元值合法的区域
@@ -323,7 +374,14 @@ def main() -> int:
         return m
 
     man["samples"]["masked"] = write_raster(
-        out / "p3_masked.tif", 64, 64, 1, ramp, gt=NORTH_GT, epsg=32650, nodata=None,
+        out / "p3_masked.tif",
+        64,
+        64,
+        1,
+        ramp,
+        gt=NORTH_GT,
+        epsg=32650,
+        nodata=None,
         mask_fn=mask_all_valid,
     )
     man["samples"]["masked"]["mask_block"] = list(MASK_BLOCK)
@@ -338,9 +396,17 @@ def main() -> int:
         return a
 
     man["samples"]["alpha"] = write_raster(
-        out / "p3_alpha.tif", 64, 64, 4, alpha_array,
-        gt=NORTH_GT, epsg=32650, nodata=None, dtype=gdal.GDT_Byte,
-        extra_options=["PHOTOMETRIC=RGB", "ALPHA=YES"], alpha_band=True,
+        out / "p3_alpha.tif",
+        64,
+        64,
+        4,
+        alpha_array,
+        gt=NORTH_GT,
+        epsg=32650,
+        nodata=None,
+        dtype=gdal.GDT_Byte,
+        extra_options=["PHOTOMETRIC=RGB", "ALPHA=YES"],
+        alpha_band=True,
     )
     man["samples"]["alpha"]["alpha_block"] = list(ALPHA_BLOCK)
 
@@ -348,7 +414,14 @@ def main() -> int:
     zh = out / "中文 目录"
     zh.mkdir(exist_ok=True)
     man["samples"]["chinese_path"] = write_raster(
-        zh / "影像 1.tif", 64, 64, 1, ramp, gt=NORTH_GT, epsg=32650, nodata=65535,
+        zh / "影像 1.tif",
+        64,
+        64,
+        1,
+        ramp,
+        gt=NORTH_GT,
+        epsg=32650,
+        nodata=65535,
     )
 
     # ------------------------------------------------------- P3-02 矢量数据集
@@ -359,7 +432,9 @@ def main() -> int:
     subdataset_info = write_subdataset_samples(out)
     man["samples"].update(subdataset_info)
 
-    (out / "manifest.json").write_text(json.dumps(man, ensure_ascii=False, indent=1), encoding="utf-8")
+    (out / "manifest.json").write_text(
+        json.dumps(man, ensure_ascii=False, indent=1), encoding="utf-8"
+    )
     print(json.dumps(man, ensure_ascii=False))
     return 0
 

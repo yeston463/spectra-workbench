@@ -182,8 +182,12 @@ class _LegacyConfirmDialog(QDialog):
             a_cand = (app_root / ly.source).resolve()
 
             cmb = QComboBox()
-            cmb.addItem(f"项目目录: {p_cand}" + (" [存在]" if p_cand.exists() else " [不存在]"), p_cand)
-            cmb.addItem(f"程序根目录: {a_cand}" + (" [存在]" if a_cand.exists() else " [不存在]"), a_cand)
+            cmb.addItem(
+                f"项目目录: {p_cand}" + (" [存在]" if p_cand.exists() else " [不存在]"), p_cand
+            )
+            cmb.addItem(
+                f"程序根目录: {a_cand}" + (" [存在]" if a_cand.exists() else " [不存在]"), a_cand
+            )
             cmb.addItem("自定义选择文件…", None)
 
             if p_cand.exists() and not a_cand.exists():
@@ -282,7 +286,9 @@ class MainWindow(QMainWindow):
         self._last_task_spec: TaskSpec | None = None
         # 导出任务不自动加入图层树（导出不应改变当前工作流）。
         self._export_task_ids: set[str] = set()
-        self._cache = TileCache(budget_bytes=cache_budget_bytes) if cache_budget_bytes else TileCache()
+        self._cache = (
+            TileCache(budget_bytes=cache_budget_bytes) if cache_budget_bytes else TileCache()
+        )
         self.project_path: Path | None = None
         self.missing_sources: list[MissingSource] = []
         self._pending_active_layer: str | None = None
@@ -309,7 +315,9 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------ 客户端
     def _get_client(self, provider_id: str) -> QtWorkerClient:
         if provider_id not in self._clients:
-            client = QtWorkerClient(provider_id=provider_id, project_root=self.project_root, parent=self)
+            client = QtWorkerClient(
+                provider_id=provider_id, project_root=self.project_root, parent=self
+            )
             self._clients[provider_id] = client
             # 归属登记：无论槽位日后被换成什么，closeEvent 都要回收本对象。
             self._owned_clients.append(client)
@@ -360,6 +368,7 @@ class MainWindow(QMainWindow):
                 from spectra_workbench.ui.dialogs.spectral_profile_dialog import (
                     SpectralProfileDialog,
                 )
+
                 self._spectral_profile_dialog = SpectralProfileDialog(self)
 
             bands_info = payload.get("bands") or []
@@ -414,7 +423,9 @@ class MainWindow(QMainWindow):
 
         self.dock_left = QDockWidget("数据与工具 (Explorer)", self)
         self.dock_left.setObjectName("dock_left")
-        self.dock_left.setAllowedAreas(Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea)
+        self.dock_left.setAllowedAreas(
+            Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea
+        )
         self.tab_left = QTabWidget()
         self.toolbox_panel = ToolboxPanel()
         self.layer_panel = LayerPanel()
@@ -427,7 +438,9 @@ class MainWindow(QMainWindow):
 
         self.dock_right = QDockWidget("参数与查询 (Inspector)", self)
         self.dock_right.setObjectName("dock_right")
-        self.dock_right.setAllowedAreas(Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea)
+        self.dock_right.setAllowedAreas(
+            Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea
+        )
         self.tab_right = QTabWidget()
         self.form_widget = CapabilityFormWidget()
         self.form_widget.set_project_root(self.project_root)
@@ -540,7 +553,9 @@ class MainWindow(QMainWindow):
 
         self.act_pan = QAction(get_icon("pan"), "平移 (Pan)", self)
         self.act_pan.setToolTip("平移画布 (Pan Tool) - 鼠标左键拖拽平移影像")
-        self.act_pan.triggered.connect(lambda: self.status_bar.showMessage("平移模式：鼠标左键按住拖映画布"))
+        self.act_pan.triggered.connect(
+            lambda: self.status_bar.showMessage("平移模式：鼠标左键按住拖映画布")
+        )
         m_view.addAction(self.act_pan)
 
         self.act_fit = QAction(get_icon("zoom_full"), "适应全图 (&F)", self)
@@ -602,22 +617,30 @@ class MainWindow(QMainWindow):
         m_view.addAction(self.act_measure)
 
         self.act_profile = QAction(get_icon("tool_profile"), "像元光谱剖面 (&P)", self)
-        self.act_profile.setToolTip("开启后点击影像像元查看多波段连续反射光谱剖面曲线 (Spectral Profile)")
+        self.act_profile.setToolTip(
+            "开启后点击影像像元查看多波段连续反射光谱剖面曲线 (Spectral Profile)"
+        )
         self.act_profile.setCheckable(True)
         m_view.addAction(self.act_profile)
 
         # -------------------------------------------------------------- ENVI 经典拉伸与显示增强动作
         self.act_stretch_linear = QAction(get_icon("stretch_linear"), "线性 2% 拉伸", self)
         self.act_stretch_linear.setToolTip("ENVI 经典线性 2%~98% 分位数拉伸 (Linear 2% Stretch)")
-        self.act_stretch_linear.triggered.connect(lambda: self.apply_stretch_mode(StretchMode.percentile))
+        self.act_stretch_linear.triggered.connect(
+            lambda: self.apply_stretch_mode(StretchMode.percentile)
+        )
 
         self.act_stretch_minmax = QAction(get_icon("stretch_minmax"), "极值全范围拉伸", self)
         self.act_stretch_minmax.setToolTip("全范围极值拉伸 (Min-Max Full Stretch)")
-        self.act_stretch_minmax.triggered.connect(lambda: self.apply_stretch_mode(StretchMode.min_max))
+        self.act_stretch_minmax.triggered.connect(
+            lambda: self.apply_stretch_mode(StretchMode.min_max)
+        )
 
         self.act_stretch_stddev = QAction(get_icon("stretch_stddev"), "标准差 2σ 拉伸", self)
         self.act_stretch_stddev.setToolTip("标准差 2σ 高斯拉伸 (Gaussian StdDev Stretch)")
-        self.act_stretch_stddev.triggered.connect(lambda: self.apply_stretch_mode(StretchMode.stddev))
+        self.act_stretch_stddev.triggered.connect(
+            lambda: self.apply_stretch_mode(StretchMode.stddev)
+        )
 
         self.act_display_rgb = QAction(get_icon("display_rgb"), "RGB 彩色合成", self)
         self.act_display_rgb.setToolTip("切换为 RGB 多波段彩色合成显示 (RGB Composite)")
@@ -625,13 +648,19 @@ class MainWindow(QMainWindow):
 
         self.act_display_pseudo = QAction(get_icon("display_pseudo"), "伪彩色增强", self)
         self.act_display_pseudo.setToolTip("切换为单波段伪彩色增强显示 (Pseudocolor)")
-        self.act_display_pseudo.triggered.connect(lambda: self.apply_display_mode(DisplayMode.pseudo))
+        self.act_display_pseudo.triggered.connect(
+            lambda: self.apply_display_mode(DisplayMode.pseudo)
+        )
 
         # -------------------------------------------------------------- ROI 与矢量标定动作
         self.act_roi_probe = QAction(get_icon("roi_probe"), "像元光标探针", self)
-        self.act_roi_probe.setToolTip("像元探针 (Pixel Probe / Cursor Location Value) - 查看当前鼠标位置像元值")
+        self.act_roi_probe.setToolTip(
+            "像元探针 (Pixel Probe / Cursor Location Value) - 查看当前鼠标位置像元值"
+        )
         self.act_roi_probe.triggered.connect(
-            lambda: self.status_bar.showMessage("像元探针：移动鼠标即可在底部状态栏与信息面板实时查看像元值")
+            lambda: self.status_bar.showMessage(
+                "像元探针：移动鼠标即可在底部状态栏与信息面板实时查看像元值"
+            )
         )
 
         self.act_roi_rect = QAction(get_icon("roi_rect"), "矩形 ROI 标定", self)
@@ -644,7 +673,9 @@ class MainWindow(QMainWindow):
 
         self.act_roi_del = QAction(get_icon("roi_delete"), "删除选中 ROI", self)
         self.act_roi_del.setToolTip("删除当前选中的 ROI 图形项")
-        self.act_roi_del.triggered.connect(lambda: self._on_roi_delete(self.canvas.delete_selected_roi() or ""))
+        self.act_roi_del.triggered.connect(
+            lambda: self._on_roi_delete(self.canvas.delete_selected_roi() or "")
+        )
 
         # -------------------------------------------------------------- 遥感专题快捷算法动作
         self.act_tool_ndvi = QAction(get_icon("tool_ndvi"), "植被指数 (NDVI)", self)
@@ -669,7 +700,9 @@ class MainWindow(QMainWindow):
 
         self.act_tool_stats = QAction(get_icon("tool_stats"), "统计与直方图", self)
         self.act_tool_stats.setToolTip("栅格逐波段极值、均值与直方图统计 (gdal:statistics)")
-        self.act_tool_stats.triggered.connect(lambda: self.quick_launch_capability("gdal:statistics"))
+        self.act_tool_stats.triggered.connect(
+            lambda: self.quick_launch_capability("gdal:statistics")
+        )
 
         # -------------------------------------------------------------- 视图 CRS 下拉控件
         crs_row = QWidget()
@@ -870,7 +903,9 @@ class MainWindow(QMainWindow):
         else:
             local_p = Path(str(path)).resolve()
             if not local_p.exists():
-                self._notify(QMessageBox.Icon.Critical, "文件未找到", f"指定影像文件不存在:\n{local_p}")
+                self._notify(
+                    QMessageBox.Icon.Critical, "文件未找到", f"指定影像文件不存在:\n{local_p}"
+                )
                 return
             p = local_p
             display_name = record.name if record else p.stem
@@ -898,7 +933,9 @@ class MainWindow(QMainWindow):
                 self._project_layer_order.append(layer.layer_id)
             self._layer_seq[layer.layer_id] = seq
             # 顺序按“发起打开的先后”确定：探测响应谁先回来不影响图层顺序
-            index = sum(1 for ly in self.layer_panel.layers if self._layer_seq.get(ly.layer_id, 0) < seq)
+            index = sum(
+                1 for ly in self.layer_panel.layers if self._layer_seq.get(ly.layer_id, 0) < seq
+            )
             self.layer_panel.add_layer(
                 layer,
                 select=(record is None or layer.layer_id == self._pending_active_layer),
@@ -910,6 +947,7 @@ class MainWindow(QMainWindow):
             if client._closed:
                 # 客户端已关闭（正在销毁窗口）：不再发起任何新探测
                 return
+
             # 栅格探测失败：可能是矢量数据集，回退到矢量探测（P3-02）
             def _on_vector_ok(vec: dict[str, Any]) -> None:
                 self._add_vector_layer(p, vec, record=record, rois=rois, order=seq)
@@ -972,7 +1010,11 @@ class MainWindow(QMainWindow):
         self._client_for(layer)
         if order is not None:
             self._layer_seq[layer.layer_id] = order
-        index = sum(1 for ly in self.layer_panel.layers if self._layer_seq.get(ly.layer_id, 0) < (order or 0))
+        index = sum(
+            1
+            for ly in self.layer_panel.layers
+            if self._layer_seq.get(ly.layer_id, 0) < (order or 0)
+        )
         self.layer_panel.add_layer(layer, select=True, index=index)
         self._mark_dirty()
         # 矢量图层不进入影像画布：渲染能力未实现，明确说明而不提供假入口
@@ -991,7 +1033,9 @@ class MainWindow(QMainWindow):
             if cand.exists():
                 self.open_dataset(cand)
                 return
-        self._notify(QMessageBox.Icon.Information, "提示", "未找到预置样例数据，请通过 [打开影像] 选择文件。")
+        self._notify(
+            QMessageBox.Icon.Information, "提示", "未找到预置样例数据，请通过 [打开影像] 选择文件。"
+        )
 
     def _selected_layer(self) -> LayerItem | None:
         return getattr(self.layer_panel, "_selected_layer", None)
@@ -1020,7 +1064,11 @@ class MainWindow(QMainWindow):
         else:
             self.attribute_panel.clear()
         if renderable:
-            self.display_panel.set_layer(layer.band_count, layer.display)
+            self.display_panel.set_layer(
+                layer.band_count,
+                layer.display,
+                bad_bands=layer.metadata.get("bad_bands"),
+            )
             self.status_bar.showMessage(
                 f"图层 {layer.name} | {layer.width}x{layer.height} | {layer.band_count} 波段 | "
                 f"{layer.crs_display} | 空间模型={layer.metadata.get('spatial_model', 'affine')}"
@@ -1194,9 +1242,17 @@ class MainWindow(QMainWindow):
             if cand.layer_id == layer_id:
                 removed_source = str(cand.file_path)
                 break
-        if not removed_source and self.canvas.current_layer and self.canvas.current_layer.layer_id == layer_id:
+        if (
+            not removed_source
+            and self.canvas.current_layer
+            and self.canvas.current_layer.layer_id == layer_id
+        ):
             removed_source = str(self.canvas.current_layer.file_path)
-        if not removed_source and self.canvas_b.current_layer and self.canvas_b.current_layer.layer_id == layer_id:
+        if (
+            not removed_source
+            and self.canvas_b.current_layer
+            and self.canvas_b.current_layer.layer_id == layer_id
+        ):
             removed_source = str(self.canvas_b.current_layer.file_path)
         if not removed_source and rec is not None:
             removed_source = str(rec.source)
@@ -1343,8 +1399,12 @@ class MainWindow(QMainWindow):
             self.info_panel.show_query_error(msg)
 
         self._client_for(layer).query_pixel_async(
-            layer.file_path, row=row, col=col, view_crs_wkt=self.canvas.view_crs_wkt,
-            on_success=_ok, on_error=_err,
+            layer.file_path,
+            row=row,
+            col=col,
+            view_crs_wkt=self.canvas.view_crs_wkt,
+            on_success=_ok,
+            on_error=_err,
         )
 
     def _on_map_query(self, x: float, y: float) -> None:
@@ -1361,9 +1421,13 @@ class MainWindow(QMainWindow):
             self.info_panel.show_map_error(msg)
 
         self._client_for(layer).map_to_pixel_async(
-            layer.file_path, x, y,
+            layer.file_path,
+            x,
+            y,
             view_crs_wkt=self.canvas.view_crs_wkt or layer.crs_wkt,
-            convention=str(convention), on_success=_ok, on_error=_err,
+            convention=str(convention),
+            on_success=_ok,
+            on_error=_err,
         )
 
     def _on_stats_requested(self, mode: str) -> None:
@@ -1455,11 +1519,7 @@ class MainWindow(QMainWindow):
         else:
             pts = [(float(p[0]), float(p[1])) for p in target_roi.points]
 
-        dst_nodata = (
-            float(target_layer.nodata)
-            if target_layer.nodata is not None
-            else -9999.0
-        )
+        dst_nodata = float(target_layer.nodata) if target_layer.nodata is not None else -9999.0
 
         task_id = f"task-clip-{uuid.uuid4().hex[:8]}"
         in_p = Path(target_layer.file_path).resolve()
@@ -1565,7 +1625,9 @@ class MainWindow(QMainWindow):
             self.status_bar.showMessage(f"视图 CRS：EPSG:{epsg}（跨 CRS 图层将重投影到该网格）")
 
         def _err(msg: str) -> None:
-            self._notify(QMessageBox.Icon.Warning, "CRS 不可用", f"worker 无法构建 EPSG:{epsg}：{msg}")
+            self._notify(
+                QMessageBox.Icon.Warning, "CRS 不可用", f"worker 无法构建 EPSG:{epsg}：{msg}"
+            )
             self.cmb_view_crs.setCurrentIndex(0)
 
         self.gdal_client.crs_wkt_async(int(epsg), on_success=_ok, on_error=_err)
@@ -1639,7 +1701,9 @@ class MainWindow(QMainWindow):
                 all_rois.extend(layer.rois)
             elif lid in self._project_records:
                 old_rec = self._project_records[lid]
-                orig_abs = resolve_source(self.project_dir, old_rec.source, is_relative=old_rec.source_is_relative)
+                orig_abs = resolve_source(
+                    self.project_dir, old_rec.source, is_relative=old_rec.source_is_relative
+                )
                 stored, is_rel = store_source(base_dir, orig_abs)
                 rec = old_rec.model_copy(
                     update={
@@ -1687,7 +1751,7 @@ class MainWindow(QMainWindow):
             return False
         target = self.project_path
         if save_as or target is None:
-            suggested = (target or (self.project_dir / "未命名.spectra.json"))
+            suggested = target or (self.project_dir / "未命名.spectra.json")
             chosen, _ = QFileDialog.getSaveFileName(
                 self, "保存项目", str(suggested), "Spectra 项目 (*.spectra.json);;JSON (*.json)"
             )
@@ -1724,7 +1788,9 @@ class MainWindow(QMainWindow):
         if not res:
             QMessageBox.critical(self, "打开失败", "项目文件无法读取，详见状态栏。")
             return
-        if (res == "pending_confirmation" or self.is_pending_confirmation) and not self.prompt_confirm_legacy_paths():
+        if (
+            res == "pending_confirmation" or self.is_pending_confirmation
+        ) and not self.prompt_confirm_legacy_paths():
             return
         if self.missing_sources:
             self.prompt_relink_missing()
@@ -1870,7 +1936,9 @@ class MainWindow(QMainWindow):
                 else:
                     p = resolve_source(target_dir, rec.source, is_relative=True)
                 stored, is_rel = store_source(target_dir, p)
-                updated_rec = rec.model_copy(update={"source": stored, "source_is_relative": is_rel})
+                updated_rec = rec.model_copy(
+                    update={"source": stored, "source_is_relative": is_rel}
+                )
                 self._project_records[rec.layer_id] = updated_rec
                 local_p = extract_local_path_from_vsi(p)
                 if local_p is None or local_p.exists():
@@ -1886,7 +1954,11 @@ class MainWindow(QMainWindow):
             else:
                 p = resolve_source(target_dir, rec.source, is_relative=False)
                 local_p = extract_local_path_from_vsi(p)
-                if local_p is not None and not local_p.exists() and not any(m.layer_id == rec.layer_id for m in missing):
+                if (
+                    local_p is not None
+                    and not local_p.exists()
+                    and not any(m.layer_id == rec.layer_id for m in missing)
+                ):
                     missing.append(MissingSource(rec.layer_id, rec.name, rec.source, local_p))
 
         self._open_seq = base_seq + len(spec.layers)
@@ -2039,9 +2111,7 @@ class MainWindow(QMainWindow):
             f"重试任务 {spec.task_id}：attempt {spec.attempt} → {next_spec.attempt}（同一 task_id）",
             "scheduler",
         )
-        self.status_bar.showMessage(
-            f"重试任务 {spec.task_id}：第 {next_spec.attempt} 次尝试"
-        )
+        self.status_bar.showMessage(f"重试任务 {spec.task_id}：第 {next_spec.attempt} 次尝试")
         self.submit_task(next_spec)
 
     def load_result_to_layer(self, result: TaskResult) -> None:
@@ -2122,9 +2192,7 @@ class MainWindow(QMainWindow):
             "layer_names": [ly.name for ly in self.layer_panel.layers],
         }
         sidecar = target.with_name(target.name + ".json")
-        sidecar.write_text(
-            json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
+        sidecar.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
         self.status_bar.showMessage(f"视图已导出：{target}（元数据：{sidecar.name}）")
         return target
 
@@ -2140,9 +2208,7 @@ class MainWindow(QMainWindow):
         preferred = "COG" if "云优化" in selected else None
         self.export_layer_raster(path, driver=_export_driver(Path(path), preferred))
 
-    def export_layer_raster(
-        self, path: Path | str, driver: str | None = None
-    ) -> bool:
+    def export_layer_raster(self, path: Path | str, driver: str | None = None) -> bool:
         """把当前图层另存为带地理参考的数据集，走与工具箱相同的真实 worker 通道。
 
         复用 ``gdal:translate`` 的参数契约与校验，不另造一套导出执行链路；

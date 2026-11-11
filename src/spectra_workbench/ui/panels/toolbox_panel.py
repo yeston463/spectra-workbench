@@ -133,7 +133,10 @@ class ToolboxPanel(QWidget):
 
             item = QTreeWidgetItem([f"{c.name} ({c.capability_id})", state_str])
             item.setData(0, Qt.ItemDataRole.UserRole, c)
-            item.setToolTip(0, f"【{c.name}】\n标识符: {c.capability_id}\n引擎: {c.engine.provider_id.upper()}\n状态: {state_str}\n\n{c.description or '暂无详细描述'}")
+            item.setToolTip(
+                0,
+                f"【{c.name}】\n标识符: {c.capability_id}\n引擎: {c.engine.provider_id.upper()}\n状态: {state_str}\n\n{c.description or '暂无详细描述'}",
+            )
             item.setToolTip(1, f"引擎: {c.engine.provider_id.upper()}\n状态: {state_str}")
 
             if is_conn:
@@ -179,6 +182,7 @@ class ToolboxPanel(QWidget):
 
     def select_capability(self, capability_id: str) -> None:
         """根据 capability_id 自动定位并选中树节点。"""
+
         def _search_node(node: QTreeWidgetItem | None) -> bool:
             if node is None:
                 return False

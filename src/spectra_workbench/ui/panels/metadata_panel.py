@@ -72,7 +72,9 @@ class MetadataPanel(QWidget):
 
         row = QVBoxLayout()
         self.cmb_subdataset = QComboBox()
-        self.cmb_subdataset.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        self.cmb_subdataset.setSizeAdjustPolicy(
+            QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
+        )
         self.cmb_subdataset.setMinimumContentsLength(18)
         self.cmb_subdataset.currentIndexChanged.connect(self._on_subdataset_combo_changed)
         row.addWidget(self.cmb_subdataset)
@@ -140,9 +142,7 @@ class MetadataPanel(QWidget):
                 self.tbl_fields.setItem(i, col, QTableWidgetItem(value))
 
         extent = lyr.get("extent")
-        extent_text = (
-            ", ".join(f"{v:g}" for v in extent) if isinstance(extent, list) else "不可用"
-        )
+        extent_text = ", ".join(f"{v:g}" for v in extent) if isinstance(extent, list) else "不可用"
         fc = lyr.get("feature_count")
         if fc is None:
             fc_text = "未知（驱动未提供或需昂贵扫描）"

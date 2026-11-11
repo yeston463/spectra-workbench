@@ -270,9 +270,7 @@ def parse_node(raw: Any, index: int, seen_ids: set[str]) -> dict[str, Any]:
             )
         if mode == "literal" and (len(entry) < 2 or not isinstance(entry[1], str)):
             raise WorkflowValidationError(f"节点 {nid} 输入 {port!r} literal 缺少路径")
-        if mode == "node" and (
-            len(entry) < 3 or not all(isinstance(x, str) for x in entry[1:3])
-        ):
+        if mode == "node" and (len(entry) < 3 or not all(isinstance(x, str) for x in entry[1:3])):
             raise WorkflowValidationError(
                 f"节点 {nid} 输入 {port!r} node 需要 [node_id, output_key]"
             )
@@ -322,9 +320,7 @@ def render_workflow_nodes(doc: dict[str, Any]) -> tuple[list[dict[str, Any]], di
     4. 资源汇总：按引擎计数的节点分布（不承诺未实现的估算数值）。
     """
     seen: set[str] = set()
-    nodes_list: list[dict[str, Any]] = [
-        parse_node(n, i, seen) for i, n in enumerate(doc["nodes"])
-    ]
+    nodes_list: list[dict[str, Any]] = [parse_node(n, i, seen) for i, n in enumerate(doc["nodes"])]
     by_id = {n["id"]: n for n in nodes_list}
 
     # --- 引用完整性 + 端口类型检查 ---
@@ -401,9 +397,7 @@ def write_report(path: Path | str, payload: dict[str, Any]) -> Path:
     """把 workflow report / cache manifest 写为 JSON（UTF-8 无 BOM）。"""
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=1), encoding="utf-8"
-    )
+    target.write_text(json.dumps(payload, ensure_ascii=False, indent=1), encoding="utf-8")
     return target
 
 
@@ -471,9 +465,7 @@ def run_workflow(
             return _fingerprint_file(Path(entry["path"]), strong=strong_check)
         up_fp = current_output_fp.get(entry["node_id"], {}).get(entry["output_key"])
         if up_fp is None:
-            raise WorkflowError(
-                f"节点 {node_id}.{port} 的上游 {entry['node_id']} 尚无可用输出指纹"
-            )
+            raise WorkflowError(f"节点 {node_id}.{port} 的上游 {entry['node_id']} 尚无可用输出指纹")
         return up_fp
 
     for node in ordered:
@@ -483,11 +475,7 @@ def run_workflow(
         ):
             report.mark(nid, status="pending", error={"code": "skipped", "message": "前序节点失败"})
             continue
-        failed_up = [
-            d
-            for d in deps[nid]
-            if report.entries[d]["status"] in ("failed", "pending")
-        ]
+        failed_up = [d for d in deps[nid] if report.entries[d]["status"] in ("failed", "pending")]
         if continue_on_error and failed_up:
             report.mark(
                 nid,
@@ -510,9 +498,7 @@ def run_workflow(
                 uri = (
                     _as_uri(entry["path"])
                     if entry["mode"] == "literal"
-                    else current_output_uri.get(entry["node_id"], {}).get(
-                        entry["output_key"], ""
-                    )
+                    else current_output_uri.get(entry["node_id"], {}).get(entry["output_key"], "")
                 )
                 input_refs[port] = {"uri": uri, "kind": entry["kind"]}
                 input_fps[port] = _resolve_input_fp(nid, port, entry)
@@ -531,12 +517,8 @@ def run_workflow(
         if isinstance(prev, dict) and prev.get("status") == "succeeded":
             key_ok = prev.get("node_key") == node_key
             prev_inputs = prev.get("inputs") or {}
-            inputs_ok = (
-                set(prev_inputs) == set(node["inputs"])
-                and all(
-                    _fingerprints_equal(input_fps[p], prev_inputs.get(p))
-                    for p in node["inputs"]
-                )
+            inputs_ok = set(prev_inputs) == set(node["inputs"]) and all(
+                _fingerprints_equal(input_fps[p], prev_inputs.get(p)) for p in node["inputs"]
             )
             outputs_ok = True
             prev_outputs = prev.get("outputs") or {}
@@ -546,9 +528,7 @@ def run_workflow(
                     outputs_ok = False
                     break
                 try:
-                    current = _fingerprint_file(
-                        _uri_to_path(prev_out["uri"]), strong=strong_check
-                    )
+                    current = _fingerprint_file(_uri_to_path(prev_out["uri"]), strong=strong_check)
                 except WorkflowError:
                     outputs_ok = False
                     break
@@ -562,9 +542,7 @@ def run_workflow(
                 nid,
                 task_id=prev.get("task_id"),
                 status="cached",
-                outputs=[
-                    out.get("uri", "") for out in prev_outputs.values() if out.get("uri")
-                ],
+                outputs=[out.get("uri", "") for out in prev_outputs.values() if out.get("uri")],
                 cache={"hit": True, "reason": "node_key/输入指纹/输出指纹未变"},
             )
             current_output_fp[nid] = {

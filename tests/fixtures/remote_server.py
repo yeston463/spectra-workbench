@@ -55,12 +55,14 @@ class LocalHttpRangeServer:
         class RangeHandler(http.server.BaseHTTPRequestHandler):
             def _record_request(self, method: str) -> None:
                 with outer._lock:
-                    outer.requests.append({
-                        "method": method,
-                        "path": self.path,
-                        "headers": dict(self.headers),
-                        "range": self.headers.get("Range"),
-                    })
+                    outer.requests.append(
+                        {
+                            "method": method,
+                            "path": self.path,
+                            "headers": dict(self.headers),
+                            "range": self.headers.get("Range"),
+                        }
+                    )
 
             def _handle_failure(self) -> bool:
                 with outer._lock:

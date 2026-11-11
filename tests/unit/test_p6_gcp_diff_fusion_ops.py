@@ -73,9 +73,7 @@ def test_quadratic_transform_needs_polynomial2_and_reports_independent_error() -
         affine["coef_x"], affine["coef_y"], px[20:], py[20:], order=1
     )
     affine_err = float(np.sqrt(np.mean((check_x - x[20:]) ** 2 + (check_y - y[20:]) ** 2)))
-    check_x2, check_y2 = apply_polynomial(
-        quad["coef_x"], quad["coef_y"], px[20:], py[20:], order=2
-    )
+    check_x2, check_y2 = apply_polynomial(quad["coef_x"], quad["coef_y"], px[20:], py[20:], order=2)
     quad_err = float(np.sqrt(np.mean((check_x2 - x[20:]) ** 2 + (check_y2 - y[20:]) ** 2)))
     assert affine_err > 0.01
     assert quad_err <= 1e-10

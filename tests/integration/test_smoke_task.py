@@ -42,8 +42,22 @@ from spectra_workbench.workers.process import WorkerProcess
 pytestmark = [pytest.mark.integration, pytest.mark.engine]
 
 EXPECTED_FIRST_ROW = [
-    0.0, 17.0, 34.0, 51.0, 68.0, 85.0, 102.0, 119.0,
-    136.0, 153.0, 170.0, 187.0, 204.0, 221.0, 238.0, 255.0
+    0.0,
+    17.0,
+    34.0,
+    51.0,
+    68.0,
+    85.0,
+    102.0,
+    119.0,
+    136.0,
+    153.0,
+    170.0,
+    187.0,
+    204.0,
+    221.0,
+    238.0,
+    255.0,
 ]
 
 
@@ -177,7 +191,9 @@ def test_gdal_smoke_task_via_qt_client():
                 "    'first_row': arr[0], 'last_row': arr[-1]\n"
                 "}))\n"
             )
-            p = subprocess.run([gdal_py, "-c", verify_script], capture_output=True, text=True, env=env)
+            p = subprocess.run(
+                [gdal_py, "-c", verify_script], capture_output=True, text=True, env=env
+            )
             assert p.returncode == 0, f"GDAL 深度校验失败: {p.stderr}"
             probe_data = json.loads(p.stdout.strip())
 
@@ -236,7 +252,9 @@ def test_output_overwrite_protection_preserves_existing_target():
         sentinel_content = b"SENTINEL BYTES - MUST NOT BE OVERWRITTEN"
         protected_target.write_bytes(sentinel_content)
 
-        worker = WorkerProcess(provider_id="gdal", worker_id="test-overwrite-guard", project_root=root)
+        worker = WorkerProcess(
+            provider_id="gdal", worker_id="test-overwrite-guard", project_root=root
+        )
         try:
             worker.start(timeout=15.0)
 
@@ -245,11 +263,24 @@ def test_output_overwrite_protection_preserves_existing_target():
                 task_id="t-conflict-01",
                 capability_id="gdal:translate",
                 descriptor_revision="1.0",
-                engine=EngineConstraint(provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"),
+                engine=EngineConstraint(
+                    provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"
+                ),
                 project_root=str(temp_root),
                 workspace=str(temp_root / "workspace"),
-                inputs={"input": DatasetRef(dataset_id="in", kind=DatasetKind.raster, uri=in_dat.as_uri())},
-                outputs=[OutputPlan(key="output", kind=DatasetKind.raster, uri=protected_target.as_uri(), overwrite=False)],
+                inputs={
+                    "input": DatasetRef(
+                        dataset_id="in", kind=DatasetKind.raster, uri=in_dat.as_uri()
+                    )
+                },
+                outputs=[
+                    OutputPlan(
+                        key="output",
+                        kind=DatasetKind.raster,
+                        uri=protected_target.as_uri(),
+                        overwrite=False,
+                    )
+                ],
                 parameters={"format": "GTiff"},
             )
             res_conflict = worker.execute_task(spec_conflict, timeout=20.0)
@@ -265,11 +296,24 @@ def test_output_overwrite_protection_preserves_existing_target():
                 task_id="t-conflict-02",
                 capability_id="gdal:translate",
                 descriptor_revision="1.0",
-                engine=EngineConstraint(provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"),
+                engine=EngineConstraint(
+                    provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"
+                ),
                 project_root=str(temp_root),
                 workspace=str(temp_root / "workspace"),
-                inputs={"input": DatasetRef(dataset_id="in", kind=DatasetKind.raster, uri=in_dat.as_uri())},
-                outputs=[OutputPlan(key="output", kind=DatasetKind.raster, uri=protected_target.as_uri(), overwrite=True)],
+                inputs={
+                    "input": DatasetRef(
+                        dataset_id="in", kind=DatasetKind.raster, uri=in_dat.as_uri()
+                    )
+                },
+                outputs=[
+                    OutputPlan(
+                        key="output",
+                        kind=DatasetKind.raster,
+                        uri=protected_target.as_uri(),
+                        overwrite=True,
+                    )
+                ],
                 parameters={"format": "GTiff"},
             )
             res_overwrite = worker.execute_task(spec_overwrite, timeout=20.0)
@@ -294,7 +338,9 @@ def test_envi_dataset_sidecar_commit_and_reopen():
         temp_root = Path(temp_dir)
         envi_target = temp_root / "converted_envi.dat"
 
-        worker = WorkerProcess(provider_id="gdal", worker_id="test-envi-sidecars", project_root=root)
+        worker = WorkerProcess(
+            provider_id="gdal", worker_id="test-envi-sidecars", project_root=root
+        )
         try:
             worker.start(timeout=15.0)
 
@@ -302,11 +348,25 @@ def test_envi_dataset_sidecar_commit_and_reopen():
                 task_id="t-envi-01",
                 capability_id="gdal:translate",
                 descriptor_revision="1.0",
-                engine=EngineConstraint(provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"),
+                engine=EngineConstraint(
+                    provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"
+                ),
                 project_root=str(temp_root),
                 workspace=str(temp_root / "workspace"),
-                inputs={"input": DatasetRef(dataset_id="in", kind=DatasetKind.raster, uri=in_dat.as_uri())},
-                outputs=[OutputPlan(key="output", kind=DatasetKind.raster, uri=envi_target.as_uri(), driver="ENVI", overwrite=True)],
+                inputs={
+                    "input": DatasetRef(
+                        dataset_id="in", kind=DatasetKind.raster, uri=in_dat.as_uri()
+                    )
+                },
+                outputs=[
+                    OutputPlan(
+                        key="output",
+                        kind=DatasetKind.raster,
+                        uri=envi_target.as_uri(),
+                        driver="ENVI",
+                        overwrite=True,
+                    )
+                ],
                 parameters={"format": "ENVI"},
             )
             res = worker.execute_task(spec, timeout=20.0)
@@ -332,7 +392,12 @@ def test_envi_dataset_sidecar_commit_and_reopen():
                 "assert ds.RasterXSize == 16 and ds.RasterYSize == 16\n"
                 "print('ENVI_REOPEN_OK')\n"
             )
-            p = subprocess.run([str(gdal_rt["python"]), "-c", check_script], env=gdal_rt["env"], capture_output=True, text=True)
+            p = subprocess.run(
+                [str(gdal_rt["python"]), "-c", check_script],
+                env=gdal_rt["env"],
+                capture_output=True,
+                text=True,
+            )
             assert p.returncode == 0, f"ENVI 重新打开失败: {p.stderr}"
             assert "ENVI_REOPEN_OK" in p.stdout
 
@@ -365,11 +430,21 @@ def test_project_relative_output_resolution_independent_of_cwd():
                 task_id="t-rel-01",
                 capability_id="gdal:translate",
                 descriptor_revision="1.0",
-                engine=EngineConstraint(provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"),
+                engine=EngineConstraint(
+                    provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"
+                ),
                 project_root=str(user_project),
                 workspace=str(temp_root / "workspace"),
-                inputs={"input": DatasetRef(dataset_id="in", kind=DatasetKind.raster, uri=in_dat.as_uri())},
-                outputs=[OutputPlan(key="output", kind=DatasetKind.raster, uri=rel_output, overwrite=True)],
+                inputs={
+                    "input": DatasetRef(
+                        dataset_id="in", kind=DatasetKind.raster, uri=in_dat.as_uri()
+                    )
+                },
+                outputs=[
+                    OutputPlan(
+                        key="output", kind=DatasetKind.raster, uri=rel_output, overwrite=True
+                    )
+                ],
                 parameters={"format": "GTiff"},
             )
             res = worker.execute_task(spec, timeout=20.0)
@@ -381,7 +456,9 @@ def test_project_relative_output_resolution_independent_of_cwd():
             unexpected_file = isolated_worker_cwd / rel_output
 
             assert expected_file.exists(), f"文件未生成在声明的项目目录下: {expected_file}"
-            assert not unexpected_file.exists(), f"文件被错误写入 worker 当前工作目录下: {unexpected_file}"
+            assert not unexpected_file.exists(), (
+                f"文件被错误写入 worker 当前工作目录下: {unexpected_file}"
+            )
 
             worker.stop()
         finally:
@@ -401,9 +478,14 @@ def test_commit_failure_preserves_original_target_and_staged():
         existing.write_bytes(original_data)
         staged.write_bytes(staged_data)
 
-        ctx = ExecutionContext(task_id="review-commit-failure", workspace=temp_root, staging_dir=temp_root / "staging")
+        ctx = ExecutionContext(
+            task_id="review-commit-failure", workspace=temp_root, staging_dir=temp_root / "staging"
+        )
         caught = None
-        with patch("spectra_workbench.providers.base.shutil.move", side_effect=OSError("injected move failure")):
+        with patch(
+            "spectra_workbench.providers.base.shutil.move",
+            side_effect=OSError("injected move failure"),
+        ):
             try:
                 ctx.commit_file(staged, existing, overwrite=True)
             except OSError as exc:
@@ -424,7 +506,9 @@ def test_input_output_same_file_rejected():
 
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_root = Path(temp_dir)
-        worker = WorkerProcess(provider_id="gdal", worker_id="test-same-file-rejection", project_root=root)
+        worker = WorkerProcess(
+            provider_id="gdal", worker_id="test-same-file-rejection", project_root=root
+        )
         try:
             worker.start(timeout=15.0)
 
@@ -432,11 +516,21 @@ def test_input_output_same_file_rejected():
                 task_id="t-samefile-01",
                 capability_id="gdal:translate",
                 descriptor_revision="1.0",
-                engine=EngineConstraint(provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"),
+                engine=EngineConstraint(
+                    provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"
+                ),
                 project_root=str(temp_root),
                 workspace=str(temp_root / "workspace"),
-                inputs={"input": DatasetRef(dataset_id="in", kind=DatasetKind.raster, uri=in_dat.as_uri())},
-                outputs=[OutputPlan(key="output", kind=DatasetKind.raster, uri=in_dat.as_uri(), overwrite=True)],
+                inputs={
+                    "input": DatasetRef(
+                        dataset_id="in", kind=DatasetKind.raster, uri=in_dat.as_uri()
+                    )
+                },
+                outputs=[
+                    OutputPlan(
+                        key="output", kind=DatasetKind.raster, uri=in_dat.as_uri(), overwrite=True
+                    )
+                ],
                 parameters={"format": "GTiff"},
             )
             res = worker.execute_task(spec, timeout=20.0)
@@ -467,11 +561,25 @@ def test_gdal_warp_reprojection_numerical_and_crs():
                 task_id="warp-3857-smoke",
                 capability_id="gdal:warp",
                 descriptor_revision="1.0",
-                engine=EngineConstraint(provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"),
+                engine=EngineConstraint(
+                    provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"
+                ),
                 project_root=str(temp_root),
                 workspace=str(temp_root / "workspace"),
-                inputs={"input": DatasetRef(dataset_id="source", kind=DatasetKind.raster, uri=in_dat.as_uri())},
-                outputs=[OutputPlan(key="output", kind=DatasetKind.raster, uri=target_tif.as_uri(), driver="GTiff", overwrite=True)],
+                inputs={
+                    "input": DatasetRef(
+                        dataset_id="source", kind=DatasetKind.raster, uri=in_dat.as_uri()
+                    )
+                },
+                outputs=[
+                    OutputPlan(
+                        key="output",
+                        kind=DatasetKind.raster,
+                        uri=target_tif.as_uri(),
+                        driver="GTiff",
+                        overwrite=True,
+                    )
+                ],
                 parameters={"dstSRS": "EPSG:3857", "resampleAlg": "bilinear"},
             )
             res = worker.execute_task(spec, timeout=20.0)
@@ -519,7 +627,9 @@ def test_gdal_worker_unsupported_capability_rejection():
         temp_root = Path(temp_dir)
         target_tif = temp_root / "should_not_exist.tif"
 
-        worker = WorkerProcess(provider_id="gdal", worker_id="test-unsupported-cap", project_root=root)
+        worker = WorkerProcess(
+            provider_id="gdal", worker_id="test-unsupported-cap", project_root=root
+        )
         try:
             worker.start(timeout=15.0)
 
@@ -527,11 +637,24 @@ def test_gdal_worker_unsupported_capability_rejection():
                 task_id="unsupported-retile-test",
                 capability_id="gdal:retile",
                 descriptor_revision="1.0",
-                engine=EngineConstraint(provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"),
+                engine=EngineConstraint(
+                    provider_id="gdal", runtime_id="gdal-qgis", expected_version="3.13.3"
+                ),
                 project_root=str(temp_root),
                 workspace=str(temp_root / "workspace"),
-                inputs={"input": DatasetRef(dataset_id="source", kind=DatasetKind.raster, uri=in_dat.as_uri())},
-                outputs=[OutputPlan(key="output", kind=DatasetKind.raster, uri=target_tif.as_uri(), driver="GTiff")],
+                inputs={
+                    "input": DatasetRef(
+                        dataset_id="source", kind=DatasetKind.raster, uri=in_dat.as_uri()
+                    )
+                },
+                outputs=[
+                    OutputPlan(
+                        key="output",
+                        kind=DatasetKind.raster,
+                        uri=target_tif.as_uri(),
+                        driver="GTiff",
+                    )
+                ],
                 parameters={},
             )
             res = worker.execute_task(spec, timeout=20.0)
@@ -565,11 +688,25 @@ def test_rasterio_worker_convert_and_unsupported_rejection():
                 task_id="rio-convert-ok",
                 capability_id="rasterio:convert",
                 descriptor_revision="1.0",
-                engine=EngineConstraint(provider_id="rasterio", runtime_id="sw-rasterio", expected_version="1.5.2"),
+                engine=EngineConstraint(
+                    provider_id="rasterio", runtime_id="sw-rasterio", expected_version="1.5.2"
+                ),
                 project_root=str(temp_root),
                 workspace=str(temp_root / "workspace"),
-                inputs={"input": DatasetRef(dataset_id="source", kind=DatasetKind.raster, uri=in_dat.as_uri())},
-                outputs=[OutputPlan(key="output", kind=DatasetKind.raster, uri=target_tif.as_uri(), driver="GTiff", overwrite=True)],
+                inputs={
+                    "input": DatasetRef(
+                        dataset_id="source", kind=DatasetKind.raster, uri=in_dat.as_uri()
+                    )
+                },
+                outputs=[
+                    OutputPlan(
+                        key="output",
+                        kind=DatasetKind.raster,
+                        uri=target_tif.as_uri(),
+                        driver="GTiff",
+                        overwrite=True,
+                    )
+                ],
                 parameters={},
             )
             res_ok = worker.execute_task(spec_ok, timeout=20.0)
@@ -581,11 +718,21 @@ def test_rasterio_worker_convert_and_unsupported_rejection():
                 task_id="rio-warp-unsupported",
                 capability_id="rasterio:warp",
                 descriptor_revision="1.0",
-                engine=EngineConstraint(provider_id="rasterio", runtime_id="sw-rasterio", expected_version="1.5.2"),
+                engine=EngineConstraint(
+                    provider_id="rasterio", runtime_id="sw-rasterio", expected_version="1.5.2"
+                ),
                 project_root=str(temp_root),
                 workspace=str(temp_root / "workspace"),
-                inputs={"input": DatasetRef(dataset_id="source", kind=DatasetKind.raster, uri=in_dat.as_uri())},
-                outputs=[OutputPlan(key="output", kind=DatasetKind.raster, uri=bad_tif.as_uri(), driver="GTiff")],
+                inputs={
+                    "input": DatasetRef(
+                        dataset_id="source", kind=DatasetKind.raster, uri=in_dat.as_uri()
+                    )
+                },
+                outputs=[
+                    OutputPlan(
+                        key="output", kind=DatasetKind.raster, uri=bad_tif.as_uri(), driver="GTiff"
+                    )
+                ],
                 parameters={},
             )
             res_bad = worker.execute_task(spec_bad, timeout=20.0)

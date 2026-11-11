@@ -74,10 +74,19 @@ if TYPE_CHECKING:
 
 #: 输出格式下拉的候选项按能力族切换：
 #: 栅格成果走栅格驱动矩阵，矢量成果（P5-02 polygonize/contour）走 OGR 驱动。
-_RASTER_FORMAT_ITEMS = ["GTiff (GeoTIFF)", "ENVI (.dat/.hdr)", "COG (云优化 GeoTIFF)", "PNG", "JPEG"]
-_VECTOR_FORMAT_ITEMS = ["GPKG (GeoPackage)", "GeoJSON (.geojson)", "Shapefile (.shp)", "FlatGeobuf (.fgb)"]
-
-
+_RASTER_FORMAT_ITEMS = [
+    "GTiff (GeoTIFF)",
+    "ENVI (.dat/.hdr)",
+    "COG (云优化 GeoTIFF)",
+    "PNG",
+    "JPEG",
+]
+_VECTOR_FORMAT_ITEMS = [
+    "GPKG (GeoPackage)",
+    "GeoJSON (.geojson)",
+    "Shapefile (.shp)",
+    "FlatGeobuf (.fgb)",
+]
 
 
 class CapabilityFormWidget(QWidget):
@@ -151,9 +160,7 @@ class CapabilityFormWidget(QWidget):
         # --- 多输入（P4-02 拼接 / VRT / 堆叠）---
         # 顺序即输入顺序，而输入顺序决定重叠优先级（GDAL「后加入者优先」），
         # 因此必须可增删且可上下移动，不能只做一个无序集合。
-        self.lbl_inputs = QLabel(
-            "输入源列表（顺序决定重叠优先级：first=先列的胜，last=后列的胜）:"
-        )
+        self.lbl_inputs = QLabel("输入源列表（顺序决定重叠优先级：first=先列的胜，last=后列的胜）:")
         self.lst_inputs = QListWidget()
         self.lst_inputs.setMinimumHeight(90)
         self.btn_add_input = QPushButton("添加...")
@@ -191,7 +198,9 @@ class CapabilityFormWidget(QWidget):
         # 专有参数行
         # --- 格式选择 ---
         self.cmb_format = QComboBox()
-        self.cmb_format.addItems(["GTiff (GeoTIFF)", "ENVI (.dat/.hdr)", "COG (云优化 GeoTIFF)", "PNG", "JPEG"])
+        self.cmb_format.addItems(
+            ["GTiff (GeoTIFF)", "ENVI (.dat/.hdr)", "COG (云优化 GeoTIFF)", "PNG", "JPEG"]
+        )
         self.lbl_format = QLabel("输出格式 (Format):")
         self.params_form.addRow(self.lbl_format, self.cmb_format)
 
@@ -382,7 +391,9 @@ class CapabilityFormWidget(QWidget):
         self.params_form.addRow(self.lbl_vt_select, self.txt_vt_select)
 
         self.txt_vt_dst_srs = QLineEdit()
-        self.txt_vt_dst_srs.setPlaceholderText("留空=保持源 CRS；例：EPSG:4326（输出 X=经度, Y=纬度）")
+        self.txt_vt_dst_srs.setPlaceholderText(
+            "留空=保持源 CRS；例：EPSG:4326（输出 X=经度, Y=纬度）"
+        )
         self.lbl_vt_dst_srs = QLabel("目标 CRS (dstSRS):")
         self.params_form.addRow(self.lbl_vt_dst_srs, self.txt_vt_dst_srs)
 
@@ -727,7 +738,9 @@ class CapabilityFormWidget(QWidget):
         self.params_form.addRow(self.lbl_fvc_class_edges, self.txt_fvc_class_edges)
 
         self.txt_fvc_mask = QLineEdit()
-        self.txt_fvc_mask.setPlaceholderText("可选：单波段掩膜（1=有效，0=无效；可由 gdal:mask 生成）")
+        self.txt_fvc_mask.setPlaceholderText(
+            "可选：单波段掩膜（1=有效，0=无效；可由 gdal:mask 生成）"
+        )
         self.btn_browse_fvc_mask = QPushButton("选择...")
         self.btn_browse_fvc_mask.clicked.connect(self._browse_fvc_mask)
         fvc_mask_row = QHBoxLayout()
@@ -852,7 +865,9 @@ class CapabilityFormWidget(QWidget):
 
         # --- P8-01 多维数组二维切片 ---
         self.txt_mdim_array = QLineEdit()
-        self.txt_mdim_array.setPlaceholderText("多维数组名（例：temp / sst；点工具箱探测多维树后填入）")
+        self.txt_mdim_array.setPlaceholderText(
+            "多维数组名（例：temp / sst；点工具箱探测多维树后填入）"
+        )
         self.lbl_mdim_array = QLabel("数组 (array):")
         self.params_form.addRow(self.lbl_mdim_array, self.txt_mdim_array)
 
@@ -947,20 +962,24 @@ class CapabilityFormWidget(QWidget):
 
         # --- 数据类型 ---
         self.cmb_out_type = QComboBox()
-        self.cmb_out_type.addItems(["保持原样 (Default)", "Byte (uint8)", "UInt16", "Int16", "Float32", "Float64"])
+        self.cmb_out_type.addItems(
+            ["保持原样 (Default)", "Byte (uint8)", "UInt16", "Int16", "Float32", "Float64"]
+        )
         self.lbl_out_type = QLabel("输出数据类型:")
         self.params_form.addRow(self.lbl_out_type, self.cmb_out_type)
 
         # --- 目标坐标系 (Warp) ---
         self.cmb_dst_crs = QComboBox()
         self.cmb_dst_crs.setEditable(True)
-        self.cmb_dst_crs.addItems([
-            "EPSG:3857",
-            "EPSG:4326",
-            "EPSG:32650",
-            "EPSG:32649",
-            "EPSG:32651",
-        ])
+        self.cmb_dst_crs.addItems(
+            [
+                "EPSG:3857",
+                "EPSG:4326",
+                "EPSG:32650",
+                "EPSG:32649",
+                "EPSG:32651",
+            ]
+        )
         self.lbl_dst_crs = QLabel("目标坐标系 (Dst SRS):")
         self.params_form.addRow(self.lbl_dst_crs, self.cmb_dst_crs)
 
@@ -986,7 +1005,7 @@ class CapabilityFormWidget(QWidget):
         main_layout.addWidget(scroll, stretch=1)
 
         # 4. 底部执行提交按钮
-        self.btn_submit = QPushButton("🚀 提交执行任务 (Run Task)")
+        self.btn_submit = QPushButton("提交执行任务 (Run Task)")
         self.btn_submit.setStyleSheet(
             "QPushButton { background-color: #27ae60; color: white; font-weight: bold; "
             "font-size: 13px; padding: 10px; border-radius: 4px; } "
@@ -1000,9 +1019,7 @@ class CapabilityFormWidget(QWidget):
     def set_project_root(self, root: Path | str) -> None:
         self._project_root = Path(root).resolve()
 
-    def set_metadata_provider(
-        self, provider: Callable[[Path], dict[str, Any]] | None
-    ) -> None:
+    def set_metadata_provider(self, provider: Callable[[Path], dict[str, Any]] | None) -> None:
         """注入 GUI 侧只读元数据提供者（通常由 MainWindow 调用 worker probe）。"""
         self._metadata_provider = provider
 
@@ -1049,15 +1066,13 @@ class CapabilityFormWidget(QWidget):
         if not is_connected:
             self.grp_params.setEnabled(False)
             self.lbl_unsupported_banner.setVisible(True)
-            reasons = "; ".join(cap.limitations) if cap.limitations else "平台适配器当前尚未接入该算法执行通道。"
-            req_lines = [
-                f"{r.name}{r.constraint or ''} ({r.reason})"
-                for r in cap.requirements
-            ]
-            ep_lines = [
-                f"{e.kind}: {e.target} (available={e.available})"
-                for e in cap.entrypoints
-            ]
+            reasons = (
+                "; ".join(cap.limitations)
+                if cap.limitations
+                else "平台适配器当前尚未接入该算法执行通道。"
+            )
+            req_lines = [f"{r.name}{r.constraint or ''} ({r.reason})" for r in cap.requirements]
+            ep_lines = [f"{e.kind}: {e.target} (available={e.available})" for e in cap.entrypoints]
             extra_details = ""
             if req_lines:
                 extra_details += f"\n依赖要求: {'; '.join(req_lines)}"
@@ -1069,14 +1084,14 @@ class CapabilityFormWidget(QWidget):
                 f"限制与缺口说明: {reasons}{extra_details}"
             )
             self.btn_submit.setEnabled(False)
-            self.btn_submit.setText("🚫 暂未接入平台，禁止提交")
+            self.btn_submit.setText("暂未接入平台，禁止提交")
             return
 
         # 3. 已接通能力配置
         self.grp_params.setEnabled(True)
         self.lbl_unsupported_banner.setVisible(False)
         self.btn_submit.setEnabled(True)
-        self.btn_submit.setText("🚀 提交执行任务 (Run Task)")
+        self.btn_submit.setText("提交执行任务 (Run Task)")
 
         cid = cap.capability_id
         is_warp = "warp" in cid
@@ -1088,11 +1103,7 @@ class CapabilityFormWidget(QWidget):
 
         # 显示或隐藏相应字段（统计报告输出 JSON artifact，不显示栅格格式选项）
         show_format = (
-            is_translate
-            or is_warp
-            or is_rasterio
-            or "calc" in sup
-            or supports_output_format(cid)
+            is_translate or is_warp or is_rasterio or "calc" in sup or supports_output_format(cid)
         )
         self.lbl_format.setVisible(show_format)
         self.cmb_format.setVisible(show_format)
@@ -1132,28 +1143,18 @@ class CapabilityFormWidget(QWidget):
         )
         self._set_row_visible(self.lbl_band_list, self.txt_band_list, "bandList" in sup)
         # P5-02 地形分析
-        self._set_row_visible(
-            self.lbl_dem_processing, self.cmb_dem_processing, "processing" in sup
-        )
+        self._set_row_visible(self.lbl_dem_processing, self.cmb_dem_processing, "processing" in sup)
         self._set_row_visible(self.lbl_dem_zfactor, self.spin_dem_zfactor, "zFactor" in sup)
         self._set_row_visible(self.lbl_dem_scale, self.spin_dem_scale, "scale" in sup)
         # P5-02 矢量栅格化
-        self._set_row_visible(
-            self.lbl_burn_values, self.txt_burn_values, "burnValues" in sup
-        )
+        self._set_row_visible(self.lbl_burn_values, self.txt_burn_values, "burnValues" in sup)
         self._set_row_visible(self.lbl_attribute, self.txt_attribute, "attribute" in sup)
-        self._set_row_visible(
-            self.lbl_all_touched, self.chk_all_touched, "allTouched" in sup
-        )
+        self._set_row_visible(self.lbl_all_touched, self.chk_all_touched, "allTouched" in sup)
         # P5-02 散点栅格插值
-        self._set_row_visible(
-            self.lbl_grid_algorithm, self.cmb_grid_algorithm, "algorithm" in sup
-        )
+        self._set_row_visible(self.lbl_grid_algorithm, self.cmb_grid_algorithm, "algorithm" in sup)
         self._set_row_visible(self.lbl_zfield, self.txt_zfield, "zField" in sup)
         # P5-02 栅格矢量化（成果为矢量）
-        self._set_row_visible(
-            self.lbl_field_name, self.txt_field_name, "fieldName" in sup
-        )
+        self._set_row_visible(self.lbl_field_name, self.txt_field_name, "fieldName" in sup)
         self._set_row_visible(
             self.lbl_connectedness, self.cmb_connectedness, "connectedness" in sup
         )
@@ -1163,12 +1164,8 @@ class CapabilityFormWidget(QWidget):
         self._set_row_visible(
             self.lbl_contour_interval, self.spin_contour_interval, "interval" in sup
         )
-        self._set_row_visible(
-            self.lbl_contour_offset, self.spin_contour_offset, "offset" in sup
-        )
-        self._set_row_visible(
-            self.lbl_fixed_levels, self.txt_fixed_levels, "fixedLevels" in sup
-        )
+        self._set_row_visible(self.lbl_contour_offset, self.spin_contour_offset, "offset" in sup)
+        self._set_row_visible(self.lbl_fixed_levels, self.txt_fixed_levels, "fixedLevels" in sup)
         # P5-04 矢量处理 / SQL / 坐标转换
         for label, widget, key in (
             (self.lbl_vt_sql, self.txt_vt_sql, "sql"),
@@ -1183,80 +1180,54 @@ class CapabilityFormWidget(QWidget):
         self._set_row_visible(self.lbl_band_a, self.spin_band_a, "bandA" in sup)
         self._set_row_visible(self.lbl_band_b, self.spin_band_b, "bandB" in sup)
         self._set_row_visible(self.lbl_savi_l, self.spin_savi_l, "saviL" in sup)
-        self._set_row_visible(
-            self.lbl_use_physical, self.chk_use_physical, "usePhysical" in sup
-        )
+        self._set_row_visible(self.lbl_use_physical, self.chk_use_physical, "usePhysical" in sup)
         # P6-02 FFT 滤波 / 去条纹
-        self._set_row_visible(
-            self.lbl_fft_band, self.spin_fft_band, "fftBand" in sup
-        )
-        self._set_row_visible(
-            self.lbl_fft_suppress, self.txt_fft_suppress, "suppressBins" in sup
-        )
+        self._set_row_visible(self.lbl_fft_band, self.spin_fft_band, "fftBand" in sup)
+        self._set_row_visible(self.lbl_fft_suppress, self.txt_fft_suppress, "suppressBins" in sup)
         # P6-03 PCA 正/逆变换
         self._set_row_visible(self.lbl_pca_mode, self.cmb_pca_mode, "pcaMode" in sup)
         self._set_row_visible(
             self.lbl_pca_components, self.spin_pca_components, "pcaComponents" in sup
         )
-        self._set_row_visible(
-            self.lbl_pca_matrix, self.cmb_pca_matrix, "pcaMatrix" in sup
-        )
-        self._set_row_visible(
-            self.lbl_pca_transform, self.txt_pca_transform, "pcaTransform" in sup
-        )
+        self._set_row_visible(self.lbl_pca_matrix, self.cmb_pca_matrix, "pcaMatrix" in sup)
+        self._set_row_visible(self.lbl_pca_transform, self.txt_pca_transform, "pcaTransform" in sup)
         self.btn_browse_pca_transform.setVisible("pcaTransform" in sup)
         # P6-03 缨帽变换
         self._set_row_visible(self.lbl_tc_sensor, self.cmb_tc_sensor, "tcSensor" in sup)
         self._set_row_visible(self.lbl_tc_bands, self.txt_tc_bands, "tcBands" in sup)
-        self._set_row_visible(
-            self.lbl_tc_source_title, self.lbl_tc_source, "tcSensor" in sup
-        )
+        self._set_row_visible(self.lbl_tc_source_title, self.lbl_tc_source, "tcSensor" in sup)
         # P6-04 GCP 配准
-        self._set_row_visible(
-            self.lbl_gcp_transform, self.cmb_gcp_transform, "gcpTransform" in sup
-        )
+        self._set_row_visible(self.lbl_gcp_transform, self.cmb_gcp_transform, "gcpTransform" in sup)
         self._set_row_visible(self.lbl_gcp_file, self.txt_gcp_file, "gcpFile" in sup)
         self.btn_browse_gcp_file.setVisible("gcpFile" in sup)
         self._set_row_visible(
-            self.lbl_gcp_reference, self.txt_gcp_reference, "referenceFile" in sup and "gcpFile" in sup
+            self.lbl_gcp_reference,
+            self.txt_gcp_reference,
+            "referenceFile" in sup and "gcpFile" in sup,
         )
-        self.btn_browse_gcp_reference.setVisible(
-            "referenceFile" in sup and "gcpFile" in sup
-        )
-        self._set_row_visible(
-            self.lbl_gcp_resample, self.cmb_gcp_resample, "gcpResample" in sup
-        )
+        self.btn_browse_gcp_reference.setVisible("referenceFile" in sup and "gcpFile" in sup)
+        self._set_row_visible(self.lbl_gcp_resample, self.cmb_gcp_resample, "gcpResample" in sup)
         # P6-04 栅格差值
+        self._set_row_visible(self.lbl_diff_mode, self.cmb_diff_mode, "diffMode" in sup)
         self._set_row_visible(
-            self.lbl_diff_mode, self.cmb_diff_mode, "diffMode" in sup
+            self.lbl_diff_reference,
+            self.txt_diff_reference,
+            "referenceFile" in sup and "diffMode" in sup,
         )
-        self._set_row_visible(
-            self.lbl_diff_reference, self.txt_diff_reference, "referenceFile" in sup and "diffMode" in sup
-        )
-        self.btn_browse_diff_reference.setVisible(
-            "referenceFile" in sup and "diffMode" in sup
-        )
+        self.btn_browse_diff_reference.setVisible("referenceFile" in sup and "diffMode" in sup)
         # P6-04 融合
         self._set_row_visible(self.lbl_fusion_ms, self.txt_fusion_ms, "msFile" in sup)
         self.btn_browse_fusion_ms.setVisible("msFile" in sup)
-        self._set_row_visible(
-            self.lbl_fusion_ms_bands, self.txt_fusion_ms_bands, "msBands" in sup
-        )
-        self._set_row_visible(
-            self.lbl_fusion_method, self.cmb_fusion_method, "fusionMethod" in sup
-        )
+        self._set_row_visible(self.lbl_fusion_ms_bands, self.txt_fusion_ms_bands, "msBands" in sup)
+        self._set_row_visible(self.lbl_fusion_method, self.cmb_fusion_method, "fusionMethod" in sup)
         self._set_row_visible(
             self.lbl_fusion_resample, self.cmb_fusion_resample, "fusionResample" in sup
         )
         # P6-05 二值掩膜
-        self._set_row_visible(
-            self.lbl_mask_band, self.spin_mask_band, "maskBand" in sup
-        )
+        self._set_row_visible(self.lbl_mask_band, self.spin_mask_band, "maskBand" in sup)
         self._set_row_visible(self.lbl_mask_low, self.txt_mask_low, "maskLow" in sup)
         self._set_row_visible(self.lbl_mask_high, self.txt_mask_high, "maskHigh" in sup)
-        self._set_row_visible(
-            self.lbl_mask_invert, self.chk_mask_invert, "maskInvert" in sup
-        )
+        self._set_row_visible(self.lbl_mask_invert, self.chk_mask_invert, "maskInvert" in sup)
         # P9-02 杂斑滤除 / 无效值填补 / 近黑边清理 / 邻近距离 / 视域
         for row_lbl, row_wgt, param_k in (
             (self.lbl_sieve_threshold, self.spin_sieve_threshold, "threshold"),
@@ -1276,13 +1247,9 @@ class CapabilityFormWidget(QWidget):
             self._set_row_visible(row_lbl, row_wgt, param_k in sup)
         # P6-05 FVC
         self._set_row_visible(self.lbl_fvc_band, self.spin_fvc_band, "fvcBand" in sup)
-        self._set_row_visible(
-            self.lbl_fvc_mode, self.cmb_fvc_mode, "endmemberMode" in sup
-        )
+        self._set_row_visible(self.lbl_fvc_mode, self.cmb_fvc_mode, "endmemberMode" in sup)
         self._set_row_visible(self.lbl_fvc_low, self.spin_fvc_low, "lowPercentile" in sup)
-        self._set_row_visible(
-            self.lbl_fvc_high, self.spin_fvc_high, "highPercentile" in sup
-        )
+        self._set_row_visible(self.lbl_fvc_high, self.spin_fvc_high, "highPercentile" in sup)
         self._set_row_visible(self.lbl_fvc_soil, self.txt_fvc_soil, "fvcSoil" in sup)
         self._set_row_visible(self.lbl_fvc_veg, self.txt_fvc_veg, "fvcVeg" in sup)
         self._set_row_visible(
@@ -1311,26 +1278,18 @@ class CapabilityFormWidget(QWidget):
         self._set_row_visible(self.lbl_dos_band, self.spin_dos_band, "dosBand" in sup)
         self._set_row_visible(self.lbl_haze_dn, self.txt_haze_dn, "hazeDN" in sup)
         self._set_row_visible(self.lbl_dos_esun, self.txt_dos_esun, "dosEsun" in sup)
-        self._set_row_visible(
-            self.lbl_dos_sun_zen, self.txt_dos_sun_zen, "sunZenAngle" in sup
-        )
+        self._set_row_visible(self.lbl_dos_sun_zen, self.txt_dos_sun_zen, "sunZenAngle" in sup)
         self._set_row_visible(self.lbl_dos_gain, self.txt_dos_gain, "dosGain" in sup)
         self._set_row_visible(self.lbl_dos_offset, self.txt_dos_offset, "dosOffset" in sup)
-        self._set_row_visible(
-            self.lbl_dos_dist, self.txt_dos_dist, "earthSunDistance" in sup
-        )
+        self._set_row_visible(self.lbl_dos_dist, self.txt_dos_dist, "earthSunDistance" in sup)
         # P6-06 去云
         self._set_row_visible(
             self.lbl_cloud_secondary, self.txt_cloud_secondary, "secondaryFile" in sup
         )
         self.btn_browse_cloud_secondary.setVisible("secondaryFile" in sup)
-        self._set_row_visible(
-            self.lbl_cloud_mask, self.txt_cloud_mask, "cloudMaskFile" in sup
-        )
+        self._set_row_visible(self.lbl_cloud_mask, self.txt_cloud_mask, "cloudMaskFile" in sup)
         self.btn_browse_cloud_mask.setVisible("cloudMaskFile" in sup)
-        self._set_row_visible(
-            self.lbl_cloud_band_list, self.txt_cloud_band_list, "bandList" in sup
-        )
+        self._set_row_visible(self.lbl_cloud_band_list, self.txt_cloud_band_list, "bandList" in sup)
         self._set_row_visible(
             self.lbl_cloud_primary_time, self.txt_cloud_primary_time, "primaryTime" in sup
         )
@@ -1343,12 +1302,12 @@ class CapabilityFormWidget(QWidget):
             self.lbl_cloud_dilate, self.spin_cloud_dilate, "maskDilatePixels" in sup
         )
         self._set_row_visible(self.lbl_levels, self.txt_levels, "levels" in sup)
-        self._set_row_visible(self.lbl_ovr_compress, self.cmb_ovr_compress, "overviewCompress" in sup)
+        self._set_row_visible(
+            self.lbl_ovr_compress, self.cmb_ovr_compress, "overviewCompress" in sup
+        )
         # P8-01 多维切片
         self._set_row_visible(self.lbl_mdim_array, self.txt_mdim_array, "array" in sup)
-        self._set_row_visible(
-            self.lbl_mdim_select, self.txt_mdim_select, "dimSelect" in sup
-        )
+        self._set_row_visible(self.lbl_mdim_select, self.txt_mdim_select, "dimSelect" in sup)
         # P4-04
         self._set_row_visible(self.lbl_calc, self.txt_calc, "calc" in sup)
         self._set_row_visible(self.lbl_stats_mode, self.cmb_stats_mode, "statisticsMode" in sup)
@@ -1358,9 +1317,15 @@ class CapabilityFormWidget(QWidget):
 
         # P4-01：裁剪 / 重采样 / 输出网格
         self._set_row_visible(self.lbl_clip, self.txt_clip, is_translate or is_warp)
-        self._set_row_visible(self.lbl_xres, self.spin_xres, is_translate or is_warp or is_rasterize)
-        self._set_row_visible(self.lbl_yres, self.spin_yres, is_translate or is_warp or is_rasterize)
-        self._set_row_visible(self.lbl_outsize, self.txt_outsize, is_translate or is_warp or is_rasterize or is_grid)
+        self._set_row_visible(
+            self.lbl_xres, self.spin_xres, is_translate or is_warp or is_rasterize
+        )
+        self._set_row_visible(
+            self.lbl_yres, self.spin_yres, is_translate or is_warp or is_rasterize
+        )
+        self._set_row_visible(
+            self.lbl_outsize, self.txt_outsize, is_translate or is_warp or is_rasterize or is_grid
+        )
         self._set_row_visible(self.lbl_tap, self.chk_tap, is_warp)
 
         # 切换能力时**隔离状态**：把新能力不适用的控件值重置。
@@ -1374,7 +1339,10 @@ class CapabilityFormWidget(QWidget):
     def _add_input_files(self) -> None:
         """向多输入列表追加文件（可多选）。"""
         paths, _ = QFileDialog.getOpenFileNames(
-            self, "选择输入影像（可多选）", str(self._project_root), "栅格影像 (*.tif *.tiff *.img *.dat *.vrt);;全部文件 (*)"
+            self,
+            "选择输入影像（可多选）",
+            str(self._project_root),
+            "栅格影像 (*.tif *.tiff *.img *.dat *.vrt);;全部文件 (*)",
         )
         for path in paths:
             self.lst_inputs.addItem(path)
@@ -1715,11 +1683,7 @@ class CapabilityFormWidget(QWidget):
         if "burnValues" in supported:
             raw_burn = self.txt_burn_values.text().strip()
             if raw_burn:
-                parts_burn = [
-                    x.strip()
-                    for x in raw_burn.replace(";", ",").split(",")
-                    if x.strip()
-                ]
+                parts_burn = [x.strip() for x in raw_burn.replace(";", ",").split(",") if x.strip()]
                 burns: list[float] = []
                 for part in parts_burn:
                     try:
@@ -1792,9 +1756,7 @@ class CapabilityFormWidget(QWidget):
         if "spat" in supported:
             raw_spat = self.txt_vt_spat.text().strip()
             if raw_spat:
-                parts_spat = [
-                    x.strip() for x in raw_spat.replace(";", ",").split(",") if x.strip()
-                ]
+                parts_spat = [x.strip() for x in raw_spat.replace(";", ",").split(",") if x.strip()]
                 if len(parts_spat) != 4:
                     return params, f"spat 需要逗号分隔的 minx,miny,maxx,maxy，当前为：{raw_spat}"
                 try:
@@ -1845,8 +1807,7 @@ class CapabilityFormWidget(QWidget):
                     ]
                     if len(parts_bin) != 2:
                         return params, (
-                            "suppressBins 每对必须是 [fy,fx] 两个整数，"
-                            f"当前片段为：{chunk}"
+                            f"suppressBins 每对必须是 [fy,fx] 两个整数，当前片段为：{chunk}"
                         )
                     try:
                         fy, fx = int(parts_bin[0]), int(parts_bin[1])
@@ -2137,7 +2098,9 @@ class CapabilityFormWidget(QWidget):
             raw_values = self.txt_prox_values.text().strip()
             if raw_values:
                 values_out: list[float] = []
-                for part in raw_values.replace(";", ",").replace("；", ",").replace("，", ",").split(","):
+                for part in (
+                    raw_values.replace(";", ",").replace("；", ",").replace("，", ",").split(",")
+                ):
                     part = part.strip()
                     if not part:
                         continue
@@ -2212,7 +2175,10 @@ class CapabilityFormWidget(QWidget):
         if clip_text and "srcWin" in supported:
             parts = [x.strip() for x in clip_text.replace(";", ",").split(",") if x.strip()]
             if len(parts) != 4:
-                return params, "裁剪窗口需要 4 个整数（xoff, yoff, xsize, ysize），例如：10,20,100,80"
+                return (
+                    params,
+                    "裁剪窗口需要 4 个整数（xoff, yoff, xsize, ysize），例如：10,20,100,80",
+                )
             try:
                 clip_vals = [int(x) for x in parts]
             except ValueError:
@@ -2351,7 +2317,11 @@ class CapabilityFormWidget(QWidget):
             self.set_input_path(path)
 
     def _browse_output(self) -> None:
-        init_dir = str(Path(self.txt_input.text()).parent) if self.txt_input.text() else str(self._project_root)
+        init_dir = (
+            str(Path(self.txt_input.text()).parent)
+            if self.txt_input.text()
+            else str(self._project_root)
+        )
         path, _ = QFileDialog.getSaveFileName(
             self,
             "选择输出文件",
@@ -2424,9 +2394,7 @@ class CapabilityFormWidget(QWidget):
                 if not transform_text:
                     return "PCA inverse 模式必须选择 .pca.json 变换文件"
                 try:
-                    payload = json.loads(
-                        Path(transform_text).read_text(encoding="utf-8")
-                    )
+                    payload = json.loads(Path(transform_text).read_text(encoding="utf-8"))
                 except (OSError, json.JSONDecodeError) as exc:
                     return f"无法读取 PCA 变换文件：{exc}"
                 bands = int(payload.get("band_count") or 0)
@@ -2556,8 +2524,7 @@ class CapabilityFormWidget(QWidget):
             )
             return "；".join(fixed_violations) if fixed_violations else None
         has_nodata_param = any(
-            params.get(key) is not None
-            for key in ("srcNodata", "vrtNodata", "dstNodata", "noData")
+            params.get(key) is not None for key in ("srcNodata", "vrtNodata", "dstNodata", "noData")
         )
         if out_fmt.upper() in {"PNG", "JPEG"} and has_nodata_param:
             return f"{out_fmt} 不支持 NoData；请改用 GTiff/COG/ENVI 或清除 NoData 参数"
@@ -2670,19 +2637,21 @@ class CapabilityFormWidget(QWidget):
         out_p = Path(out_str).resolve()
 
         if in_place and (len(in_paths) != 1 or in_paths[0] != out_p):
-                QMessageBox.warning(
-                    self,
-                    "in-place 校验",
-                    "元数据编辑/概览构建为就地更新：输出路径必须与输入路径完全相同。",
-                )
-                return
+            QMessageBox.warning(
+                self,
+                "in-place 校验",
+                "元数据编辑/概览构建为就地更新：输出路径必须与输入路径完全相同。",
+            )
+            return
 
         for in_p in in_paths:
             if not in_p.exists():
                 QMessageBox.warning(self, "输入不存在", f"输入文件不存在:\n{in_p}")
                 return
         if any(in_p == out_p for in_p in in_paths):
-            QMessageBox.critical(self, "同源冲突", "输入路径与输出路径指向同一文件，操作已被安全拒绝！")
+            QMessageBox.critical(
+                self, "同源冲突", "输入路径与输出路径指向同一文件，操作已被安全拒绝！"
+            )
             return
 
         # 组装 TaskSpec
@@ -2720,7 +2689,9 @@ class CapabilityFormWidget(QWidget):
                 params["output_type"] = raw_type.split()[0]
             co_text = self.txt_co.text().strip()
             if co_text:
-                params["creation_options"] = [opt.strip() for opt in co_text.split(",") if opt.strip()]
+                params["creation_options"] = [
+                    opt.strip() for opt in co_text.split(",") if opt.strip()
+                ]
 
         elif "rasterio" in cid:
             params["driver"] = out_fmt
@@ -2810,7 +2781,9 @@ class CapabilityFormWidget(QWidget):
             task_id=task_id,
             attempt=1,
             capability_id=cid,
-            descriptor_revision=self._current_cap.descriptor_revision if self._current_cap else "1.0",
+            descriptor_revision=self._current_cap.descriptor_revision
+            if self._current_cap
+            else "1.0",
             engine=EngineConstraint(
                 provider_id=provider_id,
                 runtime_id=runtime_id,

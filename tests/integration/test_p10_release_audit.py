@@ -33,18 +33,23 @@ def test_p10_04_checklist_and_capability_audit_compliance():
     assert report["platform_executable"]["count"] >= 29
 
     # 核心红线：未解释缺口必须严格为 0
-    assert len(report.get("unexplained_gaps", [])) == 0, f"存在未解释缺口: {report.get('unexplained_gaps')}"
+    assert len(report.get("unexplained_gaps", [])) == 0, (
+        f"存在未解释缺口: {report.get('unexplained_gaps')}"
+    )
 
     # 验证所有 missing / blocked 均包含充分的 limitations 局限性声明，杜绝用简化公式冒充
     missing_items = report["missing"]["items"]
     assert len(missing_items) == 13, f"缺失项计数不符: {len(missing_items)}"
     for item in missing_items:
-        assert item.get("limitations") and len(item["limitations"]) > 0, f"能力 {item['capability_id']} 缺少 limitations 说明"
+        assert item.get("limitations") and len(item["limitations"]) > 0, (
+            f"能力 {item['capability_id']} 缺少 limitations 说明"
+        )
         # 验证说明包含具体替代或未实现原因
         text = " ".join(item["limitations"])
-        assert any(k in text for k in ["未实现", "替代", "不承诺", "sw-rasterio", "QGIS", "blocked", "外部"]), (
-            f"能力 {item['capability_id']} 的 limitations 描述不充分: {text}"
-        )
+        assert any(
+            k in text
+            for k in ["未实现", "替代", "不承诺", "sw-rasterio", "QGIS", "blocked", "外部"]
+        ), f"能力 {item['capability_id']} 的 limitations 描述不充分: {text}"
 
 
 @pytest.mark.integration

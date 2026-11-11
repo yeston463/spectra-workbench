@@ -369,7 +369,9 @@ def test_gui_statistics_full_limit_is_enforced(qapp, gdal_rt, tmp_path) -> None:
     assert not out.exists(), "全量统计超限不得静默降级或产出报告"
 
 
-def test_gui_statistics_rejects_non_json_output_without_modal(qapp, gdal_rt, tmp_path, monkeypatch) -> None:
+def test_gui_statistics_rejects_non_json_output_without_modal(
+    qapp, gdal_rt, tmp_path, monkeypatch
+) -> None:
     src = _make_raster(gdal_rt, tmp_path / "stats_suffix_src.tif", [[1, 2]])
     form, emitted = _form_for(tmp_path, "gdal:statistics")
     warnings: list[str] = []

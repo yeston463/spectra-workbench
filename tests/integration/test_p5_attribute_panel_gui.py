@@ -135,8 +135,7 @@ def test_attribute_panel_pages_through_150_points(
 
         # 表头：FID | 几何 | value | name
         headers = [
-            model.headerData(c, Qt.Orientation.Horizontal)
-            for c in range(model.columnCount())
+            model.headerData(c, Qt.Orientation.Horizontal) for c in range(model.columnCount())
         ]
         assert headers == ["FID", "几何", "value", "name"], headers
         assert model.rowCount() == 100

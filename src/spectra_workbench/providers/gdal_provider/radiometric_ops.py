@@ -71,9 +71,7 @@ def run_calibration(
     gdal = _gdal()
     mode_name = str(mode or "physical").strip().lower()
     if mode_name not in CALIBRATE_MODES:
-        raise CalibrateError(
-            f"未知定标模式 {mode!r}；可用：{', '.join(CALIBRATE_MODES)}"
-        )
+        raise CalibrateError(f"未知定标模式 {mode!r}；可用：{', '.join(CALIBRATE_MODES)}")
     if not math.isfinite(dst_nodata):
         raise CalibrateError(f"输出 NoData 必须为有限值，实际 {dst_nodata}")
     if not source.exists():
@@ -96,9 +94,7 @@ def run_calibration(
         for band_index in range(1, n_bands + 1):
             band = ds.GetRasterBand(band_index)
             if gdal.DataTypeIsComplex(band.DataType):
-                raise CalibrateError(
-                    f"定标仅支持实数波段，波段 {band_index} 是复数类型"
-                )
+                raise CalibrateError(f"定标仅支持实数波段，波段 {band_index} 是复数类型")
             raw_obj = band.ReadAsArray()
             if raw_obj is None:
                 raise CalibrateError(f"无法读取波段 {band_index}")
@@ -115,9 +111,7 @@ def run_calibration(
     esun_norm = [float(v) for v in esun] if esun else None
     if mode_name == "physical":
         if gains_norm is not None and len(gains_norm) != n_bands:
-            raise CalibrateError(
-                f"calibrateGains 数量 {len(gains_norm)} 与波段数 {n_bands} 不一致"
-            )
+            raise CalibrateError(f"calibrateGains 数量 {len(gains_norm)} 与波段数 {n_bands} 不一致")
         if offsets_norm is not None and len(offsets_norm) != n_bands:
             raise CalibrateError(
                 f"calibrateOffsets 数量 {len(offsets_norm)} 与波段数 {n_bands} 不一致"
@@ -133,9 +127,7 @@ def run_calibration(
         if sun_zen_angle is None:
             raise CalibrateError("endmemberMode=toa_reflectance 需要 sunZenAngle")
         if not 0.0 <= float(sun_zen_angle) < 180.0:
-            raise CalibrateError(
-                f"sunZenAngle 必须在 [0, 180) 度，实际 {sun_zen_angle}"
-            )
+            raise CalibrateError(f"sunZenAngle 必须在 [0, 180) 度，实际 {sun_zen_angle}")
         sun_zen_rad = math.radians(float(sun_zen_angle))
         cos_term = math.cos(sun_zen_rad)
         if cos_term <= 0.0:
@@ -169,9 +161,7 @@ def run_calibration(
         else:
             if esun_norm is None:  # mypy: 已在验证分支强制
                 raise CalibrateError("endmemberMode=toa_reflectance 需要 calibrateEsun")
-            output_values.append(
-                np.where(invalid, raw, sqrt_term * raw / esun_norm[idx])
-            )
+            output_values.append(np.where(invalid, raw, sqrt_term * raw / esun_norm[idx]))
     _progress(callback, 0.65, f"定标 {n_bands} 个波段")
 
     _progress(callback, 0.80, f"写出成果（{out_format} / Float32，{n_bands} 波段）")
@@ -192,9 +182,7 @@ def run_calibration(
             out_ds.SetMetadataItem("CALIBRATION_SUN_ZEN", f"{sun_zen_angle:.12g}")
         for idx in range(n_bands):
             band_out = out_ds.GetRasterBand(idx + 1)
-            arr = np.where(
-                invalid_masks[idx], dst_nodata, output_values[idx]
-            ).astype(np.float32)
+            arr = np.where(invalid_masks[idx], dst_nodata, output_values[idx]).astype(np.float32)
             band_out.WriteArray(arr)
             band_out.SetNoDataValue(float(dst_nodata))
             band_out.SetDescription(f"calibrated_B{idx + 1}")
@@ -208,9 +196,7 @@ def run_calibration(
             else:
                 if esun_norm is None:
                     raise CalibrateError("endmemberMode=toa_reflectance 需要 calibrateEsun")
-                band_out.SetMetadataItem(
-                    "CALIB_ESUN", f"{esun_norm[idx]:.12g}"
-                )
+                band_out.SetMetadataItem("CALIB_ESUN", f"{esun_norm[idx]:.12g}")
             band_out.FlushCache()
     finally:
         out_ds = None
@@ -225,15 +211,9 @@ def run_calibration(
         "formula": formula,
         "spectral_type": spectral_type,
         "bands": n_bands,
-        "sun_zen_angle": (
-            float(sun_zen_angle) if sun_zen_angle is not None else None
-        ),
-        "gains": (
-            [float(v) for v in gains_norm] if gains_norm is not None else None
-        ),
-        "offsets": (
-            [float(v) for v in offsets_norm] if offsets_norm is not None else None
-        ),
+        "sun_zen_angle": (float(sun_zen_angle) if sun_zen_angle is not None else None),
+        "gains": ([float(v) for v in gains_norm] if gains_norm is not None else None),
+        "offsets": ([float(v) for v in offsets_norm] if offsets_norm is not None else None),
         "esun": [float(v) for v in esun_norm] if esun_norm is not None else None,
         "src_nodata": src_nodata,
         "dst_nodata": float(dst_nodata),

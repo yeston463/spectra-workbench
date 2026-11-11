@@ -132,10 +132,7 @@ class TileCache:
 
     def invalidate_source(self, source: str) -> int:
         """源变化（如重新定位文件、任务覆写成果）时丢弃该源全部缓存。"""
-        doomed = [
-            k for k in self._data
-            if k.source == source or k.source.startswith(f"{source}|")
-        ]
+        doomed = [k for k in self._data if k.source == source or k.source.startswith(f"{source}|")]
         for k in doomed:
             self._sizes.pop(k, None)
             self._data.pop(k, None)

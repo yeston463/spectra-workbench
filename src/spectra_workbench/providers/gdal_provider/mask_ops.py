@@ -77,21 +77,19 @@ def compute_mask(
 def _read_band(ds: Any, band_index: int, src_nodata: float | None) -> tuple[np.ndarray, np.ndarray]:
     gdal = _gdal()
     if band_index < 1 or band_index > int(ds.RasterCount):
-        raise MaskError(
-            f"maskBand={band_index} 超出范围（数据集共 {ds.RasterCount} 个波段）"
-        )
+        raise MaskError(f"maskBand={band_index} 超出范围（数据集共 {ds.RasterCount} 个波段）")
     band = ds.GetRasterBand(band_index)
     if gdal.DataTypeIsComplex(band.DataType):
-        raise MaskError(
-            f"掩膜生成仅支持实数波段，波段 {band_index} 是复数类型"
-        )
+        raise MaskError(f"掩膜生成仅支持实数波段，波段 {band_index} 是复数类型")
     raw_obj = band.ReadAsArray()
     if raw_obj is None:
         raise MaskError(f"无法读取波段 {band_index}")
     raw = np.asarray(raw_obj, dtype=np.float64)
     label = band.GetNoDataValue()
-    nodata = float(src_nodata) if src_nodata is not None else (
-        float(label) if label is not None else None
+    nodata = (
+        float(src_nodata)
+        if src_nodata is not None
+        else (float(label) if label is not None else None)
     )
     valid = np.isfinite(raw)
     if nodata is not None:

@@ -58,7 +58,9 @@ def _make_raster(
     alpha: bool = False,
 ) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
-    np_dtype = {"Byte": "uint8", "UInt16": "uint16", "Float32": "float32", "Float64": "float64"}[dtype]
+    np_dtype = {"Byte": "uint8", "UInt16": "uint16", "Float32": "float32", "Float64": "float64"}[
+        dtype
+    ]
     alpha_stmt = (
         f"    if i == {bands}:\n        b.SetColorInterpretation(gdal.GCI_AlphaBand)\n"
         if alpha
@@ -186,9 +188,7 @@ def test_desktop_merge_first_last_order_load_and_reopen(
     qapp: QApplication, gdal_rt: dict[str, Any], tmp_path: Path
 ) -> None:
     a = _make_raster(gdal_rt, tmp_path / "a.tif", value=10.0)
-    b = _make_raster(
-        gdal_rt, tmp_path / "b.tif", value=20.0, gt=(102.0, 1.0, 0.0, 28.0, 0.0, -1.0)
-    )
+    b = _make_raster(gdal_rt, tmp_path / "b.tif", value=20.0, gt=(102.0, 1.0, 0.0, 28.0, 0.0, -1.0))
     out_last = tmp_path / "merge_last.tif"
     out_first = tmp_path / "merge_first.tif"
     project = tmp_path / "desktop_merge.spectra.json"

@@ -64,17 +64,11 @@ class OptionalExtensionSpec(ContractModel):
     @model_validator(mode="after")
     def _enforce_not_falsely_implemented(self) -> OptionalExtensionSpec:
         if self.implemented:
-            raise ValueError(
-                f"可选扩展 {self.extension_id} 尚未实现，禁止将 implemented 设为 True"
-            )
+            raise ValueError(f"可选扩展 {self.extension_id} 尚未实现，禁止将 implemented 设为 True")
         if self.availability == Availability.ready:
-            raise ValueError(
-                f"未实现的可选扩展 {self.extension_id} 禁止声明 availability=ready"
-            )
+            raise ValueError(f"未实现的可选扩展 {self.extension_id} 禁止声明 availability=ready")
         if any(ep.available for ep in self.planned_entrypoints):
-            raise ValueError(
-                f"未实现的可选扩展 {self.extension_id} 禁止声明 available=True 的入口"
-            )
+            raise ValueError(f"未实现的可选扩展 {self.extension_id} 禁止声明 available=True 的入口")
         if not self.gaps:
             raise ValueError(f"可选扩展 {self.extension_id} 必须提供明确的缺口说明")
         return self
@@ -616,9 +610,7 @@ def get_optional_extension_spec(extension_id: str) -> OptionalExtensionSpec | No
 
 def list_optional_extension_specs() -> list[OptionalExtensionSpec]:
     """返回全部已登记的可选引擎扩展规格（按 extension_id 排序）。"""
-    return [
-        _SPEC_BY_ID[k] for k in sorted(_SPEC_BY_ID.keys())
-    ]
+    return [_SPEC_BY_ID[k] for k in sorted(_SPEC_BY_ID.keys())]
 
 
 def build_optional_extension_descriptors() -> list[CapabilityDescriptor]:
@@ -673,9 +665,7 @@ def audit_optional_extensions() -> dict[str, Any]:
                 "non_goals": list(spec.non_goals),
                 "core_alternatives": list(spec.core_alternatives),
                 "requirements": [r.to_contract_dict() for r in spec.requirements],
-                "planned_entrypoints": [
-                    ep.to_contract_dict() for ep in spec.planned_entrypoints
-                ],
+                "planned_entrypoints": [ep.to_contract_dict() for ep in spec.planned_entrypoints],
                 "gaps": list(spec.gaps),
                 "presence": desc.state.presence.value,
                 "binding": desc.state.binding.value,

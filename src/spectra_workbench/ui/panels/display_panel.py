@@ -153,9 +153,11 @@ class DisplayPanel(QWidget):
         root.addStretch()
 
     # ------------------------------------------------------------------ 绑定
-    def set_layer(self, band_count: int, settings: DisplaySettings | None) -> None:
+    def set_layer(
+        self, band_count: int, settings: DisplaySettings | None, bad_bands: list[int] | None = None
+    ) -> None:
         self._band_count = max(0, int(band_count))
-        self._populate_bands(self._band_count)
+        self._populate_bands(self._band_count, bad_bands=bad_bands)
         if settings is not None:
             self._settings = settings.model_copy(deep=True)
         self._sync_widgets_from_settings()
@@ -223,18 +225,30 @@ class DisplayPanel(QWidget):
     def current_settings(self) -> DisplaySettings:
         return self._settings.model_copy(deep=True)
 
-    def _populate_bands(self, count: int) -> None:
+    def _populate_bands(self, count: int, bad_bands: list[int] | None = None) -> None:
+        bad_set = set(bad_bands or [])
         for cmb in (self.cmb_band, self.cmb_r, self.cmb_g, self.cmb_b):
             cmb.blockSignals(True)
             cmb.clear()
             for i in range(1, max(count, 1) + 1):
-                cmb.addItem(str(i), i)
+                label = f"⚠️ 波段 {i} (坏波段)" if i in bad_set else str(i)
+                cmb.addItem(label, i)
             cmb.blockSignals(False)
 
     def _sync_widgets_from_settings(self) -> None:
         s = self._settings
-        for cmb in (self.cmb_mode, self.cmb_band, self.cmb_r, self.cmb_g, self.cmb_b,
-                    self.cmb_stretch, self.cmb_cmap, self.spin_lo, self.spin_hi, self.spin_opacity):
+        for cmb in (
+            self.cmb_mode,
+            self.cmb_band,
+            self.cmb_r,
+            self.cmb_g,
+            self.cmb_b,
+            self.cmb_stretch,
+            self.cmb_cmap,
+            self.spin_lo,
+            self.spin_hi,
+            self.spin_opacity,
+        ):
             cmb.blockSignals(True)
         self.cmb_mode.setCurrentIndex(
             [DisplayMode.gray, DisplayMode.rgb, DisplayMode.pseudo].index(s.mode)
@@ -243,14 +257,29 @@ class DisplayPanel(QWidget):
         self._set_combo(self.cmb_r, s.rgb_bands[0])
         self._set_combo(self.cmb_g, s.rgb_bands[1])
         self._set_combo(self.cmb_b, s.rgb_bands[2])
-        idx = [StretchMode.none, StretchMode.min_max, StretchMode.percentile, StretchMode.stddev].index(s.stretch)
+        idx = [
+            StretchMode.none,
+            StretchMode.min_max,
+            StretchMode.percentile,
+            StretchMode.stddev,
+        ].index(s.stretch)
         self.cmb_stretch.setCurrentIndex(idx)
         self._set_combo(self.cmb_cmap, s.pseudocolor)
         self.spin_lo.setValue(float(s.percentiles[0]))
         self.spin_hi.setValue(float(s.percentiles[1]))
         self.spin_opacity.setValue(float(s.opacity))
-        for cmb in (self.cmb_mode, self.cmb_band, self.cmb_r, self.cmb_g, self.cmb_b,
-                    self.cmb_stretch, self.cmb_cmap, self.spin_lo, self.spin_hi, self.spin_opacity):
+        for cmb in (
+            self.cmb_mode,
+            self.cmb_band,
+            self.cmb_r,
+            self.cmb_g,
+            self.cmb_b,
+            self.cmb_stretch,
+            self.cmb_cmap,
+            self.spin_lo,
+            self.spin_hi,
+            self.spin_opacity,
+        ):
             cmb.blockSignals(False)
 
     @staticmethod

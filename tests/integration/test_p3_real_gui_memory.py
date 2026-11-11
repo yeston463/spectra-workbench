@@ -33,7 +33,9 @@ def qapp() -> QApplication:
     return app
 
 
-def _wait_layers(win: MainWindow, qapp: QApplication, count: int = 1, timeout: float = 12.0) -> None:
+def _wait_layers(
+    win: MainWindow, qapp: QApplication, count: int = 1, timeout: float = 12.0
+) -> None:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         qapp.processEvents()

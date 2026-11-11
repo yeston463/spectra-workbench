@@ -49,7 +49,12 @@ __all__ = [
     "reconstruction_metrics",
     "run_pca_forward",
     "run_pca_inverse",
+    "extract_pc_scatter",
 ]
+
+from spectra_workbench.providers.gdal_provider.spatial_analyst_ops import (
+    extract_pc_scatter,
+)
 
 PCA_TRANSFORM_TYPE = "spectra_pca_transform"
 PCA_TRANSFORM_SCHEMA = "1.0"
@@ -78,9 +83,7 @@ def _progress(callback: Callable[..., Any] | None, ratio: float, message: str) -
 def _normalize_matrix(matrix: str) -> str:
     normalized = str(matrix or "covariance").strip().lower()
     if normalized not in PCA_MATRICES:
-        raise PCAError(
-            f"未知 PCA 矩阵类型 {matrix!r}；可用：{', '.join(PCA_MATRICES)}"
-        )
+        raise PCAError(f"未知 PCA 矩阵类型 {matrix!r}；可用：{', '.join(PCA_MATRICES)}")
     return normalized
 
 
@@ -128,10 +131,7 @@ def fit_pca(
         zero_std = np.isclose(std, 0.0, atol=1e-15)
         if zero_std.any():
             bad = [str(i + 1) for i in np.flatnonzero(zero_std)]
-            raise PCAError(
-                "相关矩阵模式要求每个波段方差非零；零方差波段："
-                + ", ".join(bad)
-            )
+            raise PCAError("相关矩阵模式要求每个波段方差非零；零方差波段：" + ", ".join(bad))
         standardized = centered / std[:, None]
         covariance = standardized @ standardized.T / n_valid
     else:
@@ -296,8 +296,7 @@ def _transform_payload(
         "std": [float(v) for v in fit["std"]],
         "eigenvalues": [float(v) for v in eigenvalues],
         "eigenvectors": [
-            [float(v) for v in row]
-            for row in np.asarray(fit["eigenvectors"], dtype=np.float64)
+            [float(v) for v in row] for row in np.asarray(fit["eigenvectors"], dtype=np.float64)
         ],
         "explained_variance_ratio": [
             float(v) for v in np.asarray(fit["explained_variance_ratio"], dtype=np.float64)
@@ -379,9 +378,7 @@ def run_pca_forward(
             band_out.SetNoDataValue(float(dst_nodata))
             band_out.SetDescription(f"PC{idx + 1}")
             band_out.SetMetadataItem("EIGENVALUE", f"{eigenvalues[idx]:.12g}")
-            band_out.SetMetadataItem(
-                "EXPLAINED_VARIANCE_RATIO", f"{explained[idx]:.12g}"
-            )
+            band_out.SetMetadataItem("EXPLAINED_VARIANCE_RATIO", f"{explained[idx]:.12g}")
             band_out.SetMetadataItem("PCA_MATRIX", str(fit["matrix"]))
             band_out.FlushCache()
     finally:
@@ -422,9 +419,7 @@ def load_transform(path: Path) -> dict[str, Any]:
     if payload.get("type") != PCA_TRANSFORM_TYPE:
         raise PCAError(f"不是 PCA 变换文件（type={payload.get('type')!r}）: {path}")
     if str(payload.get("schema_version")) != PCA_TRANSFORM_SCHEMA:
-        raise PCAError(
-            f"不支持的 PCA 变换文件版本 {payload.get('schema_version')!r}"
-        )
+        raise PCAError(f"不支持的 PCA 变换文件版本 {payload.get('schema_version')!r}")
     matrix = _normalize_matrix(str(payload.get("matrix") or "covariance"))
     try:
         mean = np.asarray(payload["mean"], dtype=np.float64)
@@ -496,16 +491,12 @@ def run_pca_inverse(
         else:
             k = int(components)
             if k < 1 or k > min(available, n_bands):
-                raise PCAError(
-                    f"components 必须在 [1, {min(available, n_bands)}]，实际 {k}"
-                )
+                raise PCAError(f"components 必须在 [1, {min(available, n_bands)}]，实际 {k}")
         width, height = int(ds.RasterXSize), int(ds.RasterYSize)
         gt = tuple(float(v) for v in (ds.GetGeoTransform() or ()))
         proj = ds.GetProjectionRef() or ""
         _progress(callback, 0.30, f"读取 {k} 个主成分")
-        comps, valid, _labels = _read_bands(
-            ds, list(range(1, k + 1)), src_nodata
-        )
+        comps, valid, _labels = _read_bands(ds, list(range(1, k + 1)), src_nodata)
     finally:
         ds = None
 

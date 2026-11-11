@@ -264,7 +264,9 @@ class TestCredentialStoreOperations:
         assert len(store.list_profiles()) == 1
         assert store.delete_profile("s3_prod") is False
 
-    def test_store_env_variable_override(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_store_env_variable_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         target_path = tmp_path / "env_creds.json"
         monkeypatch.setenv("SPECTRA_CREDENTIALS_FILE", str(target_path))
 
@@ -463,7 +465,9 @@ class TestOfflineModeReadiness:
             assert meta["count"] == 3
 
             # 窗口读取
-            window = worker.read_window(local_tif, x_off=0, y_off=0, win_w=64, win_h=64, out_w=64, out_h=64)
+            window = worker.read_window(
+                local_tif, x_off=0, y_off=0, win_w=64, win_h=64, out_w=64, out_h=64
+            )
             assert window["out_w"] == 64
             assert window["out_h"] == 64
             assert "b64_data" in window
@@ -543,7 +547,9 @@ class TestWorkerDynamicCredentialsAndVsiAuth:
             assert meta["count"] == 3
 
             # 6. 读取窗口：成功返回切片
-            win = worker.read_window(vsi_url, x_off=0, y_off=0, win_w=32, win_h=32, out_w=32, out_h=32)
+            win = worker.read_window(
+                vsi_url, x_off=0, y_off=0, win_w=32, win_h=32, out_w=32, out_h=32
+            )
             assert win["out_w"] == 32
             assert win["out_h"] == 32
             assert "b64_data" in win
@@ -568,7 +574,11 @@ class TestGuiCredentialIntegration:
 
         store = CredentialStore(creds_file)
         token = "gui-secret-bearer-token-456"
-        store.save_profile(CredentialProfile(profile_id="gui_bearer_prof", kind="http_bearer", credentials={"token": token}))
+        store.save_profile(
+            CredentialProfile(
+                profile_id="gui_bearer_prof", kind="http_bearer", credentials={"token": token}
+            )
+        )
 
         local_tif = _make_sample_geotiff(gdal_rt, tmp_path / "gui_auth.tif")
         server = LocalHttpRangeServer(
@@ -605,7 +615,11 @@ class TestGuiCredentialIntegration:
             # 保存项目
             proj_file = tmp_path / "gui_auth_proj.spectra.json"
             from unittest.mock import patch
-            with patch("PySide6.QtWidgets.QFileDialog.getSaveFileName", return_value=(str(proj_file), "Project")):
+
+            with patch(
+                "PySide6.QtWidgets.QFileDialog.getSaveFileName",
+                return_value=(str(proj_file), "Project"),
+            ):
                 win.save_project_action(save_as=True)
                 qapp.processEvents()
 

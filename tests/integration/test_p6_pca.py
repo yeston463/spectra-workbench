@@ -302,9 +302,7 @@ def test_pca_correlation_matrix_full_reconstruction(
 ) -> None:
     src = _make_raster(gdal_rt, tmp_path / "pca_corr_src.tif", rows=4, cols=4)
     components = tmp_path / "pca_corr.tif"
-    result = _run(
-        qapp, {"pcaMode": "forward", "pcaMatrix": "correlation"}, src, components
-    )
+    result = _run(qapp, {"pcaMode": "forward", "pcaMatrix": "correlation"}, src, components)
     assert result.status is TaskStatus.succeeded, result.error
     transform = _sidecar(components, ".pca.json")
     assert transform["matrix"] == "correlation"
@@ -368,9 +366,7 @@ def test_pca_mode_and_format_rejections(
     src = _make_raster(gdal_rt, tmp_path / "pca_reject_src.tif", rows=4, cols=4)
     out = tmp_path / "pca_reject_out.tif"
 
-    forward_with_transform = _run(
-        qapp, {"pcaMode": "forward", "pcaTransform": "x.json"}, src, out
-    )
+    forward_with_transform = _run(qapp, {"pcaMode": "forward", "pcaTransform": "x.json"}, src, out)
     assert forward_with_transform.status is TaskStatus.failed
     assert forward_with_transform.error
     assert forward_with_transform.error["code"] == "invalid_parameters"
@@ -399,9 +395,7 @@ def test_pca_mode_and_format_rejections(
     assert too_many.error["code"] == "invalid_parameters"
     assert not out.exists()
 
-    png = _run(
-        qapp, {"pcaMode": "forward", "format": "PNG"}, src, tmp_path / "pca.png"
-    )
+    png = _run(qapp, {"pcaMode": "forward", "format": "PNG"}, src, tmp_path / "pca.png")
     assert png.status is TaskStatus.failed
     assert png.error
     assert png.error["code"] == "unsupported_format_combination"

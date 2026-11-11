@@ -46,7 +46,9 @@ def qapp() -> QApplication:
     return app
 
 
-def _make_dummy_layer(layer_id: str = "L1", name: str = "Test Layer", nodata: float = -9999.0) -> LayerItem:
+def _make_dummy_layer(
+    layer_id: str = "L1", name: str = "Test Layer", nodata: float = -9999.0
+) -> LayerItem:
     meta: dict[str, Any] = {
         "width": 100,
         "height": 100,
@@ -93,7 +95,9 @@ class TestClipMaskParameterNormalization:
 
     def test_invalid_roi_points_less_than_3(self) -> None:
         with pytest.raises(ParameterError, match="必须是包含至少 3 个顶点的坐标序列"):
-            normalize_raster_params({"roiPoints": [(10, 10), (20, 20)]}, capability_id="gdal:clip_mask")
+            normalize_raster_params(
+                {"roiPoints": [(10, 10), (20, 20)]}, capability_id="gdal:clip_mask"
+            )
 
     def test_valid_cutline_path(self) -> None:
         norm = normalize_raster_params(

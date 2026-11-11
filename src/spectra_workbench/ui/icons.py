@@ -41,6 +41,7 @@ def _create_pixmap(size: int) -> tuple[QPixmap, QPainter]:
 # 1. 项目与数据图标 (File & Project)
 # ---------------------------------------------------------------------------
 
+
 def _draw_new_project(p: QPainter, s: float) -> None:
     # 白色折角纸张 + 绿色加号
     path = QPainterPath()
@@ -155,9 +156,18 @@ def _draw_open_remote(p: QPainter, s: float) -> None:
 # 2. 地图浏览与导航图标 (Map Navigation)
 # ---------------------------------------------------------------------------
 
+
 def _draw_pan(p: QPainter, s: float) -> None:
     # 经典 QGIS 平移手型 (Pan)
-    p.setPen(QPen(QColor("#2C3E50"), 1.5, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+    p.setPen(
+        QPen(
+            QColor("#2C3E50"),
+            1.5,
+            Qt.PenStyle.SolidLine,
+            Qt.PenCapStyle.RoundCap,
+            Qt.PenJoinStyle.RoundJoin,
+        )
+    )
     p.setBrush(QBrush(QColor("#F9E79F")))
     hand = QPainterPath()
     hand.moveTo(s * 0.35, s * 0.80)
@@ -206,7 +216,15 @@ def _draw_zoom_out(p: QPainter, s: float) -> None:
 
 def _draw_zoom_full(p: QPainter, s: float) -> None:
     # 适应全图 (四角向外展开箭头)
-    p.setPen(QPen(QColor("#16A085"), 2.0, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.MiterJoin))
+    p.setPen(
+        QPen(
+            QColor("#16A085"),
+            2.0,
+            Qt.PenStyle.SolidLine,
+            Qt.PenCapStyle.RoundCap,
+            Qt.PenJoinStyle.MiterJoin,
+        )
+    )
     # 左上
     p.drawLine(QPointF(s * 0.22, s * 0.38), QPointF(s * 0.22, s * 0.22))
     p.drawLine(QPointF(s * 0.22, s * 0.22), QPointF(s * 0.38, s * 0.22))
@@ -253,13 +271,22 @@ def _draw_refresh(p: QPainter, s: float) -> None:
 # 3. 显示与拉伸增强图标 (Stretch & Display - ENVI 经典)
 # ---------------------------------------------------------------------------
 
+
 def _draw_stretch_linear(p: QPainter, s: float) -> None:
     # ENVI 经典 2%~98% 线性拉伸折线 (直方图拉伸)
     p.setPen(QPen(QColor("#7F8C8D"), 1.0))
     p.drawLine(QPointF(s * 0.15, s * 0.85), QPointF(s * 0.85, s * 0.85))  # X轴
     p.drawLine(QPointF(s * 0.15, s * 0.85), QPointF(s * 0.15, s * 0.15))  # Y轴
     # 线性折线：前平、中斜、后平
-    p.setPen(QPen(QColor("#E67E22"), 2.5, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+    p.setPen(
+        QPen(
+            QColor("#E67E22"),
+            2.5,
+            Qt.PenStyle.SolidLine,
+            Qt.PenCapStyle.RoundCap,
+            Qt.PenJoinStyle.RoundJoin,
+        )
+    )
     path = QPainterPath()
     path.moveTo(s * 0.15, s * 0.85)
     path.lineTo(s * 0.30, s * 0.85)  # 2% 下限截断
@@ -282,7 +309,15 @@ def _draw_stretch_minmax(p: QPainter, s: float) -> None:
 
 def _draw_stretch_stddev(p: QPainter, s: float) -> None:
     # 正态高斯分布曲线 (2σ 标准差拉伸)
-    p.setPen(QPen(QColor("#2980B9"), 2.2, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+    p.setPen(
+        QPen(
+            QColor("#2980B9"),
+            2.2,
+            Qt.PenStyle.SolidLine,
+            Qt.PenCapStyle.RoundCap,
+            Qt.PenJoinStyle.RoundJoin,
+        )
+    )
     path = QPainterPath()
     path.moveTo(s * 0.15, s * 0.85)
     path.quadTo(s * 0.35, s * 0.80, s * 0.50, s * 0.20)  # 峰值
@@ -335,6 +370,7 @@ def _draw_sync_link(p: QPainter, s: float) -> None:
 # ---------------------------------------------------------------------------
 # 4. ROI 数字化与交互标定 (ROI & Vector Tools - ENVI 核心)
 # ---------------------------------------------------------------------------
+
 
 def _draw_roi_polygon(p: QPainter, s: float) -> None:
     # 经典多边形 ROI 绘制
@@ -399,6 +435,7 @@ def _draw_roi_delete(p: QPainter, s: float) -> None:
 # 5. 遥感专题与核心算法快捷图标 (Remote Sensing Analysis)
 # ---------------------------------------------------------------------------
 
+
 def _draw_tool_ndvi(p: QPainter, s: float) -> None:
     # 植被指数 (嫩绿色叶片)
     p.setPen(QPen(QColor("#1E8449"), 1.5))
@@ -452,7 +489,12 @@ def _draw_tool_warp(p: QPainter, s: float) -> None:
 def _draw_tool_stats(p: QPainter, s: float) -> None:
     # 统计直方图
     p.setPen(Qt.PenStyle.NoPen)
-    bars = [(0.18, 0.40, "#3498DB"), (0.36, 0.65, "#2ECC71"), (0.54, 0.80, "#E67E22"), (0.72, 0.50, "#9B59B6")]
+    bars = [
+        (0.18, 0.40, "#3498DB"),
+        (0.36, 0.65, "#2ECC71"),
+        (0.54, 0.80, "#E67E22"),
+        (0.72, 0.50, "#9B59B6"),
+    ]
     for x, h, col in bars:
         p.setBrush(QBrush(QColor(col)))
         p.drawRect(QRectF(s * x, s * (0.85 - h * 0.70), s * 0.14, s * h * 0.70))
@@ -653,7 +695,6 @@ _DRAWERS: dict[str, Callable[[QPainter, float], None]] = {
     "tool_play": _draw_tool_play,
     "tool_clip": _draw_tool_clip,
     "roi_clip": _draw_tool_clip,
-
 }
 
 

@@ -37,7 +37,7 @@ class SyntheticSampleMeta:
     name: str
     description: str
     samples: int  # width / columns
-    lines: int    # height / rows
+    lines: int  # height / rows
     bands: int
     dtype: str
     envi_data_type: int
@@ -147,7 +147,9 @@ def read_envi_raster(hdr_path: Path | str, dat_path: Path | str | None = None) -
     }
 
 
-def create_ramp_sample(samples: int = 16, lines: int = 16, min_val: float = 0.0, max_val: float = 255.0) -> tuple[bytes, dict[str, Any]]:
+def create_ramp_sample(
+    samples: int = 16, lines: int = 16, min_val: float = 0.0, max_val: float = 255.0
+) -> tuple[bytes, dict[str, Any]]:
     """A01-1 单波段水平渐变 ramp (Float32)。"""
     vals: list[float] = []
     step = (max_val - min_val) / max(1, samples - 1)
@@ -164,7 +166,9 @@ def create_ramp_sample(samples: int = 16, lines: int = 16, min_val: float = 0.0,
     return buf, stats
 
 
-def create_constant_sample(samples: int = 8, lines: int = 8, val: float = 42.0) -> tuple[bytes, dict[str, Any]]:
+def create_constant_sample(
+    samples: int = 8, lines: int = 8, val: float = 42.0
+) -> tuple[bytes, dict[str, Any]]:
     """A01-2 常量栅格 (Float32)。"""
     vals = [val] * (samples * lines)
     buf = struct.pack(f"<{len(vals)}f", *vals)
@@ -177,7 +181,9 @@ def create_constant_sample(samples: int = 8, lines: int = 8, val: float = 42.0) 
     return buf, stats
 
 
-def create_multiband_sample(samples: int = 8, lines: int = 8, bands: int = 4) -> tuple[bytes, dict[str, Any]]:
+def create_multiband_sample(
+    samples: int = 8, lines: int = 8, bands: int = 4
+) -> tuple[bytes, dict[str, Any]]:
     """A01-3 多波段已知值栅格 (UInt16)，4 波段 (模拟 Red, Green, Blue, NIR)。"""
     vals: list[int] = []
     band_stats: list[dict[str, Any]] = []
@@ -189,13 +195,15 @@ def create_multiband_sample(samples: int = 8, lines: int = 8, bands: int = 4) ->
                 v = base_val + r * 10 + c
                 b_vals.append(v)
         vals.extend(b_vals)
-        band_stats.append({
-            "band_idx": b + 1,
-            "min": min(b_vals),
-            "max": max(b_vals),
-            "first_pixel": b_vals[0],
-            "last_pixel": b_vals[-1],
-        })
+        band_stats.append(
+            {
+                "band_idx": b + 1,
+                "min": min(b_vals),
+                "max": max(b_vals),
+                "first_pixel": b_vals[0],
+                "last_pixel": b_vals[-1],
+            }
+        )
     buf = struct.pack(f"<{len(vals)}H", *vals)
     stats = {
         "bands": bands,
@@ -204,7 +212,9 @@ def create_multiband_sample(samples: int = 8, lines: int = 8, bands: int = 4) ->
     return buf, stats
 
 
-def create_nodata_sample(samples: int = 8, lines: int = 8, nodata: float = -9999.0) -> tuple[bytes, dict[str, Any]]:
+def create_nodata_sample(
+    samples: int = 8, lines: int = 8, nodata: float = -9999.0
+) -> tuple[bytes, dict[str, Any]]:
     """A01-4 包含显式 NoData 像元与合法 0 值的栅格 (Float32)。验证 NoData、mask、合法 0 值三者不混为一谈。"""
     vals: list[float] = []
     valid_count = 0
@@ -249,7 +259,10 @@ def generate_all_fixtures(output_dir: Path | str) -> dict[str, Any]:
     hdr1, dat1 = write_envi_raster(
         out_dir / "a01_ramp_16x16",
         ramp_buf,
-        16, 16, 1, "float32",
+        16,
+        16,
+        1,
+        "float32",
         map_info="UTM, 1, 1, 400000.0, 4400000.0, 30.0, 30.0, 50, North, WGS-84",
         band_names=["Ramp_Float32"],
         description="A01-1 单波段 ramp 渐变 (16x16 Float32)",
@@ -277,7 +290,10 @@ def generate_all_fixtures(output_dir: Path | str) -> dict[str, Any]:
     hdr2, dat2 = write_envi_raster(
         out_dir / "a01_constant_8x8",
         const_buf,
-        8, 8, 1, "float32",
+        8,
+        8,
+        1,
+        "float32",
         band_names=["Constant_42"],
         description="A01-2 常量像元 (8x8 Float32, 值为 42.0)",
     )
@@ -304,7 +320,10 @@ def generate_all_fixtures(output_dir: Path | str) -> dict[str, Any]:
     hdr3, dat3 = write_envi_raster(
         out_dir / "a01_multiband_4b_8x8",
         mb_buf,
-        8, 8, 4, "uint16",
+        8,
+        8,
+        4,
+        "uint16",
         band_names=["Blue", "Green", "Red", "NIR"],
         description="A01-3 多波段已知值栅格 (8x8, 4 波段 UInt16)",
     )
@@ -331,7 +350,10 @@ def generate_all_fixtures(output_dir: Path | str) -> dict[str, Any]:
     hdr4, dat4 = write_envi_raster(
         out_dir / "a01_nodata_masked_8x8",
         nd_buf,
-        8, 8, 1, "float32",
+        8,
+        8,
+        1,
+        "float32",
         nodata_value=-9999.0,
         band_names=["NoData_and_Zero"],
         description="A01-4 包含 NoData 与合法 0 值的栅格 (8x8 Float32)",

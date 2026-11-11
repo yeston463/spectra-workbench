@@ -67,7 +67,10 @@ class RasterioProviderAdapter(ProviderAdapter):
 
     def runtime_info(self) -> dict[str, Any]:
         if not RASTERIO_AVAILABLE or rasterio is None:
-            return {"available": False, "error": "rasterio module not importable in current environment"}
+            return {
+                "available": False,
+                "error": "rasterio module not importable in current environment",
+            }
 
         return {
             "available": True,
@@ -103,7 +106,9 @@ class RasterioProviderAdapter(ProviderAdapter):
             return {
                 "valid": False,
                 "code": "engine_mismatch",
-                "errors": [f"Engine provider 不匹配：期望 'rasterio'，实际 '{spec.engine.provider_id}'"],
+                "errors": [
+                    f"Engine provider 不匹配：期望 'rasterio'，实际 '{spec.engine.provider_id}'"
+                ],
                 "warnings": warnings,
             }
 
@@ -199,7 +204,10 @@ class RasterioProviderAdapter(ProviderAdapter):
                 task_id=spec.task_id,
                 attempt=spec.attempt,
                 status=TaskStatus.failed,
-                error={"code": val.get("code", "unsupported_capability"), "message": "; ".join(val["errors"])},
+                error={
+                    "code": val.get("code", "unsupported_capability"),
+                    "message": "; ".join(val["errors"]),
+                },
                 duration_seconds=0.0,
             )
 
@@ -252,7 +260,9 @@ class RasterioProviderAdapter(ProviderAdapter):
             dst_driver = spec.parameters.get("format", out_plan.driver or "GTiff")
             meta.update(driver=dst_driver)
 
-            context.progress(0.40, "processing", f"向 staging 写入成果栅格（分块流式写入）: {staging_out.name}")
+            context.progress(
+                0.40, "processing", f"向 staging 写入成果栅格（分块流式写入）: {staging_out.name}"
+            )
             with rasterio.open(str(staging_out), "w", **meta) as dst:
                 for i in range(1, src.count + 1):
                     for _, window in src.block_windows(i):
@@ -317,6 +327,7 @@ class RasterioProviderAdapter(ProviderAdapter):
     def probe_dataset(self, path: Path | str) -> dict[str, Any]:
         """通过 Rasterio 探测数据集元数据。"""
         from pathlib import Path
+
         if not RASTERIO_AVAILABLE or rasterio is None:
             raise RuntimeError("Rasterio 运行时不可用")
         p = Path(path)
@@ -329,13 +340,17 @@ class RasterioProviderAdapter(ProviderAdapter):
             gt = list(src.transform.to_gdal()) if src.transform else None
             bands_info = []
             for b_idx in range(1, src.count + 1):
-                bands_info.append({
-                    "band": b_idx,
-                    "dtype": str(src.dtypes[b_idx - 1]),
-                    "nodata": float(src.nodata) if src.nodata is not None else None,
-                    "color_interp": str(src.colorinterp[b_idx - 1].name) if src.colorinterp else "undefined",
-                    "overviews": len(src.overviews(b_idx)) if hasattr(src, "overviews") else 0,
-                })
+                bands_info.append(
+                    {
+                        "band": b_idx,
+                        "dtype": str(src.dtypes[b_idx - 1]),
+                        "nodata": float(src.nodata) if src.nodata is not None else None,
+                        "color_interp": str(src.colorinterp[b_idx - 1].name)
+                        if src.colorinterp
+                        else "undefined",
+                        "overviews": len(src.overviews(b_idx)) if hasattr(src, "overviews") else 0,
+                    }
+                )
             return {
                 "path": str(p),
                 "driver": src.driver,
@@ -399,7 +414,12 @@ class RasterioProviderAdapter(ProviderAdapter):
             for b_idx in target_bands:
                 if b_idx < 1 or b_idx > tot_b:
                     continue
-                arr = src.read(b_idx, window=window, out_shape=(out_h, out_w), resampling=rasterio.enums.Resampling.bilinear)
+                arr = src.read(
+                    b_idx,
+                    window=window,
+                    out_shape=(out_h, out_w),
+                    resampling=rasterio.enums.Resampling.bilinear,
+                )
                 arr = arr.astype(np.float32)
                 nd = src.nodata
                 valid_mask = (arr != nd) if nd is not None else np.isfinite(arr)
@@ -409,7 +429,9 @@ class RasterioProviderAdapter(ProviderAdapter):
                     b_min, b_max = 0.0, 1.0
                 stats.append({"band": b_idx, "min": b_min, "max": b_max})
                 if b_max > b_min:
-                    stretched = np.clip((arr - b_min) / (b_max - b_min) * 255.0, 0, 255).astype(np.uint8)
+                    stretched = np.clip((arr - b_min) / (b_max - b_min) * 255.0, 0, 255).astype(
+                        np.uint8
+                    )
                 else:
                     stretched = np.zeros_like(arr, dtype=np.uint8)
                 band_arrays.append(stretched)

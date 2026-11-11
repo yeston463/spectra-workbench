@@ -161,7 +161,9 @@ class InfoPanel(QWidget):
         else:
             self.lbl_map.setText("数据集无地理参考（仅像元坐标）")
         epsg = data.get("crs_epsg")
-        self.lbl_crs.setText(f"EPSG:{epsg}" if epsg else ("自定义 WKT" if data.get("crs_wkt") else "无 CRS"))
+        self.lbl_crs.setText(
+            f"EPSG:{epsg}" if epsg else ("自定义 WKT" if data.get("crs_wkt") else "无 CRS")
+        )
 
         bands = data.get("bands", [])
         self.tbl.setRowCount(len(bands))

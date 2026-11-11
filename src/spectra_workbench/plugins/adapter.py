@@ -122,9 +122,7 @@ class PluginProviderAdapter(ProviderAdapter):
         if not found_cap or not found_plugin:
             ext_spec = get_optional_extension_spec(cid)
             if ext_spec is not None:
-                deps = ", ".join(
-                    f"{r.name}{r.constraint or ''}" for r in ext_spec.requirements
-                )
+                deps = ", ".join(f"{r.name}{r.constraint or ''}" for r in ext_spec.requirements)
                 gaps = "；".join(ext_spec.gaps)
                 return {
                     "valid": False,
@@ -134,7 +132,11 @@ class PluginProviderAdapter(ProviderAdapter):
                         f"所需依赖：{deps}；缺口说明：{gaps}"
                     ],
                 }
-            return {"valid": False, "code": "capability_not_found", "errors": [f"Plugin capability {cid} not found"]}
+            return {
+                "valid": False,
+                "code": "capability_not_found",
+                "errors": [f"Plugin capability {cid} not found"],
+            }
 
         if found_plugin.status != PluginStatus.enabled:
             return {
@@ -159,7 +161,9 @@ class PluginProviderAdapter(ProviderAdapter):
     def estimate(self, spec: TaskSpec) -> dict[str, Any]:
         return {"estimated_ram_mib": 64, "estimated_disk_bytes": 1024 * 1024}
 
-    def _resolve_handler(self, spec: TaskSpec) -> tuple[str, Callable[[TaskSpec, ExecutionContext], TaskResult]]:
+    def _resolve_handler(
+        self, spec: TaskSpec
+    ) -> tuple[str, Callable[[TaskSpec, ExecutionContext], TaskResult]]:
         """按 capability_id 解析并加载插件的执行函数（仅在 Worker 子进程执行）。"""
         cid = spec.capability_id
         entrypoint_str = None
@@ -246,5 +250,7 @@ class PluginProviderAdapter(ProviderAdapter):
     ) -> dict[str, Any]:
         gdal_ad = self._get_gdal_adapter()
         if gdal_ad is not None:
-            return gdal_ad.read_window(path, x_off, y_off, win_w, win_h, out_w, out_h, bands, raw, overview)
+            return gdal_ad.read_window(
+                path, x_off, y_off, win_w, win_h, out_w, out_h, bands, raw, overview
+            )
         raise NotImplementedError("GDAL runtime not available in plugin adapter for read_window")

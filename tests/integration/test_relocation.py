@@ -87,7 +87,9 @@ sys.exit(0)
         text=True,
         timeout=15,
     )
-    assert proc.returncode == 0, f"Rasterio 独立目录执行失败: stdout={proc.stdout}, stderr={proc.stderr}"
+    assert proc.returncode == 0, (
+        f"Rasterio 独立目录执行失败: stdout={proc.stdout}, stderr={proc.stderr}"
+    )
     assert "Rasterio relocation check passed" in proc.stdout
 
 
@@ -139,5 +141,7 @@ sys.exit(0)
         text=True,
         timeout=15,
     )
-    assert proc.returncode == 0, f"GDAL 独立目录执行失败: stdout={proc.stdout}, stderr={proc.stderr}"
+    assert proc.returncode == 0, (
+        f"GDAL 独立目录执行失败: stdout={proc.stdout}, stderr={proc.stderr}"
+    )
     assert "GDAL relocation check passed" in proc.stdout

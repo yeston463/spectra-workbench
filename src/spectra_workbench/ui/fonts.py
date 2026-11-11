@@ -14,10 +14,10 @@ from PySide6.QtWidgets import QApplication
 
 def ensure_application_fonts(app: QApplication | None = None) -> int:
     """检测并配置应用程序字体。
-    
+
     特别是在 offscreen 平台插件下，Qt 默认不会自动初始化 Windows 字体列表，
     本函数会主动注册 Windows 常用系统字体（如微软雅黑、Segoe UI、Arial 等）。
-    
+
     返回当前字体库中的可用字体族总数。
     """
     count = len(QFontDatabase.families())
@@ -26,11 +26,11 @@ def ensure_application_fonts(app: QApplication | None = None) -> int:
 
     # 常见 Windows 系统字体路径优先级
     candidate_paths = [
-        Path(r"C:\Windows\Fonts\msyh.ttc"),      # 微软雅黑
+        Path(r"C:\Windows\Fonts\msyh.ttc"),  # 微软雅黑
         Path(r"C:\Windows\Fonts\msyh.ttf"),
-        Path(r"C:\Windows\Fonts\segoeui.ttf"),    # Segoe UI
-        Path(r"C:\Windows\Fonts\arial.ttf"),       # Arial
-        Path(r"C:\Windows\Fonts\simsun.ttc"),     # 宋体
+        Path(r"C:\Windows\Fonts\segoeui.ttf"),  # Segoe UI
+        Path(r"C:\Windows\Fonts\arial.ttf"),  # Arial
+        Path(r"C:\Windows\Fonts\simsun.ttc"),  # 宋体
     ]
 
     loaded_family: str | None = None

@@ -105,7 +105,11 @@ def _load_resource_json(filename: str) -> dict[str, Any] | None:
     """尝试从 resources/ 或 docs/progress/runs/ 载入静态元数据 JSON。"""
     res_candidates = [
         Path(__file__).resolve().parent.parent / "resources" / filename,
-        Path(__file__).resolve().parent.parent.parent.parent / "docs" / "progress" / "runs" / filename,
+        Path(__file__).resolve().parent.parent.parent.parent
+        / "docs"
+        / "progress"
+        / "runs"
+        / filename,
         Path("src/spectra_workbench/resources") / filename,
     ]
     for c in res_candidates:
@@ -185,23 +189,101 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
                     type="string",
                     required=False,
                     default="nearest",
-                    choices=["nearest", "bilinear", "cubic", "cubicspline", "lanczos", "average", "mode"],
+                    choices=[
+                        "nearest",
+                        "bilinear",
+                        "cubic",
+                        "cubicspline",
+                        "lanczos",
+                        "average",
+                        "mode",
+                    ],
                 ),
-                ParameterSpec(key="srcWin", native_name="srcWin", label="像素裁剪窗口 [xoff, yoff, xsize, ysize]", type="list", required=False),
-                ParameterSpec(key="projWin", native_name="projWin", label="投影坐标裁剪窗口 [ulx, uly, lrx, lry]", type="list", required=False),
-                ParameterSpec(key="outputBounds", native_name="outputBounds", label="输出边界范围 [minx, miny, maxx, maxy]", type="list", required=False),
-                ParameterSpec(key="xRes", native_name="xRes", label="输出像元宽度", type="number", required=False),
-                ParameterSpec(key="yRes", native_name="yRes", label="输出像元高度", type="number", required=False),
-                ParameterSpec(key="width", native_name="width", label="输出宽度 (像元)", type="integer", required=False),
-                ParameterSpec(key="height", native_name="height", label="输出高度 (像元)", type="integer", required=False),
-                ParameterSpec(key="noData", native_name="noData", label="指定无效值 (NoData)", type="number", required=False),
+                ParameterSpec(
+                    key="srcWin",
+                    native_name="srcWin",
+                    label="像素裁剪窗口 [xoff, yoff, xsize, ysize]",
+                    type="list",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="projWin",
+                    native_name="projWin",
+                    label="投影坐标裁剪窗口 [ulx, uly, lrx, lry]",
+                    type="list",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="outputBounds",
+                    native_name="outputBounds",
+                    label="输出边界范围 [minx, miny, maxx, maxy]",
+                    type="list",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="xRes",
+                    native_name="xRes",
+                    label="输出像元宽度",
+                    type="number",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="yRes",
+                    native_name="yRes",
+                    label="输出像元高度",
+                    type="number",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="width",
+                    native_name="width",
+                    label="输出宽度 (像元)",
+                    type="integer",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="height",
+                    native_name="height",
+                    label="输出高度 (像元)",
+                    type="integer",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="noData",
+                    native_name="noData",
+                    label="指定无效值 (NoData)",
+                    type="number",
+                    required=False,
+                ),
             ],
-            inputs=[PortSpec(key="input", data_type=DatasetKind.raster, required=True, description="输入源影像")],
-            outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="输出目标影像")],
-            requirements=[Requirement(kind="package", name="GDAL", reason="需 osgeo.gdal C++ 核心引擎与栅格驱动")],
+            inputs=[
+                PortSpec(
+                    key="input",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="输入源影像",
+                )
+            ],
+            outputs=[
+                PortSpec(
+                    key="output",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="输出目标影像",
+                )
+            ],
+            requirements=[
+                Requirement(
+                    kind="package", name="GDAL", reason="需 osgeo.gdal C++ 核心引擎与栅格驱动"
+                )
+            ],
             entrypoints=[
-                Entrypoint(kind="form", target="gdal:translate", available=True, notes="GUI 动态配置表单"),
-                Entrypoint(kind="cli", target="gdal_translate.exe", available=True, notes="标准 CLI 别名"),
+                Entrypoint(
+                    kind="form", target="gdal:translate", available=True, notes="GUI 动态配置表单"
+                ),
+                Entrypoint(
+                    kind="cli", target="gdal_translate.exe", available=True, notes="标准 CLI 别名"
+                ),
             ],
             state=CapabilityState(
                 presence=Presence.present,
@@ -232,8 +314,20 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
             engine=_engine_spec(),
             source=_source_spec("programs/gdalwarp.html"),
             parameters=[
-                ParameterSpec(key="dstSRS", native_name="dstSRS", label="目标空间参考 (CRS)", type="crs", required=False),
-                ParameterSpec(key="srcSRS", native_name="srcSRS", label="源空间参考 (CRS)", type="crs", required=False),
+                ParameterSpec(
+                    key="dstSRS",
+                    native_name="dstSRS",
+                    label="目标空间参考 (CRS)",
+                    type="crs",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="srcSRS",
+                    native_name="srcSRS",
+                    label="源空间参考 (CRS)",
+                    type="crs",
+                    required=False,
+                ),
                 ParameterSpec(
                     key="resampleAlg",
                     native_name="resampleAlg",
@@ -241,25 +335,115 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
                     type="string",
                     required=False,
                     default="near",
-                    choices=["near", "bilinear", "cubic", "cubicspline", "lanczos", "average", "mode", "max", "min"],
+                    choices=[
+                        "near",
+                        "bilinear",
+                        "cubic",
+                        "cubicspline",
+                        "lanczos",
+                        "average",
+                        "mode",
+                        "max",
+                        "min",
+                    ],
                 ),
-                ParameterSpec(key="dstNodata", native_name="dstNodata", label="目标无效值 (NoData)", type="number", required=False),
-                ParameterSpec(key="srcWin", native_name="srcWin", label="源像素裁剪窗口 [xoff, yoff, xsize, ysize]", type="list", required=False),
-                ParameterSpec(key="projWin", native_name="projWin", label="源投影裁剪窗口 [ulx, uly, lrx, lry]", type="list", required=False),
-                ParameterSpec(key="outputBounds", native_name="outputBounds", label="目标输出范围 [minx, miny, maxx, maxy]", type="list", required=False),
-                ParameterSpec(key="xRes", native_name="xRes", label="输出像元宽度", type="number", required=False),
-                ParameterSpec(key="yRes", native_name="yRes", label="输出像元高度", type="number", required=False),
-                ParameterSpec(key="width", native_name="width", label="输出宽度 (像元)", type="integer", required=False),
-                ParameterSpec(key="height", native_name="height", label="输出高度 (像元)", type="integer", required=False),
-                ParameterSpec(key="outputType", native_name="outputType", label="输出数据类型", type="string", required=False),
-                ParameterSpec(key="targetAlignedPixels", native_name="targetAlignedPixels", label="像元网格对齐 (-tap)", type="boolean", required=False, default=False),
+                ParameterSpec(
+                    key="dstNodata",
+                    native_name="dstNodata",
+                    label="目标无效值 (NoData)",
+                    type="number",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="srcWin",
+                    native_name="srcWin",
+                    label="源像素裁剪窗口 [xoff, yoff, xsize, ysize]",
+                    type="list",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="projWin",
+                    native_name="projWin",
+                    label="源投影裁剪窗口 [ulx, uly, lrx, lry]",
+                    type="list",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="outputBounds",
+                    native_name="outputBounds",
+                    label="目标输出范围 [minx, miny, maxx, maxy]",
+                    type="list",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="xRes",
+                    native_name="xRes",
+                    label="输出像元宽度",
+                    type="number",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="yRes",
+                    native_name="yRes",
+                    label="输出像元高度",
+                    type="number",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="width",
+                    native_name="width",
+                    label="输出宽度 (像元)",
+                    type="integer",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="height",
+                    native_name="height",
+                    label="输出高度 (像元)",
+                    type="integer",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="outputType",
+                    native_name="outputType",
+                    label="输出数据类型",
+                    type="string",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="targetAlignedPixels",
+                    native_name="targetAlignedPixels",
+                    label="像元网格对齐 (-tap)",
+                    type="boolean",
+                    required=False,
+                    default=False,
+                ),
             ],
-            inputs=[PortSpec(key="input", data_type=DatasetKind.raster, required=True, multiple=True, description="输入源影像列表")],
-            outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="重投影成果栅格")],
-            requirements=[Requirement(kind="package", name="GDAL", reason="需 PROJ 库与 GDAL Warp API")],
+            inputs=[
+                PortSpec(
+                    key="input",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    multiple=True,
+                    description="输入源影像列表",
+                )
+            ],
+            outputs=[
+                PortSpec(
+                    key="output",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="重投影成果栅格",
+                )
+            ],
+            requirements=[
+                Requirement(kind="package", name="GDAL", reason="需 PROJ 库与 GDAL Warp API")
+            ],
             entrypoints=[
                 Entrypoint(kind="form", target="gdal:warp", available=True),
-                Entrypoint(kind="cli", target="gdalwarp.exe", available=True, notes="标准 CLI 别名"),
+                Entrypoint(
+                    kind="cli", target="gdalwarp.exe", available=True, notes="标准 CLI 别名"
+                ),
             ],
             state=CapabilityState(
                 presence=Presence.present,
@@ -298,14 +482,47 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
                     required=True,
                     choices=["hillshade", "slope", "aspect", "TRI", "TPI", "roughness"],
                 ),
-                ParameterSpec(key="zFactor", native_name="zFactor", label="高程缩放比例 (zFactor)", type="number", required=False, default=1.0),
-                ParameterSpec(key="scale", native_name="scale", label="垂直比例因数 (scale)", type="number", required=False, default=1.0),
+                ParameterSpec(
+                    key="zFactor",
+                    native_name="zFactor",
+                    label="高程缩放比例 (zFactor)",
+                    type="number",
+                    required=False,
+                    default=1.0,
+                ),
+                ParameterSpec(
+                    key="scale",
+                    native_name="scale",
+                    label="垂直比例因数 (scale)",
+                    type="number",
+                    required=False,
+                    default=1.0,
+                ),
             ],
-            inputs=[PortSpec(key="input", data_type=DatasetKind.raster, required=True, description="输入 DEM 影像")],
-            outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="地形分析成果图")],
+            inputs=[
+                PortSpec(
+                    key="input",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="输入 DEM 影像",
+                )
+            ],
+            outputs=[
+                PortSpec(
+                    key="output",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="地形分析成果图",
+                )
+            ],
             requirements=[Requirement(kind="package", name="GDAL", reason="需 GDAL DEM 处理核心")],
             entrypoints=[
-                Entrypoint(kind="form", target="gdal:dem", available=True, notes="平台适配器已接入（P5-02）"),
+                Entrypoint(
+                    kind="form",
+                    target="gdal:dem",
+                    available=True,
+                    notes="平台适配器已接入（P5-02）",
+                ),
                 Entrypoint(kind="cli", target="gdaldem.exe", available=True, notes="标准 CLI 别名"),
             ],
             state=CapabilityState(
@@ -342,19 +559,77 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
                     default="invdist",
                     choices=["invdist", "invdistnn", "average", "nearest", "linear"],
                 ),
-                ParameterSpec(key="zField", native_name="zfield", label="高程字段名（可选，默认读几何 Z）", type="string", required=False),
-                ParameterSpec(key="width", native_name="width", label="输出宽度（像元）", type="integer", required=True),
-                ParameterSpec(key="height", native_name="height", label="输出高度（像元）", type="integer", required=True),
-                ParameterSpec(key="outputBounds", native_name="te", label="输出范围 minx,miny,maxx,maxy", type="list", required=False),
-                ParameterSpec(key="outputType", native_name="outputType", label="输出数据类型", type="string", required=False, default="Float64"),
-                ParameterSpec(key="noData", native_name="noData", label="输出无效值 (NoData)", type="number", required=False),
+                ParameterSpec(
+                    key="zField",
+                    native_name="zfield",
+                    label="高程字段名（可选，默认读几何 Z）",
+                    type="string",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="width",
+                    native_name="width",
+                    label="输出宽度（像元）",
+                    type="integer",
+                    required=True,
+                ),
+                ParameterSpec(
+                    key="height",
+                    native_name="height",
+                    label="输出高度（像元）",
+                    type="integer",
+                    required=True,
+                ),
+                ParameterSpec(
+                    key="outputBounds",
+                    native_name="te",
+                    label="输出范围 minx,miny,maxx,maxy",
+                    type="list",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="outputType",
+                    native_name="outputType",
+                    label="输出数据类型",
+                    type="string",
+                    required=False,
+                    default="Float64",
+                ),
+                ParameterSpec(
+                    key="noData",
+                    native_name="noData",
+                    label="输出无效值 (NoData)",
+                    type="number",
+                    required=False,
+                ),
             ],
-            inputs=[PortSpec(key="input", data_type=DatasetKind.vector, required=True, description="包含三维或属性值的输入点图层")],
-            outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="插值生成的规则栅格")],
+            inputs=[
+                PortSpec(
+                    key="input",
+                    data_type=DatasetKind.vector,
+                    required=True,
+                    description="包含三维或属性值的输入点图层",
+                )
+            ],
+            outputs=[
+                PortSpec(
+                    key="output",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="插值生成的规则栅格",
+                )
+            ],
             requirements=[Requirement(kind="package", name="GDAL", reason="需 GDAL Grid API")],
             entrypoints=[
-                Entrypoint(kind="form", target="gdal:grid", available=True, notes="平台适配器已接入（P5-02）"),
-                Entrypoint(kind="cli", target="gdal_grid.exe", available=True, notes="标准 CLI 别名"),
+                Entrypoint(
+                    kind="form",
+                    target="gdal:grid",
+                    available=True,
+                    notes="平台适配器已接入（P5-02）",
+                ),
+                Entrypoint(
+                    kind="cli", target="gdal_grid.exe", available=True, notes="标准 CLI 别名"
+                ),
             ],
             state=CapabilityState(
                 presence=Presence.present,
@@ -381,19 +656,83 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
             engine=_engine_spec(),
             source=_source_spec("programs/gdalbuildvrt.html"),
             parameters=[
-                ParameterSpec(key="overlapPriority", native_name="overlapPriority", label="重叠区优先级 (last/first)", type="string", required=False, default="last", choices=["last", "first"]),
-                ParameterSpec(key="resolution", native_name="resolution", label="分辨率策略", type="string", required=False, default="average", choices=["first", "estimate", "average", "highest", "lowest", "same"]),
-                ParameterSpec(key="srcNodata", native_name="srcNodata", label="源无效值覆盖 (srcNodata)", type="number", required=False),
-                ParameterSpec(key="vrtNodata", native_name="VRTNodata", label="VRT 虚拟无效值 (vrtNodata)", type="number", required=False),
-                ParameterSpec(key="separate", native_name="separate", label="按独立波段堆叠", type="boolean", required=False, default=False),
-                ParameterSpec(key="relativePaths", native_name="relativePaths", label="使用相对源路径", type="boolean", required=False, default=True),
+                ParameterSpec(
+                    key="overlapPriority",
+                    native_name="overlapPriority",
+                    label="重叠区优先级 (last/first)",
+                    type="string",
+                    required=False,
+                    default="last",
+                    choices=["last", "first"],
+                ),
+                ParameterSpec(
+                    key="resolution",
+                    native_name="resolution",
+                    label="分辨率策略",
+                    type="string",
+                    required=False,
+                    default="average",
+                    choices=["first", "estimate", "average", "highest", "lowest", "same"],
+                ),
+                ParameterSpec(
+                    key="srcNodata",
+                    native_name="srcNodata",
+                    label="源无效值覆盖 (srcNodata)",
+                    type="number",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="vrtNodata",
+                    native_name="VRTNodata",
+                    label="VRT 虚拟无效值 (vrtNodata)",
+                    type="number",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="separate",
+                    native_name="separate",
+                    label="按独立波段堆叠",
+                    type="boolean",
+                    required=False,
+                    default=False,
+                ),
+                ParameterSpec(
+                    key="relativePaths",
+                    native_name="relativePaths",
+                    label="使用相对源路径",
+                    type="boolean",
+                    required=False,
+                    default=True,
+                ),
             ],
-            inputs=[PortSpec(key="input", data_type=DatasetKind.raster, required=True, multiple=True, description="输入源文件列表")],
-            outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="生成的 .vrt 虚拟头文件")],
+            inputs=[
+                PortSpec(
+                    key="input",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    multiple=True,
+                    description="输入源文件列表",
+                )
+            ],
+            outputs=[
+                PortSpec(
+                    key="output",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="生成的 .vrt 虚拟头文件",
+                )
+            ],
             requirements=[Requirement(kind="package", name="GDAL", reason="需 VRT 驱动支持")],
             entrypoints=[
-                Entrypoint(kind="form", target="gdal:buildvrt", available=True, notes="平台适配器已接入（P4-02）"),
-                Entrypoint(kind="cli", target="gdalbuildvrt.exe", available=True, notes="标准 CLI 别名"),
+                Entrypoint(
+                    kind="form",
+                    target="gdal:buildvrt",
+                    available=True,
+                    notes="平台适配器已接入（P4-02）",
+                ),
+                Entrypoint(
+                    kind="cli", target="gdalbuildvrt.exe", available=True, notes="标准 CLI 别名"
+                ),
             ],
             state=CapabilityState(
                 presence=Presence.present,
@@ -403,7 +742,10 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
             ),
             effects="new_dataset",
             cancellation="cooperative",
-            limitations=["仅构建 VRT 描述、不写物理像元；源引用默认相对最终目录", "混合 CRS 明确拒绝；非 separate 要求源波段结构一致；源依赖只读，不参与 sidecar 删除"],
+            limitations=[
+                "仅构建 VRT 描述、不写物理像元；源引用默认相对最终目录",
+                "混合 CRS 明确拒绝；非 separate 要求源波段结构一致；源依赖只读，不参与 sidecar 删除",
+            ],
             validation_evidence=[],
         ),
         CapabilityDescriptor(
@@ -417,18 +759,76 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
             engine=_engine_spec(),
             source=_source_spec("programs/gdalbuildvrt.html"),
             parameters=[
-                ParameterSpec(key="srcNodata", native_name="srcNodata", label="源 NoData", type="number", required=False),
-                ParameterSpec(key="vrtNodata", native_name="VRTNodata", label="VRT NoData", type="number", required=False),
-                ParameterSpec(key="xRes", native_name="xRes", label="输出像元宽", type="number", required=False),
-                ParameterSpec(key="yRes", native_name="yRes", label="输出像元高", type="number", required=False),
-                ParameterSpec(key="outputBounds", native_name="outputBounds", label="输出边界范围 minx,miny,maxx,maxy", type="list", required=False),
-                ParameterSpec(key="outputType", native_name="outputType", label="输出数据类型", type="string", required=False),
+                ParameterSpec(
+                    key="srcNodata",
+                    native_name="srcNodata",
+                    label="源 NoData",
+                    type="number",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="vrtNodata",
+                    native_name="VRTNodata",
+                    label="VRT NoData",
+                    type="number",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="xRes",
+                    native_name="xRes",
+                    label="输出像元宽",
+                    type="number",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="yRes",
+                    native_name="yRes",
+                    label="输出像元高",
+                    type="number",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="outputBounds",
+                    native_name="outputBounds",
+                    label="输出边界范围 minx,miny,maxx,maxy",
+                    type="list",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="outputType",
+                    native_name="outputType",
+                    label="输出数据类型",
+                    type="string",
+                    required=False,
+                ),
             ],
-            inputs=[PortSpec(key="inputs", data_type=DatasetKind.raster, required=True, multiple=True, description="按堆叠顺序排列的源文件列表")],
-            outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="多波段成果栅格")],
-            requirements=[Requirement(kind="package", name="GDAL", reason="需 VRT 与 Translate 支持")],
+            inputs=[
+                PortSpec(
+                    key="inputs",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    multiple=True,
+                    description="按堆叠顺序排列的源文件列表",
+                )
+            ],
+            outputs=[
+                PortSpec(
+                    key="output",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="多波段成果栅格",
+                )
+            ],
+            requirements=[
+                Requirement(kind="package", name="GDAL", reason="需 VRT 与 Translate 支持")
+            ],
             entrypoints=[
-                Entrypoint(kind="form", target="gdal:stack", available=True, notes="平台适配器已接入（P4-02）"),
+                Entrypoint(
+                    kind="form",
+                    target="gdal:stack",
+                    available=True,
+                    notes="平台适配器已接入（P4-02）",
+                ),
             ],
             state=CapabilityState(
                 presence=Presence.present,
@@ -438,7 +838,10 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
             ),
             effects="new_dataset",
             cancellation="cooperative",
-            limitations=["separate=True 时每个源的所有波段依次进入，波段数不必相同", "输出格式受 S4 矩阵限制（PNG/JPEG 不支持 NoData/mask；JPEG 仅 Byte 1/3 波段）"],
+            limitations=[
+                "separate=True 时每个源的所有波段依次进入，波段数不必相同",
+                "输出格式受 S4 矩阵限制（PNG/JPEG 不支持 NoData/mask；JPEG 仅 Byte 1/3 波段）",
+            ],
             validation_evidence=[],
         ),
         CapabilityDescriptor(
@@ -452,14 +855,48 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
             engine=_engine_spec(),
             source=_source_spec("programs/gdal_translate.html"),
             parameters=[
-                ParameterSpec(key="bandList", native_name="bandList", label="波段顺序 (1-based)", type="list", required=False),
-                ParameterSpec(key="outputType", native_name="outputType", label="输出数据类型", type="string", required=False),
+                ParameterSpec(
+                    key="bandList",
+                    native_name="bandList",
+                    label="波段顺序 (1-based)",
+                    type="list",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="outputType",
+                    native_name="outputType",
+                    label="输出数据类型",
+                    type="string",
+                    required=False,
+                ),
             ],
-            inputs=[PortSpec(key="inputs", data_type=DatasetKind.raster, required=True, multiple=False, description="单个输入栅格")],
-            outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="重排后的成果栅格")],
-            requirements=[Requirement(kind="package", name="GDAL", reason="需 Translate 的 -b 支持")],
+            inputs=[
+                PortSpec(
+                    key="inputs",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    multiple=False,
+                    description="单个输入栅格",
+                )
+            ],
+            outputs=[
+                PortSpec(
+                    key="output",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="重排后的成果栅格",
+                )
+            ],
+            requirements=[
+                Requirement(kind="package", name="GDAL", reason="需 Translate 的 -b 支持")
+            ],
             entrypoints=[
-                Entrypoint(kind="form", target="gdal:bandmanage", available=True, notes="平台适配器已接入（P4-02）"),
+                Entrypoint(
+                    kind="form",
+                    target="gdal:bandmanage",
+                    available=True,
+                    notes="平台适配器已接入（P4-02）",
+                ),
             ],
             state=CapabilityState(
                 presence=Presence.present,
@@ -469,7 +906,10 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
             ),
             effects="new_dataset",
             cancellation="cooperative",
-            limitations=["波段号从 1 开始；输出顺序严格按给定列表", "输出格式受 S4 矩阵限制；ENVI/JPEG 等不支持的 alpha/波段组合会提前拒绝"],
+            limitations=[
+                "波段号从 1 开始；输出顺序严格按给定列表",
+                "输出格式受 S4 矩阵限制；ENVI/JPEG 等不支持的 alpha/波段组合会提前拒绝",
+            ],
             validation_evidence=[],
         ),
         CapabilityDescriptor(
@@ -483,13 +923,39 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
             engine=_engine_spec(),
             source=_source_spec("programs/gdal_edit.html"),
             parameters=[
-                ParameterSpec(key="srcNodata", native_name="srcNodata", label="NoData 值", type="number", required=True),
+                ParameterSpec(
+                    key="srcNodata",
+                    native_name="srcNodata",
+                    label="NoData 值",
+                    type="number",
+                    required=True,
+                ),
             ],
-            inputs=[PortSpec(key="inputs", data_type=DatasetKind.raster, required=True, multiple=False, description="待更新的数据集（输出=输入，in-place）")],
-            outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="更新后的同一数据集")],
+            inputs=[
+                PortSpec(
+                    key="inputs",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    multiple=False,
+                    description="待更新的数据集（输出=输入，in-place）",
+                )
+            ],
+            outputs=[
+                PortSpec(
+                    key="output",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="更新后的同一数据集",
+                )
+            ],
             requirements=[Requirement(kind="package", name="GDAL", reason="需更新模式打开")],
             entrypoints=[
-                Entrypoint(kind="form", target="gdal:editmeta", available=True, notes="平台适配器已接入（P4-03）"),
+                Entrypoint(
+                    kind="form",
+                    target="gdal:editmeta",
+                    available=True,
+                    notes="平台适配器已接入（P4-03）",
+                ),
                 Entrypoint(kind="cli", target="gdal_edit.py", available=True),
             ],
             state=CapabilityState(
@@ -517,15 +983,56 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
             engine=_engine_spec(),
             source=_source_spec("programs/gdaladdo.html"),
             parameters=[
-                ParameterSpec(key="resampleAlg", native_name="resampleAlg", label="重采样方式", type="string", required=False, default="NEAREST"),
-                ParameterSpec(key="levels", native_name="levels", label="倍率列表（严格递增，每个≥2）", type="list", required=True),
-                ParameterSpec(key="overviewCompress", native_name="COMPRESS_OVERVIEW", label="概览压缩", type="string", required=False),
+                ParameterSpec(
+                    key="resampleAlg",
+                    native_name="resampleAlg",
+                    label="重采样方式",
+                    type="string",
+                    required=False,
+                    default="NEAREST",
+                ),
+                ParameterSpec(
+                    key="levels",
+                    native_name="levels",
+                    label="倍率列表（严格递增，每个≥2）",
+                    type="list",
+                    required=True,
+                ),
+                ParameterSpec(
+                    key="overviewCompress",
+                    native_name="COMPRESS_OVERVIEW",
+                    label="概览压缩",
+                    type="string",
+                    required=False,
+                ),
             ],
-            inputs=[PortSpec(key="inputs", data_type=DatasetKind.raster, required=True, multiple=False, description="待构建概览的数据集（输出=输入，in-place）")],
-            outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="构建概览后的同一数据集")],
-            requirements=[Requirement(kind="package", name="GDAL", reason="需 BuildOverviews 支持")],
+            inputs=[
+                PortSpec(
+                    key="inputs",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    multiple=False,
+                    description="待构建概览的数据集（输出=输入，in-place）",
+                )
+            ],
+            outputs=[
+                PortSpec(
+                    key="output",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="构建概览后的同一数据集",
+                )
+            ],
+            requirements=[
+                Requirement(kind="package", name="GDAL", reason="需 BuildOverviews 支持")
+            ],
             entrypoints=[
-                Entrypoint(kind="form", target="gdal:overview", available=True, notes="平台适配器已接入（P4-03）"),
+                Entrypoint(
+                    kind="form",
+                    target="gdal:overview",
+                    available=True,
+                    notes="平台适配器已接入（P4-03）",
+                ),
                 Entrypoint(kind="cli", target="gdaladdo.exe", available=True),
             ],
             state=CapabilityState(
@@ -550,23 +1057,106 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
             engine=_engine_spec(),
             source=_source_spec("programs/gdal_rasterize.html"),
             parameters=[
-                ParameterSpec(key="attribute", native_name="attribute", label="烧录属性字段名", type="string", required=False),
-                ParameterSpec(key="burnValues", native_name="burnValues", label="固定烧录像元值列表", type="list", required=False),
-                ParameterSpec(key="allTouched", native_name="allTouched", label="触碰全部像元 (AllTouched)", type="boolean", required=False, default=False),
-                ParameterSpec(key="xRes", native_name="xRes", label="输出像元宽", type="number", required=False),
-                ParameterSpec(key="yRes", native_name="yRes", label="输出像元高", type="number", required=False),
-                ParameterSpec(key="width", native_name="width", label="输出宽度 (像元)", type="integer", required=False),
-                ParameterSpec(key="height", native_name="height", label="输出高度 (像元)", type="integer", required=False),
-                ParameterSpec(key="outputBounds", native_name="te", label="输出范围 minx,miny,maxx,maxy", type="list", required=False),
-                ParameterSpec(key="outputType", native_name="outputType", label="输出数据类型", type="string", required=False, default="Float64"),
-                ParameterSpec(key="noData", native_name="noData", label="输出无效值 (NoData)", type="number", required=False),
+                ParameterSpec(
+                    key="attribute",
+                    native_name="attribute",
+                    label="烧录属性字段名",
+                    type="string",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="burnValues",
+                    native_name="burnValues",
+                    label="固定烧录像元值列表",
+                    type="list",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="allTouched",
+                    native_name="allTouched",
+                    label="触碰全部像元 (AllTouched)",
+                    type="boolean",
+                    required=False,
+                    default=False,
+                ),
+                ParameterSpec(
+                    key="xRes",
+                    native_name="xRes",
+                    label="输出像元宽",
+                    type="number",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="yRes",
+                    native_name="yRes",
+                    label="输出像元高",
+                    type="number",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="width",
+                    native_name="width",
+                    label="输出宽度 (像元)",
+                    type="integer",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="height",
+                    native_name="height",
+                    label="输出高度 (像元)",
+                    type="integer",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="outputBounds",
+                    native_name="te",
+                    label="输出范围 minx,miny,maxx,maxy",
+                    type="list",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="outputType",
+                    native_name="outputType",
+                    label="输出数据类型",
+                    type="string",
+                    required=False,
+                    default="Float64",
+                ),
+                ParameterSpec(
+                    key="noData",
+                    native_name="noData",
+                    label="输出无效值 (NoData)",
+                    type="number",
+                    required=False,
+                ),
             ],
-            inputs=[PortSpec(key="input", data_type=DatasetKind.vector, required=True, description="输入待栅格化矢量")],
-            outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="烧录成果栅格")],
+            inputs=[
+                PortSpec(
+                    key="input",
+                    data_type=DatasetKind.vector,
+                    required=True,
+                    description="输入待栅格化矢量",
+                )
+            ],
+            outputs=[
+                PortSpec(
+                    key="output",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="烧录成果栅格",
+                )
+            ],
             requirements=[Requirement(kind="package", name="GDAL", reason="需 GDAL Rasterize API")],
             entrypoints=[
-                Entrypoint(kind="form", target="gdal:rasterize", available=True, notes="平台适配器已接入（P5-02）"),
-                Entrypoint(kind="cli", target="gdal_rasterize.exe", available=True, notes="标准 CLI 别名"),
+                Entrypoint(
+                    kind="form",
+                    target="gdal:rasterize",
+                    available=True,
+                    notes="平台适配器已接入（P5-02）",
+                ),
+                Entrypoint(
+                    kind="cli", target="gdal_rasterize.exe", available=True, notes="标准 CLI 别名"
+                ),
             ],
             state=CapabilityState(
                 presence=Presence.present,
@@ -593,16 +1183,64 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
             engine=_engine_spec(),
             source=_source_spec("programs/gdal_contour.html"),
             parameters=[
-                ParameterSpec(key="interval", native_name="interval", label="等值线步长", type="number", required=False, default=10.0),
-                ParameterSpec(key="offset", native_name="offset", label="基础偏移零点", type="number", required=False, default=0.0),
-                ParameterSpec(key="fixedLevels", native_name="fixedLevels", label="固定等级序列（完全替代 interval）", type="list", required=False),
-                ParameterSpec(key="band", native_name="band", label="输入波段（1-based，默认 1）", type="integer", required=False, default=1),
+                ParameterSpec(
+                    key="interval",
+                    native_name="interval",
+                    label="等值线步长",
+                    type="number",
+                    required=False,
+                    default=10.0,
+                ),
+                ParameterSpec(
+                    key="offset",
+                    native_name="offset",
+                    label="基础偏移零点",
+                    type="number",
+                    required=False,
+                    default=0.0,
+                ),
+                ParameterSpec(
+                    key="fixedLevels",
+                    native_name="fixedLevels",
+                    label="固定等级序列（完全替代 interval）",
+                    type="list",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="band",
+                    native_name="band",
+                    label="输入波段（1-based，默认 1）",
+                    type="integer",
+                    required=False,
+                    default=1,
+                ),
             ],
-            inputs=[PortSpec(key="input", data_type=DatasetKind.raster, required=True, description="输入单波段高程栅格")],
-            outputs=[PortSpec(key="output", data_type=DatasetKind.vector, required=True, description="生成的等值线矢量图层")],
-            requirements=[Requirement(kind="package", name="GDAL", reason="需 GDAL Contour 生成核心")],
+            inputs=[
+                PortSpec(
+                    key="input",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="输入单波段高程栅格",
+                )
+            ],
+            outputs=[
+                PortSpec(
+                    key="output",
+                    data_type=DatasetKind.vector,
+                    required=True,
+                    description="生成的等值线矢量图层",
+                )
+            ],
+            requirements=[
+                Requirement(kind="package", name="GDAL", reason="需 GDAL Contour 生成核心")
+            ],
             entrypoints=[
-                Entrypoint(kind="form", target="gdal:contour", available=True, notes="平台适配器已接入（P5-02）"),
+                Entrypoint(
+                    kind="form",
+                    target="gdal:contour",
+                    available=True,
+                    notes="平台适配器已接入（P5-02）",
+                ),
                 Entrypoint(kind="cli", target="gdal_contour.exe", available=True),
                 Entrypoint(kind="script", target="osgeo.gdal.ContourGenerate", available=True),
             ],
@@ -633,15 +1271,58 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
             engine=_engine_spec(),
             source=_source_spec("programs/gdal_polygonize.html"),
             parameters=[
-                ParameterSpec(key="fieldName", native_name="fieldName", label="像元值保存字段名", type="string", required=False, default="DN"),
-                ParameterSpec(key="connectedness", native_name="connectedness", label="连通性 (4邻域/8邻域)", type="integer", required=False, default=4, choices=[4, 8]),
-                ParameterSpec(key="band", native_name="band", label="输入波段（1-based，默认 1）", type="integer", required=False, default=1),
+                ParameterSpec(
+                    key="fieldName",
+                    native_name="fieldName",
+                    label="像元值保存字段名",
+                    type="string",
+                    required=False,
+                    default="DN",
+                ),
+                ParameterSpec(
+                    key="connectedness",
+                    native_name="connectedness",
+                    label="连通性 (4邻域/8邻域)",
+                    type="integer",
+                    required=False,
+                    default=4,
+                    choices=[4, 8],
+                ),
+                ParameterSpec(
+                    key="band",
+                    native_name="band",
+                    label="输入波段（1-based，默认 1）",
+                    type="integer",
+                    required=False,
+                    default=1,
+                ),
             ],
-            inputs=[PortSpec(key="input", data_type=DatasetKind.raster, required=True, description="输入离散分类栅格")],
-            outputs=[PortSpec(key="output", data_type=DatasetKind.vector, required=True, description="生成的多边形矢量图层")],
-            requirements=[Requirement(kind="package", name="GDAL", reason="需 GDAL Polygonize API")],
+            inputs=[
+                PortSpec(
+                    key="input",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="输入离散分类栅格",
+                )
+            ],
+            outputs=[
+                PortSpec(
+                    key="output",
+                    data_type=DatasetKind.vector,
+                    required=True,
+                    description="生成的多边形矢量图层",
+                )
+            ],
+            requirements=[
+                Requirement(kind="package", name="GDAL", reason="需 GDAL Polygonize API")
+            ],
             entrypoints=[
-                Entrypoint(kind="form", target="gdal:polygonize", available=True, notes="平台适配器已接入（P5-02）"),
+                Entrypoint(
+                    kind="form",
+                    target="gdal:polygonize",
+                    available=True,
+                    notes="平台适配器已接入（P5-02）",
+                ),
                 Entrypoint(kind="cli", target="gdal_polygonize.exe", available=True),
                 Entrypoint(kind="script", target="osgeo.gdal.Polygonize", available=True),
             ],
@@ -671,15 +1352,57 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
             engine=_engine_spec(),
             source=_source_spec("programs/gdal_sieve.html"),
             parameters=[
-                ParameterSpec(key="threshold", native_name="threshold", label="最小保留斑块尺寸（像元数）", type="integer", required=True),
-                ParameterSpec(key="connectedness", native_name="connectedness", label="邻域连通度 (4 或 8)", type="integer", required=False, default=4, choices=[4, 8]),
-                ParameterSpec(key="band", native_name="band", label="处理波段（1-based）", type="integer", required=False, default=1),
+                ParameterSpec(
+                    key="threshold",
+                    native_name="threshold",
+                    label="最小保留斑块尺寸（像元数）",
+                    type="integer",
+                    required=True,
+                ),
+                ParameterSpec(
+                    key="connectedness",
+                    native_name="connectedness",
+                    label="邻域连通度 (4 或 8)",
+                    type="integer",
+                    required=False,
+                    default=4,
+                    choices=[4, 8],
+                ),
+                ParameterSpec(
+                    key="band",
+                    native_name="band",
+                    label="处理波段（1-based）",
+                    type="integer",
+                    required=False,
+                    default=1,
+                ),
             ],
-            inputs=[PortSpec(key="input", data_type=DatasetKind.raster, required=True, description="输入分类斑块栅格")],
-            outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="杂斑滤除后栅格")],
-            requirements=[Requirement(kind="package", name="GDAL", reason="需 GDAL SieveFilter 算法")],
+            inputs=[
+                PortSpec(
+                    key="input",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="输入分类斑块栅格",
+                )
+            ],
+            outputs=[
+                PortSpec(
+                    key="output",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="杂斑滤除后栅格",
+                )
+            ],
+            requirements=[
+                Requirement(kind="package", name="GDAL", reason="需 GDAL SieveFilter 算法")
+            ],
             entrypoints=[
-                Entrypoint(kind="form", target="gdal:sieve", available=True, notes="平台适配器已接入（P9-02，调用 gdal.SieveFilter）"),
+                Entrypoint(
+                    kind="form",
+                    target="gdal:sieve",
+                    available=True,
+                    notes="平台适配器已接入（P9-02，调用 gdal.SieveFilter）",
+                ),
                 Entrypoint(kind="cli", target="gdal_sieve.exe", available=True),
                 Entrypoint(kind="script", target="osgeo.gdal.SieveFilter", available=True),
             ],
@@ -709,16 +1432,64 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
             engine=_engine_spec(),
             source=_source_spec("programs/gdal_fillnodata.html"),
             parameters=[
-                ParameterSpec(key="fillDistance", native_name="maxSearchDist", label="最大填补搜索距离（像元）", type="number", required=False, default=10.0),
-                ParameterSpec(key="smoothIterations", native_name="smoothingIterations", label="平滑迭代次数", type="integer", required=False, default=0),
-                ParameterSpec(key="band", native_name="band", label="处理波段（1-based）", type="integer", required=False, default=1),
-                ParameterSpec(key="srcNodata", native_name="srcNodata", label="NoData 覆盖值（缺省读波段标签）", type="number", required=False),
+                ParameterSpec(
+                    key="fillDistance",
+                    native_name="maxSearchDist",
+                    label="最大填补搜索距离（像元）",
+                    type="number",
+                    required=False,
+                    default=10.0,
+                ),
+                ParameterSpec(
+                    key="smoothIterations",
+                    native_name="smoothingIterations",
+                    label="平滑迭代次数",
+                    type="integer",
+                    required=False,
+                    default=0,
+                ),
+                ParameterSpec(
+                    key="band",
+                    native_name="band",
+                    label="处理波段（1-based）",
+                    type="integer",
+                    required=False,
+                    default=1,
+                ),
+                ParameterSpec(
+                    key="srcNodata",
+                    native_name="srcNodata",
+                    label="NoData 覆盖值（缺省读波段标签）",
+                    type="number",
+                    required=False,
+                ),
             ],
-            inputs=[PortSpec(key="input", data_type=DatasetKind.raster, required=True, description="包含 NoData 缺口的栅格")],
-            outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="缺口修复成果影像")],
-            requirements=[Requirement(kind="package", name="GDAL", reason="需 GDAL FillNodata 算法")],
+            inputs=[
+                PortSpec(
+                    key="input",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="包含 NoData 缺口的栅格",
+                )
+            ],
+            outputs=[
+                PortSpec(
+                    key="output",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="缺口修复成果影像",
+                )
+            ],
+            requirements=[
+                Requirement(kind="package", name="GDAL", reason="需 GDAL FillNodata 算法")
+            ],
             entrypoints=[
-                Entrypoint(kind="form", target="gdal:fillnodata", available=True, notes="平台适配器已接入（P9-02，调用 gdal.FillNodata）"),
+                Entrypoint(
+                    kind="form",
+                    target="gdal:fillnodata",
+                    available=True,
+                    notes="平台适配器已接入（P9-02，调用 gdal.FillNodata）",
+                ),
                 Entrypoint(kind="cli", target="gdal_fillnodata.exe", available=True),
                 Entrypoint(kind="script", target="osgeo.gdal.FillNodata", available=True),
             ],
@@ -748,14 +1519,47 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
             engine=_engine_spec(),
             source=_source_spec("programs/nearblack.html"),
             parameters=[
-                ParameterSpec(key="near", native_name="nearDist", label="接近阈值范围（0..255）", type="integer", required=False, default=15),
-                ParameterSpec(key="white", native_name="white", label="搜索近白而非近黑边界", type="boolean", required=False, default=False),
+                ParameterSpec(
+                    key="near",
+                    native_name="nearDist",
+                    label="接近阈值范围（0..255）",
+                    type="integer",
+                    required=False,
+                    default=15,
+                ),
+                ParameterSpec(
+                    key="white",
+                    native_name="white",
+                    label="搜索近白而非近黑边界",
+                    type="boolean",
+                    required=False,
+                    default=False,
+                ),
             ],
-            inputs=[PortSpec(key="input", data_type=DatasetKind.raster, required=True, description="边缘含杂散压缩伪影影像")],
-            outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="黑白边界清洁影像")],
+            inputs=[
+                PortSpec(
+                    key="input",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="边缘含杂散压缩伪影影像",
+                )
+            ],
+            outputs=[
+                PortSpec(
+                    key="output",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="黑白边界清洁影像",
+                )
+            ],
             requirements=[Requirement(kind="package", name="GDAL", reason="需 nearblack 原生算法")],
             entrypoints=[
-                Entrypoint(kind="form", target="gdal:nearblack", available=True, notes="平台适配器已接入（P9-02，调用 gdal.Nearblack）"),
+                Entrypoint(
+                    kind="form",
+                    target="gdal:nearblack",
+                    available=True,
+                    notes="平台适配器已接入（P9-02，调用 gdal.Nearblack）",
+                ),
                 Entrypoint(kind="cli", target="nearblack.exe", available=True),
                 Entrypoint(kind="script", target="osgeo.gdal.Nearblack", available=True),
             ],
@@ -784,18 +1588,78 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
             engine=_engine_spec(),
             source=_source_spec("programs/gdal_viewshed.html"),
             parameters=[
-                ParameterSpec(key="ox", native_name="observerX", label="观察者 X 坐标（栅格 CRS）", type="number", required=True),
-                ParameterSpec(key="oy", native_name="observerY", label="观察者 Y 坐标（栅格 CRS）", type="number", required=True),
-                ParameterSpec(key="observerHeight", native_name="observerHeight", label="观察点附加高度", type="number", required=False, default=2.0),
-                ParameterSpec(key="targetHeight", native_name="targetHeight", label="目标点附加高度", type="number", required=False, default=0.0),
-                ParameterSpec(key="viewDistance", native_name="maxDistance", label="最大通视半径（留空=覆盖全图）", type="number", required=False),
-                ParameterSpec(key="band", native_name="band", label="DEM 波段（1-based）", type="integer", required=False, default=1),
+                ParameterSpec(
+                    key="ox",
+                    native_name="observerX",
+                    label="观察者 X 坐标（栅格 CRS）",
+                    type="number",
+                    required=True,
+                ),
+                ParameterSpec(
+                    key="oy",
+                    native_name="observerY",
+                    label="观察者 Y 坐标（栅格 CRS）",
+                    type="number",
+                    required=True,
+                ),
+                ParameterSpec(
+                    key="observerHeight",
+                    native_name="observerHeight",
+                    label="观察点附加高度",
+                    type="number",
+                    required=False,
+                    default=2.0,
+                ),
+                ParameterSpec(
+                    key="targetHeight",
+                    native_name="targetHeight",
+                    label="目标点附加高度",
+                    type="number",
+                    required=False,
+                    default=0.0,
+                ),
+                ParameterSpec(
+                    key="viewDistance",
+                    native_name="maxDistance",
+                    label="最大通视半径（留空=覆盖全图）",
+                    type="number",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="band",
+                    native_name="band",
+                    label="DEM 波段（1-based）",
+                    type="integer",
+                    required=False,
+                    default=1,
+                ),
             ],
-            inputs=[PortSpec(key="input", data_type=DatasetKind.raster, required=True, description="输入 DEM 栅格")],
-            outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="通视范围二值掩膜图")],
-            requirements=[Requirement(kind="package", name="GDAL", reason="需 gdal_viewshed 原生模块")],
+            inputs=[
+                PortSpec(
+                    key="input",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="输入 DEM 栅格",
+                )
+            ],
+            outputs=[
+                PortSpec(
+                    key="output",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="通视范围二值掩膜图",
+                )
+            ],
+            requirements=[
+                Requirement(kind="package", name="GDAL", reason="需 gdal_viewshed 原生模块")
+            ],
             entrypoints=[
-                Entrypoint(kind="form", target="gdal:viewshed", available=True, notes="平台适配器已接入（P9-02，调用 gdal.ViewshedGenerate）"),
+                Entrypoint(
+                    kind="form",
+                    target="gdal:viewshed",
+                    available=True,
+                    notes="平台适配器已接入（P9-02，调用 gdal.ViewshedGenerate）",
+                ),
                 Entrypoint(kind="cli", target="gdal_viewshed.exe", available=True),
                 Entrypoint(kind="script", target="osgeo.gdal.ViewshedGenerate", available=True),
             ],
@@ -829,21 +1693,65 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
             engine=_engine_spec(),
             source=_source_spec("programs/gdal_calc.html"),
             parameters=[
-                ParameterSpec(key="calc", native_name="calc", label="受限表达式", type="expression", required=True, help="例如: (A-B)/(A+B)；支持 + - * / // % ** 与 abs/min/max/sqrt/exp/log/log10"),
-                ParameterSpec(key="srcNodata", native_name="srcNodata", label="输入 NoData（留空取各源标签）", type="number", required=False),
-                ParameterSpec(key="dstNodata", native_name="dstNodata", label="输出 NoData（默认 -9999）", type="number", required=False),
-                ParameterSpec(key="outputType", native_name="outputType", label="输出数据类型", type="string", required=False, default="Float32"),
+                ParameterSpec(
+                    key="calc",
+                    native_name="calc",
+                    label="受限表达式",
+                    type="expression",
+                    required=True,
+                    help="例如: (A-B)/(A+B)；支持 + - * / // % ** 与 abs/min/max/sqrt/exp/log/log10",
+                ),
+                ParameterSpec(
+                    key="srcNodata",
+                    native_name="srcNodata",
+                    label="输入 NoData（留空取各源标签）",
+                    type="number",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="dstNodata",
+                    native_name="dstNodata",
+                    label="输出 NoData（默认 -9999）",
+                    type="number",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="outputType",
+                    native_name="outputType",
+                    label="输出数据类型",
+                    type="string",
+                    required=False,
+                    default="Float32",
+                ),
             ],
             inputs=[
-                PortSpec(key="inputs", data_type=DatasetKind.raster, required=True, multiple=True, description="按顺序对应 A/B/C… 的输入栅格列表（允许 1 个）"),
+                PortSpec(
+                    key="inputs",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    multiple=True,
+                    description="按顺序对应 A/B/C… 的输入栅格列表（允许 1 个）",
+                ),
             ],
-            outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="单波段表达式成果图")],
+            outputs=[
+                PortSpec(
+                    key="output",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="单波段表达式成果图",
+                )
+            ],
             requirements=[
                 Requirement(kind="package", name="GDAL", reason="需 GDAL 读写栅格"),
                 Requirement(kind="package", name="numpy", reason="需 numpy 向量计算库"),
             ],
             entrypoints=[
-                Entrypoint(kind="form", target="gdal:calc", available=True, notes="平台适配器已接入（P4-04）"),
+                Entrypoint(
+                    kind="form",
+                    target="gdal:calc",
+                    available=True,
+                    notes="平台适配器已接入（P4-04）",
+                ),
                 Entrypoint(kind="cli", target="gdal_calc.exe", available=True),
             ],
             state=CapabilityState(
@@ -876,21 +1784,126 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
             engine=_engine_spec(),
             source=_source_spec("programs/gdalinfo.html"),
             parameters=[
-                ParameterSpec(key="statisticsMode", native_name="mode", label="统计模式", type="string", required=False, default="sampled", choices=["sampled", "full"]),
-                ParameterSpec(key="histogramBins", native_name="bins", label="直方图分箱数", type="integer", required=False, default=256),
-                ParameterSpec(key="maxSamples", native_name="max_samples", label="抽样预算（像元）", type="integer", required=False, default=1000000),
-                ParameterSpec(key="fullLimit", native_name="full_limit", label="全量模式像元上限", type="integer", required=False, default=50000000),
-                ParameterSpec(key="bandList", native_name="bandList", label="统计波段（1-based，留空=全部）", type="list", required=False),
-                ParameterSpec(key="srcNodata", native_name="srcNodata", label="NoData 覆盖值（留空取波段标签）", type="number", required=False),
+                ParameterSpec(
+                    key="statisticsMode",
+                    native_name="mode",
+                    label="统计模式",
+                    type="string",
+                    required=False,
+                    default="sampled",
+                    choices=["sampled", "full"],
+                ),
+                ParameterSpec(
+                    key="histogramBins",
+                    native_name="bins",
+                    label="直方图分箱数",
+                    type="integer",
+                    required=False,
+                    default=256,
+                ),
+                ParameterSpec(
+                    key="maxSamples",
+                    native_name="max_samples",
+                    label="抽样预算（像元）",
+                    type="integer",
+                    required=False,
+                    default=1000000,
+                ),
+                ParameterSpec(
+                    key="fullLimit",
+                    native_name="full_limit",
+                    label="全量模式像元上限",
+                    type="integer",
+                    required=False,
+                    default=50000000,
+                ),
+                ParameterSpec(
+                    key="bandList",
+                    native_name="bandList",
+                    label="统计波段（1-based，留空=全部）",
+                    type="list",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="srcNodata",
+                    native_name="srcNodata",
+                    label="NoData 覆盖值（留空取波段标签）",
+                    type="number",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="maskFile",
+                    native_name="maskFile",
+                    label="掩膜栅格文件路径",
+                    type="string",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="maskBand",
+                    native_name="maskBand",
+                    label="掩膜波段号（1-based）",
+                    type="integer",
+                    required=False,
+                    default=1,
+                ),
+                ParameterSpec(
+                    key="maskValue",
+                    native_name="maskValue",
+                    label="掩膜匹配地类值",
+                    type="number",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="maskMin",
+                    native_name="maskMin",
+                    label="掩膜区间下界",
+                    type="number",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="maskMax",
+                    native_name="maskMax",
+                    label="掩膜区间上界",
+                    type="number",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="maskInvert",
+                    native_name="maskInvert",
+                    label="反转掩膜选择",
+                    type="boolean",
+                    required=False,
+                    default=False,
+                ),
             ],
-            inputs=[PortSpec(key="input", data_type=DatasetKind.raster, required=True, multiple=False, description="待统计的栅格")],
-            outputs=[PortSpec(key="output", data_type=DatasetKind.artifact, required=True, description="JSON 统计报告（不加载为栅格图层）")],
+            inputs=[
+                PortSpec(
+                    key="input",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    multiple=False,
+                    description="待统计的栅格",
+                )
+            ],
+            outputs=[
+                PortSpec(
+                    key="output",
+                    data_type=DatasetKind.artifact,
+                    required=True,
+                    description="JSON 统计报告（不加载为栅格图层）",
+                )
+            ],
             requirements=[
                 Requirement(kind="package", name="GDAL", reason="需 GDAL 读取波段与原生统计"),
                 Requirement(kind="package", name="numpy", reason="需 numpy 计算分位数与直方图"),
             ],
             entrypoints=[
-                Entrypoint(kind="form", target="gdal:statistics", available=True, notes="平台适配器已接入（P4-04）"),
+                Entrypoint(
+                    kind="form",
+                    target="gdal:statistics",
+                    available=True,
+                    notes="平台适配器已接入（P4-04）",
+                ),
                 Entrypoint(kind="cli", target="gdalinfo.exe -stats", available=True),
             ],
             state=CapabilityState(
@@ -920,21 +1933,101 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
             engine=_engine_spec(),
             source=_source_spec("programs/gdal_merge.html"),
             parameters=[
-                ParameterSpec(key="overlapPriority", native_name="overlapPriority", label="重叠区优先级 (last/first)", type="string", required=False, default="last", choices=["last", "first"]),
-                ParameterSpec(key="resolution", native_name="resolution", label="分辨率策略", type="string", required=False, default="average", choices=["first", "estimate", "average", "highest", "lowest", "same"]),
-                ParameterSpec(key="srcNodata", native_name="srcNodata", label="源无效值 (srcNodata)", type="number", required=False),
-                ParameterSpec(key="vrtNodata", native_name="VRTNodata", label="中间 VRT 无效值 (vrtNodata)", type="number", required=False),
-                ParameterSpec(key="dstNodata", native_name="dstNodata", label="目标输出无效值 (dstNodata)", type="number", required=False),
-                ParameterSpec(key="xRes", native_name="xRes", label="输出像元宽", type="number", required=False),
-                ParameterSpec(key="yRes", native_name="yRes", label="输出像元高", type="number", required=False),
-                ParameterSpec(key="outputBounds", native_name="outputBounds", label="输出边界范围 minx,miny,maxx,maxy", type="list", required=False),
-                ParameterSpec(key="outputType", native_name="outputType", label="输出数据类型", type="string", required=False),
+                ParameterSpec(
+                    key="overlapPriority",
+                    native_name="overlapPriority",
+                    label="重叠区优先级 (last/first)",
+                    type="string",
+                    required=False,
+                    default="last",
+                    choices=["last", "first"],
+                ),
+                ParameterSpec(
+                    key="resolution",
+                    native_name="resolution",
+                    label="分辨率策略",
+                    type="string",
+                    required=False,
+                    default="average",
+                    choices=["first", "estimate", "average", "highest", "lowest", "same"],
+                ),
+                ParameterSpec(
+                    key="srcNodata",
+                    native_name="srcNodata",
+                    label="源无效值 (srcNodata)",
+                    type="number",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="vrtNodata",
+                    native_name="VRTNodata",
+                    label="中间 VRT 无效值 (vrtNodata)",
+                    type="number",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="dstNodata",
+                    native_name="dstNodata",
+                    label="目标输出无效值 (dstNodata)",
+                    type="number",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="xRes",
+                    native_name="xRes",
+                    label="输出像元宽",
+                    type="number",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="yRes",
+                    native_name="yRes",
+                    label="输出像元高",
+                    type="number",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="outputBounds",
+                    native_name="outputBounds",
+                    label="输出边界范围 minx,miny,maxx,maxy",
+                    type="list",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="outputType",
+                    native_name="outputType",
+                    label="输出数据类型",
+                    type="string",
+                    required=False,
+                ),
             ],
-            inputs=[PortSpec(key="input", data_type=DatasetKind.raster, required=True, multiple=True, description="输入相邻待拼图像列表")],
-            outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="镶嵌合并成果影像")],
-            requirements=[Requirement(kind="package", name="GDAL", reason="需 VRT 与 Translate 支持")],
+            inputs=[
+                PortSpec(
+                    key="input",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    multiple=True,
+                    description="输入相邻待拼图像列表",
+                )
+            ],
+            outputs=[
+                PortSpec(
+                    key="output",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="镶嵌合并成果影像",
+                )
+            ],
+            requirements=[
+                Requirement(kind="package", name="GDAL", reason="需 VRT 与 Translate 支持")
+            ],
             entrypoints=[
-                Entrypoint(kind="form", target="gdal:merge", available=True, notes="平台适配器已接入（P4-02）"),
+                Entrypoint(
+                    kind="form",
+                    target="gdal:merge",
+                    available=True,
+                    notes="平台适配器已接入（P4-02）",
+                ),
                 Entrypoint(kind="cli", target="gdal_merge.exe", available=True),
             ],
             state=CapabilityState(
@@ -945,7 +2038,10 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
             ),
             effects="new_dataset",
             cancellation="cooperative",
-            limitations=["本机无 gdal_merge.py，平台实现走「VRT + Translate」路径；不兼容输入会被明确拒绝", "输出格式受 S4 矩阵限制；旧 sidecar 事务删除、输入依赖受保护"],
+            limitations=[
+                "本机无 gdal_merge.py，平台实现走「VRT + Translate」路径；不兼容输入会被明确拒绝",
+                "输出格式受 S4 矩阵限制；旧 sidecar 事务删除、输入依赖受保护",
+            ],
             validation_evidence=[],
         ),
         CapabilityDescriptor(
@@ -959,16 +2055,64 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
             engine=_engine_spec(),
             source=_source_spec("programs/gdal_proximity.html"),
             parameters=[
-                ParameterSpec(key="values", native_name="VALUES", label="目标像元值列表（留空=非零像元）", type="list", required=False),
-                ParameterSpec(key="distunits", native_name="DISTUNITS", label="距离单位", type="string", required=False, default='PIXEL', choices=['PIXEL', 'GEO']),
-                ParameterSpec(key="maxDist", native_name="MAXDIST", label="最大计算距离（留空=不限）", type="number", required=False),
-                ParameterSpec(key="band", native_name="band", label="处理波段（1-based）", type="integer", required=False, default=1),
+                ParameterSpec(
+                    key="values",
+                    native_name="VALUES",
+                    label="目标像元值列表（留空=非零像元）",
+                    type="list",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="distunits",
+                    native_name="DISTUNITS",
+                    label="距离单位",
+                    type="string",
+                    required=False,
+                    default="PIXEL",
+                    choices=["PIXEL", "GEO"],
+                ),
+                ParameterSpec(
+                    key="maxDist",
+                    native_name="MAXDIST",
+                    label="最大计算距离（留空=不限）",
+                    type="number",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="band",
+                    native_name="band",
+                    label="处理波段（1-based）",
+                    type="integer",
+                    required=False,
+                    default=1,
+                ),
             ],
-            inputs=[PortSpec(key="input", data_type=DatasetKind.raster, required=True, description="输入二值或目标特征图")],
-            outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="欧氏邻近距离图")],
-            requirements=[Requirement(kind="package", name="GDAL", reason="需 gdal_proximity 脚本")],
+            inputs=[
+                PortSpec(
+                    key="input",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="输入二值或目标特征图",
+                )
+            ],
+            outputs=[
+                PortSpec(
+                    key="output",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="欧氏邻近距离图",
+                )
+            ],
+            requirements=[
+                Requirement(kind="package", name="GDAL", reason="需 gdal_proximity 脚本")
+            ],
             entrypoints=[
-                Entrypoint(kind="form", target="gdal:proximity", available=True, notes="平台适配器已接入（P9-02，调用 gdal.ComputeProximity）"),
+                Entrypoint(
+                    kind="form",
+                    target="gdal:proximity",
+                    available=True,
+                    notes="平台适配器已接入（P9-02，调用 gdal.ComputeProximity）",
+                ),
                 Entrypoint(kind="cli", target="gdal_proximity.exe", available=True),
                 Entrypoint(kind="script", target="osgeo.gdal.ComputeProximity", available=True),
             ],
@@ -998,16 +2142,57 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
             engine=_engine_spec(),
             source=_source_spec("programs/gdal_retile.html"),
             parameters=[
-                ParameterSpec(key="tileWidth", native_name="tileWidth", label="瓦片宽度 (像素)", type="integer", required=False, default=256),
-                ParameterSpec(key="tileHeight", native_name="tileHeight", label="瓦片高度 (像素)", type="integer", required=False, default=256),
-                ParameterSpec(key="levels", native_name="levels", label="金字塔级数", type="integer", required=False, default=1),
+                ParameterSpec(
+                    key="tileWidth",
+                    native_name="tileWidth",
+                    label="瓦片宽度 (像素)",
+                    type="integer",
+                    required=False,
+                    default=256,
+                ),
+                ParameterSpec(
+                    key="tileHeight",
+                    native_name="tileHeight",
+                    label="瓦片高度 (像素)",
+                    type="integer",
+                    required=False,
+                    default=256,
+                ),
+                ParameterSpec(
+                    key="levels",
+                    native_name="levels",
+                    label="金字塔级数",
+                    type="integer",
+                    required=False,
+                    default=1,
+                ),
             ],
-            inputs=[PortSpec(key="input", data_type=DatasetKind.raster, required=True, multiple=True, description="输入源大图")],
-            outputs=[PortSpec(key="output_dir", data_type=DatasetKind.artifact, required=True, description="输出切片文件目录")],
+            inputs=[
+                PortSpec(
+                    key="input",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    multiple=True,
+                    description="输入源大图",
+                )
+            ],
+            outputs=[
+                PortSpec(
+                    key="output_dir",
+                    data_type=DatasetKind.artifact,
+                    required=True,
+                    description="输出切片文件目录",
+                )
+            ],
             requirements=[Requirement(kind="package", name="GDAL", reason="需 gdal_retile 脚本")],
             entrypoints=[
                 Entrypoint(kind="cli", target="gdal_retile.exe", available=True),
-                Entrypoint(kind="script", target="osgeo_utils.gdal_retile.main", available=True, notes="Python 会话入口（P9-02）：输出为瓦片目录，不适合单输出表单"),
+                Entrypoint(
+                    kind="script",
+                    target="osgeo_utils.gdal_retile.main",
+                    available=True,
+                    notes="Python 会话入口（P9-02）：输出为瓦片目录，不适合单输出表单",
+                ),
             ],
             state=CapabilityState(
                 presence=Presence.present,
@@ -1033,18 +2218,80 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
             engine=_engine_spec(),
             source=_source_spec("platform/pansharpen"),
             parameters=[
-                ParameterSpec(key="msFile", native_name="msFile", label="多光谱影像文件", type="string", required=True),
-                ParameterSpec(key="msBands", native_name="msBands", label="3 个 MS 波段号（R,G,B）", type="list", required=True),
-                ParameterSpec(key="fusionMethod", native_name="fusionMethod", label="融合方法（brovey / hsv）", type="string", required=False, default="brovey", choices=list(FUSION_METHODS)),
-                ParameterSpec(key="fusionResample", native_name="fusionResample", label="MS 重采样（nearest / bilinear）", type="string", required=False, default="bilinear", choices=list(LOCAL_RESAMPLES)),
-                ParameterSpec(key="srcNodata", native_name="srcNodata", label="源 NoData 覆盖", type="number", required=False),
-                ParameterSpec(key="dstNodata", native_name="dstNodata", label="输出 NoData", type="number", required=False, default=-9999.0),
+                ParameterSpec(
+                    key="msFile",
+                    native_name="msFile",
+                    label="多光谱影像文件",
+                    type="string",
+                    required=True,
+                ),
+                ParameterSpec(
+                    key="msBands",
+                    native_name="msBands",
+                    label="3 个 MS 波段号（R,G,B）",
+                    type="list",
+                    required=True,
+                ),
+                ParameterSpec(
+                    key="fusionMethod",
+                    native_name="fusionMethod",
+                    label="融合方法（brovey / hsv）",
+                    type="string",
+                    required=False,
+                    default="brovey",
+                    choices=list(FUSION_METHODS),
+                ),
+                ParameterSpec(
+                    key="fusionResample",
+                    native_name="fusionResample",
+                    label="MS 重采样（nearest / bilinear）",
+                    type="string",
+                    required=False,
+                    default="bilinear",
+                    choices=list(LOCAL_RESAMPLES),
+                ),
+                ParameterSpec(
+                    key="srcNodata",
+                    native_name="srcNodata",
+                    label="源 NoData 覆盖",
+                    type="number",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="dstNodata",
+                    native_name="dstNodata",
+                    label="输出 NoData",
+                    type="number",
+                    required=False,
+                    default=-9999.0,
+                ),
             ],
-            inputs=[PortSpec(key="input", data_type=DatasetKind.raster, required=True, description="单波段全色影像（north-up 网格）")],
-            outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="3 波段 Float32 融合成果")],
-            requirements=[Requirement(kind="package", name="numpy", reason="Brovey/HSV 逐像元融合")],
+            inputs=[
+                PortSpec(
+                    key="input",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="单波段全色影像（north-up 网格）",
+                )
+            ],
+            outputs=[
+                PortSpec(
+                    key="output",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="3 波段 Float32 融合成果",
+                )
+            ],
+            requirements=[
+                Requirement(kind="package", name="numpy", reason="Brovey/HSV 逐像元融合")
+            ],
             entrypoints=[
-                Entrypoint(kind="form", target="gdal:pansharpen", available=True, notes="平台适配器已接入（P6-04）"),
+                Entrypoint(
+                    kind="form",
+                    target="gdal:pansharpen",
+                    available=True,
+                    notes="平台适配器已接入（P6-04）",
+                ),
             ],
             state=CapabilityState(
                 presence=Presence.present,
@@ -1073,18 +2320,77 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
             engine=_engine_spec(),
             source=_source_spec("programs/ogr2ogr.html"),
             parameters=[
-                ParameterSpec(key="format", native_name="format", label="目标矢量驱动", type="string", required=False, default="GPKG", choices=["GPKG", "ESRI Shapefile", "GeoJSON", "FlatGeobuf"]),
-                ParameterSpec(key="sql", native_name="sql", label="SQL 过滤查询语句", type="sql", required=False),
-                ParameterSpec(key="dstSRS", native_name="dstSRS", label="目标空间参考 (CRS)", type="crs", required=False),
-                ParameterSpec(key="spat", native_name="spat", label="空间过滤框 minx,miny,maxx,maxy（源 CRS 单位）", type="list", required=False),
-                ParameterSpec(key="where", native_name="where", label="属性过滤子句 (WHERE)", type="string", required=False),
-                ParameterSpec(key="select", native_name="select", label="保留字段列表", type="list", required=False),
+                ParameterSpec(
+                    key="format",
+                    native_name="format",
+                    label="目标矢量驱动",
+                    type="string",
+                    required=False,
+                    default="GPKG",
+                    choices=["GPKG", "ESRI Shapefile", "GeoJSON", "FlatGeobuf"],
+                ),
+                ParameterSpec(
+                    key="sql",
+                    native_name="sql",
+                    label="SQL 过滤查询语句",
+                    type="sql",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="dstSRS",
+                    native_name="dstSRS",
+                    label="目标空间参考 (CRS)",
+                    type="crs",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="spat",
+                    native_name="spat",
+                    label="空间过滤框 minx,miny,maxx,maxy（源 CRS 单位）",
+                    type="list",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="where",
+                    native_name="where",
+                    label="属性过滤子句 (WHERE)",
+                    type="string",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="select",
+                    native_name="select",
+                    label="保留字段列表",
+                    type="list",
+                    required=False,
+                ),
             ],
-            inputs=[PortSpec(key="input", data_type=DatasetKind.vector, required=True, description="输入源矢量图层")],
-            outputs=[PortSpec(key="output", data_type=DatasetKind.vector, required=True, description="输出目标矢量图层")],
-            requirements=[Requirement(kind="package", name="GDAL", reason="需 OGR 矢量引擎与矢量驱动")],
+            inputs=[
+                PortSpec(
+                    key="input",
+                    data_type=DatasetKind.vector,
+                    required=True,
+                    description="输入源矢量图层",
+                )
+            ],
+            outputs=[
+                PortSpec(
+                    key="output",
+                    data_type=DatasetKind.vector,
+                    required=True,
+                    description="输出目标矢量图层",
+                )
+            ],
+            requirements=[
+                Requirement(kind="package", name="GDAL", reason="需 OGR 矢量引擎与矢量驱动")
+            ],
             entrypoints=[
-                Entrypoint(kind="form", target="ogr:vectortranslate", available=True, notes="平台适配器已接入（P5-04）"),
+                Entrypoint(
+                    kind="form",
+                    target="ogr:vectortranslate",
+                    available=True,
+                    notes="平台适配器已接入（P5-04）",
+                ),
                 Entrypoint(kind="cli", target="ogr2ogr.exe", available=True, notes="标准 CLI 别名"),
                 Entrypoint(kind="script", target="osgeo.gdal.VectorTranslate", available=True),
             ],
@@ -1115,19 +2421,90 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
             engine=_engine_spec(),
             source=_source_spec("platform/sindex"),
             parameters=[
-                ParameterSpec(key="sindex", native_name="index", label="光谱指数", type="string", required=True, choices=["ndvi", "ndwi", "nbr", "savi"]),
-                ParameterSpec(key="bandA", native_name="bandA", label="波段 A（ndvi/nbr/savi=NIR，ndwi=Green）", type="integer", required=True),
-                ParameterSpec(key="bandB", native_name="bandB", label="波段 B（ndvi/savi=Red，ndwi=NIR，nbr=SWIR）", type="integer", required=True),
-                ParameterSpec(key="saviL", native_name="saviL", label="SAVI 土壤调节因子 L（仅 savi）", type="number", required=False, default=0.5),
-                ParameterSpec(key="usePhysical", native_name="usePhysical", label="使用波段元数据 scale/offset 换算物理量", type="boolean", required=False, default=True),
-                ParameterSpec(key="srcNodata", native_name="srcNodata", label="源 NoData 覆盖", type="number", required=False),
-                ParameterSpec(key="dstNodata", native_name="dstNodata", label="输出 NoData", type="number", required=False, default=-9999.0),
+                ParameterSpec(
+                    key="sindex",
+                    native_name="index",
+                    label="光谱指数",
+                    type="string",
+                    required=True,
+                    choices=["ndvi", "ndwi", "nbr", "savi"],
+                ),
+                ParameterSpec(
+                    key="bandA",
+                    native_name="bandA",
+                    label="波段 A（ndvi/nbr/savi=NIR，ndwi=Green）",
+                    type="integer",
+                    required=True,
+                ),
+                ParameterSpec(
+                    key="bandB",
+                    native_name="bandB",
+                    label="波段 B（ndvi/savi=Red，ndwi=NIR，nbr=SWIR）",
+                    type="integer",
+                    required=True,
+                ),
+                ParameterSpec(
+                    key="saviL",
+                    native_name="saviL",
+                    label="SAVI 土壤调节因子 L（仅 savi）",
+                    type="number",
+                    required=False,
+                    default=0.5,
+                ),
+                ParameterSpec(
+                    key="usePhysical",
+                    native_name="usePhysical",
+                    label="使用波段元数据 scale/offset 换算物理量",
+                    type="boolean",
+                    required=False,
+                    default=True,
+                ),
+                ParameterSpec(
+                    key="srcNodata",
+                    native_name="srcNodata",
+                    label="源 NoData 覆盖",
+                    type="number",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="dstNodata",
+                    native_name="dstNodata",
+                    label="输出 NoData",
+                    type="number",
+                    required=False,
+                    default=-9999.0,
+                ),
             ],
-            inputs=[PortSpec(key="input", data_type=DatasetKind.raster, required=True, description="多波段输入栅格（A/B 波段取自同一数据集）")],
-            outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="单波段 Float32 指数成果")],
-            requirements=[Requirement(kind="package", name="numpy", reason="指数逐像元 numpy 求值（gdal worker 运行时自带）")],
+            inputs=[
+                PortSpec(
+                    key="input",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="多波段输入栅格（A/B 波段取自同一数据集）",
+                )
+            ],
+            outputs=[
+                PortSpec(
+                    key="output",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="单波段 Float32 指数成果",
+                )
+            ],
+            requirements=[
+                Requirement(
+                    kind="package",
+                    name="numpy",
+                    reason="指数逐像元 numpy 求值（gdal worker 运行时自带）",
+                )
+            ],
             entrypoints=[
-                Entrypoint(kind="form", target="gdal:sindex", available=True, notes="平台适配器已接入（P6-01）"),
+                Entrypoint(
+                    kind="form",
+                    target="gdal:sindex",
+                    available=True,
+                    notes="平台适配器已接入（P6-01）",
+                ),
             ],
             state=CapabilityState(
                 presence=Presence.present,
@@ -1156,16 +2533,90 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
             engine=_engine_spec(),
             source=_source_spec("platform/fftfilter"),
             parameters=[
-                ParameterSpec(key="fftBand", native_name="fftBand", label="处理波段（1-based）", type="integer", required=True),
-                ParameterSpec(key="suppressBins", native_name="suppressBins", label="抑制频率 bin [fy,fx] 列表（负数按模归一化，自动补对称伙伴；空=恒等往返）", type="list", required=False),
-                ParameterSpec(key="srcNodata", native_name="srcNodata", label="源 NoData 覆盖（缺省读波段标签）", type="number", required=False),
-                ParameterSpec(key="dstNodata", native_name="dstNodata", label="输出 NoData", type="number", required=False, default=-9999.0),
+                ParameterSpec(
+                    key="fftBand",
+                    native_name="fftBand",
+                    label="处理波段（1-based）",
+                    type="integer",
+                    required=True,
+                ),
+                ParameterSpec(
+                    key="suppressBins",
+                    native_name="suppressBins",
+                    label="抑制频率 bin [fy,fx] 列表（负数按模归一化，自动补对称伙伴；空=恒等往返）",
+                    type="list",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="srcNodata",
+                    native_name="srcNodata",
+                    label="源 NoData 覆盖（缺省读波段标签）",
+                    type="number",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="dstNodata",
+                    native_name="dstNodata",
+                    label="输出 NoData",
+                    type="number",
+                    required=False,
+                    default=-9999.0,
+                ),
+                ParameterSpec(
+                    key="transitionWidth",
+                    native_name="transitionWidth",
+                    label="滚降过渡羽化宽度（像元）",
+                    type="number",
+                    required=False,
+                    default=0.0,
+                ),
+                ParameterSpec(
+                    key="notchRegions",
+                    native_name="notchRegions",
+                    label="矩形陷波抑制区域 [[min_y,max_y,min_x,max_x],...]",
+                    type="list",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="taperType",
+                    native_name="taperType",
+                    label="滚降窗口类型",
+                    type="string",
+                    required=False,
+                    default="cosine",
+                    choices=["cosine", "gaussian"],
+                ),
             ],
-            inputs=[PortSpec(key="input", data_type=DatasetKind.raster, required=True, description="单波段输入栅格")],
-            outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="单波段 Float32 滤波成果")],
-            requirements=[Requirement(kind="package", name="numpy", reason="FFT 逐像元 numpy.fft 求值（gdal worker 运行时自带）")],
+            inputs=[
+                PortSpec(
+                    key="input",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="单波段输入栅格",
+                )
+            ],
+            outputs=[
+                PortSpec(
+                    key="output",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="单波段 Float32 滤波成果",
+                )
+            ],
+            requirements=[
+                Requirement(
+                    kind="package",
+                    name="numpy",
+                    reason="FFT 逐像元 numpy.fft 求值（gdal worker 运行时自带）",
+                )
+            ],
             entrypoints=[
-                Entrypoint(kind="form", target="gdal:fftfilter", available=True, notes="平台适配器已接入（P6-02）"),
+                Entrypoint(
+                    kind="form",
+                    target="gdal:fftfilter",
+                    available=True,
+                    notes="平台适配器已接入（P6-02）",
+                ),
             ],
             state=CapabilityState(
                 presence=Presence.present,
@@ -1196,18 +2647,84 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
             engine=_engine_spec(),
             source=_source_spec("platform/pca"),
             parameters=[
-                ParameterSpec(key="pcaMode", native_name="pcaMode", label="模式（forward / inverse）", type="string", required=False, default="forward", choices=["forward", "inverse"]),
-                ParameterSpec(key="pcaComponents", native_name="pcaComponents", label="主成分数（缺省=全部波段）", type="integer", required=False),
-                ParameterSpec(key="pcaMatrix", native_name="pcaMatrix", label="矩阵类型（covariance / correlation）", type="string", required=False, default="covariance", choices=["covariance", "correlation"]),
-                ParameterSpec(key="pcaTransform", native_name="pcaTransform", label="PCA 变换文件（inverse 必填，正变换写出的 .pca.json）", type="string", required=False),
-                ParameterSpec(key="srcNodata", native_name="srcNodata", label="源 NoData 覆盖（缺省读各波段标签）", type="number", required=False),
-                ParameterSpec(key="dstNodata", native_name="dstNodata", label="输出 NoData", type="number", required=False, default=-9999.0),
+                ParameterSpec(
+                    key="pcaMode",
+                    native_name="pcaMode",
+                    label="模式（forward / inverse）",
+                    type="string",
+                    required=False,
+                    default="forward",
+                    choices=["forward", "inverse"],
+                ),
+                ParameterSpec(
+                    key="pcaComponents",
+                    native_name="pcaComponents",
+                    label="主成分数（缺省=全部波段）",
+                    type="integer",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="pcaMatrix",
+                    native_name="pcaMatrix",
+                    label="矩阵类型（covariance / correlation）",
+                    type="string",
+                    required=False,
+                    default="covariance",
+                    choices=["covariance", "correlation"],
+                ),
+                ParameterSpec(
+                    key="pcaTransform",
+                    native_name="pcaTransform",
+                    label="PCA 变换文件（inverse 必填，正变换写出的 .pca.json）",
+                    type="string",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="srcNodata",
+                    native_name="srcNodata",
+                    label="源 NoData 覆盖（缺省读各波段标签）",
+                    type="number",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="dstNodata",
+                    native_name="dstNodata",
+                    label="输出 NoData",
+                    type="number",
+                    required=False,
+                    default=-9999.0,
+                ),
             ],
-            inputs=[PortSpec(key="input", data_type=DatasetKind.raster, required=True, description="多波段实数栅格（forward）或主成分栅格（inverse）")],
-            outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="多波段 Float32 主成分/重建成果")],
-            requirements=[Requirement(kind="package", name="numpy", reason="PCA 特征分解 numpy.linalg.eigh（gdal worker 运行时自带）")],
+            inputs=[
+                PortSpec(
+                    key="input",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="多波段实数栅格（forward）或主成分栅格（inverse）",
+                )
+            ],
+            outputs=[
+                PortSpec(
+                    key="output",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="多波段 Float32 主成分/重建成果",
+                )
+            ],
+            requirements=[
+                Requirement(
+                    kind="package",
+                    name="numpy",
+                    reason="PCA 特征分解 numpy.linalg.eigh（gdal worker 运行时自带）",
+                )
+            ],
             entrypoints=[
-                Entrypoint(kind="form", target="gdal:pca", available=True, notes="平台适配器已接入（P6-03）"),
+                Entrypoint(
+                    kind="form",
+                    target="gdal:pca",
+                    available=True,
+                    notes="平台适配器已接入（P6-03）",
+                ),
             ],
             state=CapabilityState(
                 presence=Presence.present,
@@ -1238,16 +2755,65 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
             engine=_engine_spec(),
             source=_source_spec("platform/tasseledcap"),
             parameters=[
-                ParameterSpec(key="tcSensor", native_name="tcSensor", label="传感器（系数来源锁定）", type="string", required=True, choices=list(sensor_keys())),
-                ParameterSpec(key="tcBands", native_name="tcBands", label="6 个输入波段号，顺序 Blue,Green,Red,NIR,SWIR1,SWIR2", type="list", required=True),
-                ParameterSpec(key="srcNodata", native_name="srcNodata", label="源 NoData 覆盖（缺省读各波段标签）", type="number", required=False),
-                ParameterSpec(key="dstNodata", native_name="dstNodata", label="输出 NoData", type="number", required=False, default=-9999.0),
+                ParameterSpec(
+                    key="tcSensor",
+                    native_name="tcSensor",
+                    label="传感器（系数来源锁定）",
+                    type="string",
+                    required=True,
+                    choices=list(sensor_keys()),
+                ),
+                ParameterSpec(
+                    key="tcBands",
+                    native_name="tcBands",
+                    label="6 个输入波段号，顺序 Blue,Green,Red,NIR,SWIR1,SWIR2",
+                    type="list",
+                    required=True,
+                ),
+                ParameterSpec(
+                    key="srcNodata",
+                    native_name="srcNodata",
+                    label="源 NoData 覆盖（缺省读各波段标签）",
+                    type="number",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="dstNodata",
+                    native_name="dstNodata",
+                    label="输出 NoData",
+                    type="number",
+                    required=False,
+                    default=-9999.0,
+                ),
             ],
-            inputs=[PortSpec(key="input", data_type=DatasetKind.raster, required=True, description="含至少 6 个实数波段的栅格")],
-            outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="3 波段 Float32：brightness/greenness/wetness")],
-            requirements=[Requirement(kind="package", name="numpy", reason="缨帽系数矩阵乘（gdal worker 运行时自带）")],
+            inputs=[
+                PortSpec(
+                    key="input",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="含至少 6 个实数波段的栅格",
+                )
+            ],
+            outputs=[
+                PortSpec(
+                    key="output",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="3 波段 Float32：brightness/greenness/wetness",
+                )
+            ],
+            requirements=[
+                Requirement(
+                    kind="package", name="numpy", reason="缨帽系数矩阵乘（gdal worker 运行时自带）"
+                )
+            ],
             entrypoints=[
-                Entrypoint(kind="form", target="gdal:tasseledcap", available=True, notes="平台适配器已接入（P6-03）"),
+                Entrypoint(
+                    kind="form",
+                    target="gdal:tasseledcap",
+                    available=True,
+                    notes="平台适配器已接入（P6-03）",
+                ),
             ],
             state=CapabilityState(
                 presence=Presence.present,
@@ -1276,18 +2842,80 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
             engine=_engine_spec(),
             source=_source_spec("platform/gcpregister"),
             parameters=[
-                ParameterSpec(key="gcpTransform", native_name="gcpTransform", label="变换（affine / polynomial2）", type="string", required=False, default="affine", choices=list(GCP_TRANSFORMS)),
-                ParameterSpec(key="gcpFile", native_name="gcpFile", label="GCP JSON 文件", type="string", required=True),
-                ParameterSpec(key="referenceFile", native_name="referenceFile", label="参考影像（输出网格）", type="string", required=True),
-                ParameterSpec(key="gcpResample", native_name="gcpResample", label="重采样（nearest / bilinear）", type="string", required=False, default="bilinear", choices=list(LOCAL_RESAMPLES)),
-                ParameterSpec(key="srcNodata", native_name="srcNodata", label="源 NoData 覆盖", type="number", required=False),
-                ParameterSpec(key="dstNodata", native_name="dstNodata", label="输出 NoData", type="number", required=False, default=-9999.0),
+                ParameterSpec(
+                    key="gcpTransform",
+                    native_name="gcpTransform",
+                    label="变换（affine / polynomial2）",
+                    type="string",
+                    required=False,
+                    default="affine",
+                    choices=list(GCP_TRANSFORMS),
+                ),
+                ParameterSpec(
+                    key="gcpFile",
+                    native_name="gcpFile",
+                    label="GCP JSON 文件",
+                    type="string",
+                    required=True,
+                ),
+                ParameterSpec(
+                    key="referenceFile",
+                    native_name="referenceFile",
+                    label="参考影像（输出网格）",
+                    type="string",
+                    required=True,
+                ),
+                ParameterSpec(
+                    key="gcpResample",
+                    native_name="gcpResample",
+                    label="重采样（nearest / bilinear）",
+                    type="string",
+                    required=False,
+                    default="bilinear",
+                    choices=list(LOCAL_RESAMPLES),
+                ),
+                ParameterSpec(
+                    key="srcNodata",
+                    native_name="srcNodata",
+                    label="源 NoData 覆盖",
+                    type="number",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="dstNodata",
+                    native_name="dstNodata",
+                    label="输出 NoData",
+                    type="number",
+                    required=False,
+                    default=-9999.0,
+                ),
             ],
-            inputs=[PortSpec(key="input", data_type=DatasetKind.raster, required=True, description="源影像（可为未正确地理参考的原始像素）")],
-            outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="参考网格上的 Float32 配准成果")],
-            requirements=[Requirement(kind="package", name="numpy", reason="GCP 最小二乘与反变换采样")],
+            inputs=[
+                PortSpec(
+                    key="input",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="源影像（可为未正确地理参考的原始像素）",
+                )
+            ],
+            outputs=[
+                PortSpec(
+                    key="output",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="参考网格上的 Float32 配准成果",
+                )
+            ],
+            requirements=[
+                Requirement(kind="package", name="numpy", reason="GCP 最小二乘与反变换采样")
+            ],
             entrypoints=[
-                Entrypoint(kind="form", target="gdal:gcpregister", available=True, notes="平台适配器已接入（P6-04）"),
+                Entrypoint(
+                    kind="form",
+                    target="gdal:gcpregister",
+                    available=True,
+                    notes="平台适配器已接入（P6-04）",
+                ),
             ],
             state=CapabilityState(
                 presence=Presence.present,
@@ -1317,16 +2945,62 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
             engine=_engine_spec(),
             source=_source_spec("platform/rasterdiff"),
             parameters=[
-                ParameterSpec(key="diffMode", native_name="diffMode", label="差值模式（difference / absolute）", type="string", required=False, default="difference", choices=list(DIFF_MODES)),
-                ParameterSpec(key="referenceFile", native_name="referenceFile", label="参考影像 B", type="string", required=True),
-                ParameterSpec(key="srcNodata", native_name="srcNodata", label="源 NoData 覆盖", type="number", required=False),
-                ParameterSpec(key="dstNodata", native_name="dstNodata", label="输出 NoData", type="number", required=False, default=-9999.0),
+                ParameterSpec(
+                    key="diffMode",
+                    native_name="diffMode",
+                    label="差值模式（difference / absolute）",
+                    type="string",
+                    required=False,
+                    default="difference",
+                    choices=list(DIFF_MODES),
+                ),
+                ParameterSpec(
+                    key="referenceFile",
+                    native_name="referenceFile",
+                    label="参考影像 B",
+                    type="string",
+                    required=True,
+                ),
+                ParameterSpec(
+                    key="srcNodata",
+                    native_name="srcNodata",
+                    label="源 NoData 覆盖",
+                    type="number",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="dstNodata",
+                    native_name="dstNodata",
+                    label="输出 NoData",
+                    type="number",
+                    required=False,
+                    default=-9999.0,
+                ),
             ],
-            inputs=[PortSpec(key="input", data_type=DatasetKind.raster, required=True, description="输入影像 A")],
-            outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="Float32 差值成果（波段数与输入一致）")],
+            inputs=[
+                PortSpec(
+                    key="input",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="输入影像 A",
+                )
+            ],
+            outputs=[
+                PortSpec(
+                    key="output",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="Float32 差值成果（波段数与输入一致）",
+                )
+            ],
             requirements=[Requirement(kind="package", name="numpy", reason="逐像元差值/统计")],
             entrypoints=[
-                Entrypoint(kind="form", target="gdal:rasterdiff", available=True, notes="平台适配器已接入（P6-04）"),
+                Entrypoint(
+                    kind="form",
+                    target="gdal:rasterdiff",
+                    available=True,
+                    notes="平台适配器已接入（P6-04）",
+                ),
             ],
             state=CapabilityState(
                 presence=Presence.present,
@@ -1354,17 +3028,68 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
             engine=_engine_spec(),
             source=_source_spec("platform/mask"),
             parameters=[
-                ParameterSpec(key="maskBand", native_name="maskBand", label="输入波段（1-based）", type="integer", required=False, default=1),
-                ParameterSpec(key="maskLow", native_name="maskLow", label="掩膜下限（闭区间，可空）", type="number", required=False),
-                ParameterSpec(key="maskHigh", native_name="maskHigh", label="掩膜上限（闭区间，可空）", type="number", required=False),
-                ParameterSpec(key="maskInvert", native_name="maskInvert", label="取反掩膜", type="boolean", required=False, default=False),
-                ParameterSpec(key="srcNodata", native_name="srcNodata", label="源 NoData 覆盖", type="number", required=False),
+                ParameterSpec(
+                    key="maskBand",
+                    native_name="maskBand",
+                    label="输入波段（1-based）",
+                    type="integer",
+                    required=False,
+                    default=1,
+                ),
+                ParameterSpec(
+                    key="maskLow",
+                    native_name="maskLow",
+                    label="掩膜下限（闭区间，可空）",
+                    type="number",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="maskHigh",
+                    native_name="maskHigh",
+                    label="掩膜上限（闭区间，可空）",
+                    type="number",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="maskInvert",
+                    native_name="maskInvert",
+                    label="取反掩膜",
+                    type="boolean",
+                    required=False,
+                    default=False,
+                ),
+                ParameterSpec(
+                    key="srcNodata",
+                    native_name="srcNodata",
+                    label="源 NoData 覆盖",
+                    type="number",
+                    required=False,
+                ),
             ],
-            inputs=[PortSpec(key="input", data_type=DatasetKind.raster, required=True, description="任意实数栅格")],
-            outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="Byte 二值掩膜：1=真，0=假，未设 NoData")],
+            inputs=[
+                PortSpec(
+                    key="input",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="任意实数栅格",
+                )
+            ],
+            outputs=[
+                PortSpec(
+                    key="output",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="Byte 二值掩膜：1=真，0=假，未设 NoData",
+                )
+            ],
             requirements=[Requirement(kind="package", name="numpy", reason="逐像元阈值比较")],
             entrypoints=[
-                Entrypoint(kind="form", target="gdal:mask", available=True, notes="平台适配器已接入（P6-05）"),
+                Entrypoint(
+                    kind="form",
+                    target="gdal:mask",
+                    available=True,
+                    notes="平台适配器已接入（P6-05）",
+                ),
             ],
             state=CapabilityState(
                 presence=Presence.present,
@@ -1392,17 +3117,72 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
             engine=_engine_spec(),
             source=_source_spec("platform/clip_mask"),
             parameters=[
-                ParameterSpec(key="cutlinePath", native_name="cutlinePath", label="矢量裁剪文件路径（SHP/GeoJSON/GPKG）", type="string", required=False),
-                ParameterSpec(key="cropToCutline", native_name="cropToCutline", label="收缩输出范围至矢量包围盒", type="boolean", required=False, default=True),
-                ParameterSpec(key="dstNodata", native_name="dstNodata", label="掩膜外填充 NoData 值", type="number", required=False, default=-9999.0),
-                ParameterSpec(key="allTouched", native_name="allTouched", label="包含相交的全部像元（All Touched）", type="boolean", required=False, default=False),
-                ParameterSpec(key="resampleAlg", native_name="resampleAlg", label="重采样算法（默认最邻近 near）", type="string", required=False, default="near"),
+                ParameterSpec(
+                    key="cutlinePath",
+                    native_name="cutlinePath",
+                    label="矢量裁剪文件路径（SHP/GeoJSON/GPKG）",
+                    type="string",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="cropToCutline",
+                    native_name="cropToCutline",
+                    label="收缩输出范围至矢量包围盒",
+                    type="boolean",
+                    required=False,
+                    default=True,
+                ),
+                ParameterSpec(
+                    key="dstNodata",
+                    native_name="dstNodata",
+                    label="掩膜外填充 NoData 值",
+                    type="number",
+                    required=False,
+                    default=-9999.0,
+                ),
+                ParameterSpec(
+                    key="allTouched",
+                    native_name="allTouched",
+                    label="包含相交的全部像元（All Touched）",
+                    type="boolean",
+                    required=False,
+                    default=False,
+                ),
+                ParameterSpec(
+                    key="resampleAlg",
+                    native_name="resampleAlg",
+                    label="重采样算法（默认最邻近 near）",
+                    type="string",
+                    required=False,
+                    default="near",
+                ),
             ],
-            inputs=[PortSpec(key="input", data_type=DatasetKind.raster, required=True, description="待裁剪栅格图层")],
-            outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="掩膜裁剪后栅格成果")],
-            requirements=[Requirement(kind="package", name="gdal", reason="GDAL Warp cutline 几何裁剪执行")],
+            inputs=[
+                PortSpec(
+                    key="input",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="待裁剪栅格图层",
+                )
+            ],
+            outputs=[
+                PortSpec(
+                    key="output",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="掩膜裁剪后栅格成果",
+                )
+            ],
+            requirements=[
+                Requirement(kind="package", name="gdal", reason="GDAL Warp cutline 几何裁剪执行")
+            ],
             entrypoints=[
-                Entrypoint(kind="form", target="gdal:clip_mask", available=True, notes="平台适配器已接入（P11-07）"),
+                Entrypoint(
+                    kind="form",
+                    target="gdal:clip_mask",
+                    available=True,
+                    notes="平台适配器已接入（P11-07）",
+                ),
             ],
             state=CapabilityState(
                 presence=Presence.present,
@@ -1421,6 +3201,622 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
             validation_evidence=[],
         ),
         CapabilityDescriptor(
+            capability_id="gdal:density_slice",
+            descriptor_revision="1.0",
+            kind=CapabilityKind.algorithm,
+            name="栅格密度分割（Density Slice）",
+            native_name="spectra_workbench.density_slice_ops（GDAL/numpy）",
+            category=["classification", "density_slice", "statistics", "raster"],
+            description="将单波段连续灰度栅格按等间距或分位数划分为离散地类区间，输出带标准 GDAL 颜色表的单波段类别栅格并生成面积与像元占比审计报告。",
+            engine=_engine_spec(),
+            source=_source_spec("platform/density_slice"),
+            parameters=[
+                ParameterSpec(
+                    key="band",
+                    native_name="band",
+                    label="处理波段号（1-based）",
+                    type="integer",
+                    required=False,
+                    default=1,
+                ),
+                ParameterSpec(
+                    key="numSlices",
+                    native_name="numSlices",
+                    label="分割区间数",
+                    type="integer",
+                    required=False,
+                    default=5,
+                ),
+                ParameterSpec(
+                    key="sliceMode",
+                    native_name="sliceMode",
+                    label="区间划分模式",
+                    type="string",
+                    required=False,
+                    default="equal_interval",
+                    choices=["equal_interval", "quantile"],
+                ),
+                ParameterSpec(
+                    key="slices",
+                    native_name="slices",
+                    label="自定义切片定义列表",
+                    type="list",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="dstNodata",
+                    native_name="dstNodata",
+                    label="输出无效值 NoData",
+                    type="integer",
+                    required=False,
+                    default=0,
+                ),
+                ParameterSpec(
+                    key="outFormat",
+                    native_name="outFormat",
+                    label="输出格式",
+                    type="string",
+                    required=False,
+                    default="GTiff",
+                ),
+            ],
+            inputs=[
+                PortSpec(
+                    key="input",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="待分割单波段连续栅格",
+                )
+            ],
+            outputs=[
+                PortSpec(
+                    key="output",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="带 GDAL 颜色表的单波段离散分类栅格",
+                )
+            ],
+            requirements=[
+                Requirement(kind="package", name="GDAL", reason="GDAL 栅格读写与 ColorTable 构造"),
+                Requirement(kind="package", name="numpy", reason="numpy 统计与离散化运算"),
+            ],
+            entrypoints=[
+                Entrypoint(
+                    kind="form",
+                    target="gdal:density_slice",
+                    available=True,
+                    notes="平台适配器已接入（P11-06）",
+                ),
+            ],
+            state=CapabilityState(
+                presence=Presence.present,
+                binding=Binding.form,
+                validation=Validation.not_run,
+                availability=Availability.ready,
+            ),
+            effects="new_dataset",
+            cancellation="cooperative",
+            limitations=[
+                "输出带 GDAL 颜色表（ColorTable）的单波段离散分类栅格",
+                "生成伴随 .density_slice.json 审计元数据（含区间像元数与物理覆盖面积统计）",
+            ],
+            validation_evidence=[],
+        ),
+        CapabilityDescriptor(
+            capability_id="gdal:mosaic_advanced",
+            descriptor_revision="1.0",
+            kind=CapabilityKind.algorithm,
+            name="高级图像镶嵌（直方图匹配消色差 + 余弦羽化渐变接缝）",
+            native_name="spectra_workbench.advanced_mosaic_ops（GDAL/numpy）",
+            category=["mosaic", "histogram_matching", "feathering", "raster"],
+            description="基于重叠区直方图分位数映射进行多景影像相对辐射归一化，消除景间曝光与大气色差，并采用 50 像元余弦距离场权重平滑羽化无缝融合接缝。",
+            engine=_engine_spec(),
+            source=_source_spec("platform/mosaic_advanced"),
+            parameters=[
+                ParameterSpec(
+                    key="matchHistogram",
+                    native_name="matchHistogram",
+                    label="重叠区直方图匹配消色差",
+                    type="boolean",
+                    required=False,
+                    default=True,
+                ),
+                ParameterSpec(
+                    key="masterIndex",
+                    native_name="masterIndex",
+                    label="基准参考景索引（0-based）",
+                    type="integer",
+                    required=False,
+                    default=0,
+                ),
+                ParameterSpec(
+                    key="featherWidth",
+                    native_name="featherWidth",
+                    label="重叠区羽化渐变过渡宽度（像元）",
+                    type="integer",
+                    required=False,
+                    default=50,
+                ),
+                ParameterSpec(
+                    key="dstNodata",
+                    native_name="dstNodata",
+                    label="输出无效值 NoData",
+                    type="number",
+                    required=False,
+                    default=-9999.0,
+                ),
+                ParameterSpec(
+                    key="outFormat",
+                    native_name="outFormat",
+                    label="输出驱动格式",
+                    type="string",
+                    required=False,
+                    default="GTiff",
+                ),
+            ],
+            inputs=[
+                PortSpec(
+                    key="inputs",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="待镶嵌的多个输入栅格景序列",
+                )
+            ],
+            outputs=[
+                PortSpec(
+                    key="output",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="无缝羽化消色差镶嵌多波段成果",
+                )
+            ],
+            requirements=[
+                Requirement(kind="package", name="GDAL", reason="GDAL VRT 与坐标对齐重采样"),
+                Requirement(
+                    kind="package", name="numpy", reason="经验直方图匹配与余弦距离场加权融合"
+                ),
+            ],
+            entrypoints=[
+                Entrypoint(
+                    kind="form",
+                    target="gdal:mosaic_advanced",
+                    available=True,
+                    notes="平台适配器已接入（P11-03）",
+                ),
+            ],
+            state=CapabilityState(
+                presence=Presence.present,
+                binding=Binding.form,
+                validation=Validation.not_run,
+                availability=Availability.ready,
+            ),
+            effects="new_dataset",
+            cancellation="cooperative",
+            limitations=[
+                "自动提取相邻景重叠区累积经验分布函数（CDF）消除时相与光照色差",
+                "生成伴随 .mosaic.json 审计记录",
+            ],
+            validation_evidence=[],
+        ),
+        CapabilityDescriptor(
+            capability_id="gdal:sam",
+            descriptor_revision="1.0",
+            kind=CapabilityKind.algorithm,
+            name="光谱角制图（SAM / Spectral Angle Mapper）",
+            native_name="spectra_workbench.hyperspectral_ops（GDAL/numpy）",
+            category=["hyperspectral", "sam", "spectral_angle", "classification"],
+            description="计算像元连续光谱与参考端元光谱的广义夹角，输出不受光照强弱与阴影干扰的光谱角制图成果（Float32 弧度/度）。",
+            engine=_engine_spec(),
+            source=_source_spec("platform/sam"),
+            parameters=[
+                ParameterSpec(
+                    key="referenceSpectrum",
+                    native_name="referenceSpectrum",
+                    label="参考端元光谱向量",
+                    type="list",
+                    required=True,
+                ),
+                ParameterSpec(
+                    key="angleUnit",
+                    native_name="angleUnit",
+                    label="角度单位（radians 或 degrees）",
+                    type="string",
+                    required=False,
+                    default="radians",
+                    choices=["radians", "degrees"],
+                ),
+                ParameterSpec(
+                    key="maxAngle",
+                    native_name="maxAngle",
+                    label="最大阈值过滤夹角（超出赋 NoData）",
+                    type="number",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="dstNodata",
+                    native_name="dstNodata",
+                    label="输出无效值 NoData",
+                    type="number",
+                    required=False,
+                    default=-9999.0,
+                ),
+                ParameterSpec(
+                    key="outFormat",
+                    native_name="outFormat",
+                    label="输出驱动格式",
+                    type="string",
+                    required=False,
+                    default="GTiff",
+                ),
+            ],
+            inputs=[
+                PortSpec(
+                    key="input",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="多波段或高光谱像元立方体",
+                )
+            ],
+            outputs=[
+                PortSpec(
+                    key="output",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="单波段 Float32 光谱角制图成果",
+                )
+            ],
+            requirements=[
+                Requirement(kind="package", name="GDAL", reason="GDAL 栅格读写"),
+                Requirement(
+                    kind="package", name="numpy", reason="全图像元多维内积与模长向量化运算"
+                ),
+            ],
+            entrypoints=[
+                Entrypoint(
+                    kind="form",
+                    target="gdal:sam",
+                    available=True,
+                    notes="平台适配器已接入（P11-05）",
+                ),
+            ],
+            state=CapabilityState(
+                presence=Presence.present,
+                binding=Binding.form,
+                validation=Validation.not_run,
+                availability=Availability.ready,
+            ),
+            effects="new_dataset",
+            cancellation="cooperative",
+            limitations=[
+                "输出单波段 Float32 栅格，生成伴随 .sam.json 匹配统计审计元数据",
+            ],
+            validation_evidence=[],
+        ),
+        CapabilityDescriptor(
+            capability_id="gdal:classify",
+            descriptor_revision="1.0",
+            kind=CapabilityKind.algorithm,
+            name="遥感分类（K-Means 非监督 / ROI 监督分类）",
+            native_name="spectra_workbench.classify_ops（GDAL/numpy）",
+            category=["classification", "kmeans", "supervised", "raster"],
+            description="执行纯 NumPy 向量化遥感影像分类：支持 K-Means/ISODATA 聚类（调大类别分薄云）、基于 ROI 训练样本的最小距离/最大似然/SAM 监督分类，支持掩膜防背景并配置 GDAL ColorTable。",
+            engine=_engine_spec(),
+            source=_source_spec("platform/classify"),
+            parameters=[
+                ParameterSpec(
+                    key="method",
+                    native_name="method",
+                    label="分类准则",
+                    type="string",
+                    required=False,
+                    default="kmeans",
+                    choices=["kmeans", "minimum_distance", "sam", "maximum_likelihood"],
+                ),
+                ParameterSpec(
+                    key="numClasses",
+                    native_name="numClasses",
+                    label="聚类类别数（非监督模式）",
+                    type="integer",
+                    required=False,
+                    default=5,
+                ),
+                ParameterSpec(
+                    key="maxIterations",
+                    native_name="maxIterations",
+                    label="聚类最大迭代轮数",
+                    type="integer",
+                    required=False,
+                    default=20,
+                ),
+                ParameterSpec(
+                    key="roiTraining",
+                    native_name="roiTraining",
+                    label="训练样本类别定义（监督模式）",
+                    type="list",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="maskFile",
+                    native_name="maskFile",
+                    label="背景排除掩膜路径",
+                    type="string",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="dstNodata",
+                    native_name="dstNodata",
+                    label="输出无效值 NoData",
+                    type="integer",
+                    required=False,
+                    default=0,
+                ),
+                ParameterSpec(
+                    key="outFormat",
+                    native_name="outFormat",
+                    label="输出驱动格式",
+                    type="string",
+                    required=False,
+                    default="GTiff",
+                ),
+            ],
+            inputs=[
+                PortSpec(
+                    key="input",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="待分类多波段影像",
+                )
+            ],
+            outputs=[
+                PortSpec(
+                    key="output",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="带 GDAL 颜色表的单波段离散分类栅格",
+                )
+            ],
+            requirements=[
+                Requirement(kind="package", name="GDAL", reason="GDAL 栅格读写与颜色表生成"),
+                Requirement(kind="package", name="numpy", reason="向量化聚类与判别推断"),
+            ],
+            entrypoints=[
+                Entrypoint(
+                    kind="form",
+                    target="gdal:classify",
+                    available=True,
+                    notes="平台适配器已接入（P11-02）",
+                ),
+            ],
+            state=CapabilityState(
+                presence=Presence.present,
+                binding=Binding.form,
+                validation=Validation.not_run,
+                availability=Availability.ready,
+            ),
+            effects="new_dataset",
+            cancellation="cooperative",
+            limitations=[
+                "输出带定性配色的离散分类栅格，生成伴随 .classify.json 审计元数据",
+            ],
+            validation_evidence=[],
+        ),
+        CapabilityDescriptor(
+            capability_id="gdal:accuracy_assessment",
+            descriptor_revision="1.0",
+            kind=CapabilityKind.algorithm,
+            name="分类精度评估（混淆矩阵与 Kappa 系数）",
+            native_name="spectra_workbench.classify_ops（numpy）",
+            category=["accuracy", "confusion_matrix", "kappa", "assessment"],
+            description="基于地面真值参考图层严格计算分类混淆矩阵、总体精度（OA）、Kappa 系数、制图精度（PA）与用户精度（UA），生成 .accuracy.json 审计报告。",
+            engine=_engine_spec(),
+            source=_source_spec("platform/accuracy_assessment"),
+            parameters=[
+                ParameterSpec(
+                    key="classifiedFile",
+                    native_name="classifiedFile",
+                    label="待检验分类栅格路径",
+                    type="string",
+                    required=True,
+                ),
+                ParameterSpec(
+                    key="referenceFile",
+                    native_name="referenceFile",
+                    label="真值参考地类栅格路径",
+                    type="string",
+                    required=True,
+                ),
+            ],
+            inputs=[
+                PortSpec(
+                    key="input",
+                    data_type=DatasetKind.raster,
+                    required=False,
+                    description="待检验分类栅格",
+                )
+            ],
+            outputs=[
+                PortSpec(
+                    key="output",
+                    data_type=DatasetKind.artifact,
+                    required=True,
+                    description="精度评估报告 JSON artifact",
+                )
+            ],
+            requirements=[
+                Requirement(kind="package", name="numpy", reason="混淆矩阵与 Kappa 系数精确统计")
+            ],
+            entrypoints=[
+                Entrypoint(
+                    kind="form",
+                    target="gdal:accuracy_assessment",
+                    available=True,
+                    notes="平台适配器已接入（P11-02）",
+                ),
+            ],
+            state=CapabilityState(
+                presence=Presence.present,
+                binding=Binding.form,
+                validation=Validation.not_run,
+                availability=Availability.ready,
+            ),
+            effects="new_dataset",
+            cancellation="cooperative",
+            limitations=[
+                "严格对齐像元空间重叠区，排除背景零值与无效值，计算 OA 与 Kappa",
+            ],
+            validation_evidence=[],
+        ),
+        CapabilityDescriptor(
+            capability_id="ogr:buffer",
+            descriptor_revision="1.0",
+            kind=CapabilityKind.algorithm,
+            name="矢量空间缓冲区分析（OGR Buffer）",
+            native_name="spectra_workbench.vector_ops（OGR）",
+            category=["vector", "buffer", "spatial_analysis"],
+            description="为点/线/面要素构建指定地理距离的几何缓冲区，支持多要素融合（Dissolve），保持属性模式或生成联合多边形。",
+            engine=_engine_spec(),
+            source=_source_spec("platform/vector_buffer"),
+            parameters=[
+                ParameterSpec(
+                    key="distance",
+                    native_name="distance",
+                    label="缓冲距离（坐标单位/米）",
+                    type="number",
+                    required=True,
+                    default=10.0,
+                ),
+                ParameterSpec(
+                    key="dissolve",
+                    native_name="dissolve",
+                    label="融合所有缓冲区为单个多边形",
+                    type="boolean",
+                    required=False,
+                    default=False,
+                ),
+                ParameterSpec(
+                    key="outFormat",
+                    native_name="outFormat",
+                    label="输出矢量格式（GPKG/GeoJSON/ESRI Shapefile）",
+                    type="string",
+                    required=False,
+                    default="GPKG",
+                ),
+            ],
+            inputs=[
+                PortSpec(
+                    key="input",
+                    data_type=DatasetKind.vector,
+                    required=True,
+                    description="待缓冲矢量图层",
+                )
+            ],
+            outputs=[
+                PortSpec(
+                    key="output",
+                    data_type=DatasetKind.vector,
+                    required=True,
+                    description="缓冲区输出矢量图层",
+                )
+            ],
+            requirements=[Requirement(kind="package", name="OGR", reason="OGR 几何构建与拓扑分析")],
+            entrypoints=[
+                Entrypoint(
+                    kind="form",
+                    target="ogr:buffer",
+                    available=True,
+                    notes="平台适配器已接入（P11-09）",
+                ),
+            ],
+            state=CapabilityState(
+                presence=Presence.present,
+                binding=Binding.form,
+                validation=Validation.not_run,
+                availability=Availability.ready,
+            ),
+            effects="new_dataset",
+            cancellation="cooperative",
+            limitations=[
+                "支持 GPKG, GeoJSON, ESRI Shapefile 输出",
+            ],
+            validation_evidence=[],
+        ),
+        CapabilityDescriptor(
+            capability_id="gdal:dem_sample",
+            descriptor_revision="1.0",
+            kind=CapabilityKind.algorithm,
+            name="DEM 区域平均采样（Zonal Statistics）",
+            native_name="spectra_workbench.spatial_analyst_ops（GDAL/OGR）",
+            category=["dem", "zonal_statistics", "sampling", "spatial_analysis"],
+            description="按输入的矢量多边形分区采样提取 DEM 栅格在各分区内的像元高程统计量（像元数、均值、标准差、极值、中位数），输出 .dem_sample.json 统计报告。",
+            engine=_engine_spec(),
+            source=_source_spec("platform/dem_sample"),
+            parameters=[
+                ParameterSpec(
+                    key="demFile",
+                    native_name="demFile",
+                    label="DEM 高程栅格路径",
+                    type="string",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="zoneVector",
+                    native_name="zoneVector",
+                    label="矢量多边形分区图层路径",
+                    type="string",
+                    required=True,
+                ),
+                ParameterSpec(
+                    key="demBand",
+                    native_name="demBand",
+                    label="DEM 处理波段号",
+                    type="integer",
+                    required=False,
+                    default=1,
+                ),
+            ],
+            inputs=[
+                PortSpec(
+                    key="input",
+                    data_type=DatasetKind.raster,
+                    required=False,
+                    description="DEM 高程栅格",
+                )
+            ],
+            outputs=[
+                PortSpec(
+                    key="output",
+                    data_type=DatasetKind.artifact,
+                    required=True,
+                    description="DEM 分区采样统计 JSON artifact",
+                )
+            ],
+            requirements=[
+                Requirement(kind="package", name="GDAL", reason="DEM 栅格与局部光栅化"),
+                Requirement(kind="package", name="OGR", reason="分区矢量多边形遍历与包围盒解析"),
+                Requirement(kind="package", name="numpy", reason="区域高程统计运算"),
+            ],
+            entrypoints=[
+                Entrypoint(
+                    kind="form",
+                    target="gdal:dem_sample",
+                    available=True,
+                    notes="平台适配器已接入（P11-09）",
+                ),
+            ],
+            state=CapabilityState(
+                presence=Presence.present,
+                binding=Binding.form,
+                validation=Validation.not_run,
+                availability=Availability.ready,
+            ),
+            effects="new_dataset",
+            cancellation="cooperative",
+            limitations=[
+                "精确按多边形几何边界采样，输出各分区高程指标审计报告",
+            ],
+            validation_evidence=[],
+        ),
+        CapabilityDescriptor(
             capability_id="gdal:fvc",
             descriptor_revision="1.0",
             kind=CapabilityKind.algorithm,
@@ -1431,23 +3827,115 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
             engine=_engine_spec(),
             source=_source_spec("platform/fvc"),
             parameters=[
-                ParameterSpec(key="fvcBand", native_name="fvcBand", label="NDVI 波段（1-based）", type="integer", required=False, default=1),
-                ParameterSpec(key="endmemberMode", native_name="endmemberMode", label="端元模式（percentile / values）", type="string", required=False, default="percentile", choices=list(FVC_ENDMEMBER_MODES)),
-                ParameterSpec(key="lowPercentile", native_name="lowPercentile", label="低分位（%）", type="number", required=False, default=2.0),
-                ParameterSpec(key="highPercentile", native_name="highPercentile", label="高分位（%）", type="number", required=False, default=98.0),
-                ParameterSpec(key="fvcSoil", native_name="fvcSoil", label="土壤端元 NDVI（显式值模式必填）", type="number", required=False),
-                ParameterSpec(key="fvcVeg", native_name="fvcVeg", label="植被端元 NDVI（显式值模式必填）", type="number", required=False),
-                ParameterSpec(key="fvcClassEdges", native_name="fvcClassEdges", label="分级边界（严格递增，(0,1) 内；缺省 0.25/0.5/0.75）", type="list", required=False),
-                ParameterSpec(key="maskFile", native_name="maskFile", label="掩膜文件（单波段【1=有效】，可由 gdal:mask 生成）", type="string", required=False),
-                ParameterSpec(key="crop", native_name="crop", label="是否夹到 [0,1]（越界质量标记始终在 sidecar）", type="boolean", required=False, default=True),
-                ParameterSpec(key="srcNodata", native_name="srcNodata", label="源 NoData 覆盖", type="number", required=False),
-                ParameterSpec(key="dstNodata", native_name="dstNodata", label="输出 NoData", type="number", required=False, default=-9999.0),
+                ParameterSpec(
+                    key="fvcBand",
+                    native_name="fvcBand",
+                    label="NDVI 波段（1-based）",
+                    type="integer",
+                    required=False,
+                    default=1,
+                ),
+                ParameterSpec(
+                    key="endmemberMode",
+                    native_name="endmemberMode",
+                    label="端元模式（percentile / values）",
+                    type="string",
+                    required=False,
+                    default="percentile",
+                    choices=list(FVC_ENDMEMBER_MODES),
+                ),
+                ParameterSpec(
+                    key="lowPercentile",
+                    native_name="lowPercentile",
+                    label="低分位（%）",
+                    type="number",
+                    required=False,
+                    default=2.0,
+                ),
+                ParameterSpec(
+                    key="highPercentile",
+                    native_name="highPercentile",
+                    label="高分位（%）",
+                    type="number",
+                    required=False,
+                    default=98.0,
+                ),
+                ParameterSpec(
+                    key="fvcSoil",
+                    native_name="fvcSoil",
+                    label="土壤端元 NDVI（显式值模式必填）",
+                    type="number",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="fvcVeg",
+                    native_name="fvcVeg",
+                    label="植被端元 NDVI（显式值模式必填）",
+                    type="number",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="fvcClassEdges",
+                    native_name="fvcClassEdges",
+                    label="分级边界（严格递增，(0,1) 内；缺省 0.25/0.5/0.75）",
+                    type="list",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="maskFile",
+                    native_name="maskFile",
+                    label="掩膜文件（单波段【1=有效】，可由 gdal:mask 生成）",
+                    type="string",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="crop",
+                    native_name="crop",
+                    label="是否夹到 [0,1]（越界质量标记始终在 sidecar）",
+                    type="boolean",
+                    required=False,
+                    default=True,
+                ),
+                ParameterSpec(
+                    key="srcNodata",
+                    native_name="srcNodata",
+                    label="源 NoData 覆盖",
+                    type="number",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="dstNodata",
+                    native_name="dstNodata",
+                    label="输出 NoData",
+                    type="number",
+                    required=False,
+                    default=-9999.0,
+                ),
             ],
-            inputs=[PortSpec(key="input", data_type=DatasetKind.raster, required=True, description="NDVI 栅格（可由 gdal:sindex 生成）")],
-            outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="单波段 Float32 FVC（分级类别栅格 <成果名>.fvc_class.tif 随事务提交）")],
+            inputs=[
+                PortSpec(
+                    key="input",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="NDVI 栅格（可由 gdal:sindex 生成）",
+                )
+            ],
+            outputs=[
+                PortSpec(
+                    key="output",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="单波段 Float32 FVC（分级类别栅格 <成果名>.fvc_class.tif 随事务提交）",
+                )
+            ],
             requirements=[Requirement(kind="package", name="numpy", reason="分位数端元与分级统计")],
             entrypoints=[
-                Entrypoint(kind="form", target="gdal:fvc", available=True, notes="平台适配器已接入（P6-05）"),
+                Entrypoint(
+                    kind="form",
+                    target="gdal:fvc",
+                    available=True,
+                    notes="平台适配器已接入（P6-05）",
+                ),
             ],
             state=CapabilityState(
                 presence=Presence.present,
@@ -1477,19 +3965,83 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
             engine=_engine_spec(),
             source=_source_spec("platform/calibrate"),
             parameters=[
-                ParameterSpec(key="calibrateMode", native_name="calibrateMode", label="定标模式（physical / toa_reflectance）", type="string", required=False, default="physical", choices=list(CALIBRATE_MODES)),
-                ParameterSpec(key="calibrateGains", native_name="calibrateGains", label="每波段 gain（physical 必填，数量=波段数）", type="list", required=False),
-                ParameterSpec(key="calibrateOffsets", native_name="calibrateOffsets", label="每波段 offset（physical 可选，数量=波段数）", type="list", required=False),
-                ParameterSpec(key="calibrateEsun", native_name="calibrateEsun", label="每波段 ESUN（toa_reflectance 必填）", type="list", required=False),
-                ParameterSpec(key="sunZenAngle", native_name="sunZenAngle", label="太阳天顶角（°，toa_reflectance 必填）", type="number", required=False),
-                ParameterSpec(key="srcNodata", native_name="srcNodata", label="源 NoData 覆盖", type="number", required=False),
-                ParameterSpec(key="dstNodata", native_name="dstNodata", label="输出 NoData", type="number", required=False, default=-9999.0),
+                ParameterSpec(
+                    key="calibrateMode",
+                    native_name="calibrateMode",
+                    label="定标模式（physical / toa_reflectance）",
+                    type="string",
+                    required=False,
+                    default="physical",
+                    choices=list(CALIBRATE_MODES),
+                ),
+                ParameterSpec(
+                    key="calibrateGains",
+                    native_name="calibrateGains",
+                    label="每波段 gain（physical 必填，数量=波段数）",
+                    type="list",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="calibrateOffsets",
+                    native_name="calibrateOffsets",
+                    label="每波段 offset（physical 可选，数量=波段数）",
+                    type="list",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="calibrateEsun",
+                    native_name="calibrateEsun",
+                    label="每波段 ESUN（toa_reflectance 必填）",
+                    type="list",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="sunZenAngle",
+                    native_name="sunZenAngle",
+                    label="太阳天顶角（°，toa_reflectance 必填）",
+                    type="number",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="srcNodata",
+                    native_name="srcNodata",
+                    label="源 NoData 覆盖",
+                    type="number",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="dstNodata",
+                    native_name="dstNodata",
+                    label="输出 NoData",
+                    type="number",
+                    required=False,
+                    default=-9999.0,
+                ),
             ],
-            inputs=[PortSpec(key="input", data_type=DatasetKind.raster, required=True, description="DN/辐亮度栅格")],
-            outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="Float32 定标成果（波段数与输入一致）")],
+            inputs=[
+                PortSpec(
+                    key="input",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="DN/辐亮度栅格",
+                )
+            ],
+            outputs=[
+                PortSpec(
+                    key="output",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="Float32 定标成果（波段数与输入一致）",
+                )
+            ],
             requirements=[Requirement(kind="package", name="numpy", reason="逐波段线性/TOA 公式")],
             entrypoints=[
-                Entrypoint(kind="form", target="gdal:calibrate", available=True, notes="平台适配器已接入（P6-06）"),
+                Entrypoint(
+                    kind="form",
+                    target="gdal:calibrate",
+                    available=True,
+                    notes="平台适配器已接入（P6-06）",
+                ),
             ],
             state=CapabilityState(
                 presence=Presence.present,
@@ -1519,21 +4071,99 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
             engine=_engine_spec(),
             source=_source_spec("platform/dos1"),
             parameters=[
-                ParameterSpec(key="dosBand", native_name="dosBand", label="处理波段（1-based）", type="integer", required=False, default=1),
-                ParameterSpec(key="hazeDN", native_name="hazeDN", label="暗对象 DN（直方图低尾）", type="number", required=True),
-                ParameterSpec(key="dosEsun", native_name="dosEsun", label="该波段 ESUN（光谱太阳辐照度）", type="number", required=True),
-                ParameterSpec(key="sunZenAngle", native_name="sunZenAngle", label="太阳天顶角（°）", type="number", required=True),
-                ParameterSpec(key="dosGain", native_name="dosGain", label="线性 gain", type="number", required=False, default=1.0),
-                ParameterSpec(key="dosOffset", native_name="dosOffset", label="线性 offset", type="number", required=False, default=0.0),
-                ParameterSpec(key="earthSunDistance", native_name="earthSunDistance", label="日地距离 d（无量纲）", type="number", required=False, default=1.0),
-                ParameterSpec(key="srcNodata", native_name="srcNodata", label="源 NoData 覆盖", type="number", required=False),
-                ParameterSpec(key="dstNodata", native_name="dstNodata", label="输出 NoData", type="number", required=False, default=-9999.0),
+                ParameterSpec(
+                    key="dosBand",
+                    native_name="dosBand",
+                    label="处理波段（1-based）",
+                    type="integer",
+                    required=False,
+                    default=1,
+                ),
+                ParameterSpec(
+                    key="hazeDN",
+                    native_name="hazeDN",
+                    label="暗对象 DN（直方图低尾）",
+                    type="number",
+                    required=True,
+                ),
+                ParameterSpec(
+                    key="dosEsun",
+                    native_name="dosEsun",
+                    label="该波段 ESUN（光谱太阳辐照度）",
+                    type="number",
+                    required=True,
+                ),
+                ParameterSpec(
+                    key="sunZenAngle",
+                    native_name="sunZenAngle",
+                    label="太阳天顶角（°）",
+                    type="number",
+                    required=True,
+                ),
+                ParameterSpec(
+                    key="dosGain",
+                    native_name="dosGain",
+                    label="线性 gain",
+                    type="number",
+                    required=False,
+                    default=1.0,
+                ),
+                ParameterSpec(
+                    key="dosOffset",
+                    native_name="dosOffset",
+                    label="线性 offset",
+                    type="number",
+                    required=False,
+                    default=0.0,
+                ),
+                ParameterSpec(
+                    key="earthSunDistance",
+                    native_name="earthSunDistance",
+                    label="日地距离 d（无量纲）",
+                    type="number",
+                    required=False,
+                    default=1.0,
+                ),
+                ParameterSpec(
+                    key="srcNodata",
+                    native_name="srcNodata",
+                    label="源 NoData 覆盖",
+                    type="number",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="dstNodata",
+                    native_name="dstNodata",
+                    label="输出 NoData",
+                    type="number",
+                    required=False,
+                    default=-9999.0,
+                ),
             ],
-            inputs=[PortSpec(key="input", data_type=DatasetKind.raster, required=True, description="DN（或已转为辐亮度）单波段栅格")],
-            outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="单波段 Float32 TOA 反射率")],
+            inputs=[
+                PortSpec(
+                    key="input",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="DN（或已转为辐亮度）单波段栅格",
+                )
+            ],
+            outputs=[
+                PortSpec(
+                    key="output",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="单波段 Float32 TOA 反射率",
+                )
+            ],
             requirements=[Requirement(kind="package", name="numpy", reason="逐像元 DOS1 公式")],
             entrypoints=[
-                Entrypoint(kind="form", target="gdal:dos1", available=True, notes="平台适配器已接入（P6-06）"),
+                Entrypoint(
+                    kind="form",
+                    target="gdal:dos1",
+                    available=True,
+                    notes="平台适配器已接入（P6-06）",
+                ),
             ],
             state=CapabilityState(
                 presence=Presence.present,
@@ -1562,20 +4192,89 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
             engine=_engine_spec(),
             source=_source_spec("platform/cloudreplace"),
             parameters=[
-                ParameterSpec(key="secondaryFile", native_name="secondaryFile", label="二期影像（云下源）", type="string", required=True),
-                ParameterSpec(key="cloudMaskFile", native_name="cloudMaskFile", label="云掩膜文件（单波段，1=云）", type="string", required=True),
-                ParameterSpec(key="bandList", native_name="bandList", label="参与替换的波段列表（缺省=全部）", type="list", required=False),
-                ParameterSpec(key="primaryTime", native_name="primaryTime", label="一期时间戳（sidecar 记录）", type="string", required=False),
-                ParameterSpec(key="secondaryTime", native_name="secondaryTime", label="二期时间戳（sidecar 记录）", type="string", required=False),
-                ParameterSpec(key="maskDilatePixels", native_name="maskDilatePixels", label="掩膜膨胀像素（0=不膨胀）", type="integer", required=False, default=0),
-                ParameterSpec(key="srcNodata", native_name="srcNodata", label="源 NoData 覆盖", type="number", required=False),
-                ParameterSpec(key="dstNodata", native_name="dstNodata", label="输出 NoData", type="number", required=False, default=-9999.0),
+                ParameterSpec(
+                    key="secondaryFile",
+                    native_name="secondaryFile",
+                    label="二期影像（云下源）",
+                    type="string",
+                    required=True,
+                ),
+                ParameterSpec(
+                    key="cloudMaskFile",
+                    native_name="cloudMaskFile",
+                    label="云掩膜文件（单波段，1=云）",
+                    type="string",
+                    required=True,
+                ),
+                ParameterSpec(
+                    key="bandList",
+                    native_name="bandList",
+                    label="参与替换的波段列表（缺省=全部）",
+                    type="list",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="primaryTime",
+                    native_name="primaryTime",
+                    label="一期时间戳（sidecar 记录）",
+                    type="string",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="secondaryTime",
+                    native_name="secondaryTime",
+                    label="二期时间戳（sidecar 记录）",
+                    type="string",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="maskDilatePixels",
+                    native_name="maskDilatePixels",
+                    label="掩膜膨胀像素（0=不膨胀）",
+                    type="integer",
+                    required=False,
+                    default=0,
+                ),
+                ParameterSpec(
+                    key="srcNodata",
+                    native_name="srcNodata",
+                    label="源 NoData 覆盖",
+                    type="number",
+                    required=False,
+                ),
+                ParameterSpec(
+                    key="dstNodata",
+                    native_name="dstNodata",
+                    label="输出 NoData",
+                    type="number",
+                    required=False,
+                    default=-9999.0,
+                ),
             ],
-            inputs=[PortSpec(key="input", data_type=DatasetKind.raster, required=True, description="一期影像（可能带云）")],
-            outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="Float32 去云成果；输出波段数 = bandList 长度")],
+            inputs=[
+                PortSpec(
+                    key="input",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="一期影像（可能带云）",
+                )
+            ],
+            outputs=[
+                PortSpec(
+                    key="output",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="Float32 去云成果；输出波段数 = bandList 长度",
+                )
+            ],
             requirements=[Requirement(kind="package", name="numpy", reason="掩膜膨胀与跨时相替换")],
             entrypoints=[
-                Entrypoint(kind="form", target="gdal:cloudreplace", available=True, notes="平台适配器已接入（P6-06）"),
+                Entrypoint(
+                    kind="form",
+                    target="gdal:cloudreplace",
+                    available=True,
+                    notes="平台适配器已接入（P6-06）",
+                ),
             ],
             state=CapabilityState(
                 presence=Presence.present,
@@ -1604,14 +4303,49 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
             engine=_engine_spec(),
             source=_source_spec("platform/mdim_slice"),
             parameters=[
-                ParameterSpec(key="array", native_name="array", label="多维数组名", type="string", required=True),
-                ParameterSpec(key="dimSelect", native_name="dimSelect", label="钉死维（dim=index，除两保留维外全部）", type="string", required=True),
+                ParameterSpec(
+                    key="array",
+                    native_name="array",
+                    label="多维数组名",
+                    type="string",
+                    required=True,
+                ),
+                ParameterSpec(
+                    key="dimSelect",
+                    native_name="dimSelect",
+                    label="钉死维（dim=index，除两保留维外全部）",
+                    type="string",
+                    required=True,
+                ),
             ],
-            inputs=[PortSpec(key="input", data_type=DatasetKind.raster, required=True, description="多维容器（netCDF/HDF，经 GDAL multidim）")],
-            outputs=[PortSpec(key="output", data_type=DatasetKind.raster, required=True, description="二维切片 GTiff（像元原值；sidecar <成果名>.mdim_slice.json 记录选择/单位/scale/offset/坐标/CRS 状态）")],
-            requirements=[Requirement(kind="driver", name="netCDF/HDF5", reason="多维容器读写（GDAL multidim）")],
+            inputs=[
+                PortSpec(
+                    key="input",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="多维容器（netCDF/HDF，经 GDAL multidim）",
+                )
+            ],
+            outputs=[
+                PortSpec(
+                    key="output",
+                    data_type=DatasetKind.raster,
+                    required=True,
+                    description="二维切片 GTiff（像元原值；sidecar <成果名>.mdim_slice.json 记录选择/单位/scale/offset/坐标/CRS 状态）",
+                )
+            ],
+            requirements=[
+                Requirement(
+                    kind="driver", name="netCDF/HDF5", reason="多维容器读写（GDAL multidim）"
+                )
+            ],
             entrypoints=[
-                Entrypoint(kind="form", target="gdal:mdim_slice", available=True, notes="平台适配器已接入（P8-01）"),
+                Entrypoint(
+                    kind="form",
+                    target="gdal:mdim_slice",
+                    available=True,
+                    notes="平台适配器已接入（P8-01）",
+                ),
             ],
             state=CapabilityState(
                 presence=Presence.present,
@@ -1643,9 +4377,18 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
             parameters=[],
             inputs=[],
             outputs=[],
-            requirements=[Requirement(kind="package", name="外部引擎", reason="FLAASH 由外部引擎适配，平台内不模拟")],
+            requirements=[
+                Requirement(
+                    kind="package", name="外部引擎", reason="FLAASH 由外部引擎适配，平台内不模拟"
+                )
+            ],
             entrypoints=[
-                Entrypoint(kind="form", target="platform:flaash_external", available=False, notes="外部引擎适配待落实，没有 form 入口"),
+                Entrypoint(
+                    kind="form",
+                    target="platform:flaash_external",
+                    available=False,
+                    notes="外部引擎适配待落实，没有 form 入口",
+                ),
             ],
             state=CapabilityState(
                 presence=Presence.missing,
@@ -1675,9 +4418,16 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
             parameters=[],
             inputs=[],
             outputs=[],
-            requirements=[Requirement(kind="package", name="未确定", reason="方法未确定，暂无依赖")],
+            requirements=[
+                Requirement(kind="package", name="未确定", reason="方法未确定，暂无依赖")
+            ],
             entrypoints=[
-                Entrypoint(kind="form", target="platform:agriculture_count", available=False, notes="方法未落实，无 form 入口"),
+                Entrypoint(
+                    kind="form",
+                    target="platform:agriculture_count",
+                    available=False,
+                    notes="方法未落实，无 form 入口",
+                ),
             ],
             state=CapabilityState(
                 presence=Presence.missing,
@@ -1700,38 +4450,166 @@ def build_gdal_algorithms() -> list[CapabilityDescriptor]:
 def build_gdal_cli_programs() -> list[CapabilityDescriptor]:
     """GDAL 传统 CLI 工具清单（包含现存与显式保留的缺失工具）。"""
     programs: list[dict[str, Any]] = [
-        {"name": "gdalinfo", "doc": "programs/gdalinfo.html", "desc": "栅格数据集详细信息、驱动、波段、元数据与空间范围诊断查看。"},
-        {"name": "ogrinfo", "doc": "programs/ogrinfo.html", "desc": "矢量数据源、图层模式、属性表结构与空间要素信息检查。"},
-        {"name": "gdal_translate", "doc": "programs/gdal_translate.html", "desc": "经典栅格格式转换与抽样命令行实用工具。"},
-        {"name": "gdalwarp", "doc": "programs/gdalwarp.html", "desc": "经典栅格影像空间重投影与镶嵌命令行工具。"},
-        {"name": "gdaldem", "doc": "programs/gdaldem.html", "desc": "经典 DEM 数字高程模型地形分析命令行工具。"},
-        {"name": "gdalbuildvrt", "doc": "programs/gdalbuildvrt.html", "desc": "构建虚拟栅格 VRT 的经典命令行工具。"},
-        {"name": "gdal_contour", "doc": "programs/gdal_contour.html", "desc": "栅格等值线提取 CLI 工具。"},
-        {"name": "gdal_rasterize", "doc": "programs/gdal_rasterize.html", "desc": "矢量图层栅格化烧录 CLI 工具。"},
-        {"name": "gdal_grid", "doc": "programs/gdal_grid.html", "desc": "离散点插值生成规则栅格 CLI 工具。"},
-        {"name": "gdalmanage", "doc": "programs/gdalmanage.html", "desc": "管理文件系统中的 GDAL 栅格数据集（识别、删除、重命名、拷贝）。"},
-        {"name": "gdallocationinfo", "doc": "programs/gdallocationinfo.html", "desc": "查询指定空间坐标或像素坐标处像元实际数值。"},
-        {"name": "gdalmdiminfo", "doc": "programs/gdalmdiminfo.html", "desc": "检查多维栅格数组（netCDF / HDF / Zarr）维度、变量与属性。"},
-        {"name": "gdalmdimtranslate", "doc": "programs/gdalmdimtranslate.html", "desc": "多维栅格数组切片、变量提取与格式转换。"},
-        {"name": "gdalsrsinfo", "doc": "programs/gdalsrsinfo.html", "desc": "空间参考 (SRS/CRS) 解析与多种格式（WKT, PROJ, EPSG）相互转换。"},
-        {"name": "gdaltransform", "doc": "programs/gdaltransform.html", "desc": "坐标空间投影点转换与批量测试工具。"},
-        {"name": "gdaladdo", "doc": "programs/gdaladdo.html", "desc": "为栅格文件构建或更新多层概览视图 (Overviews / Pyramids)。"},
-        {"name": "nearblack", "doc": "programs/nearblack.html", "desc": "黑白压缩伪影边界修复命令行工具。"},
-        {"name": "ogr2ogr", "doc": "programs/ogr2ogr.html", "desc": "矢量要素转换与空间 SQL 经典命令行工具。"},
-        {"name": "ogrlineref", "doc": "programs/ogrlineref.html", "desc": "矢量线性参考 (Linear Referencing) 计算工具。"},
-        {"name": "ogrtindex", "doc": "programs/ogrtindex.html", "desc": "构建矢量瓦片索引图层工具。"},
-        {"name": "gdal_calc", "doc": "programs/gdal_calc.html", "desc": "栅格代数计算 Python CLI 脚本。"},
-        {"name": "gdal_merge", "doc": "programs/gdal_merge.html", "desc": "栅格物理镶嵌拼图 Python CLI 脚本。"},
-        {"name": "gdal_polygonize", "doc": "programs/gdal_polygonize.html", "desc": "栅格多边形矢量化 Python CLI 脚本。"},
-        {"name": "gdal_proximity", "doc": "programs/gdal_proximity.html", "desc": "像元欧氏距离分析 Python CLI 脚本。"},
-        {"name": "gdal_retile", "doc": "programs/gdal_retile.html", "desc": "网格瓦片金字塔切块 Python CLI 脚本。"},
-        {"name": "gdal_sieve", "doc": "programs/gdal_sieve.html", "desc": "分类杂斑滤除 Python CLI 脚本。"},
-        {"name": "gdal_fillnodata", "doc": "programs/gdal_fillnodata.html", "desc": "无效值插值填补 Python CLI 脚本。"},
-        {"name": "gdal_edit", "doc": "programs/gdal_edit.html", "desc": "在位修改现有数据集的空间参考、仿射变换矩阵或 NoData 标记。"},
-        {"name": "gdal2tiles", "doc": "programs/gdal2tiles.html", "desc": "生成 TMS / XYZ 标准网络瓦片集与 HTML 预览页。"},
-        {"name": "gdal2xyz", "doc": "programs/gdal2xyz.html", "desc": "将栅格转存为三列 ASCII 坐标与数值文本 (X, Y, Z)。"},
-        {"name": "gdalcompare", "doc": "programs/gdalcompare.html", "desc": "对比两幅栅格的像素数值、元数据与空间参数差异。"},
-        {"name": "gdalenhance", "doc": "programs/gdalenhance.html", "desc": "简易栅格色彩均衡与对比度拉伸工具。"},
+        {
+            "name": "gdalinfo",
+            "doc": "programs/gdalinfo.html",
+            "desc": "栅格数据集详细信息、驱动、波段、元数据与空间范围诊断查看。",
+        },
+        {
+            "name": "ogrinfo",
+            "doc": "programs/ogrinfo.html",
+            "desc": "矢量数据源、图层模式、属性表结构与空间要素信息检查。",
+        },
+        {
+            "name": "gdal_translate",
+            "doc": "programs/gdal_translate.html",
+            "desc": "经典栅格格式转换与抽样命令行实用工具。",
+        },
+        {
+            "name": "gdalwarp",
+            "doc": "programs/gdalwarp.html",
+            "desc": "经典栅格影像空间重投影与镶嵌命令行工具。",
+        },
+        {
+            "name": "gdaldem",
+            "doc": "programs/gdaldem.html",
+            "desc": "经典 DEM 数字高程模型地形分析命令行工具。",
+        },
+        {
+            "name": "gdalbuildvrt",
+            "doc": "programs/gdalbuildvrt.html",
+            "desc": "构建虚拟栅格 VRT 的经典命令行工具。",
+        },
+        {
+            "name": "gdal_contour",
+            "doc": "programs/gdal_contour.html",
+            "desc": "栅格等值线提取 CLI 工具。",
+        },
+        {
+            "name": "gdal_rasterize",
+            "doc": "programs/gdal_rasterize.html",
+            "desc": "矢量图层栅格化烧录 CLI 工具。",
+        },
+        {
+            "name": "gdal_grid",
+            "doc": "programs/gdal_grid.html",
+            "desc": "离散点插值生成规则栅格 CLI 工具。",
+        },
+        {
+            "name": "gdalmanage",
+            "doc": "programs/gdalmanage.html",
+            "desc": "管理文件系统中的 GDAL 栅格数据集（识别、删除、重命名、拷贝）。",
+        },
+        {
+            "name": "gdallocationinfo",
+            "doc": "programs/gdallocationinfo.html",
+            "desc": "查询指定空间坐标或像素坐标处像元实际数值。",
+        },
+        {
+            "name": "gdalmdiminfo",
+            "doc": "programs/gdalmdiminfo.html",
+            "desc": "检查多维栅格数组（netCDF / HDF / Zarr）维度、变量与属性。",
+        },
+        {
+            "name": "gdalmdimtranslate",
+            "doc": "programs/gdalmdimtranslate.html",
+            "desc": "多维栅格数组切片、变量提取与格式转换。",
+        },
+        {
+            "name": "gdalsrsinfo",
+            "doc": "programs/gdalsrsinfo.html",
+            "desc": "空间参考 (SRS/CRS) 解析与多种格式（WKT, PROJ, EPSG）相互转换。",
+        },
+        {
+            "name": "gdaltransform",
+            "doc": "programs/gdaltransform.html",
+            "desc": "坐标空间投影点转换与批量测试工具。",
+        },
+        {
+            "name": "gdaladdo",
+            "doc": "programs/gdaladdo.html",
+            "desc": "为栅格文件构建或更新多层概览视图 (Overviews / Pyramids)。",
+        },
+        {
+            "name": "nearblack",
+            "doc": "programs/nearblack.html",
+            "desc": "黑白压缩伪影边界修复命令行工具。",
+        },
+        {
+            "name": "ogr2ogr",
+            "doc": "programs/ogr2ogr.html",
+            "desc": "矢量要素转换与空间 SQL 经典命令行工具。",
+        },
+        {
+            "name": "ogrlineref",
+            "doc": "programs/ogrlineref.html",
+            "desc": "矢量线性参考 (Linear Referencing) 计算工具。",
+        },
+        {
+            "name": "ogrtindex",
+            "doc": "programs/ogrtindex.html",
+            "desc": "构建矢量瓦片索引图层工具。",
+        },
+        {
+            "name": "gdal_calc",
+            "doc": "programs/gdal_calc.html",
+            "desc": "栅格代数计算 Python CLI 脚本。",
+        },
+        {
+            "name": "gdal_merge",
+            "doc": "programs/gdal_merge.html",
+            "desc": "栅格物理镶嵌拼图 Python CLI 脚本。",
+        },
+        {
+            "name": "gdal_polygonize",
+            "doc": "programs/gdal_polygonize.html",
+            "desc": "栅格多边形矢量化 Python CLI 脚本。",
+        },
+        {
+            "name": "gdal_proximity",
+            "doc": "programs/gdal_proximity.html",
+            "desc": "像元欧氏距离分析 Python CLI 脚本。",
+        },
+        {
+            "name": "gdal_retile",
+            "doc": "programs/gdal_retile.html",
+            "desc": "网格瓦片金字塔切块 Python CLI 脚本。",
+        },
+        {
+            "name": "gdal_sieve",
+            "doc": "programs/gdal_sieve.html",
+            "desc": "分类杂斑滤除 Python CLI 脚本。",
+        },
+        {
+            "name": "gdal_fillnodata",
+            "doc": "programs/gdal_fillnodata.html",
+            "desc": "无效值插值填补 Python CLI 脚本。",
+        },
+        {
+            "name": "gdal_edit",
+            "doc": "programs/gdal_edit.html",
+            "desc": "在位修改现有数据集的空间参考、仿射变换矩阵或 NoData 标记。",
+        },
+        {
+            "name": "gdal2tiles",
+            "doc": "programs/gdal2tiles.html",
+            "desc": "生成 TMS / XYZ 标准网络瓦片集与 HTML 预览页。",
+        },
+        {
+            "name": "gdal2xyz",
+            "doc": "programs/gdal2xyz.html",
+            "desc": "将栅格转存为三列 ASCII 坐标与数值文本 (X, Y, Z)。",
+        },
+        {
+            "name": "gdalcompare",
+            "doc": "programs/gdalcompare.html",
+            "desc": "对比两幅栅格的像素数值、元数据与空间参数差异。",
+        },
+        {
+            "name": "gdalenhance",
+            "doc": "programs/gdalenhance.html",
+            "desc": "简易栅格色彩均衡与对比度拉伸工具。",
+        },
         {
             "name": "rgb2pct",
             "doc": "programs/rgb2pct.html",
@@ -1769,7 +4647,9 @@ def build_gdal_cli_programs() -> list[CapabilityDescriptor]:
                 description=str(p["desc"]),
                 engine=_engine_spec(),
                 source=_source_spec(str(p["doc"])),
-                entrypoints=[Entrypoint(kind="cli", target=target_cmd, available=True, notes=notes)],
+                entrypoints=[
+                    Entrypoint(kind="cli", target=target_cmd, available=True, notes=notes)
+                ],
                 state=CapabilityState(
                     presence=Presence.present,
                     binding=Binding.cli,
@@ -1806,7 +4686,9 @@ def build_gdal_cli_programs() -> list[CapabilityDescriptor]:
                 description=str(mp["desc"]),
                 engine=_engine_spec(),
                 source=_source_spec(str(mp["doc"])),
-                entrypoints=[Entrypoint(kind="cli", target=mp_name, available=False, notes=str(mp["reason"]))],
+                entrypoints=[
+                    Entrypoint(kind="cli", target=mp_name, available=False, notes=str(mp["reason"]))
+                ],
                 state=CapabilityState(
                     presence=Presence.missing,
                     binding=Binding.none,
@@ -1855,8 +4737,12 @@ def build_gdal_drivers() -> list[CapabilityDescriptor]:
                     category=cat,
                     description=f"GDAL 格式驱动: {l_name} ({'栅格' if is_raster else ''} {'矢量' if is_vector else ''})".strip(),
                     engine=_engine_spec(),
-                    source=_source_spec(f"drivers/{'raster' if is_raster else 'vector'}/{s_name.lower()}.html"),
-                    entrypoints=[Entrypoint(kind="documentation", target=f"driver:{s_name}", available=True)],
+                    source=_source_spec(
+                        f"drivers/{'raster' if is_raster else 'vector'}/{s_name.lower()}.html"
+                    ),
+                    entrypoints=[
+                        Entrypoint(kind="documentation", target=f"driver:{s_name}", available=True)
+                    ],
                     state=CapabilityState(
                         presence=Presence.present,
                         binding=Binding.indexed,
@@ -1873,7 +4759,9 @@ def build_gdal_drivers() -> list[CapabilityDescriptor]:
                             runtime_id="gdal-3.13.3",
                             report_uri="docs/progress/runs/env_report.json",
                         )
-                    ] if is_smoke else [],
+                    ]
+                    if is_smoke
+                    else [],
                 )
             )
 
@@ -1889,7 +4777,14 @@ def build_gdal_drivers() -> list[CapabilityDescriptor]:
             description="GDAL 格式驱动: Hierarchical Data Format Release 5 (栅格)",
             engine=_engine_spec(),
             source=_source_spec("drivers/raster/hdf5.html"),
-            entrypoints=[Entrypoint(kind="documentation", target="driver:HDF5", available=False, notes="当前 Windows QGIS GDAL 运行时未链接 HDF5 动态库")],
+            entrypoints=[
+                Entrypoint(
+                    kind="documentation",
+                    target="driver:HDF5",
+                    available=False,
+                    notes="当前 Windows QGIS GDAL 运行时未链接 HDF5 动态库",
+                )
+            ],
             state=CapabilityState(
                 presence=Presence.missing,
                 binding=Binding.none,
@@ -1898,7 +4793,9 @@ def build_gdal_drivers() -> list[CapabilityDescriptor]:
             ),
             effects="read_only",
             cancellation="unsupported",
-            limitations=["当前 Windows QGIS GDAL 运行时未链接 HDF5 动态库；部分 HDF5 文件可通过 netCDF 驱动尝试读取"],
+            limitations=[
+                "当前 Windows QGIS GDAL 运行时未链接 HDF5 动态库；部分 HDF5 文件可通过 netCDF 驱动尝试读取"
+            ],
             validation_evidence=[],
         )
     )
@@ -1977,7 +4874,9 @@ def build_gdal_structured_cli_commands() -> list[CapabilityDescriptor]:
                     validation=Validation.not_run,
                     availability=Availability.ready,
                 ),
-                effects="read_only" if any(w in cmd for w in ("info", "check", "summary")) else "new_dataset",
+                effects="read_only"
+                if any(w in cmd for w in ("info", "check", "summary"))
+                else "new_dataset",
                 cancellation="process_termination",
                 limitations=[],
                 validation_evidence=[],
@@ -1994,30 +4893,187 @@ def build_gdal_python_api_index() -> list[CapabilityDescriptor]:
     针对 SWIG C 扩展绑定无法反射签名的情况附注明确说明。
     """
     api_items: list[dict[str, Any]] = [
-        {"id": "gdal:api:Dataset", "kind": CapabilityKind.class_, "name": "osgeo.gdal.Dataset", "category": ["api", "gdal", "class"], "desc": "栅格数据集核心公开类，提供栅格波段、仿射矩阵、投影、RPC、GCP 与元数据读写。"},
-        {"id": "gdal:api:Band", "kind": CapabilityKind.class_, "name": "osgeo.gdal.Band", "category": ["api", "gdal", "class"], "desc": "单波段数据核心类，提供像元数据分块读写 (ReadAsArray)、NoData、统计、色彩表与概览访问。"},
-        {"id": "gdal:api:Driver", "kind": CapabilityKind.class_, "name": "osgeo.gdal.Driver", "category": ["api", "gdal", "class"], "desc": "格式驱动句柄类，用于创建、删除、复制数据集与查询格式能力。"},
-        {"id": "gdal:api:ColorTable", "kind": CapabilityKind.class_, "name": "osgeo.gdal.ColorTable", "category": ["api", "gdal", "class"], "desc": "伪彩色调色板类，管理波段色彩映射表 (Color Entries)。"},
-        {"id": "gdal:api:RasterAttributeTable", "kind": CapabilityKind.class_, "name": "osgeo.gdal.RasterAttributeTable", "category": ["api", "gdal", "class"], "desc": "栅格属性表 (RAT)，管理像元分类的伴生属性。"},
-        {"id": "gdal:api:Open", "kind": CapabilityKind.function, "name": "osgeo.gdal.Open", "category": ["api", "gdal", "function"], "desc": "打开只读或可写栅格数据集。", "swig_note": "SWIG C 扩展函数，inspect.signature 返回 (*args)；文档签名: Open(path, eAccess=GA_ReadOnly) -> Dataset"},
-        {"id": "gdal:api:OpenEx", "kind": CapabilityKind.function, "name": "osgeo.gdal.OpenEx", "category": ["api", "gdal", "function"], "desc": "高级打开接口，支持限定驱动、只读/更新标志与打开选项 open_options。", "swig_note": "SWIG C 扩展函数；文档签名: OpenEx(utf8_path, nOpenFlags=0, allowed_drivers=None, open_options=None, sibling_files=None) -> Dataset"},
-        {"id": "gdal:api:Translate", "kind": CapabilityKind.function, "name": "osgeo.gdal.Translate", "category": ["api", "gdal", "function"], "desc": "Python 包装版栅格格式转换接口。", "swig_note": "签名: Translate(destName, srcDS, **kwargs) -> Dataset"},
-        {"id": "gdal:api:Warp", "kind": CapabilityKind.function, "name": "osgeo.gdal.Warp", "category": ["api", "gdal", "function"], "desc": "Python 包装版栅格投影重采样接口。", "swig_note": "签名: Warp(destNameOrDestDS, srcDSOrSrcDSTab, **kwargs) -> Dataset"},
-        {"id": "gdal:api:Dem", "kind": CapabilityKind.function, "name": "osgeo.gdal.DEMProcessing", "category": ["api", "gdal", "function"], "desc": "Python 包装版 DEM 地形分析接口（gdaldem 的 Python 绑定；GDAL 3.13 中不存在 osgeo.gdal.Dem）。", "swig_note": "签名: DEMProcessing(destName, srcDS, processing, **kwargs) -> Dataset"},
-        {"id": "gdal:api:Grid", "kind": CapabilityKind.function, "name": "osgeo.gdal.Grid", "category": ["api", "gdal", "function"], "desc": "Python 包装版离散点插值网格化接口。", "swig_note": "签名: Grid(destName, srcDS, **kwargs) -> Dataset"},
-        {"id": "gdal:api:BuildVRT", "kind": CapabilityKind.function, "name": "osgeo.gdal.BuildVRT", "category": ["api", "gdal", "function"], "desc": "Python 包装版虚拟栅格 VRT 生成接口。", "swig_note": "签名: BuildVRT(destName, srcDS, **kwargs) -> Dataset"},
-        {"id": "gdal:api:Rasterize", "kind": CapabilityKind.function, "name": "osgeo.gdal.Rasterize", "category": ["api", "gdal", "function"], "desc": "Python 包装版矢量要素栅格化接口。", "swig_note": "签名: Rasterize(destNameOrDestDS, srcDS, **kwargs) -> Dataset"},
-        {"id": "gdal:api:ContourGenerate", "kind": CapabilityKind.function, "name": "osgeo.gdal.ContourGenerate", "category": ["api", "gdal", "function"], "desc": "从单波段生成矢量等值线折线。", "swig_note": "SWIG 函数；签名: ContourGenerate(src_band, dfContourInterval, dfContourBase, fixedLevels, useNoData, noDataValue, dst_layer, idField, elevField, callback=None)"},
-        {"id": "gdal:api:Polygonize", "kind": CapabilityKind.function, "name": "osgeo.gdal.Polygonize", "category": ["api", "gdal", "function"], "desc": "单波段离散栅格矢量化为多边形图层。", "swig_note": "SWIG 函数；签名: Polygonize(src_band, mask_band, out_layer, pixValField, papszOptions=[], callback=None)"},
-        {"id": "gdal:api:InvGeoTransform", "kind": CapabilityKind.function, "name": "osgeo.gdal.InvGeoTransform", "category": ["api", "gdal", "function"], "desc": "计算 6 参数仿射变换矩阵的逆矩阵。", "swig_note": "SWIG 函数；签名: InvGeoTransform(gt_in) -> (success, gt_out)"},
-        {"id": "gdal:api:ApplyGeoTransform", "kind": CapabilityKind.function, "name": "osgeo.gdal.ApplyGeoTransform", "category": ["api", "gdal", "function"], "desc": "应用仿射变换矩阵将像素坐标 (pixel, line) 计算为地理空间坐标 (x, y)。", "swig_note": "SWIG 函数；签名: ApplyGeoTransform(gt, x, y) -> (geo_x, geo_y)"},
-        {"id": "ogr:api:DataSource", "kind": CapabilityKind.class_, "name": "osgeo.ogr.DataSource", "category": ["api", "ogr", "class"], "desc": "OGR 矢量数据源核心类，提供矢量图层枚举、创建、执行 SQL 查询。"},
-        {"id": "ogr:api:Layer", "kind": CapabilityKind.class_, "name": "osgeo.ogr.Layer", "category": ["api", "ogr", "class"], "desc": "OGR 矢量图层类，提供空间要素迭代、空间过滤器 (SetSpatialFilter) 与属性过滤器。"},
-        {"id": "ogr:api:Feature", "kind": CapabilityKind.class_, "name": "osgeo.ogr.Feature", "category": ["api", "ogr", "class"], "desc": "单条矢量要素类，包含几何图形与字段属性字典。"},
-        {"id": "ogr:api:Geometry", "kind": CapabilityKind.class_, "name": "osgeo.ogr.Geometry", "category": ["api", "ogr", "class"], "desc": "OGC 标准几何体类（点、折线、多边形、多部件）。"},
-        {"id": "ogr:api:Open", "kind": CapabilityKind.function, "name": "osgeo.ogr.Open", "category": ["api", "ogr", "function"], "desc": "打开已有 OGR 矢量数据源。", "swig_note": "SWIG 函数；签名: Open(utf8_path, update=0) -> DataSource"},
-        {"id": "osr:api:SpatialReference", "kind": CapabilityKind.class_, "name": "osgeo.osr.SpatialReference", "category": ["api", "osr", "class"], "desc": "OGRSpatialReference 坐标参考系核心类，支持 EPSG、WKT、PROJ 导入导出与轴顺序管理。"},
-        {"id": "osr:api:CoordinateTransformation", "kind": CapabilityKind.class_, "name": "osgeo.osr.CoordinateTransformation", "category": ["api", "osr", "class"], "desc": "OGRCoordinateTransformation 坐标变换核心类，执行两套空间参考间的精确点投影转换。"},
+        {
+            "id": "gdal:api:Dataset",
+            "kind": CapabilityKind.class_,
+            "name": "osgeo.gdal.Dataset",
+            "category": ["api", "gdal", "class"],
+            "desc": "栅格数据集核心公开类，提供栅格波段、仿射矩阵、投影、RPC、GCP 与元数据读写。",
+        },
+        {
+            "id": "gdal:api:Band",
+            "kind": CapabilityKind.class_,
+            "name": "osgeo.gdal.Band",
+            "category": ["api", "gdal", "class"],
+            "desc": "单波段数据核心类，提供像元数据分块读写 (ReadAsArray)、NoData、统计、色彩表与概览访问。",
+        },
+        {
+            "id": "gdal:api:Driver",
+            "kind": CapabilityKind.class_,
+            "name": "osgeo.gdal.Driver",
+            "category": ["api", "gdal", "class"],
+            "desc": "格式驱动句柄类，用于创建、删除、复制数据集与查询格式能力。",
+        },
+        {
+            "id": "gdal:api:ColorTable",
+            "kind": CapabilityKind.class_,
+            "name": "osgeo.gdal.ColorTable",
+            "category": ["api", "gdal", "class"],
+            "desc": "伪彩色调色板类，管理波段色彩映射表 (Color Entries)。",
+        },
+        {
+            "id": "gdal:api:RasterAttributeTable",
+            "kind": CapabilityKind.class_,
+            "name": "osgeo.gdal.RasterAttributeTable",
+            "category": ["api", "gdal", "class"],
+            "desc": "栅格属性表 (RAT)，管理像元分类的伴生属性。",
+        },
+        {
+            "id": "gdal:api:Open",
+            "kind": CapabilityKind.function,
+            "name": "osgeo.gdal.Open",
+            "category": ["api", "gdal", "function"],
+            "desc": "打开只读或可写栅格数据集。",
+            "swig_note": "SWIG C 扩展函数，inspect.signature 返回 (*args)；文档签名: Open(path, eAccess=GA_ReadOnly) -> Dataset",
+        },
+        {
+            "id": "gdal:api:OpenEx",
+            "kind": CapabilityKind.function,
+            "name": "osgeo.gdal.OpenEx",
+            "category": ["api", "gdal", "function"],
+            "desc": "高级打开接口，支持限定驱动、只读/更新标志与打开选项 open_options。",
+            "swig_note": "SWIG C 扩展函数；文档签名: OpenEx(utf8_path, nOpenFlags=0, allowed_drivers=None, open_options=None, sibling_files=None) -> Dataset",
+        },
+        {
+            "id": "gdal:api:Translate",
+            "kind": CapabilityKind.function,
+            "name": "osgeo.gdal.Translate",
+            "category": ["api", "gdal", "function"],
+            "desc": "Python 包装版栅格格式转换接口。",
+            "swig_note": "签名: Translate(destName, srcDS, **kwargs) -> Dataset",
+        },
+        {
+            "id": "gdal:api:Warp",
+            "kind": CapabilityKind.function,
+            "name": "osgeo.gdal.Warp",
+            "category": ["api", "gdal", "function"],
+            "desc": "Python 包装版栅格投影重采样接口。",
+            "swig_note": "签名: Warp(destNameOrDestDS, srcDSOrSrcDSTab, **kwargs) -> Dataset",
+        },
+        {
+            "id": "gdal:api:Dem",
+            "kind": CapabilityKind.function,
+            "name": "osgeo.gdal.DEMProcessing",
+            "category": ["api", "gdal", "function"],
+            "desc": "Python 包装版 DEM 地形分析接口（gdaldem 的 Python 绑定；GDAL 3.13 中不存在 osgeo.gdal.Dem）。",
+            "swig_note": "签名: DEMProcessing(destName, srcDS, processing, **kwargs) -> Dataset",
+        },
+        {
+            "id": "gdal:api:Grid",
+            "kind": CapabilityKind.function,
+            "name": "osgeo.gdal.Grid",
+            "category": ["api", "gdal", "function"],
+            "desc": "Python 包装版离散点插值网格化接口。",
+            "swig_note": "签名: Grid(destName, srcDS, **kwargs) -> Dataset",
+        },
+        {
+            "id": "gdal:api:BuildVRT",
+            "kind": CapabilityKind.function,
+            "name": "osgeo.gdal.BuildVRT",
+            "category": ["api", "gdal", "function"],
+            "desc": "Python 包装版虚拟栅格 VRT 生成接口。",
+            "swig_note": "签名: BuildVRT(destName, srcDS, **kwargs) -> Dataset",
+        },
+        {
+            "id": "gdal:api:Rasterize",
+            "kind": CapabilityKind.function,
+            "name": "osgeo.gdal.Rasterize",
+            "category": ["api", "gdal", "function"],
+            "desc": "Python 包装版矢量要素栅格化接口。",
+            "swig_note": "签名: Rasterize(destNameOrDestDS, srcDS, **kwargs) -> Dataset",
+        },
+        {
+            "id": "gdal:api:ContourGenerate",
+            "kind": CapabilityKind.function,
+            "name": "osgeo.gdal.ContourGenerate",
+            "category": ["api", "gdal", "function"],
+            "desc": "从单波段生成矢量等值线折线。",
+            "swig_note": "SWIG 函数；签名: ContourGenerate(src_band, dfContourInterval, dfContourBase, fixedLevels, useNoData, noDataValue, dst_layer, idField, elevField, callback=None)",
+        },
+        {
+            "id": "gdal:api:Polygonize",
+            "kind": CapabilityKind.function,
+            "name": "osgeo.gdal.Polygonize",
+            "category": ["api", "gdal", "function"],
+            "desc": "单波段离散栅格矢量化为多边形图层。",
+            "swig_note": "SWIG 函数；签名: Polygonize(src_band, mask_band, out_layer, pixValField, papszOptions=[], callback=None)",
+        },
+        {
+            "id": "gdal:api:InvGeoTransform",
+            "kind": CapabilityKind.function,
+            "name": "osgeo.gdal.InvGeoTransform",
+            "category": ["api", "gdal", "function"],
+            "desc": "计算 6 参数仿射变换矩阵的逆矩阵。",
+            "swig_note": "SWIG 函数；签名: InvGeoTransform(gt_in) -> (success, gt_out)",
+        },
+        {
+            "id": "gdal:api:ApplyGeoTransform",
+            "kind": CapabilityKind.function,
+            "name": "osgeo.gdal.ApplyGeoTransform",
+            "category": ["api", "gdal", "function"],
+            "desc": "应用仿射变换矩阵将像素坐标 (pixel, line) 计算为地理空间坐标 (x, y)。",
+            "swig_note": "SWIG 函数；签名: ApplyGeoTransform(gt, x, y) -> (geo_x, geo_y)",
+        },
+        {
+            "id": "ogr:api:DataSource",
+            "kind": CapabilityKind.class_,
+            "name": "osgeo.ogr.DataSource",
+            "category": ["api", "ogr", "class"],
+            "desc": "OGR 矢量数据源核心类，提供矢量图层枚举、创建、执行 SQL 查询。",
+        },
+        {
+            "id": "ogr:api:Layer",
+            "kind": CapabilityKind.class_,
+            "name": "osgeo.ogr.Layer",
+            "category": ["api", "ogr", "class"],
+            "desc": "OGR 矢量图层类，提供空间要素迭代、空间过滤器 (SetSpatialFilter) 与属性过滤器。",
+        },
+        {
+            "id": "ogr:api:Feature",
+            "kind": CapabilityKind.class_,
+            "name": "osgeo.ogr.Feature",
+            "category": ["api", "ogr", "class"],
+            "desc": "单条矢量要素类，包含几何图形与字段属性字典。",
+        },
+        {
+            "id": "ogr:api:Geometry",
+            "kind": CapabilityKind.class_,
+            "name": "osgeo.ogr.Geometry",
+            "category": ["api", "ogr", "class"],
+            "desc": "OGC 标准几何体类（点、折线、多边形、多部件）。",
+        },
+        {
+            "id": "ogr:api:Open",
+            "kind": CapabilityKind.function,
+            "name": "osgeo.ogr.Open",
+            "category": ["api", "ogr", "function"],
+            "desc": "打开已有 OGR 矢量数据源。",
+            "swig_note": "SWIG 函数；签名: Open(utf8_path, update=0) -> DataSource",
+        },
+        {
+            "id": "osr:api:SpatialReference",
+            "kind": CapabilityKind.class_,
+            "name": "osgeo.osr.SpatialReference",
+            "category": ["api", "osr", "class"],
+            "desc": "OGRSpatialReference 坐标参考系核心类，支持 EPSG、WKT、PROJ 导入导出与轴顺序管理。",
+        },
+        {
+            "id": "osr:api:CoordinateTransformation",
+            "kind": CapabilityKind.class_,
+            "name": "osgeo.osr.CoordinateTransformation",
+            "category": ["api", "osr", "class"],
+            "desc": "OGRCoordinateTransformation 坐标变换核心类，执行两套空间参考间的精确点投影转换。",
+        },
     ]
 
     result: list[CapabilityDescriptor] = []
@@ -2037,14 +5093,23 @@ def build_gdal_python_api_index() -> list[CapabilityDescriptor]:
                 description=str(item["desc"]),
                 engine=_engine_spec(),
                 source=_source_spec("api/python/index.html"),
-                entrypoints=[Entrypoint(kind="script", target=str(item["name"]), available=True, notes=notes[0] if notes else None)],
+                entrypoints=[
+                    Entrypoint(
+                        kind="script",
+                        target=str(item["name"]),
+                        available=True,
+                        notes=notes[0] if notes else None,
+                    )
+                ],
                 state=CapabilityState(
                     presence=Presence.present,
                     binding=Binding.script,
                     validation=Validation.not_run,
                     availability=Availability.ready,
                 ),
-                effects="read_only" if "class" in item["category"] or "info" in item["id"] or "Transform" in item["id"] else "mixed",
+                effects="read_only"
+                if "class" in item["category"] or "info" in item["id"] or "Transform" in item["id"]
+                else "mixed",
                 cancellation="unsupported",
                 limitations=notes,
                 validation_evidence=[],

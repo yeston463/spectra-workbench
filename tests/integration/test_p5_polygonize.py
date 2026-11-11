@@ -237,9 +237,7 @@ def test_polygonize_rejects_raster_format_and_vector_input(
 ) -> None:
     src = _make_labeled(gdal_rt, tmp_path / "labels3.tif", [[3, 3, 9, 9], [3, 3, 9, 9]])
 
-    rejected = _run(
-        qapp, {"format": "GTiff", "fieldName": "DN"}, src, tmp_path / "rej.tif"
-    )
+    rejected = _run(qapp, {"format": "GTiff", "fieldName": "DN"}, src, tmp_path / "rej.tif")
     assert rejected.status is TaskStatus.failed
     assert rejected.error and rejected.error["code"] == "unsupported_format_combination"
     assert "GPKG" in rejected.error["message"]

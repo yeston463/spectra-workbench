@@ -168,9 +168,7 @@ def _run(
         ],
         parameters=parameters,
     )
-    client = QtWorkerClient(
-        provider_id="gdal", worker_id="p603-tc", project_root=str(ROOT)
-    )
+    client = QtWorkerClient(provider_id="gdal", worker_id="p603-tc", project_root=str(ROOT))
     results: list[Any] = []
     errors: list[tuple[str, str]] = []
     client.sig_result.connect(results.append)
@@ -353,23 +351,17 @@ def test_tasseled_cap_rejections(
     assert missing.error and missing.error["code"] == "invalid_parameters"
     assert not out.exists()
 
-    unknown = _run(
-        qapp, {"tcSensor": "sentinel2_msi", "tcBands": [1, 2, 3, 4, 5, 6]}, src, out
-    )
+    unknown = _run(qapp, {"tcSensor": "sentinel2_msi", "tcBands": [1, 2, 3, 4, 5, 6]}, src, out)
     assert unknown.status is TaskStatus.failed
     assert unknown.error and unknown.error["code"] == "invalid_parameters"
     assert not out.exists()
 
-    duplicate = _run(
-        qapp, {"tcSensor": "landsat8_oli", "tcBands": [1, 1, 2, 3, 4, 5]}, src, out
-    )
+    duplicate = _run(qapp, {"tcSensor": "landsat8_oli", "tcBands": [1, 1, 2, 3, 4, 5]}, src, out)
     assert duplicate.status is TaskStatus.failed
     assert duplicate.error and duplicate.error["code"] == "invalid_parameters"
     assert not out.exists()
 
-    out_of_range = _run(
-        qapp, {"tcSensor": "landsat8_oli", "tcBands": [1, 2, 3, 4, 5, 7]}, src, out
-    )
+    out_of_range = _run(qapp, {"tcSensor": "landsat8_oli", "tcBands": [1, 2, 3, 4, 5, 7]}, src, out)
     assert out_of_range.status is TaskStatus.failed
     assert out_of_range.error and out_of_range.error["code"] == "tasseledcap_error"
     assert not out.exists()

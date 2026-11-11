@@ -132,8 +132,7 @@ def test_vector_metadata_in_gui_panel(qapp: QApplication, p3_samples: dict) -> N
         panel = win.metadata_panel
         assert panel.lst_vector_layers.count() == len(gpkg["layer_names"])
         assert {
-            panel.lst_vector_layers.item(i).text()
-            for i in range(panel.lst_vector_layers.count())
+            panel.lst_vector_layers.item(i).text() for i in range(panel.lst_vector_layers.count())
         } == set(gpkg["layer_names"])
         summary = panel.lbl_vector_summary.text()
         assert "图层数" in summary, f"摘要应显示图层数：{summary}"
@@ -249,9 +248,7 @@ def test_missing_subdataset_reports_clear_error(qapp: QApplication, p3_samples: 
             client.stop(timeout=3.0)
 
 
-def test_worker_survives_bad_file_and_keeps_serving(
-    qapp: QApplication, p3_samples: dict
-) -> None:
+def test_worker_survives_bad_file_and_keeps_serving(qapp: QApplication, p3_samples: dict) -> None:
     """坏文件报错后，worker 仍能继续处理正常请求（不得因一次失败而整体不可用）。"""
     gpkg = p3_samples["samples"]["vector_gpkg"]
     container = p3_samples["samples"]["subdataset_container"]
@@ -265,7 +262,7 @@ def test_worker_survives_bad_file_and_keeps_serving(
         # 连续制造坏输入
         for bad in (
             str(Path(gpkg["path"]).parent / "missing.gpkg"),
-            "NETCDF:\"missing.nc\":Var",
+            'NETCDF:"missing.nc":Var',
         ):
             with pytest.raises(RuntimeError):
                 if bad.endswith(".gpkg"):

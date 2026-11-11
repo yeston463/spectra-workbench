@@ -156,7 +156,9 @@ def _payload_for(kw: dict, band: int) -> dict:
         "shape": [1, h, w],
         "numpy_dtype": "uint16",
         "data_b64": base64.b64encode(arr.tobytes()).decode(),
-        "valid_bits_b64": base64.b64encode(np.packbits(valid.reshape(-1), axis=None).tobytes()).decode(),
+        "valid_bits_b64": base64.b64encode(
+            np.packbits(valid.reshape(-1), axis=None).tobytes()
+        ).decode(),
         "valid_bits_count": int(valid.size),
         "band_meta": [
             {
@@ -190,7 +192,13 @@ def test_switching_band_does_not_show_previous_band(qapp: QApplication) -> None:
     layer = LayerItem(
         name="bands",
         file_path=Path("synthetic.tif"),
-        metadata={"width": 512, "height": 512, "count": 3, "driver": "GTiff", "spatial_model": "affine"},
+        metadata={
+            "width": 512,
+            "height": 512,
+            "count": 3,
+            "driver": "GTiff",
+            "spatial_model": "affine",
+        },
     )
     try:
         canvas.set_layer(layer, client)
@@ -243,7 +251,13 @@ def test_switching_band_invalidates_pending_response(qapp: QApplication) -> None
     layer = LayerItem(
         name="gen",
         file_path=Path("synthetic.tif"),
-        metadata={"width": 256, "height": 256, "count": 3, "driver": "GTiff", "spatial_model": "affine"},
+        metadata={
+            "width": 256,
+            "height": 256,
+            "count": 3,
+            "driver": "GTiff",
+            "spatial_model": "affine",
+        },
     )
     try:
         canvas.set_layer(layer, client)

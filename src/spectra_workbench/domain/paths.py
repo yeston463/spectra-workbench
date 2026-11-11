@@ -52,7 +52,10 @@ def is_vsi_or_remote(path: Path | str | None) -> bool:
     if not s:
         return False
     norm = s.replace("\\", "/").lower()
-    if any(norm.startswith(p) for p in ("/vsi", "http://", "https://", "s3://", "gs://", "az://", "zip://", "tar://")):
+    if any(
+        norm.startswith(p)
+        for p in ("/vsi", "http://", "https://", "s3://", "gs://", "az://", "zip://", "tar://")
+    ):
         return True
     return bool(re.match(r"^[A-Za-z0-9_]+:[\"'].*[\"']", s))
 
@@ -149,18 +152,21 @@ def extract_local_path_from_vsi(path: Path | str | None) -> Path | None:
     lowered = norm.lower()
 
     # 纯远程或内存
-    if any(lowered.startswith(p) for p in ("http://", "https://", "s3://", "gs://", "az://", "/vsicurl/", "/vsimem/")):
+    if any(
+        lowered.startswith(p)
+        for p in ("http://", "https://", "s3://", "gs://", "az://", "/vsicurl/", "/vsimem/")
+    ):
         return None
 
     # 本地归档前缀：/vsizip/, /vsitar/, /vsigzip/
     for prefix in ("/vsizip/", "/vsitar/", "/vsigzip/"):
         if lowered.startswith(prefix):
-            inner = s[len(prefix):]
+            inner = s[len(prefix) :]
             # 查找压缩包扩展名
             for ext in (".tar.gz", ".tgz", ".zip", ".tar", ".gz"):
                 idx = inner.lower().find(ext)
                 if idx != -1:
-                    archive_part = inner[:idx + len(ext)]
+                    archive_part = inner[: idx + len(ext)]
                     return Path(archive_part)
             return Path(inner)
 
@@ -169,4 +175,3 @@ def extract_local_path_from_vsi(path: Path | str | None) -> Path | None:
         return Path(s)
     except Exception:
         return None
-

@@ -75,7 +75,10 @@ print("OK")
 """
     proc = subprocess.run(
         [str(gdal_rt["python"]), "-c", script],
-        capture_output=True, text=True, timeout=120, env=gdal_rt["env"],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        env=gdal_rt["env"],
     )
     assert proc.returncode == 0, f"ENVI 构造失败：{proc.stderr}"
     hdr = dat.with_suffix(".hdr")
@@ -100,7 +103,10 @@ print("OK")
 """
     proc = subprocess.run(
         [str(gdal_rt["python"]), "-c", script],
-        capture_output=True, text=True, timeout=120, env=gdal_rt["env"],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        env=gdal_rt["env"],
     )
     assert proc.returncode == 0, f"GTiff 构造失败：{proc.stderr}"
     return path
@@ -174,7 +180,10 @@ def _inspect(gdal_rt: dict, path: Path) -> dict:
     )
     proc = subprocess.run(
         [str(gdal_rt["python"]), "-c", script],
-        capture_output=True, text=True, timeout=120, env=gdal_rt["env"],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        env=gdal_rt["env"],
     )
     assert proc.returncode == 0, f"校验失败：{proc.stderr}"
     return json.loads(proc.stdout.strip())
@@ -190,9 +199,7 @@ def _hdr_fields(hdr: Path) -> dict[str, str]:
 
 
 # --------------------------------------------------- 1. 不覆盖未知字段
-def test_envi_unknown_fields_survive_editmeta(
-    qapp, gdal_rt, tmp_path
-) -> None:
+def test_envi_unknown_fields_survive_editmeta(qapp, gdal_rt, tmp_path) -> None:
     """editmeta 更新 ENVI NoData 后，.hdr 的自定义（未知）字段必须仍在。
 
     GDAL 原生重写会丢失全部未知字段（实测），平台用读-合并-写防住。
@@ -203,9 +210,7 @@ def test_envi_unknown_fields_survive_editmeta(
     assert before.get("custom_field_a") == "legacy_value_a"
     assert before.get("my_project_tag") == "production-2024"
 
-    result = _run_inplace_task(
-        qapp, "gdal:editmeta", {"srcNodata": -9999.0}, dat
-    )
+    result = _run_inplace_task(qapp, "gdal:editmeta", {"srcNodata": -9999.0}, dat)
     assert result.status is TaskStatus.succeeded, result.error
 
     after = _hdr_fields(hdr)
@@ -274,9 +279,7 @@ def test_envi_overview_sidecar_commit(qapp, gdal_rt, tmp_path) -> None:
     assert (ovr_info["w"], ovr_info["h"]) in ((4, 4), (8, 8)), "外部 .ovr 无法独立打开"
 
 
-def test_gtiff_overview_embedded_and_size_contract(
-    qapp, gdal_rt, tmp_path
-) -> None:
+def test_gtiff_overview_embedded_and_size_contract(qapp, gdal_rt, tmp_path) -> None:
     """GTiff 概览：内嵌主文件、主影像尺寸不变、倍率递增校验。"""
     tif = _make_gtiff(gdal_rt, tmp_path / "emb.tif")
     before_size = tif.stat().st_size
